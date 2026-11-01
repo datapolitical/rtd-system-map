@@ -64,7 +64,7 @@ route 225 — Boulder / Lafayette via Baseline
 
 - Severity: medium
 - Area: page
-- Confidence: confirmed (measured seven times: 15,610 / 15,708 / 15,904 / 15,794 / 15,886 / 16,094 ms)
+- Confidence: confirmed (six measurements over two runs: 15,610 / 15,708 / 15,904 / 15,794 / 15,886 / 16,094 ms)
 - Where: public/index.html:10 loads `vendor/maplibre-gl.mjs` (1,073 KB), and `data/routes.geojson` is 1,022 KB
 - Reproduce: `cd qa && BASE=http://localhost:8811 node scripts/browser.mjs`; the throttle is Lighthouse's mobile preset (150 ms RTT, 1,638.4 kbit/s down, 750 kbit/s up, 4× CPU), and the clock runs from navigation until `#status` is hidden
 - Expected: DESIGN.md:966 "a usable map in under 2 seconds on a mid-range phone over 4G"; DESIGN.md:1127 records 6.7 s on slow 4G for V2 step 1 and notes 2.5 s was out of reach.
