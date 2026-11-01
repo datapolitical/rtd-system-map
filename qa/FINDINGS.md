@@ -40,6 +40,54 @@ route 225 — Boulder / Lafayette via Baseline
 
   AL is the same at the airport plus `8th & Coffman PnR Gate F [-105.10367,40.17306]` vs `Longmont [-105.10384,40.19953]` (2.94 km apart); AT is the same at the airport (1.13 km apart). The name is right in all three cases — only the coordinate is short, because RTD's GTFS shapes stop short of the airport station and of Longmont. Nothing in `public/js/` reads `goes`, so this is not visible in the page today.
 
+### F-003: The legend's fine print is 3.48:1 against white, below the 4.5:1 that WCAG AA asks for
+
+- Severity: medium
+- Area: page
+- Confidence: confirmed (reproduced twice, axe on desktop at 1440×900)
+- Where: public/css/app.css:209 (`color: var(--ink-3)`) with `--ink-3: #7e8b98` at public/css/app.css:26
+- Reproduce: `cd qa && BASE=http://localhost:8811 node scripts/browser.mjs` then read `qa/out/browser.json`, or `npx @axe-core/cli http://localhost:8811` (the script uses `@axe-core/playwright`)
+- Expected: DESIGN.md:986 "Accessibility: WCAG AA contrast for text". The note is 12px normal weight, so AA asks for 4.5:1.
+- Actual: axe reports
+
+```
+[serious] color-contrast: Elements must meet minimum color contrast ratio thresholds
+  target: #legend-note
+  html: <p class="note" id="legend-note">Not affiliated with RTD. Data from RTD's public map and GTFS feeds, updated Nov 1, 2026
+  why: Element has insufficient color contrast of 3.48 (foreground color: #7e8b98, background color: #ffffff,
+       font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1
+```
+
+  Only the desktop runs see it: the key is closed on phones, so `.legend-body` is not rendered there.
+
+### F-004: The opening view takes 15.9 s on Lighthouse's slow 4G, against 6.7 s recorded in Milestones and a 2 s target
+
+- Severity: medium
+- Area: page
+- Confidence: confirmed (measured seven times: 15,610 / 15,708 / 15,904 / 15,794 / 15,886 / 16,094 ms)
+- Where: public/index.html:10 loads `vendor/maplibre-gl.mjs` (1,073 KB), and `data/routes.geojson` is 1,022 KB
+- Reproduce: `cd qa && BASE=http://localhost:8811 node scripts/browser.mjs`; the throttle is Lighthouse's mobile preset (150 ms RTT, 1,638.4 kbit/s down, 750 kbit/s up, 4× CPU), and the clock runs from navigation until `#status` is hidden
+- Expected: DESIGN.md:966 "a usable map in under 2 seconds on a mid-range phone over 4G"; DESIGN.md:1133-1136 records 6.7 s on slow 4G for V2 step 1 and notes 2.5 s was out of reach.
+- Actual: median **15,886 ms** over three runs (15,886 / 16,094 / 15,794). Resource timing on one run: 1,919 KB of local files before `#status` hid, of which `vendor/maplibre-gl.mjs` is 1,073 KB and took 6,440 ms on its own, plus `vendor/maplibre-gl-worker.mjs` 507 KB and `vendor/glyphs/Overpass Bold/0-255.pbf` 81 KB. The GeoJSON is fetched by the map's worker, so it does not appear in that list; `routes.geojson` alone is another 1,022 KB, `boundary.geojson` 158 KB, `flexride.geojson` 54 KB. At 1,638.4 kbit/s, the ~3.2 MB that has to arrive before the routes draw cannot land in under 15 s, which is exactly what was measured. Caveat: this Chromium fell back to software WebGL (5 warnings), so drawing may be slower here than on a phone GPU; the byte count is not affected by that.
+
+### F-005: With no WebGL2 the page says "Loading the network…" forever instead of saying the map cannot draw
+
+- Severity: low
+- Area: page
+- Confidence: confirmed (3 runs, all three sizes, headless Firefox)
+- Where: public/js/main.js:77 (`new maplibregl.Map(...)` inside `async function main()`), with `#status` cleared only at public/js/main.js:124
+- Reproduce: `cd qa && BASE=http://localhost:8811 node scripts/browser.mjs` (Firefox is skipped by the script now, so this needs a browser without WebGL: `npx playwright open --browser=firefox http://localhost:8811` in an environment where `canvas.getContext('webgl2')` is null)
+- Expected: DESIGN.md:989 "Resilience: if the live feed fails, the map still works and says live data is unavailable" — the pattern is that the page tells the rider what is wrong rather than spinning.
+- Actual: the map constructor throws, `main()` rejects, and `#status` is never touched again:
+
+```
+page: GPUInitializationError: WebGL2 is required to display this map. ...
+console warning: Failed to create WebGL context: WebGL creation failed: * AllowWebgl2:false restricts context creation on this system.
+after 45 s: document.getElementById('status').hidden === false, textContent "Loading the network…"
+```
+
+  No browser without WebGL2 is in wide use, so this is an edge case; the point is that the failure is invisible to the rider and lands only in the console.
+
 ## Checked and fine
 
 - Rail station order (task 1): every line's station sequence matches its most common weekday GTFS pattern; C, G and T read the opposite way round, which is the same sequence and allowed.
@@ -58,7 +106,12 @@ route 225 — Boulder / Lafayette via Baseline
   - `arcgis-500`: exit 1 after its retries, `Error: 500 Internal Server Error for .../FeatureServer/1/query`, changed no.
   - `arcgis-zero-features`: exit 1, `No stations downloaded`, `stations dropped from 77 to 0`, changed no — caught by the checks, not by a crash.
   - `arcgis-error-200`: exit 1, `Error: ...: Layer is temporarily unavailable`, changed no.
+- Browser checks (task 4): Chromium at 390×844, 360×740 and 1440×900 draws the network in 852–935 ms with no console errors, no page errors, no failed requests and no 4xx/5xx responses. axe finds 0 violations on both phone sizes and 2 on desktop (F-003 and a `region` best-practice hit on `.legend-body`, which axe rates moderate, not an AA failure). Keyboard: 6 Tab stops from the page start reaches the Key at every size, and Enter and Space both toggle it at every size (`toggles true/true`). Screenshots in `qa/out/`; I made no visual judgement. Run with `cd qa && npm run serve` in one shell and `BASE=http://localhost:8811 node scripts/browser.mjs` in another.
+- Spec against code (task 5), claims that hold: shared track at 20 m with runs under 200 m smoothed away (`scripts/lib/sharedtrack.mjs:10,14`); the rail outline at OKLab lightness × 0.72 with a 3:1 floor and a white-or-ink bullet letter (`public/js/color.js:68,74`, `public/js/main.js:160`); bus tiers fading in at 0 / 9 / 10.5 / 11, which is what DESIGN.md:745 says; rail heavier than any bus at every zoom (`RAIL_WIDTH` 3–9 against the frequent bus's 1.2–5.2); stops fetched only when the map first reaches stop zoom (`public/js/main.js:706`); the 250 m bus-stop rule and the 400 m Park-n-Ride rule in the build (checked in task 1).
 
 ## Blocked
 
-- Nothing was blocked. Note for the reviewer: on this machine's Node (v26.7.0) `node --test qa/tests/` fails with `Cannot find module .../qa/tests` because a bare directory is no longer accepted, so `qa/tests/index.mjs` plus a `qa/tests/package.json` `main` make the command in the brief work as written; `node --test "qa/tests/*.qa.mjs"` works without them.
+- WebKit: `npx playwright install webkit` downloaded, but it will not launch — the host is missing its system libraries (`validateDependenciesLinux`; `browserType.launch` reports missing dependencies). Installing them needs root, which this run does not have.
+- Firefox: Playwright's Firefox in this environment has no WebGL at all — `getContext('webgl')` and `getContext('webgl2')` both return null on `about:blank` — so the map cannot draw and the run stops at a blank map. That is the environment, not the page; the page's own behaviour in that state is F-005.
+- Port 8788, the port DESIGN.md uses for `npm run dev`, is already taken on this machine by another app that answers 302 to `/login`, and `wrangler` is not installed, so `qa/scripts/serve.mjs` served `public/` on 8811 instead. It is a plain static server: no `_headers`, no Workers.
+- Note for the reviewer: on this machine's Node (v26.7.0) `node --test qa/tests/` fails with `Cannot find module .../qa/tests` because a bare directory is no longer accepted, so `qa/tests/index.mjs` plus a `qa/tests/package.json` `main` make the command in the brief work as written; `node --test "qa/tests/*.qa.mjs"` works without them.
