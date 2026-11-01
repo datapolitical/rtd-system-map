@@ -49,6 +49,15 @@ route 225 — Boulder / Lafayette via Baseline
 - Route ends (task 1): 114 of 117 match within 500 m; AB, AL and AT differ (F-002).
 - Sanity (task 1): no route or station missing from either side of the two files, no duplicate station ids, no station naming a line that is not drawn, every rail line has a colour, every coordinate inside `meta.bounds.routes`.
 - Unit tests (task 2): 32 tests over 18 exported functions in six files — `readCsv`, `csvRows`, `serviceDates`, `representativeDates`, `tierOf`, `routeFrequency`, `lineShapes`, `lineEnds` (gtfs.mjs); `stationService` (stations.mjs); `sharedTrack`, `trackAt`, `trimToEnds`, `nearestOnTrack` (sharedtrack.mjs); `directory` (directory.mjs); `destination` (labels.mjs); `downloadLayer` (arcgis.mjs); `fetchWithRetry`, `getJson` (http.mjs). All pass; no defect found in the edge cases they cover. Run with `node --test qa/tests/`.
+- Build failure drills (task 3): a worktree at `../rtd-drill` with `node_modules` symlinked, one good build first, then eight drills driven by `qa/drills/mock-fetch.mjs`, with `public/data` hashed before and after each (`node qa/drills/run-drills.mjs`). Seven failed and left the data byte-identical; the eighth succeeded, which is what the spec asks for. Full transcript in `qa/drills/transcript.txt`. No drill broke the data and none succeeded when it shouldn't, so no finding here.
+  - `truncated-zip`: exit 1, `Error: invalid zip data`, changed no.
+  - `stop-times-missing`: exit 1, `Error: GTFS feed has no stop_times.txt`, changed no.
+  - `shapes-missing`: exit 0, `rail drawn from GTFS shapes: none`, changed yes — 117 routes, 9 rail, 67 stations served, the same counts as a normal build (DESIGN.md:656: rail falls back to RTD's map geometry).
+  - `rail-color-blank`: exit 1, nine `Rail line X has no color in GTFS` checks, changed no. (D is absent from the list because it is positioning, so it is not drawn.)
+  - `half-routes-removed`: exit 1, `rail dropped from 9 to 4`, `stations_served dropped from 67 to 40`, `Only 52% of map routes match GTFS`, changed no.
+  - `arcgis-500`: exit 1 after its retries, `Error: 500 Internal Server Error for .../FeatureServer/1/query`, changed no.
+  - `arcgis-zero-features`: exit 1, `No stations downloaded`, `stations dropped from 77 to 0`, changed no — caught by the checks, not by a crash.
+  - `arcgis-error-200`: exit 1, `Error: ...: Layer is temporarily unavailable`, changed no.
 
 ## Blocked
 

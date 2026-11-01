@@ -1,0 +1,14 @@
+{
+  "name": "rtd-system-map-qa",
+  "private": true,
+  "type": "module",
+  "description": "Reviewer tooling for qa/BRIEF.md. Not part of the site.",
+  "scripts": {
+    "serve": "node scripts/serve.mjs",
+    "browser": "node scripts/browser.mjs"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "playwright": "^1.56.1"
+  }
+}
