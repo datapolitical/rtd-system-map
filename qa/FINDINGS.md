@@ -48,5 +48,8 @@ route 225 — Boulder / Lafayette via Baseline
 - Frequency (task 1): 116 of 117 routes' weekday midday headway matches; only route 225 differs (F-001).
 - Route ends (task 1): 114 of 117 match within 500 m; AB, AL and AT differ (F-002).
 - Sanity (task 1): no route or station missing from either side of the two files, no duplicate station ids, no station naming a line that is not drawn, every rail line has a colour, every coordinate inside `meta.bounds.routes`.
+- Unit tests (task 2): 32 tests over 18 exported functions in six files — `readCsv`, `csvRows`, `serviceDates`, `representativeDates`, `tierOf`, `routeFrequency`, `lineShapes`, `lineEnds` (gtfs.mjs); `stationService` (stations.mjs); `sharedTrack`, `trackAt`, `trimToEnds`, `nearestOnTrack` (sharedtrack.mjs); `directory` (directory.mjs); `destination` (labels.mjs); `downloadLayer` (arcgis.mjs); `fetchWithRetry`, `getJson` (http.mjs). All pass; no defect found in the edge cases they cover. Run with `node --test qa/tests/`.
 
 ## Blocked
+
+- Nothing was blocked. Note for the reviewer: on this machine's Node (v26.7.0) `node --test qa/tests/` fails with `Cannot find module .../qa/tests` because a bare directory is no longer accepted, so `qa/tests/index.mjs` plus a `qa/tests/package.json` `main` make the command in the brief work as written; `node --test "qa/tests/*.qa.mjs"` works without them.
