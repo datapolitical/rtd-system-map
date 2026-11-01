@@ -5,3 +5,7 @@ node_modules/
 public/data/
 # Copied from node_modules by scripts/vendor.mjs.
 public/vendor/
+# QA scratch space (qa/BRIEF.md).
+qa/cache/
+qa/out/
+qa/node_modules/
