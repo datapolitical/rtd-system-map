@@ -60,15 +60,16 @@ route 225 — Boulder / Lafayette via Baseline
 
   Only the desktop runs see it: the key is closed on phones, so `.legend-body` is not rendered there.
 
-### F-004: The opening view takes 15.9 s on Lighthouse's slow 4G, against 6.7 s recorded in Milestones and a 2 s target
+### F-004: The opening view takes 4.9 s on Lighthouse's slow 4G, against the 2 s in the Quality floor
 
 - Severity: medium
 - Area: page
-- Confidence: confirmed (nine measurements over three runs: 15,610 / 15,708 / 15,717 / 15,794 / 15,886 / 15,904 / 15,946 / 16,080 / 16,094 ms)
-- Where: public/index.html:10 loads `vendor/maplibre-gl.mjs` (1,073 KB), and `data/routes.geojson` is 1,022 KB
-- Reproduce: `cd qa && BASE=http://localhost:8811 node scripts/browser.mjs`; the throttle is Lighthouse's mobile preset (150 ms RTT, 1,638.4 kbit/s down, 750 kbit/s up, 4× CPU), and the clock runs from navigation until `#status` is hidden
-- Expected: DESIGN.md:966 "a usable map in under 2 seconds on a mid-range phone over 4G"; DESIGN.md:1127 records 6.7 s on slow 4G for V2 step 1 and notes 2.5 s was out of reach.
-- Actual: median **15,886 ms** across nine measurements; the latest three were 15,717 / 15,946 / 16,080 ms. Resource timing on one run: 1,919 KB of local files before `#status` hid, of which `vendor/maplibre-gl.mjs` is 1,073 KB and took 6,440 ms on its own, plus `vendor/maplibre-gl-worker.mjs` 507 KB and `vendor/glyphs/Overpass Bold/0-255.pbf` 81 KB. The GeoJSON is fetched by the map's worker, so it does not appear in that list; `routes.geojson` alone is another 1,022 KB, `boundary.geojson` 158 KB, `flexride.geojson` 54 KB. At 1,638.4 kbit/s, the ~3.2 MB that has to arrive before the routes draw cannot land in under 15 s, which is exactly what was measured. Caveat: this Chromium fell back to software WebGL (5 warnings), so drawing may be slower here than on a phone GPU; the byte count is not affected by that.
+- Confidence: confirmed, and corrected once: an earlier version of this finding said 15.9 s, which was measured against a static server that sent the JSON uncompressed. Cloudflare Pages compresses, so that number was mine, not the site's.
+- Where: public/index.html loads `vendor/maplibre-gl.mjs` and `vendor/maplibre-gl-worker.mjs`; the basemap glyphs are `vendor/glyphs/Overpass */0-255.pbf`
+- Reproduce: `cd qa && PORT=8811 npm run serve` in one shell (it now brotli-compresses like Pages), then `cd .. && BASE=http://localhost:8811 node qa/cache/timing.mjs`. The throttle is Lighthouse's mobile preset (150 ms RTT, 1,638.4 kbit/s down, 750 kbit/s up, 4× CPU); the clock runs from navigation until `#status` is hidden
+- Expected: DESIGN.md:966 "a usable map in under 2 seconds on a mid-range phone over 4G"
+- Actual: median **4,866 ms** over three runs (6,006 / 4,501 / 4,866). That beats the 6.7 s DESIGN.md:1127 records for V2 step 1, and misses the 2 s floor by 2.4×. What is left is not the data: 581 KB in 11 files, of which `vendor/maplibre-gl.mjs` is 234 KB and takes 1,637 ms, the two Overpass glyph pages are 161 KB and take 1,673 ms and 1,032 ms, and the worker is 119 KB. The transit GeoJSON is 2.4 MB raw but only 241 KB brotli, and most of it is fetched by the worker after the first draw.
+- Note: the same three runs against the uncompressed server took 15,717 / 15,946 / 16,080 ms. That gap is the whole reason F-004 was wrong the first time, and it is worth knowing when reading any load-time claim about this site: it is 10× the bytes on the wire.
 
 ### F-005: With no WebGL2 the page says "Loading the network…" forever instead of saying the map cannot draw
 
