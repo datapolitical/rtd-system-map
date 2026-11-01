@@ -17,6 +17,11 @@ const BASE = process.env.BASE ?? 'http://localhost:8788';
 const out = path.resolve(import.meta.dirname, '..', 'out');
 mkdirSync(out, { recursive: true });
 
+// ONLY=webkit runs a subset and merges its rows into the existing browser.json;
+// HEADED=1 launches with a display, which WebKit's GTK build needs here.
+const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
+const headed = process.env.HEADED === '1';
+
 const SIZES = [
   { label: 'phone', width: 390, height: 844, scale: 2 },
   { label: 'small-phone', width: 360, height: 740, scale: 2 },
@@ -51,11 +56,13 @@ const results = [];
 const blocked = [];
 
 for (const [name, type] of BROWSERS) {
+  if (only && !only.includes(name)) continue;
   let browser;
   try {
-    browser = await type.launch();
-    // Playwright's Firefox here has no WebGL at all, so the map cannot draw;
-    // that is this environment, not the page, and it is recorded as blocked.
+    // Chromium and Firefox stay headless; WebKit's GTK build here needs a display.
+    browser = await type.launch({ headless: name === 'webkit' ? !headed : true });
+    // Headless Firefox on this host has no WebGL at all, so the map cannot draw
+    // there; HEADED=1 under Xvfb gives it a context. Same for WebKit.
     const probe = await browser.newPage();
     await probe.goto('about:blank');
     const webgl2 = await probe.evaluate(() => !!document.createElement('canvas').getContext('webgl2'));
@@ -173,7 +180,7 @@ for (const [name, type] of BROWSERS) {
 // Load time: Lighthouse's mobile throttling, three runs, median.
 const THROTTLE = { rttMs: 150, downKbps: 1638.4, upKbps: 750, cpu: 4 };
 const timings = [];
-{
+if (!only || only.includes('chromium')) {
   const browser = await chromium.launch();
   for (let i = 0; i < 3; i++) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
