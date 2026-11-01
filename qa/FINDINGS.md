@@ -165,7 +165,7 @@ node -e 'const lum=h=>{const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).m
 
 ## Blocked
 
-- WebKit: `npx playwright install webkit` downloaded, but it will not launch — the host is missing its system libraries (`validateDependenciesLinux`; `browserType.launch` reports missing dependencies). Installing them needs root, which this run does not have.
+- WebKit: `npx playwright install webkit` downloaded build v2215, but it will not launch — the host is missing two system libraries, `libwoff1` and `libavif16` (Playwright's `validateDependenciesLinux`, and `browserType.launch` fails on them). Fixing it needs root: `sudo npx playwright install-deps`, or `sudo apt-get install libwoff1 libavif16`. `sudo` requires a password on this machine and neither package is installed, so no WebKit run was possible.
 - Firefox: Playwright's Firefox in this environment has no WebGL at all — `getContext('webgl')` and `getContext('webgl2')` both return null on `about:blank` — so the map cannot draw and the run stops at a blank map. That is the environment, not the page; the page's own behaviour in that state is F-005.
 - Port 8788, the port DESIGN.md uses for `npm run dev`, is already taken on this machine by another app that answers 302 to `/login`, and `wrangler` is not installed, so `qa/scripts/serve.mjs` served `public/` on 8811 instead. It is a plain static server: no `_headers`, no Workers.
 - Note for the reviewer: on this machine's Node (v26.7.0) `node --test qa/tests/` fails with `Cannot find module .../qa/tests` because a bare directory is no longer accepted, so `qa/tests/index.mjs` plus a `qa/tests/package.json` `main` make the command in the brief work as written; `node --test "qa/tests/*.qa.mjs"` works without them.
