@@ -1,0 +1,425 @@
+/* Overpass, served by the site itself (scripts/vendor.mjs). One variable
+   file covers every weight; Latin Extended loads only if a name needs it. */
+@font-face {
+  font-family: 'Overpass';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(../vendor/overpass-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Overpass';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(../vendor/overpass-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  --ink: #17222e;
+  --ink-2: #4c5a69;
+  --ink-3: #7e8b98;
+  --rule: #e2e7eb;
+  --surface: #ffffff;
+  --wash: #f1f4f6;
+  --focus: #1f6feb;
+  --font: 'Overpass', system-ui, sans-serif;
+  --shadow: 0 1px 2px rgba(23, 34, 46, 0.1), 0 4px 16px rgba(23, 34, 46, 0.12);
+  --you: #0a84ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #eef1f2;
+  color: var(--ink);
+  font: 15px/1.4 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Legend: a "Key" button that opens into the key. The word is on the
+   button, so it never reads as a menu. */
+
+.legend {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  background: var(--surface);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  /* Above the map's own controls, which MapLibre puts at z-index 2. */
+  z-index: 3;
+}
+
+.legend[open] {
+  width: 300px;
+  max-height: calc(100% - 24px - env(safe-area-inset-top));
+  overflow: auto;
+  border-radius: 14px;
+}
+
+.legend summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 15px 0 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* A bigger target than it looks, for thumbs. */
+.legend:not([open]) summary {
+  margin: -2px 0;
+  height: 44px;
+}
+
+.legend summary::-webkit-details-marker {
+  display: none;
+}
+
+.legend svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--ink);
+  stroke-linecap: round;
+}
+
+.legend .key-close,
+.legend[open] .key-icon {
+  display: none;
+}
+
+.legend[open] summary {
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 10px 0 16px;
+}
+
+.legend[open] .key-title {
+  font-weight: 800;
+}
+
+.legend[open] .key-close {
+  display: block;
+  stroke: var(--ink-2);
+}
+
+.legend-body {
+  padding: 0 16px 14px;
+}
+
+.legend h2 {
+  margin: 4px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.legend ul {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.tiers li {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 14px;
+}
+
+.swatch {
+  display: block;
+  width: 36px;
+  border-radius: 2px;
+}
+
+.swatch.dashed {
+  background: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 10px) !important;
+}
+
+.swatch.dotted {
+  background: radial-gradient(circle, currentColor 0 1.5px, transparent 1.5px) 0 50% / 6px 100% repeat-x !important;
+}
+
+.rail li {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+  font-size: 14px;
+}
+
+.rail .bullet {
+  justify-self: center;
+}
+
+.symbols li {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.station-dot {
+  justify-self: center;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--ink);
+}
+
+.station-dot.unserved {
+  border-color: #9aa5b0;
+}
+
+.note {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+/* Route bullets: a circle with the letter for rail, a rounded rectangle for bus. */
+
+.bullet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 24px;
+  height: 24px;
+  padding: 1px 6px 0;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.bullet.rail {
+  width: 24px;
+  padding: 1px 0 0;
+  border-radius: 50%;
+}
+
+/* Bus routes: a white tag outlined in the route's ink, like the map's. */
+.bullet.bus {
+  background: #fff;
+  box-shadow: inset 0 0 0 1.25px var(--edge);
+}
+
+/* Map controls: one size, white, soft depth, like the key button. */
+
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl {
+  margin: 0 calc(12px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) 0;
+}
+
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl {
+  margin: 0 0 calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+}
+
+.maplibregl-ctrl-group {
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.maplibregl-ctrl-group:not(:empty) {
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.maplibregl-ctrl-group button {
+  width: 44px;
+  height: 44px;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--rule);
+}
+
+.maplibregl-ctrl-group button:focus:first-child,
+.maplibregl-ctrl-group button:focus:last-child {
+  border-radius: inherit;
+}
+
+/* "Locate me": an arrow, outlined until it has found you, then filled blue. */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M16.5 3.5 3.5 9.3l5.9 1.3 1.3 5.9z' fill='none' stroke='%2317222e' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 20px no-repeat;
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active .maplibregl-ctrl-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M16.5 3.5 3.5 9.3l5.9 1.3 1.3 5.9z' fill='%230a84ff' stroke='%230a84ff' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background .maplibregl-ctrl-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M16.5 3.5 3.5 9.3l5.9 1.3 1.3 5.9z' fill='none' stroke='%230a84ff' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon,
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error .maplibregl-ctrl-icon,
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error .maplibregl-ctrl-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M16.5 3.5 3.5 9.3l5.9 1.3 1.3 5.9z' fill='none' stroke='%239aa5b0' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-waiting .maplibregl-ctrl-icon {
+  animation: locating 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes locating {
+  to {
+    opacity: 0.3;
+  }
+}
+
+/* You: a blue dot with a white ring and a soft halo. */
+.maplibregl-user-location-dot,
+.maplibregl-user-location-dot::before {
+  background-color: var(--you);
+}
+
+.maplibregl-user-location-dot::after {
+  border-width: 3px;
+  box-shadow: 0 1px 6px rgba(23, 34, 46, 0.35);
+}
+
+.maplibregl-user-location-accuracy-circle {
+  background-color: rgba(10, 132, 255, 0.12);
+}
+
+/* Credits: a small, quiet tab in the corner. */
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 12px/20px var(--font);
+}
+
+.maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) .maplibregl-ctrl-attrib-button {
+  opacity: 0.45;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: inherit;
+}
+
+/* Popups */
+
+.maplibregl-popup-content {
+  padding: 12px 14px;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  font: 14px/1.35 var(--font);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.maplibregl-popup-close-button {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  color: var(--ink-3);
+}
+
+.popup h3 {
+  margin: 0 28px 2px 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.popup .meta {
+  margin: 0 0 8px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.popup .meta.unserved {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.popup ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.popup li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.popup li:first-child {
+  border-top: 0;
+}
+
+.popup .name {
+  font-weight: 600;
+}
+
+.popup .freq {
+  grid-column: 2;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.status {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 3;
+}
+
+@media (max-width: 767px) {
+  .legend[open] {
+    width: calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    max-height: 70%;
+  }
+}
+
+.symbols:empty {
+  display: none;
+}

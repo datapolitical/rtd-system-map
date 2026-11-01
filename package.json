@@ -1,0 +1,23 @@
+{
+  "name": "rtd-system-map",
+  "private": true,
+  "type": "module",
+  "description": "A clean, mobile-friendly map of the RTD transit system, built from RTD's public data.",
+  "scripts": {
+    "postinstall": "node scripts/vendor.mjs",
+    "build": "node scripts/vendor.mjs && node scripts/build-data.mjs",
+    "dev": "wrangler pages dev public --port 8788",
+    "start": "npm run build && npm run dev",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@mapbox/tiny-sdf": "2.3.0",
+    "@napi-rs/canvas": "1.1.0",
+    "fflate": "0.8.3",
+    "pbf": "5.1.2"
+  },
+  "dependencies": {
+    "@fontsource-variable/overpass": "5.3.0",
+    "maplibre-gl": "6.15.0"
+  }
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Denver transit map (unofficial)</title>
+    <meta name="description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs." />
+    <!-- Start everything the map needs at once: the library, the network
+         summary, the font, and a connection to the basemap's server. -->
+    <link rel="modulepreload" href="vendor/maplibre-gl.mjs" />
+    <link rel="preload" href="data/meta.json" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link href="vendor/maplibre-gl.css" rel="stylesheet" />
+    <link href="css/app.css" rel="stylesheet" />
+    <script type="module" src="js/main.js"></script>
+  </head>
+  <body>
+    <div id="map" role="region" aria-label="Map of RTD bus and rail routes"></div>
+
+    <details class="legend" id="legend">
+      <!-- The icon is the map in miniature: a train line through a station,
+           and a bus. -->
+      <summary>
+        <svg class="key-icon" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M3 5.5h14" stroke="#2b8a3e" stroke-width="3" stroke-linecap="round" />
+          <path d="M3 10.5h14" stroke="#1d3044" stroke-width="2" stroke-linecap="round" />
+          <path d="M3 15h14" stroke="#8995a2" stroke-width="1.2" stroke-linecap="round" />
+        </svg>
+        <span class="key-title">Key</span>
+        <svg class="key-close" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke-width="1.8" /></svg>
+      </summary>
+      <div class="legend-body">
+        <h2>Buses on weekday middays</h2>
+        <ul class="tiers" id="legend-tiers"></ul>
+        <h2>Trains</h2>
+        <ul class="rail" id="legend-rail"></ul>
+        <ul class="symbols" id="legend-symbols"></ul>
+        <p class="note" id="legend-note">Not affiliated with RTD. Data from RTD's public map and GTFS feeds.</p>
+      </div>
+    </details>
+
+    <p class="status" id="status" role="status">Loading the network…</p>
+  </body>
+</html>
