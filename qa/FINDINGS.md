@@ -67,7 +67,7 @@ route 225 — Boulder / Lafayette via Baseline
 - Confidence: confirmed (measured seven times: 15,610 / 15,708 / 15,904 / 15,794 / 15,886 / 16,094 ms)
 - Where: public/index.html:10 loads `vendor/maplibre-gl.mjs` (1,073 KB), and `data/routes.geojson` is 1,022 KB
 - Reproduce: `cd qa && BASE=http://localhost:8811 node scripts/browser.mjs`; the throttle is Lighthouse's mobile preset (150 ms RTT, 1,638.4 kbit/s down, 750 kbit/s up, 4× CPU), and the clock runs from navigation until `#status` is hidden
-- Expected: DESIGN.md:966 "a usable map in under 2 seconds on a mid-range phone over 4G"; DESIGN.md:1133-1136 records 6.7 s on slow 4G for V2 step 1 and notes 2.5 s was out of reach.
+- Expected: DESIGN.md:966 "a usable map in under 2 seconds on a mid-range phone over 4G"; DESIGN.md:1127 records 6.7 s on slow 4G for V2 step 1 and notes 2.5 s was out of reach.
 - Actual: median **15,886 ms** over three runs (15,886 / 16,094 / 15,794). Resource timing on one run: 1,919 KB of local files before `#status` hid, of which `vendor/maplibre-gl.mjs` is 1,073 KB and took 6,440 ms on its own, plus `vendor/maplibre-gl-worker.mjs` 507 KB and `vendor/glyphs/Overpass Bold/0-255.pbf` 81 KB. The GeoJSON is fetched by the map's worker, so it does not appear in that list; `routes.geojson` alone is another 1,022 KB, `boundary.geojson` 158 KB, `flexride.geojson` 54 KB. At 1,638.4 kbit/s, the ~3.2 MB that has to arrive before the routes draw cannot land in under 15 s, which is exactly what was measured. Caveat: this Chromium fell back to software WebGL (5 warnings), so drawing may be slower here than on a phone GPU; the byte count is not affected by that.
 
 ### F-005: With no WebGL2 the page says "Loading the network…" forever instead of saying the map cannot draw
@@ -87,6 +87,60 @@ after 45 s: document.getElementById('status').hidden === false, textContent "Loa
 ```
 
   No browser without WebGL2 is in wide use, so this is an edge case; the point is that the failure is invisible to the rider and lands only in the console.
+
+### F-006: The 30-minute and 60-minute rail lines are drawn exactly as heavy as the 15-minute ones
+
+- Severity: medium
+- Area: spec
+- Confidence: confirmed
+- Where: public/js/main.js:45 (`railWidth`) and public/js/main.js:270 (`'line-width': railWidth()`); the rail layer ignores `tier`, though `meta.rail[].tier` carries it
+- Reproduce: `node -e 'const m=require("./public/data/meta.json"); console.log(m.rail.map(r=>r.route+":"+r.tier+":"+r.wk+"min").join(" "))'` and `grep -n "railWidth" public/js/main.js`
+- Expected: DESIGN.md:650-652 "Rail stays heavier than any bus at every tier. 15-minute rail is full width; 30- and 60-minute rail is a step thinner; rail with only a few trips or rush-hour trips is dashed and drawn *beneath* full-service rail, so on shared track the line that actually runs wins."
+- Actual: `railWidth()` is a function of zoom only — `const railWidth = (extra = 0) => byZoom(RAIL_WIDTH.map((w) => w + extra))` with one `RAIL_WIDTH = [3, 4, 5.6, 9]` — so every rail line is drawn at the same weight. The data has the mix the spec describes: `A:frequent:15min B:hourly:60min C:frequent:15min E:frequent:15min G:frequent:15min N:every30:30min R:frequent:15min T:frequent:15min W:frequent:15min`. Only `PART_TIME = ['peak','limited','none','unknown']` (main.js:33) gets the dashed, thinner treatment, and no rail line is in those tiers today, so B at one train an hour is drawn identically to A at four an hour.
+
+### F-007: The zoom ladder in the code has drifted from the table: stops arrive at 15 not 14.5, and no zoom shows stop names
+
+- Severity: low
+- Area: spec
+- Confidence: confirmed for the numbers; unsure whether stop names are later work
+- Where: public/js/main.js:36 (`STOPS_ZOOM = 15`), :297 (`stations-unserved` minzoom 12.5), :325 (`facilities` minzoom 12.5); `transitMarks` (main.js:276-291) has a circle layer for stops and no label layer
+- Reproduce: `grep -n "STOPS_ZOOM\|minzoom" public/js/main.js` and `grep -n "id: 'stops'" -A 10 public/js/main.js`
+- Expected: DESIGN.md:742-749 — "Park-n-Rides, transit centers, and unserved stations from 12", "Bus stops (loaded only when first needed) and smaller streets" at 14.5 and up, "Stop names, with the routes that serve each stop" at 16 and up.
+- Actual: `stations-unserved` and `facilities` both start at **12.5**, the stops layer starts at **15**, and there is no symbol layer over the `stops` source at any zoom, so stop names and their routes are only in a click popup (main.js:787). The half-level differences are small; the missing stop-name layer is the substantive one. Milestones puts "Interaction" (step 5) after this, and stop names are not on that list, so I am not certain whether they were deferred.
+
+### F-008: Bus corridors are not built, so two every-30 routes on one street never show as the frequent corridor the spec describes
+
+- Severity: medium
+- Area: spec
+- Confidence: confirmed
+- Where: DESIGN.md:731-736 (the rule) and Milestones step 2.2 (DESIGN.md:1134, "bus corridors with combined frequency"); no code implements it — `scripts/build-data.mjs` has no corridor step, and the only "corridor" in the tree is the rail side-ordering in `scripts/lib/sharedtrack.mjs:102-135`
+- Reproduce: `grep -rn "combined\|corridor" scripts/build-data.mjs scripts/lib/gtfs.mjs scripts/lib/stations.mjs` (no output) and `grep -c combined public/data/routes.geojson` (`0`)
+- Expected: "Where several routes share a street and its stops, riders can take whichever comes first. The build finds these shared stretches from GTFS stop sequences and draws the corridor once, weighted by the combined frequency of the routes on it (two routes every 30 minutes, evenly spaced, are a frequent corridor). Only stops both routes serve count, so a limited-stop route adds to the corridor only at its stops."
+- Actual: each route is drawn on its own, at its own tier; nothing computes shared stretches of bus stop sequences and nothing carries a combined frequency. `routes.geojson` has no `combined` field and both files' route properties are per-route only (`route`, `name`, `tier`, `wk`, `sa`, `su`, `wk_trips`, …). So a street served by two every-30 routes reads as two every-30 lines rather than one every-15 corridor — the exact question the site exists to answer at a shared stop.
+
+### F-009: The hourly, infrequent, rush-hour and few-trips bus lines are under the 3:1 against the land that the spec promises
+
+- Severity: medium
+- Area: page
+- Confidence: confirmed
+- Where: public/js/main.js:22-25 (tier colors `#8995a2` and `#9aa5b0`) against `PALETTE.land` `#f4f5f6` (public/js/basemap.js:7)
+- Reproduce:
+
+```bash
+node -e 'const lum=h=>{const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=0.03928?v/12.92:((v+0.055)/1.055)**2.4);return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2]};const cr=(a,b)=>{const[x,y]=[lum(a),lum(b)].sort((p,q)=>q-p);return (x+0.05)/(y+0.05)};for (const c of ["#1d3044","#58697b","#8995a2","#9aa5b0"]) console.log(c, cr(c,"#f4f5f6").toFixed(2))'
+```
+
+- Expected: DESIGN.md:709 "Every tier stays visible against the land, so even the lightest bus line meets 3:1."
+- Actual:
+
+```
+#1d3044 12.34   (frequent)
+#58697b 5.17    (every 30)
+#8995a2 2.79    (hourly)
+#9aa5b0 2.29    (infrequent, rush hours, a few trips)
+```
+
+  Two of the four inks miss the target, and they are the ones used for the least frequent routes; the two lightest also carry the dashed and dotted patterns that thin them further.
 
 ## Checked and fine
 
