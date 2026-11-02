@@ -19,15 +19,24 @@ const LAND = PALETTE.land;
 const TIERS = [
   { id: 'frequent', label: 'Every 15 min or better', color: '#1d3044', width: [1.2, 1.9, 3, 5.2], from: 0 },
   { id: 'every30', label: 'Every 16 to 30 min', color: '#58697b', width: [0.6, 0.95, 1.6, 3], from: 9 },
-  { id: 'hourly', label: 'Every 31 to 60 min', color: '#8995a2', width: [0.5, 0.7, 1.1, 2.2], from: 10.5 },
-  { id: 'infrequent', label: 'Less than hourly', color: '#9aa5b0', width: [0.5, 0.6, 1, 2], from: 10.5 },
-  { id: 'peak', label: 'Rush hours only', color: '#9aa5b0', width: [0.5, 0.6, 1, 2], from: 11, dashed: true },
-  { id: 'limited', label: 'A few trips a day', color: '#9aa5b0', width: [0.6, 0.8, 1.3, 2.4], from: 11, dotted: true },
+  { id: 'hourly', label: 'Every 31 to 60 min', color: '#697683', width: [0.5, 0.7, 1.1, 2.2], from: 10.5 },
+  { id: 'infrequent', label: 'Less than hourly', color: '#818c97', width: [0.5, 0.6, 1, 2], from: 10.5 },
+  { id: 'peak', label: 'Rush hours only', color: '#818c97', width: [0.5, 0.6, 1, 2], from: 11, dashed: true },
+  { id: 'limited', label: 'A few trips a day', color: '#818c97', width: [0.6, 0.8, 1.3, 2.4], from: 11, dotted: true },
 ];
 const TIER_RANK = Object.fromEntries(TIERS.map((t, i) => [t.id, TIERS.length - i]));
 // Rail is heavier than any bus at every zoom. On shared track, lines run side
-// by side with a white gap between them (DESIGN.md, "Shared track").
+// by side with a white gap between them (DESIGN.md, "Shared track"). Width
+// steps at the bus headway boundaries: 15 minutes or better is full width,
+// 16-30 and 31-60 are a step thinner, over 60 thinner still (DESIGN.md,
+// "Rail frequency"). Widths are at zoom 9, 11, 13 and 16.
 const RAIL_WIDTH = [3, 4, 5.6, 9];
+const RAIL_BANDS = [
+  { max: 15, width: RAIL_WIDTH },
+  { max: 30, width: [2.2, 3, 4.3, 6.8] },
+  { max: 60, width: [1.6, 2.3, 3.5, 6] },
+  { max: Infinity, width: [1.4, 2, 3.1, 5.4] },
+];
 const RAIL_GAP = 2;
 // Routes that don't run all day, drawn broken and beneath the rest.
 const PART_TIME = ['peak', 'limited', 'none', 'unknown'];
@@ -42,7 +51,14 @@ const tierMatch = (pick) => ['match', ['get', 'tier'], ...TIERS.flatMap((t) => [
 const tierWidth = (extra = 0) =>
   ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, tierMatch((t) => t.width[i] + extra)])];
 const fadeIn = ['interpolate', ['linear'], ['zoom'], ...[8, 9, 10, 11, 12, 13].flatMap((z) => [z, tierMatch((t) => Math.min(1, Math.max(0, (z - t.from) / 1.5 + 0.25)))])];
-const railWidth = (extra = 0) => byZoom(RAIL_WIDTH.map((w) => w + extra));
+// Width from the line's weekday headway, at the bus tier boundaries: <=15
+// minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
+// line with no weekday headway (weekend-only, or not running) is thinnest.
+const railWidth = (extra = 0) =>
+  ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [
+    z,
+    ['step', ['coalesce', ['get', 'wk'], 1000], RAIL_BANDS[0].width[i] + extra, ...RAIL_BANDS.slice(1).flatMap((band, k) => [RAIL_BANDS[k].max + 1, band.width[i] + extra])],
+  ])];
 // Each piece of rail is `slot` line widths to the side of its track's center.
 const railOffset = byZoom(RAIL_WIDTH.map((w) => ['*', ['get', 'slot'], w + RAIL_GAP]));
 // Stations are drawn at the widest zoom's line spacing and scaled down with
@@ -432,7 +448,7 @@ function transitMarks(lines) {
         'text-max-width': 8,
         'text-optional': true,
       },
-      paint: { 'text-color': '#7e8b98', ...halo },
+      paint: { 'text-color': '#66717e', ...halo },
     },
     {
       id: 'station-labels',
