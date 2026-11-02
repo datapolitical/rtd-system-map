@@ -5,7 +5,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { discoverLayers, downloadLayer } from './lib/arcgis.mjs';
-import { lineEnds, lineShapes, loadGtfs, readCsv, representativeDates, routeFrequency, tierOf } from './lib/gtfs.mjs';
+import { csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, routeFrequency, tierOf, unmatchedVariants } from './lib/gtfs.mjs';
 import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
@@ -55,18 +55,6 @@ const TRANSFORMS = {
 function stationLabel(name) {
   const short = name.replace(/\s+Transit Center$/i, '');
   return short !== name ? short : name.replace(/\s+Station$/i, '');
-}
-
-// Match a route on RTD's map to its GTFS routes: by route number or ID, or as
-// a family RTD draws as one line (FF for FF1 to FF5), recognized by a shared
-// prefix and the same route name.
-function matchGtfs(p, gtfsRoutes) {
-  const exact = gtfsRoutes.filter((r) => r.route_short_name === p.route || r.route_id === p.route);
-  if (exact.length) return exact;
-  const norm = (s) => (s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
-  return gtfsRoutes.filter(
-    (r) => (r.route_short_name || r.route_id).startsWith(p.route) && norm(r.route_long_name) === norm(p.name),
-  );
 }
 
 function assignRoles(layers) {
@@ -124,7 +112,8 @@ async function main() {
     for (const r of found) groupOf.set(r.route_id, p.route);
   }
   const unmatched = [...members].filter(([, found]) => !found.length).map(([route]) => route);
-  const notOnMap = gtfsRoutes.filter((r) => !groupOf.has(r.route_id)).map((r) => r.route_short_name || r.route_id);
+  const notOnMapRoutes = gtfsRoutes.filter((r) => !groupOf.has(r.route_id));
+  const notOnMap = notOnMapRoutes.map((r) => r.route_short_name || r.route_id);
 
   console.log('Measuring frequency…');
   const timezone = readCsv(gtfs.text['agency.txt'])[0]?.agency_timezone || 'America/Denver';
@@ -198,6 +187,12 @@ async function main() {
   }
   const matchedShare = 1 - unmatched.length / members.size;
   if (matchedShare < 0.95) problems.push(`Only ${Math.round(matchedShare * 100)}% of map routes match GTFS (unmatched: ${unmatched.join(', ')})`);
+  // A GTFS route that is a variant of a line RTD draws but wasn't joined to it
+  // undercounts that line. That is a bug here, not a change in RTD's network,
+  // so it stops the build instead of being noted.
+  for (const v of unmatchedVariants(notOnMapRoutes, geo.routes.map((f) => f.properties))) {
+    problems.push(`GTFS route ${v.code} is a variant of drawn route ${v.route} but was not joined to it`);
+  }
   for (const f of rail) if (!f.properties.color) problems.push(`Rail line ${f.properties.route} has no color in GTFS`);
   if (counts.stations_served < geo.stations.length / 2) {
     problems.push(`Only ${counts.stations_served} of ${geo.stations.length} stations matched GTFS rail service`);
@@ -321,6 +316,12 @@ async function main() {
   if (positioning.size) console.log(`  not drawn, one-way trains on other lines' track: ${service.positioning.join(', ')}`);
   if (unmatched.length) console.log(`  map routes not in GTFS: ${unmatched.join(', ')}`);
   if (notOnMap.length) console.log(`  GTFS routes not on RTD's map: ${notOnMap.join(', ')}`);
+}
+
+// GTFS times are HH:MM:SS and may pass 24:00.
+function secondsAfterMidnight(time) {
+  const [hours, minutes, seconds] = time.split(':').map(Number);
+  return hours * 3600 + minutes * 60 + (seconds || 0);
 }
 
 // [[west, south], [east, north]] around every coordinate in some features.
