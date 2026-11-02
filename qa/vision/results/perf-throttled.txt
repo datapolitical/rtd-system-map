@@ -1,0 +1,6 @@
+{"run":1,"load":1900,"usable":4624,"dcl":1889,"loadEnd":1890,"fcp":656,"transfer":1}
+{"run":2,"load":1891,"usable":4368,"dcl":1884,"loadEnd":1884,"fcp":652,"transfer":1}
+{"run":3,"load":1889,"usable":4330,"dcl":1886,"loadEnd":1886,"fcp":648,"transfer":1}
+{"run":4,"load":1886,"usable":4493,"dcl":1885,"loadEnd":1885,"fcp":652,"transfer":1}
+{"run":5,"load":1868,"usable":4331,"dcl":1866,"loadEnd":1866,"fcp":640,"transfer":1}
+{"throttled":true,"runs":5,"usable":[4330,4331,4368,4493,4624],"median":4368,"min":4330,"max":4624}

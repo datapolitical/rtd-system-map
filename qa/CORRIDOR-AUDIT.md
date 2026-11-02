@@ -217,4 +217,4 @@ _None._
 | corridor:AB+FF:34195-35215:a12376d9 | AB FF | 4 | 11 | 15 | 15 | 11 | frequent |
 | corridor:AB+FF:16342-17989:3a89923c | AB FF | 4 | 13 | 15 | 15 | 13 | frequent |
 
-_Generated 2026-11-02T03:48:55.937Z by qa/scripts/audit-corridors.mjs_
+_Generated 2026-11-02T04:35:27.650Z by qa/scripts/audit-corridors.mjs_

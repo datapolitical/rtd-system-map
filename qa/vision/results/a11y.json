@@ -1,0 +1,266 @@
+{
+ "axe": [],
+ "tabOrder": [
+  {
+   "tag": "CANVAS",
+   "cls": "maplibregl-canvas",
+   "id": "",
+   "label": "Map",
+   "outline": "solid 2px rgb(31, 111, 235)",
+   "shadow": "",
+   "rect": [
+    0,
+    0,
+    390,
+    844
+   ]
+  },
+  {
+   "tag": "SUMMARY",
+   "cls": "maplibregl-ctrl-attrib-button",
+   "id": "",
+   "label": "Toggle attribution",
+   "outline": "solid 2px rgb(31, 111, 235)",
+   "shadow": "rgb(0, 150, 255) 0px 0px 2px 2px",
+   "rect": [
+    10,
+    810,
+    24,
+    24
+   ]
+  },
+  {
+   "tag": "BUTTON",
+   "cls": "maplibregl-ctrl-geolocate",
+   "id": "",
+   "label": "Find my location",
+   "outline": "none 0px rgb(0, 0, 0)",
+   "shadow": "rgb(0, 150, 255) 0px 0px 2px 2px",
+   "rect": [
+    334,
+    688,
+    44,
+    44
+   ]
+  },
+  {
+   "tag": "BUTTON",
+   "cls": "maplibregl-ctrl-zoom-in",
+   "id": "",
+   "label": "Zoom in",
+   "outline": "none 0px rgb(0, 0, 0)",
+   "shadow": "rgb(0, 150, 255) 0px 0px 2px 2px",
+   "rect": [
+    334,
+    744,
+    44,
+    44
+   ]
+  },
+  {
+   "tag": "BUTTON",
+   "cls": "maplibregl-ctrl-zoom-out",
+   "id": "",
+   "label": "Zoom out",
+   "outline": "none 0px rgb(0, 0, 0)",
+   "shadow": "rgb(0, 150, 255) 0px 0px 2px 2px",
+   "rect": [
+    334,
+    788,
+    44,
+    44
+   ]
+  },
+  {
+   "tag": "SUMMARY",
+   "cls": "",
+   "id": "",
+   "label": "Key",
+   "outline": "solid 2px rgb(31, 111, 235)",
+   "shadow": "",
+   "rect": [
+    12,
+    10,
+    81,
+    44
+   ]
+  },
+  {
+   "tag": "BODY",
+   "cls": "",
+   "id": "",
+   "label": "Terrain: Mapzen, USGS and othe",
+   "outline": "none 0px rgb(23, 34, 46)",
+   "shadow": "",
+   "rect": [
+    0,
+    0,
+    390,
+    844
+   ]
+  },
+  {
+   "tag": "CANVAS",
+   "cls": "maplibregl-canvas",
+   "id": "",
+   "label": "Map",
+   "outline": "solid 2px rgb(31, 111, 235)",
+   "shadow": "",
+   "rect": [
+    0,
+    0,
+    390,
+    844
+   ]
+  },
+  {
+   "tag": "SUMMARY",
+   "cls": "maplibregl-ctrl-attrib-button",
+   "id": "",
+   "label": "Toggle attribution",
+   "outline": "solid 2px rgb(31, 111, 235)",
+   "shadow": "rgb(0, 150, 255) 0px 0px 2px 2px",
+   "rect": [
+    10,
+    810,
+    24,
+    24
+   ]
+  },
+  {
+   "tag": "BUTTON",
+   "cls": "maplibregl-ctrl-geolocate",
+   "id": "",
+   "label": "Find my location",
+   "outline": "none 0px rgb(0, 0, 0)",
+   "shadow": "rgb(0, 150, 255) 0px 0px 2px 2px",
+   "rect": [
+    334,
+    688,
+    44,
+    44
+   ]
+  },
+  {
+   "tag": "BUTTON",
+   "cls": "maplibregl-ctrl-zoom-in",
+   "id": "",
+   "label": "Zoom in",
+   "outline": "none 0px rgb(0, 0, 0)",
+   "shadow": "rgb(0, 150, 255) 0px 0px 2px 2px",
+   "rect": [
+    334,
+    744,
+    44,
+    44
+   ]
+  },
+  {
+   "tag": "BUTTON",
+   "cls": "maplibregl-ctrl-zoom-out",
+   "id": "",
+   "label": "Zoom out",
+   "outline": "none 0px rgb(0, 0, 0)",
+   "shadow": "rgb(0, 150, 255) 0px 0px 2px 2px",
+   "rect": [
+    334,
+    788,
+    44,
+    44
+   ]
+  },
+  {
+   "tag": "SUMMARY",
+   "cls": "",
+   "id": "",
+   "label": "Key",
+   "outline": "solid 2px rgb(31, 111, 235)",
+   "shadow": "",
+   "rect": [
+    12,
+    10,
+    81,
+    44
+   ]
+  },
+  {
+   "tag": "BODY",
+   "cls": "",
+   "id": "",
+   "label": "Terrain: Mapzen, USGS and othe",
+   "outline": "none 0px rgb(23, 34, 46)",
+   "shadow": "",
+   "rect": [
+    0,
+    0,
+    390,
+    844
+   ]
+  }
+ ],
+ "focusPhone": [
+  [
+   "canvas",
+   {
+    "outline": "solid 2px",
+    "shadow": "none",
+    "rect": [
+     0,
+     0,
+     390,
+     844
+    ],
+    "parentOverflow": "visible"
+   }
+  ],
+  [
+   "geolocate",
+   {
+    "outline": "none 0px",
+    "shadow": "rgb(0, 150, 255) 0px 0px 2px 2px",
+    "rect": [
+     334,
+     688,
+     44,
+     44
+    ],
+    "parentOverflow": "hidden"
+   }
+  ],
+  [
+   "key",
+   {
+    "outline": "solid 2px",
+    "shadow": "none",
+    "rect": [
+     12,
+     10,
+     81,
+     44
+    ],
+    "parentOverflow": "visible"
+   }
+  ]
+ ],
+ "toast320": {
+  "toast": [
+   80,
+   16,
+   160,
+   55
+  ],
+  "key": [
+   12,
+   10,
+   81,
+   44
+  ],
+  "overlap": [
+   13,
+   38
+  ],
+  "toastHidden": false,
+  "toastText": "Loading the network…"
+ },
+ "zoomButton": "none"
+}

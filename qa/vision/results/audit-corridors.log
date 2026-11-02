@@ -1,0 +1,45 @@
+
+GTFS: 8155 stops, 21814 trips, 815809 stop_times rows
+feed weekday date 2026-11-02; services active: MT, WK; weekday trips 8835
+corridors: 85; geometry points 447
+
+invariant                          violations
+---------------------------------- ----------
+1 members exist & serve all stops  0  (unresolved 0, missing-stop 0)
+2 stops consecutive on a member    0
+3 headway <= fastest member        0  (plus 0 declared-vs-measured mismatches, see 3b)
+4 tier matches headway             0
+5 geometry == stop coords in order 0
+6 no duplicate member set + stops  0
+
+non-consecutive that are multi-run merge seams: 0/0
+non-consecutive whose id also no longer matches geometry: 0/0
+id/geometry mismatch (diagnostic)   0
+3a wider test (member's route-level headline): 3
+
+routes: 138; no name 0; wk=0 0; wk=null 13 (unexpected 0); wk mismatch >2min 0; matched 125
+
+1a unresolved members: none
+
+1b stops not served by a member: none
+
+2 not consecutive: none
+
+3a slower than fastest member: none
+
+3b headway != measured combined: none
+
+4 tier mismatch: none
+
+5 geometry: none
+
+6 duplicates: none
+
+id hash mismatch: none
+
+route wk mismatches: none
+
+route wk null that should be measurable: none
+
+wrote qa/CORRIDOR-AUDIT.md
+AUDIT_EXIT=0
