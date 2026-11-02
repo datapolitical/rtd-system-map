@@ -51,6 +51,17 @@ const tierMatch = (pick) => ['match', ['get', 'tier'], ...TIERS.flatMap((t) => [
 const tierWidth = (extra = 0) =>
   ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, tierMatch((t) => t.width[i] + extra)])];
 const fadeIn = ['interpolate', ['linear'], ['zoom'], ...[8, 9, 10, 11, 12, 13].flatMap((z) => [z, tierMatch((t) => Math.min(1, Math.max(0, (z - t.from) / 1.5 + 0.25)))])];
+// A corridor's numbers need room to sit on the line: at the opening zoom a
+// one-kilometre stretch is six pixels, narrower than the numbers themselves, so
+// MapLibre would drop nearly all of them. They arrive with the route numbers at
+// 11.5 and hand the street back to them by 13. One zoom interpolate, because
+// MapLibre allows only one per property.
+const CORRIDOR_LABELS_FROM = 11.5;
+const CORRIDOR_LABELS_UNTIL = 13;
+const corridorLabelFade = ['interpolate', ['linear'], ['zoom'],
+  ...[CORRIDOR_LABELS_FROM, 12, 12.75, CORRIDOR_LABELS_UNTIL].flatMap((z) => [z,
+    Math.round(Math.min(1, Math.max(0, (z - CORRIDOR_LABELS_FROM) / 0.5))
+      * Math.min(1, Math.max(0, (CORRIDOR_LABELS_UNTIL - z) / 0.25)) * 100) / 100])];
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -155,7 +166,7 @@ function citiesFirst(layers) {
   return layers;
 }
 
-const DATA_SOURCES = ['boundary', 'flexride', 'routes', 'stations', 'facilities', 'labels', 'stops'];
+const DATA_SOURCES = ['boundary', 'flexride', 'routes', 'corridors', 'stations', 'facilities', 'labels', 'stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
 
 // By URL, so each file downloads and parses in the map's worker.
@@ -249,6 +260,17 @@ function transitLines(lines) {
         'line-join': 'round',
         'line-sort-key': tierMatch((t) => TIER_RANK[t.id]),
       },
+      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn },
+    },
+    // A corridor is a street where two or more routes interleave, so the
+    // combined service beats either route alone. It sits over the buses and
+    // under the trains, in its combined tier's own ink and width, so the
+    // street reads as one thicker line rather than two thin ones.
+    {
+      id: 'corridors',
+      type: 'line',
+      source: 'corridors',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn },
     },
 
@@ -389,6 +411,30 @@ function transitMarks(lines) {
         'text-padding': 1,
       },
       paint: { 'text-color': tierMatch((t) => tagInk(t)), ...knockout },
+    },
+    // A corridor carries its members' numbers side by side from the opening
+    // view, along the line and repeated on a long one. By 11.5 the routes
+    // here carry their own numbers, and two labels on one street would fight.
+    {
+      id: 'corridor-labels',
+      type: 'symbol',
+      source: 'corridors',
+      minzoom: CORRIDOR_LABELS_FROM,
+      maxzoom: CORRIDOR_LABELS_UNTIL,
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 320,
+        'text-rotation-alignment': 'viewport',
+        'text-field': ['get', 'label'],
+        'text-font': FONT.bold,
+        'text-size': ['interpolate', ['linear'], ['zoom'], 8, 9.5, 11, 10.5],
+        'text-padding': 1,
+      },
+      paint: {
+        'text-color': tierMatch((t) => tagInk(t)),
+        'text-opacity': corridorLabelFade,
+        ...knockout,
+      },
     },
     // Closer in, numbers ride along the buses: every route that comes at least
     // every 30 minutes, then all of them.
