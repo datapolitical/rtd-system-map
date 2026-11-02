@@ -148,7 +148,7 @@ export function serviceDates(text) {
 
 // --- Frequency -----------------------------------------------------------
 
-const MIDDAY = [9 * 3600, 15 * 3600];
+export const MIDDAY = [9 * 3600, 15 * 3600];
 // A route with no midday trips is "rush hours only" if it runs in both rush
 // periods: before 9am and between 3 and 8pm.
 const MORNING = [0, 9 * 3600];
@@ -322,25 +322,89 @@ export function lineShapes(text, lineOf, services = []) {
   return result;
 }
 
+// --- Matching RTD's map to GTFS ------------------------------------------
+
+const routeName = (s) => (s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * Whether a GTFS route code is a variant of a route on RTD's map. RTD marks a
+ * variant by adding a letter to a numbered route (225D and 83L beside 225 and
+ * 83) or a number to a named one (FF1 and AB1 beside FF and AB). A code that
+ * only shares a prefix across those two patterns, like ATA beside AT, is a
+ * route of its own, not a variant.
+ */
+export function isVariantOf(code, route) {
+  if (!code.startsWith(route) || code === route) return false;
+  const suffix = code.slice(route.length);
+  if (!/^[A-Z0-9]$/.test(suffix)) return false;
+  return /^\d+$/.test(route) ? /^[A-Z]$/.test(suffix) : /^\d$/.test(suffix);
+}
+
+/**
+ * The GTFS routes behind one route on RTD's map (DESIGN.md, "Routes are
+ * matched between ArcGIS and GTFS"): by route number or ID, and, additively,
+ * the family RTD draws as one line, such as FF1 to FF5 as FF. A route that
+ * matches by number still takes its variants, so a frequency counts every
+ * trip riders on that line can take.
+ */
+export function matchGtfs(mapRoute, gtfsRoutes) {
+  const exact = gtfsRoutes.filter((r) => r.route_short_name === mapRoute.route || r.route_id === mapRoute.route);
+  const family = gtfsRoutes.filter(
+    (r) =>
+      !exact.includes(r) &&
+      isVariantOf(r.route_short_name || r.route_id, mapRoute.route) &&
+      routeName(r.route_long_name) === routeName(mapRoute.name),
+  );
+  return [...exact, ...family];
+}
+
+/**
+ * GTFS routes left out of the join that are variants of a route RTD's map
+ * draws. A variant must count toward its line: leaving one out draws the line
+ * less often than it runs, which is a bug in this build and not a change in
+ * RTD's network, so the caller stops. `matched` names the route_ids already
+ * joined.
+ */
+export function unmatchedVariants(gtfsRoutes, mapRoutes, matched = []) {
+  const joined = new Set(matched);
+  const found = [];
+  for (const r of gtfsRoutes) {
+    if (joined.has(r.route_id)) continue;
+    const code = r.route_short_name || r.route_id;
+    const parent = mapRoutes.find((p) => isVariantOf(code, p.route) && routeName(r.route_long_name) === routeName(p.name));
+    if (parent) found.push({ code, route: parent.route });
+  }
+  return found;
+}
+
+// --- Line ends -----------------------------------------------------------
+
 /**
  * Where each line's trips go: for each line and direction, the headsigns its
  * trips on `services` show (all trips if none run then), most common first,
- * and the most used shape in that direction, which says where it ends.
- * `lineOf` maps a GTFS route_id to its line, or to nothing for routes to
- * skip. Returns line -> [{ headsigns, at, path }], one per direction.
+ * the most used shape in that direction, which is the path the line takes,
+ * and the terminal it ends at. The terminal is the last stop of the longest
+ * trip on that shape, not the shape's own end: shapes carry tail track and
+ * deadheads past the stop where the bus turns around. `lineOf` maps a GTFS
+ * route_id to its line, or to nothing for routes to skip. Returns
+ * line -> [{ headsigns, at, path }], one per direction.
  */
 export function lineEnds(text, lineOf, services = []) {
   const result = new Map();
   const running = new Set(services);
   const trips = readCsv(text['trips.txt']).filter((t) => lineOf(t.route_id));
   const today = trips.filter((t) => running.has(t.service_id));
-  const counts = new Map(); // line -> direction -> { headsigns, shapes }
+  const counts = new Map(); // line -> direction -> { headsigns, shapes, trips }
+  const shapeOfTrip = new Map(); // trip_id -> shape_id
   for (const t of today.length ? today : trips) {
     const line = lineOf(t.route_id);
     const byDirection = counts.get(line) ?? counts.set(line, new Map()).get(line);
-    const c = byDirection.get(t.direction_id) ?? byDirection.set(t.direction_id, { headsigns: new Map(), shapes: new Map() }).get(t.direction_id);
+    const c = byDirection.get(t.direction_id) ?? byDirection.set(t.direction_id, { headsigns: new Map(), shapes: new Map(), trips: new Map() }).get(t.direction_id);
     if (t.trip_headsign) c.headsigns.set(t.trip_headsign, (c.headsigns.get(t.trip_headsign) ?? 0) + 1);
-    if (t.shape_id) c.shapes.set(t.shape_id, (c.shapes.get(t.shape_id) ?? 0) + 1);
+    if (!t.shape_id) continue;
+    c.shapes.set(t.shape_id, (c.shapes.get(t.shape_id) ?? 0) + 1);
+    c.trips.set(t.trip_id, t.shape_id);
+    shapeOfTrip.set(t.trip_id, t.shape_id);
   }
   const top = (m) => [...m].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
   const wanted = new Set([...counts.values()].flatMap((d) => [...d.values()].map((c) => top(c.shapes)).filter(Boolean)));
@@ -355,14 +419,47 @@ export function lineEnds(text, lineOf, services = []) {
     }
   }
   const path = (id) => points.get(id)?.sort((a, b) => a[0] - b[0]).map(([, lon, lat]) => [lon, lat]) ?? null;
+  // The last stop of each trip, by stop_sequence, and the stop itself.
+  const stops = new Map();
+  for (const row of readCsv(text['stops.txt'])) stops.set(row.stop_id, [Number(row.stop_lon), Number(row.stop_lat)]);
+  const lastStop = new Map(); // trip_id -> { shape, stops, sequence, stop, time }
+  if (text['stop_times.txt'] && shapeOfTrip.size) {
+    const rows = csvRows(text['stop_times.txt']);
+    const header = rows.next().value;
+    const [tripCol, stopCol, seqCol, arrCol, depCol] = ['trip_id', 'stop_id', 'stop_sequence', 'arrival_time', 'departure_time'].map((n) => header.indexOf(n));
+    for (const row of rows) {
+      const shape = shapeOfTrip.get(row[tripCol]);
+      if (!shape) continue;
+      const seen = lastStop.get(row[tripCol]) ?? lastStop.set(row[tripCol], { stops: 0, sequence: -1 }).get(row[tripCol]);
+      seen.stops++;
+      const sequence = Number(row[seqCol]);
+      if (sequence >= seen.sequence) {
+        seen.sequence = sequence;
+        seen.stop = row[stopCol];
+        seen.time = row[arrCol] || row[depCol] || '';
+      }
+    }
+  }
+  const terminal = (tripIds) =>
+    stops.size
+      ? tripIds
+          .map((id) => lastStop.get(id))
+          .filter((t) => t?.stop && stops.has(t.stop))
+          .sort((a, b) => b.stops - a.stops || b.time.localeCompare(a.time))[0]?.stop ?? null
+      : null;
   for (const [line, byDirection] of counts) {
     result.set(
       line,
       [...byDirection]
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([, c]) => {
-          const points = path(top(c.shapes));
-          return { headsigns: [...c.headsigns].sort((a, b) => b[1] - a[1]).map(([h]) => h), at: points?.at(-1) ?? null, path: points };
+          const shape = top(c.shapes);
+          const points = path(shape);
+          // Only trips on the shape the map draws say where this line ends; a
+          // variant running a different path ends somewhere else.
+          const onShape = [...c.trips].filter(([, id]) => id === shape).map(([trip]) => trip);
+          const at = stops.get(terminal(onShape)) ?? null;
+          return { headsigns: [...c.headsigns].sort((a, b) => b[1] - a[1]).map(([h]) => h), at: at ?? points?.at(-1) ?? null, path: points };
         }),
     );
   }
