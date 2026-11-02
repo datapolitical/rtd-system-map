@@ -1,0 +1,5836 @@
+[
+ {
+  "id": "corridor:169+169L:17630-23890:79790378",
+  "members": [
+   "169",
+   "169L"
+  ],
+  "stopSeq": [
+   "17630",
+   "17631",
+   "17632",
+   "18948",
+   "18949",
+   "18950",
+   "18951",
+   "23835",
+   "33477",
+   "20247",
+   "20248",
+   "20249",
+   "23879",
+   "23880",
+   "23881",
+   "33505",
+   "23882",
+   "23883",
+   "20695",
+   "22129",
+   "24360",
+   "22128",
+   "24123",
+   "21180",
+   "21181",
+   "23886",
+   "23887",
+   "23889",
+   "23890"
+  ],
+  "declared": 60,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 60,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": {
+   "member": "169",
+   "trip": "116040661",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "169",
+    "minutes": 60,
+    "at": "17630 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "169L",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17630",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "17631",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "17632",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "18948",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "18949",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "18950",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "18951",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23835",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "33477",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "20247",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "20248",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "20249",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23879",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23880",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23881",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "33505",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23882",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23883",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "20695",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 6,
+    "members": 2
+   },
+   {
+    "stop": "22129",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 6,
+    "members": 2
+   },
+   {
+    "stop": "24360",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "22128",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "24123",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "21180",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "21181",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23886",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23887",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23889",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23890",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   }
+  ],
+  "points": 29
+ },
+ {
+  "id": "corridor:287+LD:17661-29201:db0f1688",
+  "members": [
+   "287",
+   "LD"
+  ],
+  "stopSeq": [
+   "17661",
+   "17844",
+   "25095",
+   "21009",
+   "33296",
+   "23797",
+   "23798",
+   "19960",
+   "33685",
+   "33109",
+   "19099",
+   "19959",
+   "17969",
+   "20370",
+   "17872",
+   "17873",
+   "17875",
+   "17962",
+   "19958",
+   "25314",
+   "34743",
+   "29201",
+   "34742",
+   "25315",
+   "17962"
+  ],
+  "declared": 60,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 59.8,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    22,
+    3
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "287",
+    "minutes": 60,
+    "at": "17661 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "LD",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17875",
+    "dir": "1",
+    "minutes": 59.84166666666667,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "17962",
+    "dir": "1",
+    "minutes": 59.5,
+    "departures": 9,
+    "members": 2
+   },
+   {
+    "stop": "19958",
+    "dir": "1",
+    "minutes": 59,
+    "departures": 8,
+    "members": 2
+   },
+   {
+    "stop": "25314",
+    "dir": "1",
+    "minutes": 59,
+    "departures": 8,
+    "members": 2
+   },
+   {
+    "stop": "34743",
+    "dir": "1",
+    "minutes": 59,
+    "departures": 8,
+    "members": 2
+   },
+   {
+    "stop": "29201",
+    "dir": "1",
+    "minutes": 59,
+    "departures": 8,
+    "members": 2
+   }
+  ],
+  "points": 25
+ },
+ {
+  "id": "corridor:76+80:17011-21974:52734431",
+  "members": [
+   "76",
+   "80"
+  ],
+  "stopSeq": [
+   "17011",
+   "17008",
+   "17007",
+   "17005",
+   "17003",
+   "17001",
+   "16999",
+   "16997",
+   "16994",
+   "16992",
+   "16989",
+   "17080",
+   "21692",
+   "21974"
+  ],
+  "declared": 25,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 25,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "76",
+   "trip": "116048197",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "76",
+    "minutes": 30,
+    "at": "17011 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "80",
+    "minutes": 60,
+    "at": "17011 dir 1",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17011",
+    "dir": "1",
+    "minutes": 24.133333333333333,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17008",
+    "dir": "1",
+    "minutes": 24.283333333333335,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17007",
+    "dir": "1",
+    "minutes": 24.4,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17005",
+    "dir": "1",
+    "minutes": 24.5,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17003",
+    "dir": "1",
+    "minutes": 24.583333333333332,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17001",
+    "dir": "1",
+    "minutes": 24.75,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "16999",
+    "dir": "1",
+    "minutes": 24.9,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "16997",
+    "dir": "1",
+    "minutes": 25,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "16994",
+    "dir": "1",
+    "minutes": 24.95,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "16992",
+    "dir": "1",
+    "minutes": 24.933333333333334,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "16989",
+    "dir": "1",
+    "minutes": 24.85,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17080",
+    "dir": "1",
+    "minutes": 24.766666666666666,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "21692",
+    "dir": "1",
+    "minutes": 24.666666666666668,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "21974",
+    "dir": "1",
+    "minutes": 24.6,
+    "departures": 18,
+    "members": 2
+   }
+  ],
+  "points": 14
+ },
+ {
+  "id": "corridor:153+169:22038-25559:445859c0",
+  "members": [
+   "153",
+   "169"
+  ],
+  "stopSeq": [
+   "33362",
+   "21501",
+   "21499",
+   "21498",
+   "21497",
+   "22599",
+   "20060",
+   "21684",
+   "23200",
+   "24781",
+   "22038",
+   "24782",
+   "21604",
+   "20059",
+   "22600",
+   "21506",
+   "21505",
+   "21504",
+   "20463",
+   "33363",
+   "19774",
+   "25559"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    12,
+    10
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "153",
+    "minutes": 15,
+    "at": "33362 dir 0",
+    "routeLevel": 15
+   },
+   {
+    "member": "169",
+    "minutes": 60,
+    "at": "33362 dir 0",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "33362",
+    "dir": "0",
+    "minutes": 14.5,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "21501",
+    "dir": "0",
+    "minutes": 14.5,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "21499",
+    "dir": "0",
+    "minutes": 14.5,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "21498",
+    "dir": "0",
+    "minutes": 14.5,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "21497",
+    "dir": "0",
+    "minutes": 14.5,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "22599",
+    "dir": "0",
+    "minutes": 14.5,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "20060",
+    "dir": "0",
+    "minutes": 14.525,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "21684",
+    "dir": "0",
+    "minutes": 14.6,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "23200",
+    "dir": "0",
+    "minutes": 14.641666666666666,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "24781",
+    "dir": "0",
+    "minutes": 14.7,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "22038",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "24782",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "21604",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "20059",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "22600",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "21506",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "21505",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "21504",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "20463",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "33363",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "19774",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "25559",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 22
+ },
+ {
+  "id": "corridor:208+SKIP:24252-33604:59610b53",
+  "members": [
+   "208",
+   "SKIP"
+  ],
+  "stopSeq": [
+   "24252",
+   "12591",
+   "12559",
+   "12580",
+   "22998",
+   "12465",
+   "12492",
+   "12513",
+   "19385",
+   "12534",
+   "33604",
+   "12528",
+   "12525",
+   "12514",
+   "12493",
+   "12475",
+   "23066",
+   "12579",
+   "12562",
+   "12590"
+  ],
+  "declared": 10,
+  "bestSingle": 10,
+  "bestRouteLevel": 10,
+  "measuredCombined": 10,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    11,
+    9
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "208",
+    "minutes": 60,
+    "at": "24252 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "SKIP",
+    "minutes": 10,
+    "at": "24252 dir 0",
+    "routeLevel": 10
+   }
+  ],
+  "combined": [
+   {
+    "stop": "24252",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   },
+   {
+    "stop": "12591",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   },
+   {
+    "stop": "12559",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   },
+   {
+    "stop": "12580",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   },
+   {
+    "stop": "22998",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "12465",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "12492",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "12513",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "19385",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "12534",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "33604",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "12528",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   },
+   {
+    "stop": "12525",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   },
+   {
+    "stop": "12514",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   },
+   {
+    "stop": "12493",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   },
+   {
+    "stop": "12475",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "23066",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "12579",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "12562",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   },
+   {
+    "stop": "12590",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   }
+  ],
+  "points": 20
+ },
+ {
+  "id": "corridor:169+169L:23912-24521:1e0cc32b",
+  "members": [
+   "169",
+   "169L"
+  ],
+  "stopSeq": [
+   "23912",
+   "24068",
+   "22127",
+   "22126",
+   "21183",
+   "21182",
+   "23909",
+   "23908",
+   "23907",
+   "24521"
+  ],
+  "declared": 60,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 60,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": {
+   "member": "169",
+   "trip": "116040682",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "169",
+    "minutes": 60,
+    "at": "23912 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "169L",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "23912",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "24068",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "22127",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "22126",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "21183",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "21182",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23909",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23908",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23907",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "24521",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   }
+  ],
+  "points": 10
+ },
+ {
+  "id": "corridor:120L+145X:22733-24530:2be2f906",
+  "members": [
+   "120L",
+   "145X"
+  ],
+  "stopSeq": [
+   "22733",
+   "22732",
+   "22731",
+   "22730",
+   "26414",
+   "24533",
+   "24532",
+   "24531",
+   "24530"
+  ],
+  "declared": 60,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 60,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": {
+   "member": "145X",
+   "trip": "116038869",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "120L",
+    "minutes": 60,
+    "at": "22733 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "145X",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "22733",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "22732",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "22731",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "22730",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "26414",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 6,
+    "members": 2
+   },
+   {
+    "stop": "24533",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "24532",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "24531",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "24530",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   }
+  ],
+  "points": 9
+ },
+ {
+  "id": "corridor:3+4:12023-12029:446849f8",
+  "members": [
+   "3",
+   "4"
+  ],
+  "stopSeq": [
+   "12023",
+   "12039",
+   "12063",
+   "12092",
+   "12119",
+   "11968",
+   "11991",
+   "12029"
+  ],
+  "declared": 25,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 24.7,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "3",
+   "trip": "116042721",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "3",
+    "minutes": 30,
+    "at": "11991 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "4",
+    "minutes": 60,
+    "at": "12023 dir 0",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12023",
+    "dir": "0",
+    "minutes": 20.9,
+    "departures": 19,
+    "members": 2
+   },
+   {
+    "stop": "12039",
+    "dir": "0",
+    "minutes": 21.283333333333335,
+    "departures": 19,
+    "members": 2
+   },
+   {
+    "stop": "12063",
+    "dir": "0",
+    "minutes": 21.816666666666666,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "12092",
+    "dir": "0",
+    "minutes": 22.383333333333333,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "12119",
+    "dir": "0",
+    "minutes": 22.85,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "11968",
+    "dir": "0",
+    "minutes": 23.416666666666668,
+    "departures": 19,
+    "members": 2
+   },
+   {
+    "stop": "11991",
+    "dir": "0",
+    "minutes": 24,
+    "departures": 19,
+    "members": 2
+   },
+   {
+    "stop": "12029",
+    "dir": "0",
+    "minutes": 24.683333333333334,
+    "departures": 19,
+    "members": 2
+   }
+  ],
+  "points": 8
+ },
+ {
+  "id": "corridor:76+9:33170-33666:38937f3b",
+  "members": [
+   "9",
+   "76"
+  ],
+  "stopSeq": [
+   "33170",
+   "17024",
+   "16947",
+   "23037",
+   "16974",
+   "16985",
+   "17061",
+   "33666"
+  ],
+  "declared": 26,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 25.6,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "9",
+   "trip": "116048926",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "9",
+    "minutes": 62,
+    "at": "33170 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "76",
+    "minutes": 30,
+    "at": "33170 dir 1",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "33170",
+    "dir": "1",
+    "minutes": 25.466666666666665,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17024",
+    "dir": "1",
+    "minutes": 25.55,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "16947",
+    "dir": "1",
+    "minutes": 23.716666666666665,
+    "departures": 17,
+    "members": 2
+   },
+   {
+    "stop": "23037",
+    "dir": "1",
+    "minutes": 24.025,
+    "departures": 17,
+    "members": 2
+   },
+   {
+    "stop": "16974",
+    "dir": "1",
+    "minutes": 24.166666666666664,
+    "departures": 17,
+    "members": 2
+   },
+   {
+    "stop": "16985",
+    "dir": "1",
+    "minutes": 24.366666666666667,
+    "departures": 17,
+    "members": 2
+   },
+   {
+    "stop": "17061",
+    "dir": "1",
+    "minutes": 24.725,
+    "departures": 17,
+    "members": 2
+   },
+   {
+    "stop": "33666",
+    "dir": "1",
+    "minutes": 24.958333333333336,
+    "departures": 17,
+    "members": 2
+   }
+  ],
+  "points": 8
+ },
+ {
+  "id": "corridor:205+BOLT:10726-33383:12b4c1fe",
+  "members": [
+   "205",
+   "BOLT"
+  ],
+  "stopSeq": [
+   "10726",
+   "17992",
+   "25325",
+   "17989",
+   "12672",
+   "17988",
+   "17987",
+   "33383",
+   "18016",
+   "18015",
+   "18014",
+   "35215",
+   "26095",
+   "19332",
+   "10725"
+  ],
+  "declared": 30,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 29.8,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    7,
+    8
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "205",
+    "minutes": 30,
+    "at": "10726 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "BOLT",
+    "minutes": 60,
+    "at": "10726 dir 0",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "10726",
+    "dir": "0",
+    "minutes": 28,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "17992",
+    "dir": "0",
+    "minutes": 28,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "25325",
+    "dir": "0",
+    "minutes": 28,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "17989",
+    "dir": "0",
+    "minutes": 28,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "12672",
+    "dir": "0",
+    "minutes": 28.4,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "17988",
+    "dir": "0",
+    "minutes": 29.016666666666666,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "17987",
+    "dir": "0",
+    "minutes": 29.5,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "33383",
+    "dir": "0",
+    "minutes": 29.766666666666666,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "18016",
+    "dir": "1",
+    "minutes": 28.383333333333333,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "18015",
+    "dir": "1",
+    "minutes": 28.966666666666665,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "18014",
+    "dir": "1",
+    "minutes": 28.65,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "35215",
+    "dir": "1",
+    "minutes": 28.233333333333334,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "26095",
+    "dir": "1",
+    "minutes": 28.15,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "19332",
+    "dir": "1",
+    "minutes": 28.1,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "10725",
+    "dir": "1",
+    "minutes": 28,
+    "departures": 20,
+    "members": 2
+   }
+  ],
+  "points": 15
+ },
+ {
+  "id": "corridor:80+92:11828-22944:dd89225f",
+  "members": [
+   "80",
+   "92"
+  ],
+  "stopSeq": [
+   "11828",
+   "11806",
+   "11809",
+   "11820",
+   "11817",
+   "22943",
+   "22944",
+   "11823",
+   "11810",
+   "11807"
+  ],
+  "declared": 24,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 25.7,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    7,
+    3
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "80",
+    "minutes": 60,
+    "at": "11828 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "92",
+    "minutes": 30,
+    "at": "11828 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "11828",
+    "dir": "0",
+    "minutes": 24,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11806",
+    "dir": "0",
+    "minutes": 24,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11809",
+    "dir": "0",
+    "minutes": 24,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11820",
+    "dir": "0",
+    "minutes": 24,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11817",
+    "dir": "0",
+    "minutes": 24,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "22943",
+    "dir": "0",
+    "minutes": 24,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "22944",
+    "dir": "0",
+    "minutes": 24,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11823",
+    "dir": "1",
+    "minutes": 25.733333333333334,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11810",
+    "dir": "1",
+    "minutes": 25.416666666666668,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11807",
+    "dir": "1",
+    "minutes": 25.15,
+    "departures": 18,
+    "members": 2
+   }
+  ],
+  "points": 10
+ },
+ {
+  "id": "corridor:169+169L:17628-23917:d86f62e3",
+  "members": [
+   "169",
+   "169L"
+  ],
+  "stopSeq": [
+   "17628",
+   "17627",
+   "17626",
+   "23920",
+   "22645",
+   "23918",
+   "23917"
+  ],
+  "declared": 60,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 60,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": {
+   "member": "169",
+   "trip": "116040682",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "169",
+    "minutes": 60,
+    "at": "17628 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "169L",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17628",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "17627",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "17626",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23920",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "22645",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23918",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23917",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   }
+  ],
+  "points": 7
+ },
+ {
+  "id": "corridor:206+SKIP:12603-14126:185b9b14",
+  "members": [
+   "206",
+   "SKIP"
+  ],
+  "stopSeq": [
+   "12603",
+   "12531",
+   "19179",
+   "19336",
+   "14129",
+   "22876",
+   "14126"
+  ],
+  "declared": 10,
+  "bestSingle": 10,
+  "bestRouteLevel": 10,
+  "measuredCombined": 10,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "206",
+   "trip": "116041578",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "206",
+    "minutes": 60,
+    "at": "12603 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "SKIP",
+    "minutes": 10,
+    "at": "12603 dir 1",
+    "routeLevel": 10
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12603",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "12531",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "19179",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "19336",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "14129",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "22876",
+    "dir": "1",
+    "minutes": 10,
+    "departures": 45,
+    "members": 2
+   },
+   {
+    "stop": "14126",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 44,
+    "members": 2
+   }
+  ],
+  "points": 7
+ },
+ {
+  "id": "corridor:35+76:17021-17063:acac51d8",
+  "members": [
+   "35",
+   "76"
+  ],
+  "stopSeq": [
+   "17021",
+   "17041",
+   "17046",
+   "17054",
+   "17056",
+   "17063"
+  ],
+  "declared": 21,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 20.9,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "35",
+   "trip": "116044021",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "35",
+    "minutes": 30,
+    "at": "17021 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "76",
+    "minutes": 30,
+    "at": "17021 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17021",
+    "dir": "0",
+    "minutes": 20.866666666666667,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "17041",
+    "dir": "0",
+    "minutes": 20.75,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "17046",
+    "dir": "0",
+    "minutes": 20.6,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "17054",
+    "dir": "0",
+    "minutes": 20.5,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "17056",
+    "dir": "0",
+    "minutes": 20.433333333333334,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "17063",
+    "dir": "0",
+    "minutes": 20.3,
+    "departures": 24,
+    "members": 2
+   }
+  ],
+  "points": 6
+ },
+ {
+  "id": "corridor:35+40:14136-15561:e6706492",
+  "members": [
+   "35",
+   "40"
+  ],
+  "stopSeq": [
+   "14136",
+   "14139",
+   "14149",
+   "14155",
+   "14164",
+   "15561"
+  ],
+  "declared": 11,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 11,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "35",
+   "trip": "116044053",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "35",
+    "minutes": 30,
+    "at": "14136 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "40",
+    "minutes": 15,
+    "at": "14136 dir 0",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "15561",
+    "dir": "0",
+    "minutes": 11,
+    "departures": 36,
+    "members": 2
+   }
+  ],
+  "points": 6
+ },
+ {
+  "id": "corridor:169+169L:24512-25812:6c9a5643",
+  "members": [
+   "169",
+   "169L"
+  ],
+  "stopSeq": [
+   "24520",
+   "24519",
+   "25791",
+   "34362",
+   "24512",
+   "34361",
+   "25792",
+   "24511",
+   "24510",
+   "25812"
+  ],
+  "declared": 60,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 60,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    6,
+    4
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "169",
+    "minutes": 60,
+    "at": "24520 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "169L",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "24520",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 6,
+    "members": 2
+   },
+   {
+    "stop": "24519",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "25791",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "34362",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "24512",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "34361",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "25792",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "24511",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "24510",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "25812",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   }
+  ],
+  "points": 10
+ },
+ {
+  "id": "corridor:287+324:15159-17639:9f9d99db",
+  "members": [
+   "287",
+   "324"
+  ],
+  "stopSeq": [
+   "15159",
+   "15141",
+   "15173",
+   "15143",
+   "17638",
+   "17639",
+   "17659",
+   "15145",
+   "15144",
+   "15174",
+   "15142"
+  ],
+  "declared": 23,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 27.4,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    6,
+    5
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "287",
+    "minutes": 60,
+    "at": "15159 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "324",
+    "minutes": 30,
+    "at": "15159 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "15159",
+    "dir": "0",
+    "minutes": 23.233333333333334,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "15141",
+    "dir": "0",
+    "minutes": 22.416666666666668,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "15173",
+    "dir": "0",
+    "minutes": 21,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "15143",
+    "dir": "0",
+    "minutes": 21.066666666666666,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17638",
+    "dir": "0",
+    "minutes": 21.133333333333333,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17639",
+    "dir": "0",
+    "minutes": 21.2,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17659",
+    "dir": "1",
+    "minutes": 26.416666666666668,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "15145",
+    "dir": "1",
+    "minutes": 26.616666666666667,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "15144",
+    "dir": "1",
+    "minutes": 26.866666666666667,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "15174",
+    "dir": "1",
+    "minutes": 27,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "15142",
+    "dir": "1",
+    "minutes": 27.383333333333333,
+    "departures": 18,
+    "members": 2
+   }
+  ],
+  "points": 11
+ },
+ {
+  "id": "corridor:10+15:12974-25561:2722624e",
+  "members": [
+   "10",
+   "15"
+  ],
+  "stopSeq": [
+   "12974",
+   "12995",
+   "12999",
+   "13014",
+   "25561"
+  ],
+  "declared": 10,
+  "bestSingle": 10,
+  "bestRouteLevel": 10,
+  "measuredCombined": 10,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "10",
+   "trip": "116032138",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "10",
+    "minutes": 60,
+    "at": "12974 dir 1",
+    "routeLevel": 20
+   },
+   {
+    "member": "15",
+    "minutes": 10,
+    "at": "12974 dir 1",
+    "routeLevel": 10
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12974",
+    "dir": "1",
+    "minutes": 9.966666666666667,
+    "departures": 42,
+    "members": 2
+   },
+   {
+    "stop": "12995",
+    "dir": "1",
+    "minutes": 9.95,
+    "departures": 43,
+    "members": 2
+   },
+   {
+    "stop": "12999",
+    "dir": "1",
+    "minutes": 9.95,
+    "departures": 43,
+    "members": 2
+   },
+   {
+    "stop": "13014",
+    "dir": "1",
+    "minutes": 9.933333333333334,
+    "departures": 43,
+    "members": 2
+   },
+   {
+    "stop": "25561",
+    "dir": "1",
+    "minutes": 9.933333333333334,
+    "departures": 43,
+    "members": 2
+   }
+  ],
+  "points": 5
+ },
+ {
+  "id": "corridor:30+36:13809-13855:fa595de0",
+  "members": [
+   "30",
+   "36"
+  ],
+  "stopSeq": [
+   "13809",
+   "23509",
+   "13822",
+   "13819",
+   "13855"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "30",
+   "trip": "116043027",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "30",
+    "minutes": 15,
+    "at": "13809 dir 0",
+    "routeLevel": 15
+   },
+   {
+    "member": "36",
+    "minutes": 60,
+    "at": "13809 dir 0",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "13809",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "23509",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "13822",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "13819",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "13855",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 5
+ },
+ {
+  "id": "corridor:35+83:13246-15780:a6a205d8",
+  "members": [
+   "35",
+   "83"
+  ],
+  "stopSeq": [
+   "13246",
+   "13280",
+   "13290",
+   "15773",
+   "15780"
+  ],
+  "declared": 24,
+  "bestSingle": 30,
+  "bestRouteLevel": 15,
+  "measuredCombined": 23.7,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "35",
+   "trip": "116044053",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "35",
+    "minutes": 30,
+    "at": "13246 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "83",
+    "minutes": 30,
+    "at": "13246 dir 1",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "13246",
+    "dir": "1",
+    "minutes": 23.616666666666667,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "13280",
+    "dir": "1",
+    "minutes": 23.633333333333333,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "13290",
+    "dir": "1",
+    "minutes": 23.65,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "15773",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 25,
+    "members": 2
+   },
+   {
+    "stop": "15780",
+    "dir": "1",
+    "minutes": 10.883333333333333,
+    "departures": 36,
+    "members": 2
+   }
+  ],
+  "points": 5
+ },
+ {
+  "id": "corridor:3+83:10480-11974:0baa3be0",
+  "members": [
+   "3",
+   "83"
+  ],
+  "stopSeq": [
+   "10480",
+   "10413",
+   "21849",
+   "18513",
+   "11974",
+   "11973",
+   "16656",
+   "18861"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    5,
+    3
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "3",
+    "minutes": 60,
+    "at": "10480 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "83",
+    "minutes": 15,
+    "at": "10480 dir 0",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "10480",
+    "dir": "0",
+    "minutes": 14.983333333333333,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "10413",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "21849",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "18513",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "11974",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "11973",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "16656",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "18861",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 8
+ },
+ {
+  "id": "corridor:225+287+LD:17875-17969:3f262ffc",
+  "members": [
+   "225",
+   "287",
+   "LD"
+  ],
+  "stopSeq": [
+   "17875",
+   "17873",
+   "17872",
+   "20370",
+   "17969"
+  ],
+  "declared": 60,
+  "bestSingle": 53,
+  "bestRouteLevel": 30,
+  "measuredCombined": 59.8,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": {
+   "member": "225",
+   "trip": "116055907",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "225",
+    "minutes": 53,
+    "at": "17875 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "287",
+    "minutes": 60,
+    "at": "17875 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "LD",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17875",
+    "dir": "1",
+    "minutes": 59.84166666666667,
+    "departures": 7,
+    "members": 2
+   }
+  ],
+  "points": 5
+ },
+ {
+  "id": "corridor:287+LD+LX2:17635-33297:ae40adf7",
+  "members": [
+   "287",
+   "LD",
+   "LX2"
+  ],
+  "stopSeq": [
+   "17635",
+   "17634",
+   "25094",
+   "21010",
+   "33297"
+  ],
+  "declared": 60,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 60,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": {
+   "member": "287",
+   "trip": "116042533",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "287",
+    "minutes": 60,
+    "at": "17635 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "LD",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   },
+   {
+    "member": "LX2",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17635",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "17634",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "25094",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "21010",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   }
+  ],
+  "points": 5
+ },
+ {
+  "id": "corridor:287+LD:21222-25900:5b2702f0",
+  "members": [
+   "287",
+   "LD"
+  ],
+  "stopSeq": [
+   "21222",
+   "17973",
+   "20537",
+   "17972",
+   "25900"
+  ],
+  "declared": 59,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 59,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": {
+   "member": "287",
+   "trip": "116042553",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "287",
+    "minutes": 60,
+    "at": "21222 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "LD",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "21222",
+    "dir": "1",
+    "minutes": 59,
+    "departures": 8,
+    "members": 2
+   },
+   {
+    "stop": "17973",
+    "dir": "1",
+    "minutes": 59,
+    "departures": 8,
+    "members": 2
+   },
+   {
+    "stop": "20537",
+    "dir": "1",
+    "minutes": 59,
+    "departures": 8,
+    "members": 2
+   },
+   {
+    "stop": "17972",
+    "dir": "1",
+    "minutes": 59,
+    "departures": 8,
+    "members": 2
+   },
+   {
+    "stop": "25900",
+    "dir": "1",
+    "minutes": 59,
+    "departures": 8,
+    "members": 2
+   }
+  ],
+  "points": 5
+ },
+ {
+  "id": "corridor:0+0L:12519-17772:6bdb3477",
+  "members": [
+   "0",
+   "0L"
+  ],
+  "stopSeq": [
+   "12519",
+   "12464",
+   "17774",
+   "17772"
+  ],
+  "declared": 9,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 9.1,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "0L",
+   "trip": "116031801",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "0",
+    "minutes": 15,
+    "at": "12519 dir 1",
+    "routeLevel": 15
+   },
+   {
+    "member": "0L",
+    "minutes": 15,
+    "at": "12519 dir 1",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12519",
+    "dir": "1",
+    "minutes": 9.133333333333333,
+    "departures": 48,
+    "members": 2
+   },
+   {
+    "stop": "12464",
+    "dir": "1",
+    "minutes": 7.5,
+    "departures": 47,
+    "members": 2
+   },
+   {
+    "stop": "17774",
+    "dir": "1",
+    "minutes": 7.666666666666667,
+    "departures": 48,
+    "members": 2
+   },
+   {
+    "stop": "17772",
+    "dir": "1",
+    "minutes": 6.9,
+    "departures": 48,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:9+ART:14720-14722:2db0a625",
+  "members": [
+   "9",
+   "ART"
+  ],
+  "stopSeq": [
+   "14720",
+   "14719",
+   "14718",
+   "14722"
+  ],
+  "declared": 23,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 23.2,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "9",
+   "trip": "116048926",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "9",
+    "minutes": 63,
+    "at": "14720 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "ART",
+    "minutes": 30,
+    "at": "14720 dir 1",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "14720",
+    "dir": "1",
+    "minutes": 23.183333333333334,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "14719",
+    "dir": "1",
+    "minutes": 23.083333333333332,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "14718",
+    "dir": "1",
+    "minutes": 20.95,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "14722",
+    "dir": "1",
+    "minutes": 20.866666666666667,
+    "departures": 18,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:10+32+44:17710-17717:663ede89",
+  "members": [
+   "10",
+   "32",
+   "44"
+  ],
+  "stopSeq": [
+   "17710",
+   "17713",
+   "17716",
+   "17717"
+  ],
+  "declared": 15,
+  "bestSingle": 20,
+  "bestRouteLevel": 20,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "10",
+   "trip": "116032090",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "10",
+    "minutes": 20,
+    "at": "17710 dir 0",
+    "routeLevel": 20
+   },
+   {
+    "member": "32",
+    "minutes": 60,
+    "at": "17710 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "44",
+    "minutes": 60,
+    "at": "17710 dir 0",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17710",
+    "dir": "0",
+    "minutes": 14.783333333333333,
+    "departures": 30,
+    "members": 3
+   },
+   {
+    "stop": "17713",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 3
+   },
+   {
+    "stop": "17716",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 3
+   },
+   {
+    "stop": "17717",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 3
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:20+FF:26213-26411:87495a75",
+  "members": [
+   "20",
+   "FF"
+  ],
+  "stopSeq": [
+   "26213",
+   "33075",
+   "26410",
+   "26411"
+  ],
+  "declared": 30,
+  "bestSingle": 30,
+  "bestRouteLevel": 15,
+  "measuredCombined": 30,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "20",
+   "trip": "116041229",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "20",
+    "minutes": 30,
+    "at": "26213 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "FF",
+    "minutes": null,
+    "at": null,
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "26213",
+    "dir": "1",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "33075",
+    "dir": "1",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "26410",
+    "dir": "1",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "26411",
+    "dir": "1",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:130+21:16387-16402:3ecdb7ac",
+  "members": [
+   "21",
+   "130"
+  ],
+  "stopSeq": [
+   "16387",
+   "16398",
+   "16407",
+   "16402"
+  ],
+  "declared": 10,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 10.5,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "21",
+   "trip": "116041775",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "21",
+    "minutes": 15,
+    "at": "16387 dir 0",
+    "routeLevel": 15
+   },
+   {
+    "member": "130",
+    "minutes": 30,
+    "at": "16387 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "16387",
+    "dir": "0",
+    "minutes": 10.4,
+    "departures": 36,
+    "members": 2
+   },
+   {
+    "stop": "16398",
+    "dir": "0",
+    "minutes": 10.416666666666666,
+    "departures": 36,
+    "members": 2
+   },
+   {
+    "stop": "16407",
+    "dir": "0",
+    "minutes": 10.433333333333334,
+    "departures": 36,
+    "members": 2
+   },
+   {
+    "stop": "16402",
+    "dir": "0",
+    "minutes": 10.45,
+    "departures": 36,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:30+36:13805-13818:3ad61d7b",
+  "members": [
+   "30",
+   "36"
+  ],
+  "stopSeq": [
+   "13805",
+   "13815",
+   "23068",
+   "13818",
+   "23069",
+   "13816"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    4,
+    2
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "30",
+    "minutes": 15,
+    "at": "13805 dir 1",
+    "routeLevel": 15
+   },
+   {
+    "member": "36",
+    "minutes": 60,
+    "at": "13805 dir 1",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "13805",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "13815",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "23068",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "13818",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "23069",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "13816",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 6
+ },
+ {
+  "id": "corridor:30+36+59:12408-12762:32ee5c1e",
+  "members": [
+   "30",
+   "36",
+   "59"
+  ],
+  "stopSeq": [
+   "12408",
+   "12417",
+   "12761",
+   "12762"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "30",
+   "trip": "116043091",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "30",
+    "minutes": 15,
+    "at": "12408 dir 1",
+    "routeLevel": 15
+   },
+   {
+    "member": "36",
+    "minutes": 60,
+    "at": "12408 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "59",
+    "minutes": 60,
+    "at": "12408 dir 0",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12408",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "12417",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "12761",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "12762",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:105+35:14182-33367:e4d8e884",
+  "members": [
+   "35",
+   "105"
+  ],
+  "stopSeq": [
+   "14182",
+   "14178",
+   "14174",
+   "33367"
+  ],
+  "declared": 12,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 12.3,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "35",
+   "trip": "116044021",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "35",
+    "minutes": 30,
+    "at": "14182 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "105",
+    "minutes": 15,
+    "at": "14182 dir 0",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "14182",
+    "dir": "0",
+    "minutes": 12.066666666666666,
+    "departures": 36,
+    "members": 2
+   },
+   {
+    "stop": "14178",
+    "dir": "0",
+    "minutes": 12.3,
+    "departures": 36,
+    "members": 2
+   },
+   {
+    "stop": "14174",
+    "dir": "0",
+    "minutes": 12.083333333333334,
+    "departures": 37,
+    "members": 2
+   },
+   {
+    "stop": "33367",
+    "dir": "0",
+    "minutes": 11.866666666666667,
+    "departures": 37,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:105+35:14132-14179:331f7aa1",
+  "members": [
+   "35",
+   "105"
+  ],
+  "stopSeq": [
+   "14132",
+   "14183",
+   "14181",
+   "14179"
+  ],
+  "declared": 13,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 13.3,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "35",
+   "trip": "116044053",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "35",
+    "minutes": 30,
+    "at": "14132 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "105",
+    "minutes": 15,
+    "at": "14132 dir 1",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "14132",
+    "dir": "1",
+    "minutes": 13.266666666666667,
+    "departures": 36,
+    "members": 2
+   },
+   {
+    "stop": "14183",
+    "dir": "1",
+    "minutes": 13,
+    "departures": 36,
+    "members": 2
+   },
+   {
+    "stop": "14181",
+    "dir": "1",
+    "minutes": 12.666666666666666,
+    "departures": 36,
+    "members": 2
+   },
+   {
+    "stop": "14179",
+    "dir": "1",
+    "minutes": 12.2,
+    "departures": 36,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:40+46:13110-13144:061b802e",
+  "members": [
+   "40",
+   "46"
+  ],
+  "stopSeq": [
+   "13110",
+   "13125",
+   "13104",
+   "13144"
+  ],
+  "declared": 12,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 12,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "40",
+   "trip": "116044716",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "40",
+    "minutes": 15,
+    "at": "13110 dir 0",
+    "routeLevel": 15
+   },
+   {
+    "member": "46",
+    "minutes": 30,
+    "at": "13110 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "13110",
+    "dir": "0",
+    "minutes": 12.016666666666667,
+    "departures": 37,
+    "members": 2
+   },
+   {
+    "stop": "13125",
+    "dir": "0",
+    "minutes": 11.833333333333334,
+    "departures": 37,
+    "members": 2
+   },
+   {
+    "stop": "13104",
+    "dir": "0",
+    "minutes": 11.733333333333333,
+    "departures": 37,
+    "members": 2
+   },
+   {
+    "stop": "13144",
+    "dir": "0",
+    "minutes": 11.616666666666667,
+    "departures": 37,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:40+46:13124-26151:a28043e8",
+  "members": [
+   "40",
+   "46"
+  ],
+  "stopSeq": [
+   "13124",
+   "13126",
+   "13111",
+   "26151"
+  ],
+  "declared": 13,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 13,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "40",
+   "trip": "116044785",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "40",
+    "minutes": 15,
+    "at": "13124 dir 1",
+    "routeLevel": 15
+   },
+   {
+    "member": "46",
+    "minutes": 30,
+    "at": "13124 dir 1",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "13124",
+    "dir": "1",
+    "minutes": 12.991666666666667,
+    "departures": 35,
+    "members": 2
+   },
+   {
+    "stop": "13126",
+    "dir": "1",
+    "minutes": 12.825,
+    "departures": 35,
+    "members": 2
+   },
+   {
+    "stop": "13111",
+    "dir": "1",
+    "minutes": 13,
+    "departures": 36,
+    "members": 2
+   },
+   {
+    "stop": "26151",
+    "dir": "1",
+    "minutes": 13,
+    "departures": 36,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:42+45:24513-26020:3ef0cd51",
+  "members": [
+   "42",
+   "45"
+  ],
+  "stopSeq": [
+   "24513",
+   "33461",
+   "25805",
+   "26020"
+  ],
+  "declared": 15,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 15.3,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "42",
+   "trip": "116045115",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "42",
+    "minutes": 30,
+    "at": "24513 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "45",
+    "minutes": 30,
+    "at": "24513 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "24513",
+    "dir": "0",
+    "minutes": 15.3,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "33461",
+    "dir": "0",
+    "minutes": 15.25,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "25805",
+    "dir": "0",
+    "minutes": 15.133333333333333,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "26020",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 24,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:121+45:15910-23518:2462ba4a",
+  "members": [
+   "45",
+   "121"
+  ],
+  "stopSeq": [
+   "15910",
+   "15905",
+   "33345",
+   "23518",
+   "15906",
+   "15909",
+   "15911"
+  ],
+  "declared": 15,
+  "bestSingle": 30,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15.1,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    3,
+    4
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "45",
+    "minutes": 30,
+    "at": "15910 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "121",
+    "minutes": 30,
+    "at": "15910 dir 0",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "15910",
+    "dir": "0",
+    "minutes": 14.633333333333333,
+    "departures": 25,
+    "members": 2
+   },
+   {
+    "stop": "15905",
+    "dir": "0",
+    "minutes": 14.541666666666668,
+    "departures": 25,
+    "members": 2
+   },
+   {
+    "stop": "33345",
+    "dir": "0",
+    "minutes": 14.483333333333334,
+    "departures": 25,
+    "members": 2
+   },
+   {
+    "stop": "23518",
+    "dir": "0",
+    "minutes": 14.45,
+    "departures": 25,
+    "members": 2
+   },
+   {
+    "stop": "15906",
+    "dir": "1",
+    "minutes": 15.133333333333333,
+    "departures": 25,
+    "members": 2
+   },
+   {
+    "stop": "15909",
+    "dir": "1",
+    "minutes": 15.025,
+    "departures": 25,
+    "members": 2
+   },
+   {
+    "stop": "15911",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 25,
+    "members": 2
+   }
+  ],
+  "points": 7
+ },
+ {
+  "id": "corridor:48+ART:11298-13147:cf1be8b6",
+  "members": [
+   "48",
+   "ART"
+  ],
+  "stopSeq": [
+   "11298",
+   "11269",
+   "11276",
+   "13147"
+  ],
+  "declared": 23,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 23,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "48",
+   "trip": "116046261",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "48",
+    "minutes": 30,
+    "at": "11298 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "ART",
+    "minutes": 30,
+    "at": "11298 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "11298",
+    "dir": "0",
+    "minutes": 22.95,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "11269",
+    "dir": "0",
+    "minutes": 22.966666666666665,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "11276",
+    "dir": "0",
+    "minutes": 22.983333333333334,
+    "departures": 24,
+    "members": 2
+   },
+   {
+    "stop": "13147",
+    "dir": "0",
+    "minutes": 23,
+    "departures": 24,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:100+92:11800-18685:2aae4ae0",
+  "members": [
+   "92",
+   "100"
+  ],
+  "stopSeq": [
+   "11800",
+   "33333",
+   "11805",
+   "18685",
+   "11804",
+   "11815"
+  ],
+  "declared": 25,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 25,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    4,
+    2
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "92",
+    "minutes": 30,
+    "at": "11800 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "100",
+    "minutes": 60,
+    "at": "11800 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "11800",
+    "dir": "0",
+    "minutes": 24.75,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "33333",
+    "dir": "0",
+    "minutes": 24.166666666666668,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11805",
+    "dir": "0",
+    "minutes": 23.166666666666668,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "18685",
+    "dir": "1",
+    "minutes": 25,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11804",
+    "dir": "1",
+    "minutes": 24.883333333333333,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "11815",
+    "dir": "1",
+    "minutes": 24.533333333333335,
+    "departures": 18,
+    "members": 2
+   }
+  ],
+  "points": 6
+ },
+ {
+  "id": "corridor:92+93L:23181-23183:ffbed3be",
+  "members": [
+   "92",
+   "93L"
+  ],
+  "stopSeq": [
+   "23181",
+   "23103",
+   "23182",
+   "23183",
+   "19848",
+   "23181",
+   "23103"
+  ],
+  "declared": 26,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 26.3,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    4,
+    3
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "92",
+    "minutes": 30,
+    "at": "23181 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "93L",
+    "minutes": 60,
+    "at": "23181 dir 1",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "23181",
+    "dir": "1",
+    "minutes": 20.95,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "23103",
+    "dir": "0",
+    "minutes": 26,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "23182",
+    "dir": "0",
+    "minutes": 26.133333333333333,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "23183",
+    "dir": "0",
+    "minutes": 26.316666666666666,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "19848",
+    "dir": "1",
+    "minutes": 20.983333333333334,
+    "departures": 18,
+    "members": 2
+   }
+  ],
+  "points": 7
+ },
+ {
+  "id": "corridor:135+139:16196-26193:dda5568e",
+  "members": [
+   "135",
+   "139"
+  ],
+  "stopSeq": [
+   "16196",
+   "34892",
+   "15770",
+   "26193",
+   "20368",
+   "16195"
+  ],
+  "declared": 30,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 30,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    4,
+    2
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "135",
+    "minutes": 60,
+    "at": "16196 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "139",
+    "minutes": 60,
+    "at": "16196 dir 1",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "16196",
+    "dir": "1",
+    "minutes": 29.5,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "34892",
+    "dir": "1",
+    "minutes": 29.55,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "15770",
+    "dir": "1",
+    "minutes": 29.65833333333333,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "26193",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "20368",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "16195",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   }
+  ],
+  "points": 6
+ },
+ {
+  "id": "corridor:153+483:25559-25738:263802ba",
+  "members": [
+   "153",
+   "483"
+  ],
+  "stopSeq": [
+   "25559",
+   "33940",
+   "25557",
+   "25738"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "153",
+   "trip": "116039642",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "153",
+    "minutes": 15,
+    "at": "25559 dir 1",
+    "routeLevel": 15
+   },
+   {
+    "member": "483",
+    "minutes": 60,
+    "at": "25559 dir 1",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "25559",
+    "dir": "1",
+    "minutes": 14.5,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "33940",
+    "dir": "1",
+    "minutes": 14.5,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "25557",
+    "dir": "1",
+    "minutes": 14.558333333333334,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "25738",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:169L+45:23707-25805:f6750926",
+  "members": [
+   "45",
+   "169L"
+  ],
+  "stopSeq": [
+   "23707",
+   "24513",
+   "33461",
+   "25805"
+  ],
+  "declared": 30,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 30,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "45",
+   "trip": "116045944",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "45",
+    "minutes": 30,
+    "at": "23707 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "169L",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "23707",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "24513",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "33461",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   },
+   {
+    "stop": "25805",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:208+BOND:10726-10845:830ede98",
+  "members": [
+   "208",
+   "BOND"
+  ],
+  "stopSeq": [
+   "10726",
+   "14104",
+   "14105",
+   "10845"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "208",
+   "trip": "116041630",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "208",
+    "minutes": 60,
+    "at": "10726 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "BOND",
+    "minutes": 15,
+    "at": "10726 dir 1",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "10726",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 4
+ },
+ {
+  "id": "corridor:AB+FF:12478-34195:24223591",
+  "members": [
+   "AB",
+   "FF"
+  ],
+  "stopSeq": [
+   "12478",
+   "12509",
+   "16680",
+   "34195",
+   "26210",
+   "26203",
+   "35215",
+   "34607",
+   "26205",
+   "16342"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 14.8,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    4,
+    3,
+    3
+   ],
+   "runs": 3,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "AB",
+    "minutes": 61,
+    "at": "34607 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "FF",
+    "minutes": 15,
+    "at": "12478 dir 0",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12478",
+    "dir": "0",
+    "minutes": 12.8,
+    "departures": 34,
+    "members": 2
+   },
+   {
+    "stop": "12509",
+    "dir": "0",
+    "minutes": 14.033333333333333,
+    "departures": 33,
+    "members": 2
+   },
+   {
+    "stop": "16680",
+    "dir": "0",
+    "minutes": 14.783333333333333,
+    "departures": 33,
+    "members": 2
+   },
+   {
+    "stop": "34195",
+    "dir": "0",
+    "minutes": 11,
+    "departures": 35,
+    "members": 2
+   },
+   {
+    "stop": "16342",
+    "dir": "1",
+    "minutes": 13,
+    "departures": 37,
+    "members": 2
+   }
+  ],
+  "points": 10
+ },
+ {
+  "id": "corridor:1+3:33211-35024:17c840c9",
+  "members": [
+   "1",
+   "3"
+  ],
+  "stopSeq": [
+   "33211",
+   "33212",
+   "35024"
+  ],
+  "declared": 24,
+  "bestSingle": 31,
+  "bestRouteLevel": 30,
+  "measuredCombined": 24.3,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "1",
+   "trip": "116031932",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "1",
+    "minutes": 60,
+    "at": "33211 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "3",
+    "minutes": 31,
+    "at": "33211 dir 1",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "33211",
+    "dir": "1",
+    "minutes": 24.25,
+    "departures": 17,
+    "members": 2
+   },
+   {
+    "stop": "33212",
+    "dir": "1",
+    "minutes": 24.233333333333334,
+    "departures": 17,
+    "members": 2
+   },
+   {
+    "stop": "35024",
+    "dir": "1",
+    "minutes": 24.216666666666665,
+    "departures": 17,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:16+6:12849-18999:d7171492",
+  "members": [
+   "6",
+   "16"
+  ],
+  "stopSeq": [
+   "12849",
+   "12978",
+   "18999"
+  ],
+  "declared": 10,
+  "bestSingle": 10,
+  "bestRouteLevel": 10,
+  "measuredCombined": 10,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "6",
+   "trip": "116047229",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "6",
+    "minutes": 30,
+    "at": "12849 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "16",
+    "minutes": 10,
+    "at": "12849 dir 0",
+    "routeLevel": 10
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12849",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 46,
+    "members": 2
+   },
+   {
+    "stop": "12978",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 46,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:153+6:21457-26651:83c92135",
+  "members": [
+   "6",
+   "153"
+  ],
+  "stopSeq": [
+   "21457",
+   "11964",
+   "26651"
+  ],
+  "declared": 13,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 12.8,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "6",
+   "trip": "116047264",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "6",
+    "minutes": 30,
+    "at": "21457 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "153",
+    "minutes": 15,
+    "at": "21457 dir 1",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "21457",
+    "dir": "1",
+    "minutes": 11.416666666666666,
+    "departures": 34,
+    "members": 2
+   },
+   {
+    "stop": "11964",
+    "dir": "1",
+    "minutes": 12.8,
+    "departures": 35,
+    "members": 2
+   },
+   {
+    "stop": "26651",
+    "dir": "1",
+    "minutes": 11.766666666666667,
+    "departures": 36,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:10+121:15885-15921:98fe133f",
+  "members": [
+   "10",
+   "121"
+  ],
+  "stopSeq": [
+   "15885",
+   "15887",
+   "15921"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "10",
+   "trip": "116032090",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "10",
+    "minutes": 60,
+    "at": "15885 dir 0",
+    "routeLevel": 20
+   },
+   {
+    "member": "121",
+    "minutes": 15,
+    "at": "15885 dir 0",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "15885",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "15887",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "15921",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:12+38:13379-20547:042870ef",
+  "members": [
+   "12",
+   "38"
+  ],
+  "stopSeq": [
+   "13379",
+   "13420",
+   "20547"
+  ],
+  "declared": 14,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 14.4,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "12",
+   "trip": "116037307",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "12",
+    "minutes": 30,
+    "at": "13379 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "38",
+    "minutes": 30,
+    "at": "13379 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "13379",
+    "dir": "0",
+    "minutes": 14.1,
+    "departures": 27,
+    "members": 2
+   },
+   {
+    "stop": "13420",
+    "dir": "0",
+    "minutes": 14.183333333333334,
+    "departures": 27,
+    "members": 2
+   },
+   {
+    "stop": "20547",
+    "dir": "0",
+    "minutes": 14.433333333333334,
+    "departures": 27,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:19+28+32+44:17707-22572:fecfd518",
+  "members": [
+   "19",
+   "28",
+   "32",
+   "44"
+  ],
+  "stopSeq": [
+   "17707",
+   "17708",
+   "22572"
+  ],
+  "declared": 18,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 18.3,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "19",
+   "trip": "116041058",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "19",
+    "minutes": 30,
+    "at": "17707 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "28",
+    "minutes": 60,
+    "at": "17707 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "32",
+    "minutes": 60,
+    "at": "17707 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "44",
+    "minutes": 60,
+    "at": "17707 dir 1",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17707",
+    "dir": "1",
+    "minutes": 18.2,
+    "departures": 18,
+    "members": 3
+   },
+   {
+    "stop": "17708",
+    "dir": "1",
+    "minutes": 18.316666666666666,
+    "departures": 18,
+    "members": 3
+   },
+   {
+    "stop": "22572",
+    "dir": "1",
+    "minutes": 18.116666666666667,
+    "departures": 18,
+    "members": 3
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:10+15+20+FF:12999-25561:56e8b3ef",
+  "members": [
+   "10",
+   "15",
+   "20",
+   "FF"
+  ],
+  "stopSeq": [
+   "12999",
+   "13014",
+   "25561"
+  ],
+  "declared": 8,
+  "bestSingle": 10,
+  "bestRouteLevel": 10,
+  "measuredCombined": 8.4,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "10",
+   "trip": "116032138",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "10",
+    "minutes": 60,
+    "at": "12999 dir 1",
+    "routeLevel": 20
+   },
+   {
+    "member": "15",
+    "minutes": 10,
+    "at": "12999 dir 1",
+    "routeLevel": 10
+   },
+   {
+    "member": "20",
+    "minutes": 30,
+    "at": "12999 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "FF",
+    "minutes": null,
+    "at": null,
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12999",
+    "dir": "1",
+    "minutes": 8.35,
+    "departures": 56,
+    "members": 4
+   },
+   {
+    "stop": "13014",
+    "dir": "1",
+    "minutes": 8.316666666666666,
+    "departures": 56,
+    "members": 4
+   },
+   {
+    "stop": "25561",
+    "dir": "1",
+    "minutes": 8.066666666666666,
+    "departures": 56,
+    "members": 4
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:130+21:16382-16399:b0e3c2a5",
+  "members": [
+   "21",
+   "130"
+  ],
+  "stopSeq": [
+   "16382",
+   "22444",
+   "16399"
+  ],
+  "declared": 14,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 13.7,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "21",
+   "trip": "116041837",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "21",
+    "minutes": 15,
+    "at": "16382 dir 1",
+    "routeLevel": 15
+   },
+   {
+    "member": "130",
+    "minutes": 30,
+    "at": "16382 dir 1",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "16382",
+    "dir": "1",
+    "minutes": 13.45,
+    "departures": 37,
+    "members": 2
+   },
+   {
+    "stop": "22444",
+    "dir": "1",
+    "minutes": 13.65,
+    "departures": 37,
+    "members": 2
+   },
+   {
+    "stop": "16399",
+    "dir": "1",
+    "minutes": 13.733333333333333,
+    "departures": 37,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:30+35+36:13783-13806:6bddc4d4",
+  "members": [
+   "30",
+   "35",
+   "36"
+  ],
+  "stopSeq": [
+   "13783",
+   "13786",
+   "13806"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "30",
+   "trip": "116043027",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "30",
+    "minutes": 15,
+    "at": "13783 dir 0",
+    "routeLevel": 15
+   },
+   {
+    "member": "35",
+    "minutes": 30,
+    "at": "13783 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "36",
+    "minutes": 60,
+    "at": "13783 dir 0",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "13783",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "13786",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "13806",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:30+35+36:13802-13856:70e8a0dd",
+  "members": [
+   "30",
+   "35",
+   "36"
+  ],
+  "stopSeq": [
+   "13802",
+   "13784",
+   "13856"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "30",
+   "trip": "116043091",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "30",
+    "minutes": 15,
+    "at": "13802 dir 1",
+    "routeLevel": 15
+   },
+   {
+    "member": "35",
+    "minutes": 30,
+    "at": "13802 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "36",
+    "minutes": 60,
+    "at": "13802 dir 1",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "13802",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "13784",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   },
+   {
+    "stop": "13856",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:37+49:11275-11278:e7495d57",
+  "members": [
+   "37",
+   "49"
+  ],
+  "stopSeq": [
+   "11275",
+   "11267",
+   "11278"
+  ],
+  "declared": 27,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 26.8,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "37",
+   "trip": "116044215",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "37",
+    "minutes": 60,
+    "at": "11275 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "49",
+    "minutes": 30,
+    "at": "11275 dir 1",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "11275",
+    "dir": "1",
+    "minutes": 26.766666666666666,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "11267",
+    "dir": "1",
+    "minutes": 25.95,
+    "departures": 20,
+    "members": 2
+   },
+   {
+    "stop": "11278",
+    "dir": "1",
+    "minutes": 25.25,
+    "departures": 20,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:28+43:17707-17733:3e0fbb46",
+  "members": [
+   "28",
+   "43"
+  ],
+  "stopSeq": [
+   "17707",
+   "17703",
+   "17733"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "28",
+   "trip": "116042481",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "28",
+    "minutes": 60,
+    "at": "17707 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "43",
+    "minutes": 15,
+    "at": "17707 dir 1",
+    "routeLevel": 15
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17707",
+    "dir": "1",
+    "minutes": 13.783333333333333,
+    "departures": 33,
+    "members": 2
+   },
+   {
+    "stop": "17703",
+    "dir": "1",
+    "minutes": 15,
+    "departures": 34,
+    "members": 2
+   },
+   {
+    "stop": "17733",
+    "dir": "1",
+    "minutes": 14.875,
+    "departures": 33,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:52+76+80:20821-20827:867125b8",
+  "members": [
+   "52",
+   "76",
+   "80"
+  ],
+  "stopSeq": [
+   "20821",
+   "26007",
+   "20827"
+  ],
+  "declared": 25,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 24.5,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "52",
+   "trip": "116054833",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "52",
+    "minutes": 30,
+    "at": "20821 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "76",
+    "minutes": 30,
+    "at": "20821 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "80",
+    "minutes": 60,
+    "at": "20821 dir 1",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "20821",
+    "dir": "1",
+    "minutes": 23.533333333333335,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "26007",
+    "dir": "1",
+    "minutes": 24.283333333333335,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "20827",
+    "dir": "1",
+    "minutes": 24.516666666666666,
+    "departures": 18,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:139+169+169L:12645-22227:b9dfde3b",
+  "members": [
+   "139",
+   "169",
+   "169L"
+  ],
+  "stopSeq": [
+   "12645",
+   "12647",
+   "22227",
+   "12648",
+   "12646"
+  ],
+  "declared": 30,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 30,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    2,
+    3
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "139",
+    "minutes": 60,
+    "at": "12645 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "169",
+    "minutes": 60,
+    "at": "12645 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "169L",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12645",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 3
+   },
+   {
+    "stop": "12647",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 3
+   },
+   {
+    "stop": "22227",
+    "dir": "0",
+    "minutes": 30,
+    "departures": 13,
+    "members": 3
+   },
+   {
+    "stop": "12648",
+    "dir": "1",
+    "minutes": 26.433333333333334,
+    "departures": 13,
+    "members": 3
+   },
+   {
+    "stop": "12646",
+    "dir": "1",
+    "minutes": 26.416666666666668,
+    "departures": 13,
+    "members": 3
+   }
+  ],
+  "points": 5
+ },
+ {
+  "id": "corridor:153+483:25752-35358:49b3dd78",
+  "members": [
+   "153",
+   "483"
+  ],
+  "stopSeq": [
+   "25752",
+   "35359",
+   "35358"
+  ],
+  "declared": 15,
+  "bestSingle": 15,
+  "bestRouteLevel": 15,
+  "measuredCombined": 15,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "153",
+   "trip": "116039577",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "153",
+    "minutes": 15,
+    "at": "25752 dir 0",
+    "routeLevel": 15
+   },
+   {
+    "member": "483",
+    "minutes": 60,
+    "at": "25752 dir 0",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "25752",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "35359",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 31,
+    "members": 2
+   },
+   {
+    "stop": "35358",
+    "dir": "0",
+    "minutes": 15,
+    "departures": 30,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:169+169L:19618-19620:8eb8d3c9",
+  "members": [
+   "169",
+   "169L"
+  ],
+  "stopSeq": [
+   "19618",
+   "19619",
+   "19620"
+  ],
+  "declared": 60,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 60,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": {
+   "member": "169",
+   "trip": "116040661",
+   "dir": "0"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "169",
+    "minutes": 60,
+    "at": "19618 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "169L",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "19618",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "19619",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "19620",
+    "dir": "0",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:169+169L:22200-23659:3e7f7342",
+  "members": [
+   "169",
+   "169L"
+  ],
+  "stopSeq": [
+   "22200",
+   "22201",
+   "23659"
+  ],
+  "declared": 60,
+  "bestSingle": 60,
+  "bestRouteLevel": 60,
+  "measuredCombined": 60,
+  "tier": "hourly",
+  "expedtedTier": "hourly",
+  "proving": {
+   "member": "169",
+   "trip": "116040682",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "169",
+    "minutes": 60,
+    "at": "22200 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "169L",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   }
+  ],
+  "combined": [
+   {
+    "stop": "22200",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "22201",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   },
+   {
+    "stop": "23659",
+    "dir": "1",
+    "minutes": 60,
+    "departures": 7,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:204+SKIP:16686-19310:d484aeaf",
+  "members": [
+   "204",
+   "SKIP"
+  ],
+  "stopSeq": [
+   "16686",
+   "19311",
+   "19310"
+  ],
+  "declared": 9,
+  "bestSingle": 10,
+  "bestRouteLevel": 10,
+  "measuredCombined": 9,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "204",
+   "trip": "116041358",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "204",
+    "minutes": 30,
+    "at": "16686 dir 0",
+    "routeLevel": 30
+   },
+   {
+    "member": "SKIP",
+    "minutes": 10,
+    "at": "16686 dir 0",
+    "routeLevel": 10
+   }
+  ],
+  "combined": [
+   {
+    "stop": "16686",
+    "dir": "0",
+    "minutes": 9,
+    "departures": 51,
+    "members": 2
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:287+324:15146-17636:1eb7f425",
+  "members": [
+   "287",
+   "324"
+  ],
+  "stopSeq": [
+   "15146",
+   "15166",
+   "17636",
+   "15165",
+   "25633"
+  ],
+  "declared": 22,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 26.9,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    2,
+    3
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "287",
+    "minutes": 60,
+    "at": "15146 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "324",
+    "minutes": 30,
+    "at": "15146 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "15146",
+    "dir": "0",
+    "minutes": 22.4,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "15166",
+    "dir": "0",
+    "minutes": 21.633333333333333,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "17636",
+    "dir": "0",
+    "minutes": 21,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "15165",
+    "dir": "1",
+    "minutes": 26.533333333333335,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "25633",
+    "dir": "1",
+    "minutes": 26.9,
+    "departures": 18,
+    "members": 2
+   }
+  ],
+  "points": 5
+ },
+ {
+  "id": "corridor:287+324+327:17848-26342:0c9a3cb7",
+  "members": [
+   "287",
+   "324",
+   "327"
+  ],
+  "stopSeq": [
+   "17848",
+   "26649",
+   "26342"
+  ],
+  "declared": 20,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 20,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": {
+   "member": "287",
+   "trip": "116042553",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "287",
+    "minutes": 60,
+    "at": "17848 dir 1",
+    "routeLevel": 60
+   },
+   {
+    "member": "324",
+    "minutes": 30,
+    "at": "17848 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "327",
+    "minutes": 60,
+    "at": "17848 dir 1",
+    "routeLevel": 60
+   }
+  ],
+  "combined": [
+   {
+    "stop": "17848",
+    "dir": "1",
+    "minutes": 19,
+    "departures": 24,
+    "members": 3
+   },
+   {
+    "stop": "26649",
+    "dir": "1",
+    "minutes": 19.233333333333334,
+    "departures": 24,
+    "members": 3
+   },
+   {
+    "stop": "26342",
+    "dir": "1",
+    "minutes": 20,
+    "departures": 24,
+    "members": 3
+   }
+  ],
+  "points": 3
+ },
+ {
+  "id": "corridor:323+324:19441-34190:620accc2",
+  "members": [
+   "323",
+   "324"
+  ],
+  "stopSeq": [
+   "19441",
+   "25877",
+   "34190",
+   "25619",
+   "23342"
+  ],
+  "declared": 25,
+  "bestSingle": 30,
+  "bestRouteLevel": 30,
+  "measuredCombined": 29.3,
+  "tier": "every30",
+  "expedtedTier": "every30",
+  "proving": null,
+  "consecutiveInfo": {
+   "parts": [
+    2,
+    3
+   ],
+   "runs": 2,
+   "mergeSeam": true
+  },
+  "memberHeadway": [
+   {
+    "member": "323",
+    "minutes": 60,
+    "at": "19441 dir 0",
+    "routeLevel": 60
+   },
+   {
+    "member": "324",
+    "minutes": 30,
+    "at": "19441 dir 0",
+    "routeLevel": 30
+   }
+  ],
+  "combined": [
+   {
+    "stop": "19441",
+    "dir": "0",
+    "minutes": 25.116666666666667,
+    "departures": 19,
+    "members": 2
+   },
+   {
+    "stop": "25877",
+    "dir": "0",
+    "minutes": 25,
+    "departures": 19,
+    "members": 2
+   },
+   {
+    "stop": "34190",
+    "dir": "0",
+    "minutes": 25.15,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "25619",
+    "dir": "1",
+    "minutes": 29,
+    "departures": 18,
+    "members": 2
+   },
+   {
+    "stop": "23342",
+    "dir": "1",
+    "minutes": 29.266666666666666,
+    "departures": 18,
+    "members": 2
+   }
+  ],
+  "points": 5
+ },
+ {
+  "id": "corridor:DASH+GS+SKIP:12471-12604:fd930e61",
+  "members": [
+   "DASH",
+   "GS",
+   "SKIP"
+  ],
+  "stopSeq": [
+   "12471",
+   "12512",
+   "12604"
+  ],
+  "declared": 10,
+  "bestSingle": 10,
+  "bestRouteLevel": 10,
+  "measuredCombined": 10,
+  "tier": "frequent",
+  "expedtedTier": "frequent",
+  "proving": {
+   "member": "DASH",
+   "trip": "116055594",
+   "dir": "1"
+  },
+  "consecutiveInfo": null,
+  "memberHeadway": [
+   {
+    "member": "DASH",
+    "minutes": 30,
+    "at": "12471 dir 1",
+    "routeLevel": 30
+   },
+   {
+    "member": "GS",
+    "minutes": null,
+    "at": null,
+    "routeLevel": null
+   },
+   {
+    "member": "SKIP",
+    "minutes": 10,
+    "at": "12471 dir 0",
+    "routeLevel": 10
+   }
+  ],
+  "combined": [
+   {
+    "stop": "12471",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 39,
+    "members": 2
+   },
+   {
+    "stop": "12512",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 39,
+    "members": 2
+   },
+   {
+    "stop": "12604",
+    "dir": "0",
+    "minutes": 10,
+    "departures": 39,
+    "members": 2
+   }
+  ],
+  "points": 3
+ }
+]
