@@ -412,9 +412,10 @@ function transitMarks(lines) {
       },
       paint: { 'text-color': tierMatch((t) => tagInk(t)), ...knockout },
     },
-    // A corridor carries its members' numbers side by side from the opening
-    // view, along the line and repeated on a long one. By 11.5 the routes
-    // here carry their own numbers, and two labels on one street would fight.
+    // A corridor carries its members' numbers side by side along the line,
+    // repeated on a long one. They arrive at 11.5, not with the opening view:
+    // at that zoom a corridor is a few pixels long and the numbers cannot fit.
+    // By 13 the routes here carry their own numbers, so the corridor's go.
     {
       id: 'corridor-labels',
       type: 'symbol',
