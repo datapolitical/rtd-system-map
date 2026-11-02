@@ -6,6 +6,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { discoverLayers, downloadLayer } from './lib/arcgis.mjs';
 import { csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, routeFrequency, tierOf, unmatchedVariants } from './lib/gtfs.mjs';
+import { buildCorridors } from './lib/corridors.mjs';
 import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
@@ -231,10 +232,88 @@ async function main() {
     Object.assign(f.properties, f.properties.served ? trackAt(pieces, f.geometry.coordinates) : { span: 1, bearing: 0 });
   });
 
+  // Corridors: streets two or more drawn bus routes share with interleaved
+  // departures, measured over the same weekday midday span as route headways.
+  // GTFS routes are grouped by the line the map draws (FF1…FF5 count as FF),
+  // as routeFrequency does, and each trip keeps its direction.
+  const busLines = new Set(geo.routes.filter((f) => f.properties.mode === 'bus').map((f) => f.properties.route));
+  const weekdayServices = new Set(dates.weekday?.services ?? []);
+  const busTrips = new Map(); // trip_id -> { route, direction }
+  for (const trip of readCsv(gtfs.text['trips.txt'])) {
+    const route = groupOf.get(trip.route_id);
+    if (!busLines.has(route) || !weekdayServices.has(trip.service_id)) continue;
+    busTrips.set(trip.trip_id, { route, direction: trip.direction_id || '0' });
+  }
+
+  // Each trip's stops, with only its midday departures boarding: the full
+  // pattern is kept so a corridor runs to its ends, but a stop passed outside
+  // 09:00–15:00 is marked no-boarding, which still counts as served.
+  const rowsByTrip = new Map();
+  {
+    const rows = csvRows(gtfs.text['stop_times.txt']);
+    const header = rows.next().value ?? [];
+    const col = (name) => header.indexOf(name);
+    const [tripCol, stopCol, seqCol, depCol, pickupCol] = ['trip_id', 'stop_id', 'stop_sequence', 'departure_time', 'pickup_type'].map(col);
+    for (const row of rows) {
+      if (!busTrips.has(row[tripCol]) || !row[depCol]) continue;
+      let list = rowsByTrip.get(row[tripCol]);
+      if (!list) rowsByTrip.set(row[tripCol], (list = []));
+      list.push([row[stopCol], secondsAfterMidnight(row[depCol]), Number(row[seqCol]), row[pickupCol]]);
+    }
+  }
+
+  // Only trips that board someone midday can make a corridor: a rush-hours-only
+  // express on the same street would otherwise veto the pair that does run.
+  const tripsByRoute = new Map([...busLines].map((route) => [route, []]));
+  const stopTimesByRoute = new Map([...busLines].map((route) => [route, []]));
+  for (const [trip, rows] of rowsByTrip) {
+    const midday = rows.some(([, time, , pickup]) => pickup !== '1' && time >= MIDDAY[0] && time < MIDDAY[1]);
+    if (!midday) continue;
+    const { route, direction } = busTrips.get(trip);
+    tripsByRoute.get(route).push({ trip, direction });
+    const times = stopTimesByRoute.get(route);
+    for (const [stop, time, seq, pickup] of rows) {
+      const boards = pickup !== '1' && time >= MIDDAY[0] && time < MIDDAY[1];
+      times.push({ trip, stop, time, seq, pickup: boards ? pickup : '1' });
+    }
+  }
+  const corridors = buildCorridors({
+    routes: [...busLines].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
+    tripsByRoute,
+    stopTimesByRoute,
+  });
+
+  // A corridor is a line through its shared stops, in travel order. Stop
+  // coordinates come from GTFS, which keys them by the ids corridors carry.
+  const stopCoords = new Map(readCsv(gtfs.text['stops.txt']).map((s) => [s.stop_id, [Number(s.stop_lon), Number(s.stop_lat)]]));
+  const round = (v) => Math.round(v * 10 ** PRECISION) / 10 ** PRECISION;
+  geo.corridors = [];
+  for (const corridor of corridors) {
+    const coordinates = corridor.stopIds.map((id) => stopCoords.get(id)).filter(Boolean).map(([x, y]) => [round(x), round(y)]);
+    // Two stops in common is a shared corner, not a stretch a rider would walk
+    // to: a corridor has to run along a street to be worth drawing.
+    if (coordinates.length < 3) continue;
+    const members = corridor.members.map((m) => m.shortName);
+    geo.corridors.push({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates },
+      properties: {
+        id: corridor.id,
+        members,
+        headwayMinutes: corridor.headwayMinutes,
+        tier: corridor.tier,
+        label: members.join(' '),
+      },
+    });
+  }
+
+  const corridorTiers = Object.fromEntries(
+    ['frequent', 'every30', 'hourly', 'infrequent'].map((tier) => [tier, geo.corridors.filter((f) => f.properties.tier === tier).length]),
+  );
+
   // What the panels say about each route and station. Stop route codes are
   // the map's routes or GTFS route names that belong to one.
   const byCode = new Map(gtfsRoutes.flatMap((r) => [r.route_id, r.route_short_name].filter(Boolean).map((c) => [c, groupOf.get(r.route_id)])));
-  const busLines = new Set(geo.routes.filter((f) => f.properties.mode === 'bus').map((f) => f.properties.route));
   const index = directory({
     routes: geo.routes,
     stations: geo.stations,
@@ -282,6 +361,7 @@ async function main() {
     ),
     counts,
     tiers,
+    corridors: { count: geo.corridors.length, byTier: corridorTiers },
     stations: {
       unserved: unserved.map((f) => ({ name: f.properties.name, returns: f.properties.returns })),
       gtfsRailStationsNotOnMap: service.unmatched,
@@ -307,6 +387,7 @@ async function main() {
   console.log(`\nWrote public/data in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   console.log(`  ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ')}`);
   console.log(`  tiers: ${Object.entries(tiers).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  console.log(`  corridors: ${geo.corridors.length} (${Object.entries(corridorTiers).map(([k, v]) => `${k} ${v}`).join(', ')})`);
   console.log(`  ${flexLines} FlexRide outlines in the route layer left to the FlexRide zones`);
   if (unserved.length) {
     const list = unserved.map((f) => `${f.properties.name}${f.properties.returns ? ` (returns ${f.properties.returns})` : ''}`);
