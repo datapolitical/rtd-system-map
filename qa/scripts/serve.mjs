@@ -33,7 +33,8 @@ const cache = new Map();
 
 function encoded(file, ext, accept) {
   if (!COMPRESSIBLE.has(ext)) return null;
-  const key = `${file}:${/br\b/.test(accept) ? 'br' : /gzip\b/.test(accept) ? 'gz' : 'id'}`;
+  const stamp = statSync(file);
+  const key = `${file}:${stamp.mtimeMs}:${stamp.size}:${/br\b/.test(accept) ? 'br' : /gzip\b/.test(accept) ? 'gz' : 'id'}`;
   if (cache.has(key)) return cache.get(key);
   const raw = readFileSync(file);
   const out =
