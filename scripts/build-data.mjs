@@ -6,7 +6,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { discoverLayers, downloadLayer } from './lib/arcgis.mjs';
 import { csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, routeFrequency, tierOf, unmatchedVariants } from './lib/gtfs.mjs';
-import { buildCorridors, mergeCorridors } from './lib/corridors.mjs';
+import { buildCorridors } from './lib/corridors.mjs';
 import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
@@ -306,11 +306,6 @@ async function main() {
       },
     });
   }
-
-  // A street can surface as several runs when another route joins for a few
-  // stops; join the ones that meet so the map draws one stretch, long enough
-  // to carry its numbers.
-  geo.corridors = mergeCorridors(geo.corridors);
 
   const corridorTiers = Object.fromEntries(
     ['frequent', 'every30', 'hourly', 'infrequent'].map((tier) => [tier, geo.corridors.filter((f) => f.properties.tier === tier).length]),

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildCorridors, mergeCorridors } from '../scripts/lib/corridors.mjs';
+import { buildCorridors } from '../scripts/lib/corridors.mjs';
 
 const MINUTE = 60;
 const at = (hours, minutes = 0, seconds = 0) => hours * 3600 + minutes * 60 + seconds;
@@ -238,47 +238,4 @@ test('the same data always gives the same corridors, and is not changed', () => 
   const before = structuredClone(data);
   assert.deepEqual(buildCorridors(data), buildCorridors(data));
   assert.deepEqual(data, before);
-});
-
-// --- mergeCorridors: one street, one stretch -------------------------------
-
-const feature = (members, coordinates) => ({
-  type: 'Feature',
-  geometry: { type: 'LineString', coordinates },
-  properties: { id: members.join('|'), members, headwayMinutes: 15, tier: 'frequent', label: members.join(' ') },
-});
-
-test('runs that meet end to end with the same members become one stretch', () => {
-  const merged = mergeCorridors([
-    feature(['10', '15'], [[-105.0, 39.7], [-104.99, 39.7], [-104.98, 39.7]]),
-    feature(['10', '15'], [[-104.98, 39.7], [-104.97, 39.7]]),
-  ]);
-  assert.equal(merged.length, 1);
-  assert.deepEqual(merged[0].geometry.coordinates, [[-105.0, 39.7], [-104.99, 39.7], [-104.98, 39.7], [-104.97, 39.7]]);
-});
-
-test('a run drawn in the opposite direction still joins', () => {
-  // 0.001 degrees is about 86 m at this latitude, inside the join tolerance.
-  const merged = mergeCorridors([
-    feature(['10', '15'], [[-105.0, 39.7], [-104.999, 39.7]]),
-    feature(['10', '15'], [[-104.997, 39.7], [-104.998, 39.7]]),
-  ]);
-  assert.equal(merged.length, 1);
-  assert.deepEqual(merged[0].geometry.coordinates, [[-105.0, 39.7], [-104.999, 39.7], [-104.997, 39.7]]);
-});
-
-test('different member sets stay separate even when they touch', () => {
-  const merged = mergeCorridors([
-    feature(['10', '15'], [[-105.0, 39.7], [-104.99, 39.7]]),
-    feature(['10', '15', '20'], [[-104.99, 39.7], [-104.98, 39.7]]),
-  ]);
-  assert.equal(merged.length, 2);
-});
-
-test('runs of the same members far apart are not joined across the city', () => {
-  const merged = mergeCorridors([
-    feature(['10', '15'], [[-105.0, 39.7], [-104.99, 39.7]]),
-    feature(['10', '15'], [[-104.8, 39.9], [-104.79, 39.9]]),
-  ]);
-  assert.equal(merged.length, 2);
 });
