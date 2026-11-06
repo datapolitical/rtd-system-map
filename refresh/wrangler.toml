@@ -1,0 +1,16 @@
+# The hourly refresh Worker (see worker.mjs). Deploy from the repository root:
+#   npx wrangler deploy --config refresh/wrangler.toml
+#   npx wrangler secret put DEPLOY_HOOK --config refresh/wrangler.toml
+name = "rtd-system-map-refresh"
+main = "worker.mjs"
+compatibility_date = "2025-06-01"
+workers_dev = false
+
+[triggers]
+crons = ["23 * * * *"]
+
+[vars]
+SITE = "https://rtd-system-map.pages.dev"
+
+[observability]
+enabled = true

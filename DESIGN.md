@@ -1666,6 +1666,15 @@ RTD GTFS ──────────────────────┼�
 6. **Publish** to Cloudflare Pages from a public GitHub repo, with the hourly
    refresh Worker, deploy hook, failure notification, and offline caching set
    up. After this one-time setup, routine RTD changes need no human.
+   Started 2026-11-06: the Pages project `rtd-system-map`
+   (rtd-system-map.pages.dev) is connected to the GitHub repository and
+   builds `main` with `npm run build` on Node 22, output `public`; a deploy
+   hook named `daily-refresh` exists; the refresh Worker is written in
+   `refresh/` (`check.mjs` with tests, `worker.mjs`, `wrangler.toml`, hourly
+   at :23, no page of its own). Not yet done: the first production build,
+   the Worker's deploy and its `DEPLOY_HOOK` secret, the deployment-failure
+   email (Cloudflare dashboard, Notifications), making the repository
+   public, offline caching, a domain.
 
 ## Open questions
 
@@ -2051,6 +2060,13 @@ RTD GTFS ──────────────────────┼�
   so the FreeRide goes to "Civic Center", not "MallRide Civic Center" (see
   "Route panel wording"). Not changed: RTD's other sign abbreviations ("US36
   & Bfld", "Gnprk/Lookout"); see "Open questions".
+- 2026-11-06: Publishing begun (milestone 6): Pages project connected to
+  the repository with the build on Cloudflare, so a build whose checks fail
+  leaves the live site as it was; the refresh is the Cloudflare Worker in
+  `refresh/`, as Rule 2 says (a scheduled GitHub Action was written first
+  and dropped: GitHub stops them in a quiet public repository). The Worker
+  treats a source it can't read as unchanged, so an RTD outage never
+  triggers a rebuild that would fail on the same outage.
 
 ## Sources
 
