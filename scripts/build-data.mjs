@@ -5,17 +5,27 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { discoverLayers, downloadLayer } from './lib/arcgis.mjs';
-import { csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, routeFrequency, tierOf } from './lib/gtfs.mjs';
+import { clock, csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, riderNames, routeFrequency, tierOf } from './lib/gtfs.mjs';
+import { coreBounds } from './lib/core.mjs';
 import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
+import { busNames } from './lib/busnames.mjs';
+import { heading, stopLines } from './lib/stops.mjs';
 import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
 import { stationService } from './lib/stations.mjs';
+import { busStretches } from './lib/stretches.mjs';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
 const EXPERIENCE = { portal: 'https://www.arcgis.com', id: '4a812ebf793646be945b7d58dcfbb794' };
 const GTFS_URL = 'https://www.rtd-denver.com/files/gtfs/google_transit.zip';
 
-const OUT = path.resolve(import.meta.dirname, '../public/data');
+// Where the data is written. RTD_DATA_OUT writes somewhere else instead (to
+// try a change without touching the site's data), and RTD_GTFS_ZIP names a
+// local copy of the GTFS feed to read, downloading it there first if it's
+// missing. With neither set, the build reads RTD and writes public/data.
+const OUT = process.env.RTD_DATA_OUT ? path.resolve(process.env.RTD_DATA_OUT) : path.resolve(import.meta.dirname, '../public/data');
+const OUT_NAME = path.relative(path.resolve(import.meta.dirname, '..'), OUT).replace(/^\.\..*/, OUT);
+const GTFS_CACHE = process.env.RTD_GTFS_ZIP ? path.resolve(process.env.RTD_GTFS_ZIP) : null;
 
 // Each kind of layer we draw, recognized by its geometry and the fields it
 // carries rather than by name. If RTD changes a schema enough that a role no
@@ -35,6 +45,9 @@ const SIMPLIFY = 0.00001;
 const PRECISION = 5;
 // A station is moved onto its lines' track when it's at most this far away.
 const SNAP_METERS = 200;
+// Phones open on the box holding this share of weekday service, east to west
+// and north to south (scripts/lib/core.mjs).
+const CORE_SHARE = 0.6;
 
 // GTFS route types that are rail (basic and extended).
 const isRail = (type) => ['0', '1', '2'].includes(type) || /^(1\d\d|4\d\d|9\d\d)$/.test(type);
@@ -45,7 +58,8 @@ const TRANSFORMS = {
   stations: (p) => ({ id: p.PID, name: p.NAME, label: stationLabel(p.NAME) }),
   facilities: (p) => ({ id: p.PID, name: p.NAME, class: p.CLASS, spaces: Number(p.AUTOS) || 0, fees: p.FEES ?? null }),
   stops: (p) => ({ id: String(p.BSID), name: p.STOPNAME, routes: p.ROUTES, dir: p.DIR }),
-  flexride: (p) => ({ name: p.NAME, route: p.ROUTE }),
+  // A zone's page, if RTD's layer ever carries one (today it has none).
+  flexride: (p) => ({ name: p.NAME, route: p.ROUTE, url: Object.entries(p).find(([k, v]) => /^(url|link|web|website)$/i.test(k) && v)?.[1] ?? null }),
   boundary: () => ({}),
 };
 
@@ -80,7 +94,7 @@ async function main() {
   const previous = JSON.parse(await readFile(path.join(OUT, 'meta.json'), 'utf8').catch(() => 'null'));
 
   console.log("Reading RTD's map and downloading GTFS…");
-  const [source, gtfs] = await Promise.all([discoverLayers(EXPERIENCE.portal, EXPERIENCE.id), loadGtfs(GTFS_URL)]);
+  const [source, gtfs] = await Promise.all([discoverLayers(EXPERIENCE.portal, EXPERIENCE.id), loadGtfs(GTFS_URL, GTFS_CACHE)]);
   console.log(`  web map: ${source.webmap.title} (${source.webmap.id}), ${source.layers.length} layers`);
   const roles = assignRoles(source.layers);
 
@@ -104,14 +118,21 @@ async function main() {
   const flexCodes = new Set(geo.flexride.map((f) => f.properties.route));
   const flexLines = geo.routes.filter((f) => flexCodes.has(f.properties.route)).length;
   geo.routes = geo.routes.filter((f) => !flexCodes.has(f.properties.route));
-  const members = new Map(); // map route -> its GTFS routes
-  const groupOf = new Map(); // GTFS route_id -> map route
   const drawn = new Set(geo.routes.map((f) => f.properties.route));
+  const matches = new Map(); // RTD's map code -> its GTFS routes
+  for (const { properties: p } of geo.routes) if (!matches.has(p.route)) matches.set(p.route, matchGtfs(p, gtfsRoutes, drawn));
+  // From here on a route goes by the name riders know it by ("Bound"), and
+  // keeps the map's code for it ("BOND") only so a search for the code finds it.
+  const nameOf = riderNames(matches);
+  const members = new Map(); // route -> its GTFS routes
+  const groupOf = new Map(); // GTFS route_id -> route
   for (const { properties: p } of geo.routes) {
-    const found = members.get(p.route) ?? matchGtfs(p, gtfsRoutes, drawn);
+    const found = matches.get(p.route);
+    if (nameOf.get(p.route) !== p.route) Object.assign(p, { code: p.route, route: nameOf.get(p.route) });
     members.set(p.route, found);
     for (const r of found) groupOf.set(r.route_id, p.route);
   }
+  const renamed = [...nameOf].filter(([code, name]) => code !== name);
   const unmatched = [...members].filter(([, found]) => !found.length).map(([route]) => route);
   const notOnMap = gtfsRoutes.filter((r) => !groupOf.has(r.route_id)).map((r) => r.route_short_name || r.route_id);
 
@@ -119,7 +140,13 @@ async function main() {
   const timezone = readCsv(gtfs.text['agency.txt'])[0]?.agency_timezone || 'America/Denver';
   const today = new Date(`${new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())}T00:00:00Z`);
   const dates = representativeDates(gtfs.text, today);
-  const frequency = routeFrequency(gtfs.text, dates, (id) => groupOf.get(id) ?? id);
+  // The same pass over stop_times keeps each drawn route's trips' stops, for
+  // measuring bus frequency stretch by stretch below.
+  const stopTimes = new Map();
+  const frequency = routeFrequency(gtfs.text, dates, (id) => groupOf.get(id) ?? id, {
+    stopTimes,
+    keep: (t) => Boolean(t.shape_id && groupOf.has(t.route_id)),
+  });
   for (const [kind, d] of Object.entries(dates)) console.log(`  typical ${kind}: ${d.date} (${d.services.join(', ')})`);
 
   for (const { properties: p } of geo.routes) {
@@ -174,8 +201,27 @@ async function main() {
   const positioning = new Set(service.positioning);
   geo.routes = geo.routes.filter((f) => !(f.properties.mode === 'rail' && positioning.has(f.properties.route)));
 
+  // Bus routes in stretches, each with the frequency of the trips that run
+  // along it, so a leg only a few trips take isn't drawn as frequent.
+  const buses = geo.routes.filter((f) => f.properties.mode === 'bus');
+  const levels = new Map(geo.routes.map((f) => [f.properties.route, { ...f.properties }]));
+  const routeCount = geo.routes.length;
+  const split = busStretches(buses, gtfs.text, dates, (id) => groupOf.get(id) ?? id, { stopTimes });
+  // Rail is drawn whole; its route values are its own.
+  const rails = geo.routes.filter((f) => f.properties.mode !== 'bus');
+  for (const { properties: p } of rails) Object.assign(p, { route_tier: p.tier, route_wk: p.wk });
+  geo.routes = [...split.features, ...rails];
+  const splitRoutes = split.report.filter((r) => r.stretches > 1);
+  console.log(`  bus routes in stretches: ${splitRoutes.length} of ${split.report.length} split, ${split.features.length} stretches`);
+  console.log(`    ${splitRoutes.map((r) => `${r.route} ${r.stretches}`).join(', ')}`);
+  const poorlyCovered = split.report.filter((r) => r.uncovered > 0.25);
+  if (poorlyCovered.length) {
+    console.log(`  bus routes mostly not on their GTFS shapes: ${poorlyCovered.map((r) => `${r.route} ${Math.round(r.uncovered * 100)}%`).join(', ')}`);
+  }
+
   // Checks. Any failure stops the build before anything is written.
   const counts = Object.fromEntries(Object.entries(geo).map(([role, fs]) => [role, fs.length]));
+  counts.routes = routeCount;
   const rail = geo.routes.filter((f) => f.properties.mode === 'rail');
   counts.rail = rail.length;
   counts.stations_served = geo.stations.length - unserved.length;
@@ -192,13 +238,16 @@ async function main() {
     problems.push(`Only ${counts.stations_served} of ${geo.stations.length} stations matched GTFS rail service`);
   }
   if (problems.length) {
-    console.error('\nBuild checks failed; public/data was left as it was:');
+    console.error(`\nBuild checks failed; ${OUT_NAME} was left as it was:`);
     for (const p of problems) console.error(`  - ${p}`);
     process.exit(1);
   }
 
+  // How many routes run at each tier somewhere along them.
   const tiers = {};
-  for (const f of geo.routes) tiers[f.properties.tier] = (tiers[f.properties.tier] ?? 0) + 1;
+  for (const tier of new Set(geo.routes.map((f) => f.properties.tier))) {
+    tiers[tier] = new Set(geo.routes.filter((f) => f.properties.tier === tier).map((f) => f.properties.route)).size;
+  }
 
   // Rail on shared track side by side, then where the map names each line
   // from far out: signs at the ends of rail lines, tags on frequent buses.
@@ -209,8 +258,11 @@ async function main() {
     if (!ends) continue;
     f.geometry = { type: 'MultiLineString', coordinates: trimToEnds(partsOf(f.geometry), ends.map((i) => geo.stations[i].geometry.coordinates)) };
   }
-  geo.routes = [...geo.routes.filter((f) => f.properties.mode !== 'rail'), ...sharedTrack(rail)];
-  const pieces = geo.routes.filter((f) => f.properties.mode === 'rail');
+  const { pieces, letters } = sharedTrack(
+    rail,
+    geo.stations.map((f) => f.geometry.coordinates),
+  );
+  geo.routes = [...geo.routes.filter((f) => f.properties.mode !== 'rail'), ...pieces];
   for (const f of geo.stations) {
     if (!f.properties.served) continue;
     const lines = new Set(f.properties.lines.split(' '));
@@ -221,17 +273,22 @@ async function main() {
   // rail and buses every 30 minutes or better, not on the long reach of a few
   // commuter routes.
   const network = bbox(geo.routes.filter((f) => f.properties.mode === 'rail' || ['frequent', 'every30'].includes(f.properties.tier)));
-  const { labels, signBoxes } = labelPoints(geo.routes, geo.stations, service.ends, service.headsigns, network);
-  geo.labels = labels;
+  const { labels, signBoxes, endNames, hubs } = labelPoints(geo.routes, geo.stations, service.ends, service.headsigns, network);
+  geo.labels = [...labels, ...letters];
   const endStations = new Set(Object.values(service.ends).flat());
   geo.stations.forEach((f, i) => {
-    f.properties.end = endStations.has(i);
+    // `end`: a sign names this station, so its own name waits for the sign
+    // to go. A hub has no sign and is named like any station.
+    f.properties.end = endStations.has(i) && !hubs.has(i);
     Object.assign(f.properties, f.properties.served ? trackAt(pieces, f.geometry.coordinates) : { span: 1, bearing: 0 });
   });
 
   // What the panels say about each route and station. Stop route codes are
   // the map's routes or GTFS route names that belong to one.
   const byCode = new Map(gtfsRoutes.flatMap((r) => [r.route_id, r.route_short_name].filter(Boolean).map((c) => [c, groupOf.get(r.route_id)])));
+  // RTD's stop layer may use the map's code for a route that goes by its
+  // timetable name here.
+  for (const [code, name] of renamed) byCode.set(code, name);
   const busLines = new Set(geo.routes.filter((f) => f.properties.mode === 'bus').map((f) => f.properties.route));
   const index = directory({
     routes: geo.routes,
@@ -241,11 +298,39 @@ async function main() {
     service,
     busEnds: lineEnds(gtfs.text, (id) => (busLines.has(groupOf.get(id)) ? groupOf.get(id) : null), dates.weekday?.services),
     lineOf: (code) => (busLines.has(code) ? code : byCode.get(code) ?? null),
+    levels,
     urls: new Map([...members].map(([route, found]) => [route, found.map((r) => r.route_url).find(Boolean)]).filter(([, url]) => url)),
   });
   // Stations know their buses too, so a highlighted bus keeps the stations
   // it stops at.
-  index.stations.forEach((s, i) => (geo.stations[i].properties.buses = s.buses));
+  // And how many routes meet there, trains and buses together: the stations
+  // people change at are the ones named first (main.js, 'station-labels').
+  const count = (list) => (list ? String(list).split(' ').filter(Boolean).length : 0);
+  index.stations.forEach((s, i) => {
+    const p = geo.stations[i].properties;
+    p.buses = s.buses;
+    p.links = count(p.lines) + count(p.buses);
+  });
+
+  // Names along the streets buses share, one run per street.
+  geo.busnames = busNames(geo.routes.filter((f) => f.properties.mode === 'bus'), { precision: PRECISION });
+  // Stops name the lines the map draws, families as their map route (FF1 is
+  // FF), and which way their buses head.
+  const drawnLines = new Set(geo.routes.map((f) => f.properties.route));
+  const lineAt = (code) => (drawnLines.has(code) ? code : drawnLines.has(byCode.get(code)) ? byCode.get(code) : null);
+  for (const { properties: p } of geo.stops) Object.assign(p, { lines: stopLines(p.routes, lineAt), heading: heading(p.dir) });
+  // FlexRide zones link to their page where GTFS has one.
+  const urlOf = new Map(gtfsRoutes.flatMap((r) => [r.route_id, r.route_short_name].filter(Boolean).map((c) => [c, r.route_url || null])));
+  for (const { properties: p } of geo.flexride) p.url = p.url || urlOf.get(p.route) || null;
+  const railEnds = (route) => {
+    const ends = service.ends[route];
+    if (!ends) return null;
+    const names = ends.map((i) => endNames.get(i) ?? geo.stations[i].properties.label);
+    const goes = index.routes.find((r) => r.route === route)?.goes;
+    const at = geo.stations[ends[0]].geometry.coordinates;
+    const flipped = goes?.length === 2 && goes[1].at?.[0] === at[0] && goes[1].at?.[1] === at[1];
+    return flipped ? names.reverse() : names;
+  };
   const feedInfo = readCsv(gtfs.text['feed_info.txt'])[0] ?? {};
   const meta = {
     built: new Date().toISOString(),
@@ -265,17 +350,24 @@ async function main() {
       },
     },
     dates: Object.fromEntries(Object.entries(dates).map(([k, d]) => [k, d.date])),
+    // The hours frequency is measured over, so the page can say so.
+    window: { from: clock(MIDDAY[0]), to: clock(MIDDAY[1]) },
     // What the page needs before any GeoJSON arrives: where to open the map,
     // and the rail lines for the legend.
     bounds: {
       routes: bbox(geo.routes),
       network,
-      // Phones open on the stations and the signs naming the lines' ends.
+      // Phones open on the middle of the service (trips times distance),
+      // zoomed in far enough to read.
+      core: coreBounds(geo.routes, CORE_SHARE),
+      // The stations and the signs naming the lines' ends.
       stations: bbox([...geo.stations, ...signBoxes]),
     },
-    rail: [...new Map(rail.map((f) => [f.properties.route, f.properties])).values()].sort((a, b) =>
-      a.route.localeCompare(b.route, 'en', { numeric: true }),
-    ),
+    // Each line's ends are named as its end signs name them, in the order
+    // its directory entry reads them.
+    rail: [...new Map(rail.map((f) => [f.properties.route, f.properties])).values()]
+      .sort((a, b) => a.route.localeCompare(b.route, 'en', { numeric: true }))
+      .map((p) => ({ ...p, ends: railEnds(p.route) })),
     counts,
     tiers,
     stations: {
@@ -285,7 +377,15 @@ async function main() {
     positioningOnly: service.positioning,
     unmatched: { mapRoutesNotInGtfs: unmatched, gtfsRoutesNotOnMap: notOnMap },
     families: Object.fromEntries([...members].filter(([, f]) => f.length > 1).map(([route, f]) => [route, f.map((r) => r.route_short_name || r.route_id)])),
+    // Routes shown by their timetable name: RTD's map code -> that name.
+    renamed: Object.fromEntries(renamed),
   };
+
+  if (!geo.busnames.length) {
+    console.error(`\nBuild checks failed; ${OUT_NAME} was left as it was:\n  - No bus name runs built`);
+    process.exit(1);
+  }
+  counts.busnames = geo.busnames.length;
 
   // Write to a fresh folder, then swap it in, so a crash mid-write can't leave
   // half a dataset behind.
@@ -300,7 +400,7 @@ async function main() {
   await rm(OUT, { recursive: true, force: true });
   await rename(next, OUT);
 
-  console.log(`\nWrote public/data in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+  console.log(`\nWrote ${OUT_NAME} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   console.log(`  ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ')}`);
   console.log(`  tiers: ${Object.entries(tiers).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   console.log(`  ${flexLines} FlexRide outlines in the route layer left to the FlexRide zones`);
@@ -310,6 +410,7 @@ async function main() {
   }
   if (service.unmatched.length) console.log(`  GTFS rail stations not on RTD's map: ${service.unmatched.join(', ')}`);
   if (positioning.size) console.log(`  not drawn, one-way trains on other lines' track: ${service.positioning.join(', ')}`);
+  if (renamed.length) console.log(`  shown by their timetable name: ${renamed.map(([code, name]) => `${code} as ${name}`).join(', ')}`);
   if (unmatched.length) console.log(`  map routes not in GTFS: ${unmatched.join(', ')}`);
   if (notOnMap.length) console.log(`  GTFS routes not on RTD's map: ${notOnMap.join(', ')}`);
 }
@@ -361,7 +462,7 @@ function bbox(features) {
 }
 
 main().catch((err) => {
-  console.error(`\nBuild failed; public/data was left as it was.\n${err.stack ?? err}`);
+  console.error(`\nBuild failed; ${OUT_NAME} was left as it was.\n${err.stack ?? err}`);
   process.exit(1);
 });
 

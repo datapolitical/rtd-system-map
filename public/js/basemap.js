@@ -2,29 +2,11 @@
 // colors stay quiet so the network leads, but its words carry the sense of
 // place (DESIGN.md, "Basemap"): street names you can find an intersection by,
 // highway numbers, neighborhoods and landmarks. No railways, no POI icons.
+// Every colour is in the palette (palette.js), one set for each theme. The
+// layer lists are functions, called again when the system theme changes.
 
-export const PALETTE = {
-  land: '#f4f5f6',
-  wash: '#e3e7ea',
-  water: '#bcd5e4',
-  waterLabel: '#4f7f9c',
-  park: '#e0eadb',
-  wood: '#e6ece2',
-  building: '#e7eaed',
-  buildingEdge: '#dde2e6',
-  road: '#ffffff',
-  roadEdge: '#dfe4e8',
-  motorwayEdge: '#cbd2d8',
-  runway: '#e3e7eb',
-  city: '#2c3844',
-  town: '#4c5a69',
-  neighborhood: '#6f7c89',
-  street: '#4f5b67',
-  roadLabel: '#75818d',
-  landmark: '#66727e',
-  parkLabel: '#56744f',
-  shield: '#8a96a2',
-};
+import { P } from './palette.js';
+import { DETAIL_FROM, OVERVIEW_UNTIL, TIERS, ZOOMS, tierWidth } from './shared.js';
 
 // Overpass, the interface's own face, drawn from glyphs the site makes itself
 // (scripts/glyphs.mjs).
@@ -43,7 +25,6 @@ export const BASEMAP_SOURCES = {
 
 export const GLYPHS = `${new URL('vendor/glyphs/', document.baseURI).href}{fontstack}/{range}.pbf`;
 
-const P = PALETTE;
 const omt = (id, layer, rest) => ({ id, source: 'openmaptiles', 'source-layer': layer, ...rest });
 const zoom = (...stops) => ['interpolate', ['exponential', 1.5], ['zoom'], ...stops];
 const linear = (...stops) => ['interpolate', ['linear'], ['zoom'], ...stops];
@@ -132,7 +113,7 @@ export function basemapBelow() {
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           // Below zoom 11 there's no casing, so roads draw as quiet gray lines.
-          'line-color': linear(10, road.id === 'motorway' ? P.motorwayEdge : P.roadEdge, 11.5, P.road),
+          'line-color': linear(10, road.id === 'motorway' ? P.motorwayFar : P.roadFar, 11.5, P.road),
           'line-width': roadWidth(road.width),
         },
       }),
@@ -141,15 +122,127 @@ export function basemapBelow() {
   return layers;
 }
 
+// Street names sit just beside their street, not on it: a bus line runs down
+// the middle of the street, and a name drawn on the line and the line fight
+// (the route numbers are knocked out of their lines; a name can't be).
+// Ems, enough to clear the street's half width, a bus line and its keep-out
+// margin, and half the text's height: 1.3 em leaves about 3 px of street
+// between a name and the line. From the first zoom streets are named: a name
+// on its street would be on the bus line, and so not drawn at all.
+const STREET_NAME_OFFSET = ['interpolate', ['linear'], ['zoom'], 14, ['literal', [0, -1.3]], 17, ['literal', [0, -1.45]]];
+
+// Keep-out layers: symbols that take up room and draw nothing (the 'clear'
+// image, scaled by icon-size into a box), so other labels step aside. A symbol
+// is placed after every layer above it and loses to what is already placed, so
+// a keep-out layer sits above the labels it is meant to hold back.
+const clear =(id, source, rest) => ({
+  id,
+  type: 'symbol',
+  source,
+  layout: { 'icon-image': 'clear', 'icon-allow-overlap': true, 'icon-ignore-placement': false, 'icon-padding': 0, ...rest.layout },
+  ...Object.fromEntries(Object.entries(rest).filter(([k]) => k !== 'layout')),
+});
+// Rail's footprint in px at the ZOOMS stops, matching RAIL_WIDTH and RAIL_GAP
+// in main.js (a line's width, and the gap between lines sharing track).
+const RAIL_WIDTH = [3, 4, 5.6, 9];
+const RAIL_GAP = 2;
+const byZoom = (values) => ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, values[i]])];
+const slot = ['abs', ['coalesce', ['get', 'slot'], 0]];
+const KEEP_OUT = 2; // px of clear space on each side, besides the shield's own icon-padding
+
+// No name covers a line: not a station's, a city's, a street's, or a highway
+// number. The lines are what the map is of, and a name can sit a little to
+// one side where a line can't. Every rail and bus line that is drawn takes up
+// its own room, and every name is placed after it. Only what names a line is
+// placed before: its letter or number, which sits on it (main.js puts these
+// layers just under those and above the station names).
+//
+// Rail and the strongest bus tier are kept clear at every zoom. The other bus
+// lines are kept clear from THIN_CLEAR_FROM: further out they are closer
+// together than a word is long (a mile is 30 px at zoom 10), so a name that
+// had to clear them all would have nowhere to go, and they are drawn light
+// there for the same reason they carry no numbers yet.
+//
+// The two kinds differ in one more way: a station's name is placed after
+// rail and the strongest tier but before the other bus lines, so it never
+// sits on the first two and can cross one of the others. Downtown the lighter
+// lines are a block apart, and a station with no name is worse than a name
+// across one of them. Every other name is placed after them all.
+const THIN_CLEAR_FROM = 11.5;
+const BUS_FROM = [...new Set(TIERS.map((t) => t.from))].sort((a, b) => a - b);
+const alongLine = { 'symbol-placement': 'line', 'symbol-spacing': 4, 'icon-rotation-alignment': 'viewport' };
+// Buses, one layer for each zoom a tier starts at, so a line that isn't drawn
+// yet holds nothing back. A tier the page doesn't know is drawn like the
+// last, and kept clear of like the last.
+const busKeepOut = () =>
+  BUS_FROM.map((from, i) => {
+    const last = i === BUS_FROM.length - 1;
+    const mine = ['in', ['get', 'tier'], ['literal', TIERS.filter((t) => (last ? t.from < from : t.from === from)).map((t) => t.id)]];
+    return clear(`keep-out-bus-${i}`, 'routes', {
+      ...(i ? { minzoom: Math.max(from, THIN_CLEAR_FROM) } : {}),
+      filter: ['all', ['==', ['get', 'mode'], 'bus'], last ? ['!', mine] : mine],
+      layout: { ...alongLine, 'icon-size': tierWidth(1) },
+    });
+  });
+// Rail and the strongest bus tier: what station names stay off (main.js).
+export const lineKeepOut = () => [
+  busKeepOut()[0],
+  clear('keep-out-rail', 'routes', {
+    filter: ['==', ['get', 'mode'], 'rail'],
+    layout: {
+      ...alongLine,
+      // Box side: the line, its casing, and the lines beside it, plus the margin.
+      'icon-size': byZoom(RAIL_WIDTH.map((w) => ['+', w + 3 + 2 * KEEP_OUT, ['*', 2 * (w + RAIL_GAP), slot]])),
+    },
+  }),
+];
+
+// Stations and stops hold back the basemap's names too, and so do the lighter
+// bus lines. Not the stations' own names: those sit beside their mark.
+const markKeepOut = () => [
+  ...busKeepOut().slice(1),
+  clear('keep-out-stops', 'stops', {
+    minzoom: 15,
+    layout: { 'icon-size': ['interpolate', ['linear'], ['zoom'], 15, 9, 18, 14] },
+  }),
+  clear('keep-out-stations', 'stations', {
+    minzoom: OVERVIEW_UNTIL,
+    layout: {
+      // A capsule as long as the lines it spans, and as wide as a line.
+      'icon-size': byZoom(RAIL_WIDTH.map((w) => ['+', w + 4 + 2 * KEEP_OUT, ['*', w + RAIL_GAP, ['-', ['coalesce', ['get', 'span'], 1], 1]]])),
+    },
+  }),
+];
+
+// Where a name can go when its own point is taken: on the point, then a
+// step at a time up, down and to each side (ems), nearest first. Steps small
+// enough to find a gap between two lines, and never further than ASIDE_REACH,
+// so a name doesn't end up beside the place next door. A name with nowhere
+// clear inside that isn't drawn: a line is worth more than a place's name.
+const ASIDE_REACH = 3.4;
+const steps = (step, n) => Array.from({ length: 2 * n + 1 }, (_, i) => (i - n) * step);
+const ASIDE = steps(0.6, 4)
+  .flatMap((y) => steps(0.75, 4).map((x) => [x, y]))
+  .filter((at) => Math.hypot(...at) <= ASIDE_REACH)
+  .sort((a, b) => Math.hypot(...a) - Math.hypot(...b))
+  .flatMap((at) => ['center', at]);
+
+// Place names fade out over the zoom before they go (cities 12.5 to 13.5,
+// towns and villages 13.5 to 14.5), so they thin out rather than pop off.
+const CITY_FADE = linear(12.5, 1, 13.5, 0);
+const TOWN_FADE = linear(13.5, 1, 14.5, 0);
+
 // Place, street and water names: above the transit lines, below our stations.
 export function basemapLabels() {
   const halo = { 'text-halo-color': P.land, 'text-halo-width': 1.4, 'text-halo-blur': 0.4 };
-  return [
+  const labels = [
     omt('water-label', 'water_name', {
       type: 'symbol',
       minzoom: 11,
-      filter: ['==', ['geometry-type'], 'Point'],
-      layout: { 'text-field': name, 'text-font': FONT.italic, 'text-size': 11.5, 'text-max-width': 7 },
+      // Not intermittent ones: seasonal puddles and gravel pits carry whatever
+      // name a mapper gave them, and a rider doesn't orient by them.
+      filter: ['all', ['==', ['geometry-type'], 'Point'], ['!=', ['get', 'intermittent'], 1]],
+      layout: { 'text-field': name, 'text-font': FONT.italic, 'text-size': 11.5, 'text-max-width': 7, 'text-variable-anchor-offset': ASIDE },
       paint: { 'text-color': P.waterLabel, ...halo, 'text-halo-color': P.water },
     }),
     // Street names, early and clear enough on the main streets to find an
@@ -164,6 +257,7 @@ export function basemapLabels() {
         'text-font': FONT.medium,
         'text-size': linear(14.5, 10.5, 17, 12.5),
         'symbol-spacing': 350,
+        'text-offset': STREET_NAME_OFFSET,
       },
       paint: { 'text-color': P.roadLabel, 'text-halo-color': P.road, 'text-halo-width': 2.4 },
     }),
@@ -177,7 +271,10 @@ export function basemapLabels() {
         'text-font': FONT.semibold,
         'text-size': linear(12, 10.5, 14, 11.5, 17, 13.5),
         'text-letter-spacing': 0.02,
-        'symbol-spacing': 300,
+        // More places to try while bus lines cross a street every few
+        // hundred px: a name is only drawn on a stretch no line crosses.
+        'symbol-spacing': linear(12, 120, 15, 300),
+        'text-offset': STREET_NAME_OFFSET,
         'symbol-sort-key': ['match', ['get', 'class'], ['primary', 'trunk'], 0, 1],
       },
       // Wide enough to meet across a word space, so a bus line on the street
@@ -185,25 +282,45 @@ export function basemapLabels() {
       paint: { 'text-color': P.street, 'text-halo-color': P.road, 'text-halo-width': 2.6 },
     }),
     // Interstate and US highway numbers in quiet gray shields: how people say
-    // where they are ("east of I-25").
-    omt('highway-shield', 'transportation_name', {
-      type: 'symbol',
-      minzoom: 8.5,
-      filter: ['all', ['has', 'ref'], ['<=', ['get', 'ref_length'], 3], ['in', ['get', 'network'], ['literal', ['us-interstate', 'us-highway']]]],
-      layout: {
-        'symbol-placement': 'line',
-        'symbol-spacing': ['step', ['zoom'], 260, 12, 420],
-        'icon-image': ['concat', 'shield-', ['get', 'network'], '-', ['get', 'ref_length']],
-        'icon-rotation-alignment': 'viewport',
-        'text-rotation-alignment': 'viewport',
-        'text-field': ['get', 'ref'],
-        'text-font': FONT.bold,
-        'text-size': 9.5,
-        'text-offset': ['match', ['get', 'network'], 'us-interstate', ['literal', [0, 0.15]], ['literal', [0, 0]]],
-        'icon-padding': 6,
-      },
-      paint: { 'text-color': P.shield },
-    }),
+    // where they are ("east of I-25"). The US shield has its own outline (a
+    // notched shield, not a box), and only shows while streets are unnamed
+    // and bus routes unlabeled; from 13.5 the street name says "East Colfax",
+    // and a "40" beside the bus 15 and 16 is one more number to misread.
+    // Interstates keep their shape and stay longer: the shape can't be taken
+    // for a bus tag, and "I-25" still helps at street scale. State highway
+    // refs ('us-state' and the rest) were never drawn. Until DETAIL_FROM only
+    // the main Interstates (one or two digits) are numbered: they're the ones
+    // people steer by, and a spur's or a US route's number that far out is
+    // one more number beside the bus numbers.
+    ...[
+      { id: 'highway-shield', network: 'us-interstate', minzoom: 8.5, maxzoom: 15, main: ['any', ['<=', ['get', 'ref_length'], 2], ['>=', ['zoom'], DETAIL_FROM]] },
+      { id: 'highway-shield-us', network: 'us-highway', minzoom: DETAIL_FROM, maxzoom: 13.5, main: true },
+    ].map(({ id, network, minzoom, maxzoom, main }) =>
+      omt(id, 'transportation_name', {
+        type: 'symbol',
+        minzoom,
+        maxzoom,
+        filter: ['all', ['has', 'ref'], ['<=', ['get', 'ref_length'], 3], ['==', ['get', 'network'], network], main],
+        layout: {
+          'symbol-placement': 'line',
+          'symbol-spacing': ['step', ['zoom'], 260, 12, 420],
+          'icon-image': ['concat', 'shield-', ['get', 'network'], '-', ['get', 'ref_length']],
+          'icon-rotation-alignment': 'viewport',
+          'text-rotation-alignment': 'viewport',
+          'text-field': ['get', 'ref'],
+          'text-font': FONT.bold,
+          'text-size': 9.5,
+          'text-offset': [0, 0.15],
+          'icon-padding': 6,
+        },
+        // Fade out over the last half zoom instead of vanishing.
+        paint: {
+          'text-color': P.shield,
+          'icon-opacity': linear(maxzoom - 0.5, 1, maxzoom, 0),
+          'text-opacity': linear(maxzoom - 0.5, 1, maxzoom, 0),
+        },
+      }),
+    ),
     // Landmarks people give directions by, once you're close enough to use them.
     omt('landmark-label', 'poi', {
       type: 'symbol',
@@ -219,6 +336,7 @@ export function basemapLabels() {
         'text-size': linear(14, 10.5, 17, 12.5),
         'text-max-width': 7,
         'text-padding': 6,
+        'text-variable-anchor-offset': ASIDE,
         'symbol-sort-key': ['get', 'rank'],
       },
       paint: { 'text-color': ['match', ['get', 'class'], 'park', P.parkLabel, P.landmark], ...halo },
@@ -227,7 +345,7 @@ export function basemapLabels() {
       type: 'symbol',
       minzoom: 10,
       filter: ['has', 'iata'],
-      layout: { 'text-field': name, 'text-font': FONT.semibold, 'text-size': 12, 'text-max-width': 8 },
+      layout: { 'text-field': name, 'text-font': FONT.semibold, 'text-size': 12, 'text-max-width': 8, 'text-variable-anchor-offset': ASIDE },
       paint: { 'text-color': P.town, ...halo },
     }),
     omt('neighborhood-label', 'place', {
@@ -240,59 +358,90 @@ export function basemapLabels() {
         'text-size': linear(12, 11.5, 16, 14),
         'text-letter-spacing': 0.06,
         'text-max-width': 7,
+        'text-variable-anchor-offset': ASIDE,
       },
       paint: { 'text-color': P.neighborhood, ...halo },
     }),
-    // Places: every town in the district from the opening view, smaller
-    // and lighter than the cities so more of them fit, bigger places first.
+    // Towns and villages, from DETAIL_FROM: further out the cities say where
+    // things are, and a town's name in the gaps of the network read as one
+    // more station. They're set like the cities (small spaced capitals, the
+    // way a map names an area), smaller, so a place is never taken for a
+    // station, whose name is bold and in sentence case.
     omt('village-label', 'place', {
       type: 'symbol',
-      minzoom: 10.5,
+      minzoom: DETAIL_FROM + 0.5,
+      maxzoom: 14.5,
       filter: cls('village', 'hamlet'),
       layout: {
         'text-field': name,
+        'text-transform': 'uppercase',
         'text-font': FONT.medium,
-        'text-size': linear(10.5, 11, 14, 13),
-        'text-max-width': 7,
+        'text-size': linear(11.5, 9.5, 14, 11),
+        'text-letter-spacing': 0.1,
+        'text-max-width': 8,
+        'text-variable-anchor-offset': ASIDE,
         'symbol-sort-key': 30,
       },
-      paint: { 'text-color': P.town, ...halo },
+      paint: { 'text-color': P.town, ...halo, 'text-opacity': TOWN_FADE },
     }),
     omt('town-label', 'place', {
       type: 'symbol',
-      minzoom: 8,
+      minzoom: DETAIL_FROM,
+      // Towns give way a zoom after the cities, once street names have taken
+      // over (Golden's name sat on its bus lines at 14).
+      maxzoom: 14.5,
       filter: cls('town'),
       layout: {
         'text-field': name,
+        'text-transform': 'uppercase',
         'text-font': FONT.semibold,
-        'text-size': linear(8, 10.5, 10, 11.5, 12, 13.5, 15, 15),
-        'text-max-width': 7,
+        'text-size': linear(11, 10, 13, 11.5, 15, 12.5),
+        'text-letter-spacing': 0.1,
+        'text-max-width': 8,
         'text-padding': 1,
+        'text-variable-anchor-offset': ASIDE,
         'symbol-sort-key': ['+', 10, ['coalesce', ['get', 'rank'], 10]],
       },
-      paint: { 'text-color': P.town, ...halo },
+      paint: { 'text-color': P.town, ...halo, 'text-opacity': TOWN_FADE },
     }),
+    // City names. A city's point is its middle, which is where its lines
+    // meet, so the name is set beside its point, in the nearest gap between
+    // lines, rather than on them.
     omt('city-label', 'place', {
       type: 'symbol',
-      maxzoom: 15,
+      // Gone by 13.5, where neighborhoods and street names take over: a city
+      // name is one word spread over a whole city, and at street scale it
+      // lands on the busiest corner (Denver on Colfax and Broadway).
+      maxzoom: 13.5,
       filter: cls('city'),
       layout: {
+        // Background, not a headline: small spaced capitals in the towns'
+        // gray say "this is the name of an area" and stay out of the way of
+        // the network, which is what the map is of.
         'text-field': name,
-        'text-font': FONT.bold,
-        'text-size': ['interpolate', ['linear'], ['zoom'], 7, ['match', ['get', 'rank'], [1, 2, 3], 14, 11.5], 12, ['match', ['get', 'rank'], [1, 2, 3], 19, 15]],
-        'text-letter-spacing': 0.01,
+        'text-transform': 'uppercase',
+        'text-font': FONT.semibold,
+        'text-size': ['interpolate', ['linear'], ['zoom'], 7, ['match', ['get', 'rank'], [1, 2, 3], 11, 10], 12, ['match', ['get', 'rank'], [1, 2, 3], 13, 12]],
+        'text-letter-spacing': 0.1,
         'text-max-width': 8,
-        // Beside its point rather than gone, if a sign is on it: far enough
-        // to clear a sign that covers the point itself. No padding: a name's
-        // box is already a line tall, and on smaller phones Denver's only
-        // room between the signs around it is within a pixel of them.
+        // No padding: the gap between two frequent bus lines is often only
+        // just wider than the name.
         'text-padding': 0,
-        'text-variable-anchor-offset': ['center', [0, 0], 'top', [0, 1.2], 'bottom', [0, -1.2], 'left', [1.2, 0], 'right', [-1.2, 0]],
+        'text-variable-anchor-offset': ASIDE,
         'symbol-sort-key': ['coalesce', ['get', 'rank'], 5],
       },
-      paint: { 'text-color': P.city, ...halo, 'text-halo-width': 1.8 },
+      paint: { 'text-color': P.town, ...halo, 'text-halo-width': 1.8, 'text-opacity': CITY_FADE },
     }),
   ];
+  // Stacking is placement priority (the top goes first), and every one of
+  // these is placed after the lines, the stations and their names (main.js).
+  // From the top: stations and stops, which hold all of these back; city
+  // names; the other place names; highway numbers; street names.
+  const streets = ['water-label', 'road-label-minor', 'road-label'];
+  const shields = ['highway-shield', 'highway-shield-us'];
+  const pick = (ids) => ids.map((id) => labels.find((l) => l.id === id));
+  const places = labels.filter((l) => ![...streets, ...shields].includes(l.id));
+  return [...pick(streets), ...pick(shields), ...places, ...markKeepOut()];
 }
 
 // Relief: the mountains are west, the region's best sense of direction, and
@@ -311,7 +460,15 @@ const DEM = {
 
 export const TERRAIN = {
   source: DEM,
-  layers: [
+  get layers() {
+    return terrainLayers();
+  },
+  // Relief goes over the land and parks, under water and roads.
+  before: 'water',
+};
+
+function terrainLayers() {
+  return [
     {
       id: 'elevation',
       type: 'color-relief',
@@ -320,16 +477,7 @@ export const TERRAIN = {
       paint: {
         // Meters. The plains stay the land color; the tint starts at the
         // foothills (about 1,800 m) and deepens toward the Divide.
-        'color-relief-color': [
-          'interpolate',
-          ['linear'],
-          ['elevation'],
-          1700, 'rgba(232, 236, 230, 0)',
-          1900, 'rgba(226, 232, 223, 0.55)',
-          2500, 'rgba(214, 222, 211, 0.8)',
-          3300, 'rgba(206, 213, 207, 0.85)',
-          4000, 'rgba(226, 230, 233, 0.9)',
-        ],
+        'color-relief-color': ['interpolate', ['linear'], ['elevation'], ...P.relief.flat()],
         'color-relief-opacity': linear(7, 1, 12, 0.7, 14, 0),
       },
     },
@@ -342,12 +490,10 @@ export const TERRAIN = {
         'hillshade-method': 'multidirectional',
         'hillshade-illumination-direction': [270, 315, 0, 330],
         'hillshade-illumination-altitude': [30, 30, 30, 30],
-        'hillshade-highlight-color': ['rgba(255, 255, 255, 0.35)', 'rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.2)', 'rgba(255, 255, 255, 0.2)'],
-        'hillshade-shadow-color': ['rgba(70, 88, 104, 0.32)', 'rgba(70, 88, 104, 0.28)', 'rgba(70, 88, 104, 0.18)', 'rgba(70, 88, 104, 0.18)'],
+        'hillshade-highlight-color': P.hillshade.highlight,
+        'hillshade-shadow-color': P.hillshade.shadow,
         'hillshade-exaggeration': linear(7, 0.55, 11, 0.45, 14, 0.15),
       },
     },
-  ],
-  // Relief goes over the land and parks, under water and roads.
-  before: 'water',
-};
+  ];
+}

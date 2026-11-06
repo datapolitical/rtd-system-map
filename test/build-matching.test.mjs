@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { lineEnds, matchGtfs, readCsv, routeFrequency, tierOf } from '../scripts/lib/gtfs.mjs';
+import { lineEnds, matchGtfs, readCsv, riderNames, routeFrequency, tierOf } from '../scripts/lib/gtfs.mjs';
 
 const csv = (rows) => rows.map((r) => r.join(',')).join('\n');
 const codes = (found) => found.map((r) => r.route_short_name || r.route_id).sort();
@@ -129,6 +129,32 @@ test('a route drawn on its own is never another\'s family', () => {
   const drawn = new Set(['225', '225D']);
   assert.deepEqual(codes(matchGtfs({ route: '225', name: BASE_NAME }, routes, drawn)), ['225', '225T']);
   assert.deepEqual(codes(matchGtfs({ route: '225D', name: BASE_NAME }, routes, drawn)), ['225D']);
+});
+
+test("a route goes by its timetable name, not the map's code for it", () => {
+  const gtfs = (id, name) => ({ route_id: id, route_short_name: name });
+  const names = riderNames(
+    new Map([
+      // One timetable route under another name: riders know that name.
+      ['BOND', [gtfs('BOND', 'Bound')]],
+      ['LD', [gtfs('LD1', 'LD1')]],
+      // The same name already: nothing changes.
+      ['15', [gtfs('15', '15')]],
+      // A family keeps the code its members share.
+      ['FF', [gtfs('FF1', 'FF1'), gtfs('FF2', 'FF2')]],
+      // No timetable route, or a timetable route with no name of its own.
+      ['ZZ', []],
+      ['A', [gtfs('A', '')]],
+      // Routes are listed with spaces between them, so a name can't hold one.
+      ['SKY', [gtfs('SKY', 'Sky Ride')]],
+      // Two routes can't share a name: the second keeps its code, and a route
+      // never takes the name another route already goes by.
+      ['X1', [gtfs('X1', 'Loop')]],
+      ['X2', [gtfs('X2', 'Loop')]],
+      ['Y', [gtfs('Y', '15')]],
+    ]),
+  );
+  assert.deepEqual(Object.fromEntries(names), { BOND: 'Bound', LD: 'LD1', 15: '15', FF: 'FF', ZZ: 'ZZ', A: 'A', SKY: 'SKY', X1: 'Loop', X2: 'X2', Y: 'Y' });
 });
 
 test('a route ends where its longest trip ends, not where its shape does', () => {

@@ -39,6 +39,23 @@ its number. A map that shows service without naming it says less than it
 seems to. That was V2's biggest gap, found by comparing it with other
 agencies' maps (see "Why").
 
+**It looks designed, and it is as accurate as it can be while looking that
+way.** The map should look as if a person drew it on purpose: lines that run
+together are one even pack, they branch off in clean curves, they end
+together, and nothing is ragged or accidental. RTD's data is a survey, exact
+to the meter, and a survey drawn as it comes looks like a mistake wherever
+tracks sit unevenly side by side or platforms are staggered. A rider judges
+the map by how it looks, and a map that looks careless isn't trusted on the
+things it gets right. So where the exact geometry and a clean drawing
+disagree, the clean drawing wins, within reason: a line may sit some meters
+from its track, never on another street, past a station, or anywhere that
+would send a rider to the wrong place. Everything a rider acts on (which
+lines, which stations, how often, where they go) stays exact. And the
+cleaning is always a rule in the build that works on any network, never a
+hand edit of one spot. (Chris, 2026-11-06: "we want this to look intentional
+and clean, like it was designed by a person ... the goal of this is to look
+designed while also being technically accurate as much as possible.")
+
 **Phones first.** Most people will use this on a phone, in their hand, often
 on the move. Print transit maps (the NYC subway poster, say) are references
 for clarity, not for interaction: big tap targets, one-thumb reach, detail
@@ -240,8 +257,9 @@ updated Oct 30"), so a stale map is visible to everyone.
 
 ### 1. See the whole network
 
-This is the view that opens. It shows every route RTD runs, drawn by how often
-it comes on a typical weekday, 9am to 3pm:
+This is the map itself: what opens on a wide screen, and one tap ("Whole
+network") from what opens on a phone (see "Opening state"). It shows every
+route RTD runs, drawn by how often it comes on a typical weekday, 9am to 3pm:
 
 - Routes every 15 minutes or better are bold and unmistakable.
 - Less frequent routes get progressively lighter.
@@ -333,6 +351,9 @@ Weekday evening, Saturday, Sunday, or a day and time you pick:
 One search box for routes (by number or name), stations, Park-n-Rides, stops
 (by name or stop number), landmarks, and street addresses.
 
+Built so far (2026-11-06): routes, rail stations, Park-n-Rides and transit
+centers, and bus stops. Landmarks and street addresses are not built.
+
 ### 6. Understand rail and transfers
 
 Stations are clear and labeled. Where several rail lines share track, they are
@@ -404,8 +425,15 @@ RTD updates it with each runboard and sometimes between runboards. The build
 records the feed's `feed_version` and file hash in `meta.json`.
 
 **How frequency is measured.** For each route and direction, take the typical
-(median) gap between departures at the route's busiest stop within a time
-window. A route's tier is set by its less frequent direction. The window
+(median) gap between departures at one representative place within a time
+window; a rail line's place is its busiest stop, a bus route's is described
+under "Bus routes are measured by stretch". A tier is set by the less
+frequent direction. When trips bunch, the average gap stands in for the
+median: if the average is more than 1.5 times the median, the average is
+used (`BUNCHED` in `scripts/lib/gtfs.mjs`). The threshold comes from the
+November 2026 feed, where genuinely bunched pairs ran at 4 times the median
+or more and ordinary timetable drift stayed under 1.4. Route 8's Broadway
+stretch is the one that changed: "every 7 min" became every 30. The window
 follows the time the map shows:
 
 | Time shown | Window |
@@ -424,9 +452,13 @@ the real calendar for that date, exceptions included.
 |---|---|---|
 | Frequent | every 15 min or better | bold, full ink |
 | Every 30 | 16–30 min | medium |
-| Hourly | 31–60 min | thin |
-| Infrequent | more than 60 min, or a single trip | thin, light |
+| Hourly | 31–60 min | thin, light |
+| Infrequent | more than 60 min, or a single trip | thin, light (the same look as hourly) |
 | Not running | no departure in the next hour (Live, picked time); no trips that day (typical times) | hairline, faint, no tag |
+
+Hourly and infrequent stay separate in the data (`tier` keeps both) but share
+one look and one row in the key, "Every 31 min or more", because the 30-minute,
+hourly and less-than-hourly looks could not be told apart on screen.
 
 In the typical views, a route that runs that day but not in the window is
 described by when it does run:
@@ -453,11 +485,65 @@ The route panel also shows weekday peak, evening, Saturday, and Sunday
 frequency, plus first and last trips, so one number is never read as all-day
 service.
 
+**Bus routes are measured by stretch, not once per route.** A bus route can
+come every 15 minutes in one place and a few times a day in another: the
+Flatiron Flyer family was drawn as every 15 minutes all the way to Aurora,
+where only a few trips a day run, and routes 83, 225, 228, AB, AT and NB had
+the same error. So the build (`scripts/lib/stretches.mjs`):
+
+1. cuts each drawn bus line into 50 m cells
+2. matches the cells to GTFS shapes (within 50 m, on a similar bearing).
+   A shape can pass a cell twice: a loop, or a tail past the last stop where
+   the bus runs back empty along the street it came in on (the airport
+   routes do). Each trip pattern takes its closest pass that lies between
+   its own first and last stops
+3. measures the weekday 9am to 3pm gap in each direction at one
+   representative place for each stretch, the middle of the stretch's longest
+   run; the worse direction sets the tier
+4. merges runs shorter than 600 m (300 m at a free end) into their neighbour
+
+In `routes.geojson` each bus feature is one stretch with its own `tier`,
+`wk`, `sa`, `su`, trip counts, and first and last times. It also carries
+`route_tier` and `route_wk` for the whole route, and `stretch` (0 is the
+longest). A stretch's tier can be `none`: no weekday service there, weekend
+only. Today 31 of 108 bus routes are split. `directory.json` keeps one
+whole-route entry per route. Rail is not split.
+
+Known limit: the worse direction sets the tier even where it is a couple of
+stray trips on a one-way roadway. The AL's last 0.8 km into the airport
+carries 16 inbound trips a day, hourly, and 2 outbound, so it is drawn "rush
+hours only"; the hourly line beside it reaches the terminal. Ignoring a
+direction with under a quarter of the other's trips was tried 2026-11-06 and
+not adopted: it also relabelled pieces of the 169L, 225 and FF where neither
+reading is clearly better.
+
 **What the build publishes for this.** The build doesn't fix one answer. It
 publishes:
 
 - **The weekday daytime tiers** on the route lines themselves, as now, so
   the full map draws with nothing else loaded.
+- **Shared-street labels** (`busnames.geojson`, loaded lazily): where several
+  routes share a street (within 35 m, within 25 degrees of bearing), one
+  label run naming them, strongest tier first and then in number order,
+  joined with " · ", the strongest two or three named and the rest counted
+  as "+N" when the label would run long (see "Route numbers"). Fields:
+  `label`, `label_main` (only the routes every 30 minutes or better),
+  `routes`, `tier`, `n`, and `chars` and `chars_main` (the length of each
+  label, which sets how far apart it repeats). This is naming only: lines are still drawn per route, not by
+  combined frequency (see "Open questions").
+- **Stops** with `lines`, the drawn map routes that actually stop there
+  (families mapped to the drawn code, so FF1 is FF), and `heading`
+  ("Northbound", "Southeast-bound", and so on). Stop popups used to list
+  routes that pass a stop but do not stop at it, with no direction.
+- **`meta.json`:** besides source versions and bounds, `window` (`{"from":
+  "09:00","to":"15:00"}`, from which the page words "Weekdays, 9am to 3pm"),
+  `rail[].ends` (each line's two end names, from what trains there say
+  they're going),
+  and `counts.busnames`. `tiers` counts the routes with at least one stretch
+  in each tier.
+- **FlexRide zones** carry `url`, which is null for every zone today: RTD's
+  layer and GTFS have no per-zone link. The page falls back to RTD's general
+  FlexRide page (a named constant in `public/js/select.js`).
 - **A schedule summary:** each route's departure times at its reference stop,
   for each direction and service pattern, plus the calendar with its
   exceptions. It loads in the background after the map draws, so Live and
@@ -531,6 +617,27 @@ The build reports any map route that still doesn't match, and stops if more
 than 5% don't. It reports any GTFS route RTD's map doesn't draw (none today)
 without stopping.
 
+**Routes go by their timetable names.** ArcGIS `ROUTE` is RTD's own code
+for a route, and it is not always the name riders know: the map layer's
+`BOND` is the Bound, `FMR` the MetroRide, `FREE` the FreeRide, `LD` the LD1.
+Everything a rider reads (map labels, panels, the Lines list, stops,
+stations, search results) shows the name on the bus and the timetable, by
+this rule in the build (`riderNames`), with no list of routes:
+
+- A map route that matches exactly one GTFS route takes that route's
+  `route_short_name`.
+- A family drawn as one line keeps the map's code, which is the part its
+  members' names share (FF for FF1 to FF5).
+- A route keeps the map's code if the timetable name has a space (routes are
+  listed with spaces between them) or another route already goes by it.
+
+The map's code is kept only as `code` in the route's directory entry, so a
+search for "BOND" or "FMR" still finds the route. RTD's stop layer lists
+routes by the map's codes; the build translates those too. The build reports
+each change ("shown by their timetable name: BOND as Bound, ...") and
+`meta.json` lists them under `renamed`. Checked 2026-11-06: four routes
+change, and the other 113 already had the same code in both sources.
+
 ### Live data: RTD's GTFS-realtime feeds
 
 `https://open-data.rtd-denver.com/files/gtfs-rt/rtd/VehiclePosition.pb`, plus
@@ -576,11 +683,67 @@ Everything else (streets, parks, water, labels) steps back.
 The second principle is **name what you draw**. Every line on screen is
 identified at the zoom where it appears, without a tap:
 
-- Rail carries its bullet at both ends with where it goes, and along the line.
+- Rail carries its letter along the line, on the line itself. Only below
+  zoom 9.75, where there are no letters along the lines yet, the letter sits
+  at each end instead: both at once said the same thing twice. The letter is
+  the whole label: where a line goes is in the key, the Lines list and the
+  line's panel, not on the map.
 - Buses carry their number, starting with the frequent ones.
 
 When something is drawn but there's no room to name it, it's drawn lighter
 until there is. The by-zoom table below is built on this rule.
+
+The third is **every mark earns its place**. A label is on the map at a
+given zoom because someone looking at that much of the city needs it, not
+because there's empty map to put it in. The test for each one: would a rider
+miss it? If not, it waits for the zoom where they would. Applied
+2026-11-06, after the phone's opening view named four stations on the empty
+north end of the N line and almost none downtown, repeated each line's
+letter three or four times, and set town names where they read as stations:
+
+- **Station names go to where routes meet.** Until zoom 11 the only
+  stations named are those where six or more routes meet, trains and buses
+  together (the build counts them, `links`; today 17 stations: Union
+  Station, Nine Mile, Central Park, Federal Center, I-25 / Broadway and so
+  on). They're the ones people change at and ask for. Every station is named
+  from 11, the busiest first. Every station can be tapped at any zoom.
+- **A line's letter appears as often as it takes for every line in view to
+  have one,** and no more. The build places them (see "Rail bullets").
+- **Places are named by cities until zoom 11.** Towns and villages start
+  there, in the same small capitals as cities, so a place name is never
+  taken for a station.
+- **FlexRide zones start at zoom 11.** Further out their outlines are boxes
+  around nothing and read as city limits.
+- **Highway numbers:** until zoom 11, only the main Interstates (one or two
+  digits). Spurs (I-270) and US routes start at 11.
+- **A button shows only while it does something.** "Whole network" hides
+  while the whole network is on screen.
+
+The fourth is **no name covers a line**. The lines are what the map is of,
+and a name can sit a little to one side where a line can't. Chris asked for
+this 2026-11-06 ("Aurora could go a little further down ... to avoid sitting
+on top of the 15"). How it works (`public/js/basemap.js`, "keep-out"
+layers):
+
+- Every rail and bus line that is drawn takes up its own room, and names
+  are placed after it. Only what names a line sits on it: a rail letter or a
+  bus number.
+- Rail and the frequent buses are kept clear at every zoom. The lighter bus
+  lines are kept clear from zoom 11.5: further out they are closer together
+  than a word is long, so a name that had to clear them all would have
+  nowhere to go.
+- A name whose own point is taken moves to the nearest clear spot, up to
+  3.4 em away (a city, town, neighborhood, landmark, airport or water name).
+  If there is none, the name isn't drawn at that zoom: a line is worth more
+  than a place's name. Today DENVER and AURORA are not drawn in the phone's
+  "Whole network" view or a laptop's opening view for this reason.
+- Street names sit beside their street, never on it, at every zoom. A name
+  is only drawn on a stretch no bus line crosses, so most main streets get
+  their name from about zoom 13.5.
+- One exception: a station's name stays off rail and the frequent buses but
+  can cross a lighter bus line. Downtown those are a block apart, and a
+  station with no name is worse than a name across one of them.
+- Highway shields give way to lines like any other name.
 
 ### Hierarchy (strongest to quietest)
 
@@ -603,11 +766,30 @@ water, white streets with light casings) so the network leads. Its words
 carry the sense of place:
 
 - **Street names** on main streets from zoom 12, darker than the rest, so you
-  can find an intersection; smaller streets from 14.5
-- **Interstate and US highway numbers** in quiet gray shields from zoom 8.5
+  can find an intersection; smaller streets from 14.5. They sit beside the
+  street rather than on it (1.3 em off, 1.45 em by zoom 17), so they don't
+  cover the bus line down its middle, and are drawn only where no line
+  crosses them (see "no name covers a line"). In practice most main streets
+  are named from about zoom 13.5.
+- **Interstate and US highway numbers** in quiet gray shields: the main
+  Interstates from zoom 8.5, spurs and US routes from 11
   ("east of I-25" is how people say where they are). The shield shape keeps
-  them from being read as bus route numbers.
-- **Neighborhood, town and city names**, in plain sentence case
+  them from being read as bus route numbers. Interstates have their own
+  shield and fade out from 14.5 to 15. US highways have a notched US-route
+  shield, so "40" on Colfax doesn't read as a bus tag, and fade out from 13
+  to 13.5. State highway numbers are not drawn.
+- **Neighborhood names** in plain sentence case, from zoom 12. **City names**,
+  and town names from zoom 11, in
+  small, letter-spaced capitals in the same quiet gray, the convention for a
+  name that covers an area rather than marks a point, so "DENVER" reads as
+  background and not as a place to tap. At every zoom a city name gives way
+  to the lines, stations and station names, and is set beside its point (up
+  to 3.4 em off) rather than on the lines that meet there; with nowhere
+  clear that near, it isn't drawn (see "no name covers a line"). City names
+  fade out from 12.5 to 13.5 and town names from 13.5 to 14.5 (the "Denver"
+  label used to sit on Colfax and Broadway through 14.5).
+- **Water names** skip intermittent water bodies (this removed an
+  OpenStreetMap joke name on a gravel pit).
 - **Landmarks people give directions by** from zoom 14: hospitals, campuses,
   stadiums, museums, theaters, libraries, city halls, and the larger parks
   (parks in green italics). Names only, no icons.
@@ -644,9 +826,8 @@ reference:
 | E | `#552683` | G | `#F6B221` |
 
 Some lines are close in color (B and D, E and N). Rail is never identified by
-color alone: every line carries its letter in a round bullet, and from the
-opening zoom each end of a line has a sign with its bullet and where its
-trains say they're going ("A, Denver Airport"; see "Symbols").
+color alone: every line carries its letter in a round bullet, along the line
+and at each end (see "Symbols").
 
 ### Rail frequency
 
@@ -660,9 +841,9 @@ screen in V2 step 3.
 
 | State | How it's drawn |
 |---|---|
-| Served | a white capsule with an ink edge laid across the track, as wide as the lines it serves and turned to the track's direction; a circle where one line stops |
-| Returning | hollow gray ring from zoom 12, gray label from 14. Panel: "Trains return Nov 23" |
-| No current service | hollow gray ring from zoom 12, gray label from 14. Panel: "No train service right now" |
+| Served | no mark below zoom 9 (stations a few pixels apart read as noise); from 9 to 10.25 a small tick across the track; from 11 a white capsule with an ink edge laid across the track, as wide as the lines it serves and turned to the track's direction (a circle where one line stops), crossfading with the tick from 10.25 to 11 |
+| Returning | hollow gray ring and gray label, both from zoom 13. Panel: "Trains return Nov 23" |
+| No current service | hollow gray ring and gray label, both from zoom 13. Panel: "No train service right now" |
 
 The state comes from GTFS on every build (see "Station service"), so stations
 that lose or regain trains change on their own. The key shows the gray
@@ -677,26 +858,77 @@ couplets (California and Stout, Welton), so each direction is its own track:
 the algorithm must treat a line's two directions on separate streets as one
 line, not as two lines sharing a corridor.
 
+**Reading right comes before matching the survey** (the Objective's "it
+looks designed", applied to rail). RTD's geometry is exact: each line on its
+own track, stopping at its own platform, drawn with a corner every hundred
+meters or so. Drawn exactly, that looks wrong, and a rider reads the look.
+So the build may nudge a line a little (tens of meters, never to another
+street or past a station) where that makes the picture say what is true:
+lines on the same track are one pack, lines that end at one station end
+together, and track curves. Always by a rule in the build, never by editing
+one place by hand. (Chris, 2026-11-06: "It's more important that it visually
+makes sense. And if that means nudging things a little bit so that they line
+up properly, that's actually better (within reason).")
+
 The build works this out from the geometry every time
 (`scripts/lib/sharedtrack.mjs`):
 
-1. Find where two or more lines run within 20 m of each other, point by point
-   along each line. Runs shorter than 200 m are smoothed away.
-2. Group the shared runs into *places*: runs of the same set of lines that
-   touch. The same lines can share track in more than one place, and each
-   place is ordered on its own.
-3. Order each place's lines by which side each one leaves toward, measured
-   over 1.2 km past each end, so lines don't cross where they part. Bigger
-   places are ordered first. A smaller place whose lines all go on into a
-   bigger one keeps the bigger one's order, so lines don't cross where one
-   joins or leaves either (E and R stay side by side south of Lincoln, where
-   the T ends).
-4. Point every shared piece the same way (east, or north), and save each
-   line's slot in its place. The map turns the slot into an on-screen offset
-   that stays the same width at every zoom.
+1. Clean each line's path: drop spikes, a stretch that runs out and back
+   over itself, and a sideways hop of a few meters between two tracks (RTD's
+   T line had both at I-25 / Broadway, drawn as a blob). Then level the ends:
+   lines whose ends are within 150 m of each other and run the same way
+   (within 20 degrees) end at one station, at platforms staggered by a
+   train's length. Each is carried on to where the furthest of them stops,
+   square across the track, so the ends line up. No line is cut short. At
+   Union Station the N was drawn about 75 m short of the A, and B and G
+   about 7 m short. Lines that end facing each other (light rail and
+   commuter rail at Union Station) are left alone.
+2. Find where two or more lines run within 20 m of each other, point by point
+   along each line. Sharing carries across: if C is within 20 m of E and E
+   of T, all three share the track there, even where C and T are 25 m apart.
+   Runs shorter than 200 m are smoothed away.
+3. Group the shared runs into *places*: runs of the same set of lines that
+   touch. The same lines can share track in more than one place.
+4. Decide, for each pair of lines, which is on the left. Each place says
+   which side each line leaves toward, measured over 1.2 km past each end.
+   A pair is ordered once for all the places it runs through in a row, on
+   what those places say together, so two lines never swap sides between one
+   place and the next and never cross where a third joins or leaves (E and R
+   stay side by side south of Lincoln, where the T ends).
+5. Point every shared piece the same way, and save each line's slot in its
+   place. The map turns the slot into an on-screen offset that stays the
+   same width at every zoom.
+6. Draw each place as one pack. Tracks side by side are anything from 0 to
+   20 m apart (at Union Station B and G are on one, N and A on another 20 m
+   away), so lines drawn on their own tracks, each a slot to the side, sat
+   unevenly: two tight, a gap, two tight. Every line of a place is moved
+   onto the middle of the place's tracks, where the slots space them evenly.
+   A line that has started to leave counts for less and less toward the
+   middle (from 20 m away to 40 m), so it doesn't pull the others after it.
+   Where a line joins or leaves a pack, the piece with fewer lines swings
+   between its own track and the pack's middle over 300 m, so the lines
+   leave together and then part, with no sideways jump.
+7. Round every line. Each point goes to the average of the path for 60 m
+   either side, nearer path counting for more, so a corner in RTD's path, or
+   one made by a line swinging into a pack, is drawn as a curve. A sharp
+   corner is cut by a few meters. The ends of a line don't move.
+8. Ease each line between slots. Where a line leaves others, it starts in
+   the slot it had beside them and moves to its new one in steps of a
+   sixteenth of a line's width, over up to 1.5 km, finishing before the next
+   station. Only the piece with fewer lines moves; lines still together stay
+   put. So a line never steps sideways at a junction, and isn't drawn over
+   another while their tracks are still close.
 
-Where a line leaves a bundle, the others close up by half a line's width at
-once. A smooth taper is a known gap.
+Checked on RTD's network 2026-11-06: no two joined pieces of a line differ by
+more than a sixteenth of a width, and no two lines within 20 m of each other
+are drawn less than 0.88 of a width apart. In the pack leaving Union Station
+the four lines are within 0.8 m of one path all the way (they were up to
+20 m apart). `test/sharedtrack.test.mjs` holds these rules on a made-up
+network.
+
+Known limit: the four commuter lines end at Union Station with no station
+mark on them. RTD's data has one point for Union Station, and it sits on the
+light rail end, 250 m away.
 
 A new line, a rerouted line, or a new shared corridor is handled with no
 changes. Never fix a corridor by hand-editing data or hiding a line; improve
@@ -713,8 +945,27 @@ against the land, so even the lightest bus line meets 3:1. Frequent buses are
 a deep navy ink (`#1D3044`) rather than black, so a dense downtown grid
 doesn't read as a solid block.
 
+As drawn, on the land color (`#F4F5F6`), with widths at zoom 9, 11, 13 and 16:
+
+| Look | Color | Width | Style |
+|---|---|---|---|
+| Every 15 min or better | `#1D3044` | 1.2 / 1.9 / 3 / 5.2 | solid |
+| Every 16–30 min | `#3F5266` | 0.85 / 1.4 / 2.1 / 3.7 | solid |
+| Every 31 min or more (hourly, less than hourly) | `#78848F` | 0.45 / 0.6 / 1 / 2 | solid |
+| Rush hours only | `#78848F` | 0.5 / 0.7 / 1.1 / 2.1 | dashed |
+| A few trips | `#78848F` | 0.6 / 0.9 / 1.4 / 2.5 | dotted |
+
+The 30-minute, hourly and less-than-hourly looks could not be told apart,
+and the key's swatches were in the wrong order, so the two slowest tiers now
+share one look and one key row, "Every 31 min or more".
+
+Each stretch of a route takes the tier measured for it (see "Bus routes are
+measured by stretch"), so one route can change weight where its service does.
+
 Route numbers sit in their lines until zoom 14: bold numbers in the line's
-ink, knocked out of the line, so the line breaks around its number. From 14,
+ink, knocked out of the line, so the line breaks around its number. Between
+11.5 and 14 the numbers that repeat along a line come from the shared-street
+labels below, so a street with several routes reads "30 • 31". From 14,
 where lines are wide and streets are named, numbers get small white tags
 outlined in the line's ink. Filled tags from far out were tried and rejected:
 they read as highway shields, covered streets, and outweighed the buses they
@@ -730,19 +981,39 @@ When numbers appear:
   the numbers before it on a phone, a laptop and a desktop. Where there's no
   room, the route left without a number is one that shares its street with
   another: downtown, the 0L, 15L and FreeRide, and on phones a few more in
-  central Denver. They get their numbers by zoom 10, except FreeRide, which
-  sits under the Denver name until numbers repeat along the line from 11.5.
-  A number sits on its line, or just beside it where a city name is.
-- **Every-30 routes:** from 11.5.
+  central Denver. They get their numbers by zoom 10, except FreeRide on
+  phones, which is crowded out downtown until numbers repeat along the line
+  from 11.5. None is drawn below zoom 9 (the overview).
+- **Every-30 routes:** from 11.5, in the shared-street labels below.
 - **Every route:** from 13.
 - **Not running:** no number.
 
-**Corridors.** Where several routes share a street and its stops, riders can
-take whichever comes first. The build finds these shared stretches from GTFS
-stop sequences and draws the corridor once, weighted by the combined
-frequency of the routes on it (two routes every 30 minutes, evenly spaced, are
-a frequent corridor). Only stops both routes serve count, so a limited-stop
-route adds to the corridor only at its stops.
+**Shared streets.** Where several routes run along one street, they share
+one label so the street reads as a whole instead of alternating numbers
+(30, 31, 30, 31). The build (`scripts/lib/busnames.mjs`) finds routes within
+35 m of each other and within 25 degrees of the same bearing, and makes one
+label run naming them all: strongest tier first, then in number order,
+joined with " · " in the data and drawn with a bullet ("30 • 31"). Up to
+three routes are always named. Four are named if the label fits in 16
+characters. Otherwise the strongest three are named (two, if three don't
+fit) and the rest are counted: "0 • 0L • 83 +8". A label never ends in "+1",
+which is as wide as the number it hides. That keeps a tag under about 40% of
+a phone's width; the rest of the routes are in the list a tap opens. Labels
+of 12 characters or more repeat every 600 px along the street, shorter ones
+every 300 px, so a long tag shows about once per screen. (MapLibre can't
+vary spacing by feature, so the long labels are drawn by twin layers,
+`bus-numbers-long` and `bus-tags-long`; code that lists tag layers lists
+both.) Before zoom 13
+only the routes every 30 minutes or better are named; from 13, all of them.
+This is naming only. Each route is still drawn as its own line, with its own
+tier.
+
+**Corridors by combined frequency are not built.** Where several routes share
+a street and its stops, riders can take whichever comes first, so two routes
+every 30 minutes, evenly spaced, are a frequent corridor to a rider. The
+plan was to draw the shared stretch once, weighted by combined frequency,
+counting only stops both routes serve. That is still open (see "Open
+questions"); today the map draws each route by its own frequency.
 
 ### By zoom level
 
@@ -750,11 +1021,11 @@ Each bus tier fades in over about a zoom level rather than popping on.
 
 | Zoom | Shows | Also in Live |
 |---|---|---|
-| Up to 10 (the opening view) | District wash and relief. Rail, with a sign at both ends of each line. Frequent buses and corridors, each with one number. Stations. Every town and city in the district, the airport, downtown, and the main campuses. Highway shields. | Alert marks on rail, closed stations |
-| 9–11.5 | Every-30 buses from 9, drawn lighter until their tags arrive. Hourly and less from 10.5. Station names and rail bullets along the lines from 10.5. Part-time buses and neighborhoods from 11. | Train positions from 11 |
-| 11.5–13 | Every-30 numbers. Main street names from 12. Park-n-Rides, transit centers, and unserved stations from 12. | |
-| 13–14.5 | Every route's number, in tags from 14. Line-end signs give way to station names. Landmarks and unserved station names from 14. | Bus positions, alert marks on bus routes |
-| 14.5 and up | Bus stops (loaded only when first needed) and smaller streets | Closed stops crossed out |
+| Below 9 (the overview: a phone's "Whole network") | District wash and relief. Rail, with each line's letter at both ends and nothing else on it. Frequent buses as lines, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
+| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks and one number on each frequent bus, from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of stations where six or more routes meet. Hourly and less from 10.5. Stations are small ticks to 10.25; capsules from 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 11, closed stations |
+| 11.5–13 | Every-30 numbers, in shared-street labels. Names now keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. | |
+| 13–14.5 | Every route's number, in tags from 14. Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
+| 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15 | Closed stops crossed out |
 | 16 and up | Stop names, with the routes that serve each stop | Vehicles' route numbers |
 
 ### Symbols
@@ -762,24 +1033,54 @@ Each bus tier fades in over about a zoom level rather than popping on.
 - **Park-n-Ride:** a small slate "P" sign drawn as an icon, not a text
   square, set just up and to the left of its spot so it never covers a
   station. One size for all; the panel gives the number of spaces.
-- **Line-end signs**, from the opening zoom to 13: a white sign at each end
-  of each line, with its bullets and where trains there say they're going.
-  The name is the GTFS headsign without the line's own name ("W-Line Jeffco"
-  becomes "Jeffco", "Train to Alameda Station" becomes "Alameda"); a headsign
-  that spells out the station's name uses that name ("Union Station"). Lines
-  ending together share one sign. Where more than three end together (Union
-  Station), it's one ink sign with the name alone. The build picks every
-  sign's side together: the arrangement that covers the least track and
-  reaches least past the network's edges (the stations' width, which is what
-  phones fit, and the desktop's frame above and below), with no two signs
-  meeting at any scale from the smallest phone's opening view in to where
-  signs give way. Each pair is checked at a dozen scales, because two signs
-  facing each other can clear at one and meet at another. Phones open wide
-  enough to show every sign whole, from 360 px wide. Signs claim their space
-  first, then city names, which move just beside their point rather than
-  disappear, then route numbers.
-- **Rail bullets** ride along each line from zoom 10.5, so a line can be
-  named anywhere on screen, not only in the key.
+- **Line-end signs**, below zoom 9.75 only: each line's letter, alone, just
+  past each end of the line. From 9.75 the letters along the line take
+  over; a letter at the end beside one on the line a little way along was
+  the same thing twice. No destination name: the letter says
+  which line this is, and the end station is named by the same rule as any
+  other station. Where the line goes is in the key, the Lines list and the
+  line's panel. Lines ending together share one sign ("E R"). Where more
+  than three end together (Union Station), there is no sign. The build
+  picks which side of the end each sign sits on, all together: the
+  arrangement that covers the least track and reaches least past the
+  network's edges, with no two signs meeting at any scale from the smallest
+  phone's opening view in to where signs give way. It still sizes that
+  check for the wider sign with a name that the map used to draw, so
+  letters have more room than they need. The page sets the letter 14 px
+  from the end on that side. A phone's "Whole network" view shows every
+  letter whole, from 360 px wide; its opening view is closer in and has the
+  letters along the lines instead. Signs and rail letters claim their space
+  first, then bus numbers, then station names, then every other name. `meta.rail[].ends` still carries each line's end names,
+  worded from the GTFS headsign without the line's own name ("W-Line Jeffco"
+  becomes "Jeffco"), for the key and the Lines list.
+- **Rail bullets** ride along each line from zoom 9.75, so a line can be
+  named anywhere on screen, not only in the key. The build decides where
+  (`lettersAlong` in `scripts/lib/sharedtrack.mjs`), once for each whole
+  zoom from 10 to 16; the map shows the set for the zoom it is at (the
+  zoom-10 set from 9.75, the zoom-16 set from 16 in).
+  - A place for a letter comes up about every 100 px along each stretch of
+    track.
+  - Lines sharing the track take turns at those places: each goes to the
+    line whose nearest letter is furthest away. So every line is named along
+    track it shares, about every 100 px times the number of lines.
+  - A line alone takes every other place (about every 200 px), so a line in
+    open country (the N) isn't lettered three times in one screen.
+  - Each letter moves along its line, up to a quarter of the way to the next
+    place (half, if it must), to sit clear of stations (16 px) and of other
+    letters (28 px). The map draws only one of two symbols that touch, so a
+    letter placed on a station was a letter not drawn.
+  - A line too short to have come up gets one letter mid-way along its
+    longest stretch. So every line has a letter at every zoom
+    (`test/sharedtrack.test.mjs`).
+  - The letter sits on its own line, not on the middle of the track. The
+    build gives each letter the side its line is drawn on (`sx`, `sy`, in
+    line widths), and the map moves it there. On track four lines wide the
+    gold G used to sit on the purple N.
+
+  Letters are placed before station names, so lines keep their letters at
+  middle zooms. Measured 2026-11-06: every line in view has a letter in the
+  opening view of 360, 375, 390, 412 and 430 px phones and at zooms 9.8, 11,
+  13 and 16 around downtown.
 - **Not running** (at the time shown): a hairline in the lightest bus gray,
   with no tag, so the network keeps its shape without claiming service.
 - **Vehicles** (Live): a small rounded arrow pointing where the vehicle is
@@ -811,9 +1112,9 @@ Each bus tier fades in over about a zoom level rather than popping on.
 | Focus | `#1F6FEB` | keyboard focus ring |
 | Live | `#E89A00` | the Live button when on, and the mark beside live times only (amber, like an LED departure sign) |
 
-Basemap tints (`PALETTE` in `public/js/basemap.js`): land `#F4F5F6`, water
-`#BCD5E4`, parks `#E0EADB`, roads white with a `#DFE4E8` casing, main street
-names `#4F5B67`, outside the district a `#E3E7EA` wash.
+Basemap tints (light theme; `PALETTES` in `public/js/palette.js`): land
+`#F4F5F6`, water `#BCD5E4`, parks `#E0EADB`, roads white with a `#DFE4E8`
+casing, main street names `#4F5B67`, outside the district a `#E3E7EA` wash.
 
 **Type:** Overpass, a descendant of Highway Gothic, the US road-sign face.
 Weights 400, 600 and 800, tabular numerals. Scale: 13, 15, 17, 22, 28 px.
@@ -825,6 +1126,34 @@ the map and the interface share one typeface.
 **Route bullets:** rail lines are a circle with the letter; bus routes are a
 white rounded rectangle with the number, outlined in the route's ink. They are the only strongly colored
 elements in the interface itself.
+
+### Dark mode
+
+The site follows the system setting (`prefers-color-scheme`). There is no
+toggle and nothing is stored. If the setting changes while the page is open,
+the map and interface re-color in place and the map stays where it was.
+
+- **One palette, two themes.** Every map color, including the symbols drawn
+  on canvas (tags, shields, station capsules, signs, key swatches), comes
+  from `public/js/palette.js`. Every interface color is a CSS custom property
+  in `app.css`, with a dark set under the media query. No color literal sits
+  in a layer definition.
+- **The hierarchy is the same, inverted.** On dark land (`#161B21`) the most
+  frequent buses are the brightest and thickest (`#DCE6EF`, 13.7:1), then
+  `#9FB1C3` (7.9:1), then `#687A8E` (3.9:1), with the same widths and the
+  same dashes and dots as the light theme (12.3, 7.4 and 3.5:1).
+- **Rail colors still come from RTD's data.** In dark, a line whose official
+  color is under 4:1 against the dark land is lifted in lightness, keeping
+  its hue, until it reaches 4:1 (today the E, N and T). Brighter colors are
+  left alone. The rule is applied in code; no line's color is written down.
+- **Text** meets 4.5:1 in both themes, each label against what it sits on
+  (land, road, water, park, shield). Five light-theme labels were under it
+  until 2026-11-06 (neighborhood 3.9, minor road names 4.0, shield numbers
+  3.0, water names 2.8, park names 4.2) and were darkened just to the line,
+  so they stay the quietest text on the map.
+- A chosen route's casing is the dark land color instead of white, and the
+  20% fade is unchanged.
+- `color-scheme` and `theme-color` metas cover both themes.
 
 ## Interface
 
@@ -839,21 +1168,37 @@ The controls:
 - **Live** is the one labeled button, because it's the one that changes what
   the map means. Off, it's white with the word "Live". On, it fills with the
   live mark and the time ("Live, 9:41 pm").
-- **The key** is a small button whose icon is the key in miniature: a rail line,
-  then a frequent and an every-30 bus line, at their weights. It opens on demand, and is open by default only on wide screens.
+- **The key** is a button with an icon (a thick rail-colored line with a
+  white station circle over a shorter, thinner ink line), the word "Key" and
+  the time the map shows ("Weekdays, 9am to 3pm"). It opens on demand, and is
+  open by default only on wide screens. It folds to its button while a panel
+  is open.
 - **Zoom:** touch screens get no zoom buttons, because people pinch.
 - **Locate me** is an arrow that fills blue once it has found you, and you're
-  a blue dot with a white ring.
+  a blue dot with a white ring. If it finds you outside RTD's area, the map
+  stays where it was and says "You're outside RTD's area, so the map stayed
+  here."
+- **Whole network** is a button with the map controls, with the words on
+  it and four arrows pointing out, that zooms out to all of the network. On
+  a phone it is the way to Boulder and Longmont from the opening view, so
+  it is labelled, not an icon alone. It hides while the whole network is
+  on screen, where it would do nothing.
+- **North up, flat.** The map can't be rotated or tilted, by drag, touch or
+  keyboard, and a bearing or pitch in a link's hash is dropped. A rotated map
+  had no way back, because there is no compass.
+- **Bounds.** The map can't be panned far outside RTD's area: the routes'
+  bounds plus a margin.
 - **Map credits** sit in a small tab in the corner.
 
 ### Layout
 
-Phone: full-screen map, with search and Live at the top. A bottom sheet
-appears only when something is open.
+Phone: full-screen map, with search at the top and the key under it (Live
+joins the key's row when it ships). A bottom sheet appears only when
+something is open.
 
 ```
 ┌───────────────────────────┐
-│ [⌕ Search lines, places]  │
+│ [⌕ Search lines, places | Lines] │
 │ [key]            [● Live] │
 │                           │
 │           map             │
@@ -870,57 +1215,158 @@ after a tap:
 └───────────────────────────┘
 ```
 
-Search and Live are both within thumb reach of the top. The sheet has three
-heights: peek (about 120 px), half, and full. Drag or tap the handle to move
-between them.
+The search bar is the top row, with a "Lines" button at its right end. The
+sheet has three heights: peek (120 px), half, and full, measured from below
+the search bar and key. It opens at a height that fits its content, up to
+half. Drag or tap the handle (a 44 px touch target) to move between them.
 
-Desktop (768 px and wider): the sheet becomes a panel on the left, about
-380 px wide, floating over the map, with search at its top.
+Desktop (768 px and wider): search sits at the top left, 380 px wide, with
+the key's button under it. The sheet becomes a card on the left, 380 px
+wide, floating over the map under both.
+
+Tab order from page load: search, Lines, the key, the map, then the map
+controls. The map's accessible name says how to open things without a
+pointer: "To open a route or place, use Search or Lines." Safari's Tab key
+skips buttons and links by default, so every button and link gets an
+explicit `tabindex="0"` as it's added to the page (`tabbable.js`); the order
+is then the same in Safari, Firefox and Chrome.
+
+One panel replaces popups. Esc closes it. Focus moves to the panel's title
+when it opens and returns to where it was when it closes. Motion is reduced
+when the user prefers it.
 
 ### Opening state
 
-The first visit opens on the whole network, Live off. Phones frame the rail
-network and its signs; wider screens frame the network drawn at full
-strength (rail and buses every 30 minutes or better), beside the open key, so
-the network rather than the district's far edges fills the screen.
+Live is off. Where the map opens is the first of these that applies:
+
+1. **A shared link** opens on what it shares, and nothing moves it.
+2. **Your location, if the browser already allows it.** The map opens on
+   you at zoom 13.5 (every route number around you, and about a 20-minute
+   walk each way), with your blue dot. The page never asks for your location
+   on load: it checks the permission, and only an existing "allowed" counts.
+   If you've started using the map before the position arrives, or you're
+   outside RTD's area, the map stays where it is and says nothing. Safari on
+   iPhone mostly answers "ask" unless the site is set to Allow, so most
+   iPhones get the next case.
+3. **Phones open on the middle of the service:** the box that holds the
+   middle 60% of weekday service (trips times distance) east to west and
+   north to south, worked out by the build from RTD's data
+   (`scripts/lib/core.mjs`, `meta.bounds.core`). Today that is central
+   Denver and west Aurora, about Wadsworth to Peoria, at about zoom 10: close
+   enough to tell stations apart and read their names. It is framed between
+   the search bar and key above and the buttons below.
+4. **Wider screens open on the whole network** drawn at full strength (rail
+   and buses every 30 minutes or better), beside the open key, at about zoom
+   9.4, where stations and signs already read.
+
+**Whole network** is one tap from any of these. On a phone it frames the
+full-strength network with 36 px of room each side for the names of the
+places at its ends (Boulder), at about zoom 8.5, which is the overview: lines
+and letters, no station marks (see "By zoom level").
+
+Short screens (under 500 px tall) are framed like phones; on a phone held
+sideways the map is framed beside the search bar and key, not under them.
+
+Why not the whole network on a phone: at zoom 8.4 it put every station,
+ten line-end signs and the Union Station sign in a strip a third of the
+screen tall. Stations were a
+few pixels apart, the signs and city names covered the lines, and nothing
+could be read or tapped accurately. The whole-network overview answers "what
+shape is the system"; someone on a phone is more often asking about a place.
+
+Known limits: the service-weighted box reaches north to Thornton, so the top
+third of a phone's opening view is the N line alone. Union Station has no
+name in a phone's opening view: its name has nowhere clear of the lines
+that meet there until about zoom 12.
 
 - **Returning visitors** open where they left off, with Live as they left it.
   Someone who rides with Live on gets it back.
-- **A shared link** opens on what it shares.
-- **Location:** the page never asks for your location on load. If you've
-  already allowed it, your dot appears without moving the map, because
-  centering on you would assume the question is "what's near me".
 
 ### What the opening view tells you
 
 Without a card or a caption, the first screen answers:
 
-- **What the network is:** every line, drawn by how often it comes.
-- **What each line is:** rail letters with where each line goes, and frequent
-  bus numbers.
-- **Where things are:** towns, the airport, downtown, campuses, the
-  mountains.
+- **What the network is:** every line in view, drawn by how often it comes.
+- **What each line is:** rail letters along the lines, and frequent bus
+  numbers.
+- **Where the stations are, and what they're called.**
+- **Where things are:** city and town names, kept quiet and off the lines.
+- **That there's more:** the "Whole network" button.
 - **How to see right now:** the Live button.
 
 ### One tap model
 
 - Tap a vehicle (Live): vehicle details.
-- Tap a station, Park-n-Ride, or stop symbol: that place.
+- Tap a station: the station, trains first. When it's closed, "Closed: no
+  trains this week" (or the return date) comes first. Then buses, then
+  parking.
+- Tap a stop: the stop ("Stop 17731 · Southbound"), then only the routes that
+  stop there.
+- Tap a Park-n-Ride or transit center: the station if one is within 300 m;
+  otherwise its own panel, with the spaces and the routes at stops within
+  400 m.
 - Tap an alert mark (Live): the alert.
-- Tap a route's tag or a rail bullet: that line.
-- Tap anywhere else: "From here" for that spot.
+- Tap a route's tag or a rail letter: that line.
+- Tap a shared-street label such as "30 • 31": a short list of those routes.
+- Tap on or near lines: "Routes here", strongest first.
+- Tap a FlexRide zone: a FlexRide panel, or the last row of a list when lines
+  are there too.
+- Tap anywhere else: "From here" for that spot (not built yet). A tap on
+  nothing closes the panel.
 
-Routes are opened from a list (From here, a station, search), from their tag
-or bullet, never by trying to hit a thin line with a finger.
+Routes are opened from a list (Routes here, a station, search, Lines), from
+their tag or letter, or by tapping near the line.
+
+### Search
+
+Search finds routes (by number, letter or name), rail stations, Park-n-Rides
+and transit centers, and bus stops (by name or stop number). It does not find
+addresses or landmarks yet. Results are a short list, at most eight, grouped
+as Routes, Stations, Park-n-Rides and transit centers, and Bus stops. An
+exact route number comes first; trains come before buses on a tie. A route
+shown by its timetable name is also found by RTD's map code for it ("BOND"
+finds the Bound). When the
+words typed are a station's or Park-n-Ride's whole name, that group leads,
+so "Union Station" is the station, then the lines that go there. Choosing a
+result moves the map there and opens its panel. An empty result says so in
+plain words.
+
+It works by keyboard: the arrow keys move through results, Enter opens one,
+Esc closes the list, and a screen reader hears how many results there are.
+The stops file (1.5 MB) loads when the search box is first used, never at
+page load.
 
 ### Highlight, don't list
 
-Opening a route highlights it end to end, fades everything else to about
-20%, and labels its two ends. The panel shows one route at a time; a list of
+Opening a route draws it over a white casing, fades everything else to about
+20% (with MapLibre global state), and labels its two ends. The end labels
+claim their space, so a city name beneath one gives way. Each stretch keeps
+its own tier's color and dash. The panel shows one route at a time; a list of
 20 routes in a popup is never the answer. On phones the panel is the bottom
 sheet; on desktop it is the left panel. The map's opening view and every
 "fit to route" leaves room for the panel, so the panel never covers what it
 describes.
+
+### Route panel wording
+
+The headline is the midday figure with "weekdays, 9am to 3pm" beside it.
+Under it are Weekdays, Saturday and Sunday rows. First and last trip go on a
+separate line, never beside the midday figure: the old popup read "Every 10
+min midday on weekdays, 3:12am to 1:19am", which looked like a span of
+frequency. When a route's stretches differ, a note lists them and the rows
+say "here" for the stretch under the finger. A stretch with no weekday
+service reads "No weekday service here; runs Saturday and Sunday". The panel
+ends with a link to RTD's timetable.
+
+Where a bus goes is read from its signs (GTFS `trip_headsign`), most common
+first, without the route's number, "free" and any "via ...", and with RTD's
+short forms spelled out (Stn, Ctr, PnR). An end at a rail station takes the
+station's name. Words every direction's sign begins with that are not part
+of any RTD station or facility name are the service's name, not a place, and
+are dropped: the FreeRide's signs read "Free MallRide Civic Center" and
+"Free MallRide Union Station" (RTD's old name for it), so it goes to Civic
+Center and Union Station. Route 37's "40th & Airport" and "40th & Colorado"
+share "40th &", which names places, so both stay whole.
 
 ### Stations lead with trains
 
@@ -930,9 +1376,12 @@ says so first ("No train service right now" or "Trains return Nov 23").
 
 ### Lines list
 
-A "Lines" view lists every rail line and bus route, grouped by tier and
-searchable by number or name, so any route can be opened without finding it
-on the map. It is also the keyboard path to every route.
+A "Lines" button at the right of the search bar opens every rail line and
+bus route in the panel, grouped as in the key (trains, then each bus tier),
+so any route can be opened without finding it on the map. Each row opens
+that route, and Back returns to the same row in the list. The search box
+finds a route by number or name, so the list has no filter of its own. It is
+also the keyboard path to every route.
 
 ### Shareable links
 
@@ -942,20 +1391,31 @@ shared or bookmarked.
 
 ### The key
 
-Always one tap away. Its title says what time the lines show ("Weekdays, 9am
-to 3pm", "Sunday, 9am to 3pm", or "Live, next 90 minutes"). Under the title
-are the other times (Weekday evening, Saturday, Sunday, Pick a day and time),
-then what each symbol means:
+Always one tap away. The closed key is a button: its icon, the word "Key",
+and the time the lines show ("Weekdays, 9am to 3pm"; later "Sunday, 9am to
+3pm" or "Live, next 90 minutes"). The time is worded from `window` in
+`meta.json`. Open, it lists:
 
-- **Frequency tiers.**
-- **Rail lines**, each with its bullet and where it goes ("A to Airport"), not
-  as a row of letters.
-- **Other symbols.** In Live, these include vehicles and the alert mark.
+- A one-line "An unofficial map of RTD buses and trains."
+- **Buses:** the frequency tiers, each a swatch of the line itself. The two
+  slowest share one row, "Every 31 min or more". There is no row for tier
+  `none`.
+- **Trains:** each rail line with its bullet, where it goes ("A to Airport"),
+  and a "How often" column.
+- **On the map:** Rail station; "Closed: no trains this week"; Park-n-Ride;
+  Transit center; Bus stop, when zoomed in close; "FlexRide: book a ride in
+  this area"; "Outside RTD's district". In Live this would include vehicles
+  and the alert mark.
+- A note: not affiliated with RTD, and when the data was updated.
+
+Once the other times (Weekday evening, Saturday, Sunday, Pick a day and
+time) are built, they go under the title.
 
 It shows what a symbol means, not statistics about it: no route counts.
-Entries appear only for things on the map (the unserved-station symbol only
-when a station is unserved). It has no layer toggles: Live is the one switch
-that changes what the map shows.
+Rows appear only when the data has that thing (the closed-station row only
+when a station is closed). It has no layer toggles: Live is the one switch
+that changes what the map shows. When it scrolls, the title stays put and a
+"More below" hint shows.
 
 ### While it loads
 
@@ -993,8 +1453,11 @@ phones, not a full-width bar.
     `load` event, which waits for every basemap tile.
   - GeoJSON is passed to MapLibre by URL, so it downloads and parses in the
     map's worker, off the main thread.
-  - Bus stops (the largest file) load only when the map first reaches stop
-    zoom.
+  - Bus stops (the largest file) load only when the map first reaches zoom
+    14, and are drawn from 15. The shared-street labels (`busnames`) load
+    from zoom 10.8, a little before the zoom that shows them.
+  - `directory.json` (every route's ends, hours and stations) loads after
+    the first draw, since it's only needed once something is tapped.
   - The schedule summary loads after the map first draws, and a route's
     timetable only when its panel opens. Live feeds are fetched only while
     Live is on (or a stop panel is open) and the tab is visible.
@@ -1154,6 +1617,8 @@ RTD GTFS ──────────────────────┼�
    2. **Build-step geometry and color.** Contrast-adjusted rail colors and
       bullet letter colors; computed shared track with per-line offsets
       (including one-way couplets); bus corridors with combined frequency.
+      Partly done: shared streets are named together, but lines are drawn per
+      route, not by combined frequency (see "Open questions").
       *Done when:* no line overlaps another on shared track anywhere in the
       network, and every line and bullet meets its contrast target, all
       computed with nothing listed by hand.
@@ -1176,9 +1641,15 @@ RTD GTFS ──────────────────────┼�
       phones from 360 px wide and on desktop. Frequent routes that share a
       street downtown wait for zoom 10 for their numbers, FreeRide for 11.5
       (see "Bus routes").
-   5. **Interaction** (next). Highlight a route, the bottom sheet and desktop panel,
-      station panels that lead with trains, the Lines list, keyboard access
-      to all of it, and padding so panels never cover what they describe.
+   5. **Interaction** (partly done 2026-11-05). Highlight a route, the bottom
+      sheet and desktop panel, station panels that lead with trains, the
+      Lines list, keyboard access to all of it, and padding so panels never
+      cover what they describe. Done so far: the panel (bottom sheet and
+      desktop card, replacing popups), route highlight, station, stop,
+      Park-n-Ride and FlexRide panels, "Routes here" and shared-street lists.
+      Added 2026-11-06: search, the Lines list, and a keyboard path to
+      every route, station, Park-n-Ride and stop. Not done: shareable links,
+      "From here", and a check with a real screen reader.
       *Done when:* every route and station can be opened by keyboard, and a
       tapped route is unmistakable on a phone.
 3. **Live and other times.** The schedule summary and per-route timetables
@@ -1198,10 +1669,13 @@ RTD GTFS ──────────────────────┼�
 
 ## Open questions
 
-- **Shared corridors (decided for V2 step 2, details open):** corridors are
-  drawn by combined frequency (see "Bus routes"). Still open: how evenly two
-  routes must be spaced to count. Two routes every 30 minutes that leave a
-  minute apart are not "every 15" to a rider.
+- **Shared corridors by combined frequency (open):** shared streets are
+  named together ("30 · 31"), but each route is still drawn by its own
+  frequency, so two routes every 30 minutes that run evenly spaced on one
+  street don't draw as a frequent corridor. Whether to draw them that way,
+  and how evenly two routes must be spaced to count (two routes every 30
+  minutes that leave a minute apart are not "every 15" to a rider), are
+  unsettled.
 - **Span:** should "Frequent" also require all-day service? A strict test
   (4 or more departures in every hour from 6am to 8pm) leaves only 4 routes:
   FreeRide, 15, 31, and SKIP. Even 15-minute rail fails it at the edges of
@@ -1235,7 +1709,22 @@ RTD GTFS ──────────────────────┼�
 - **Points of interest for V3:** which database, where it lives, how it's
   updated, and whether it can be published.
 - **Name and domain.**
-- **Dark mode.**
+- **Bunching threshold:** a direction is rated by its average gap instead of
+  its median when the average is more than 1.5 times the median. Measured
+  2026-11-06: only route 8 passes 1.5 (ratio 4.1); 1.75 and 2.0 change
+  nothing. At 1.25 the AB (Boulder to the airport, 9 midday trips in gaps of
+  30 and 60 minutes, average 41, ratio 1.38) would be drawn hourly, "every
+  41 min", instead of every 30, and two short pieces of the 104L at the
+  airport would drop a tier. Lower it to 1.25?
+- **Where a bus goes, in RTD's sign wording (open):** a bus route's ends are
+  named from its bus signs (GTFS `trip_headsign`), which abbreviate: "US36 &
+  Bfld" (76), "Gnprk/Lookout" (205), "Wads/Hampden Park-n-Ride" (35),
+  "NRL/Golden" (23), "CCA" (6), "Aspen Rdg/Black Dmnd" (228). RTD's
+  misspellings come through too ("Broomfiled", "Prarie"). Ends at a rail
+  station already take the station's name. The same rule could cover RTD's
+  Park-n-Rides and transit centers
+  (the facility layer has their full names), which would fix about half of
+  these; the rest would need the name of the last stop. Neither is built.
 - **Director districts:** RTD's map includes them. Useful for the secondary
   audience, but not the default view.
 
@@ -1367,6 +1856,201 @@ RTD GTFS ──────────────────────┼�
 - 2026-11-05: Phones narrower than 360 px are not a target. A 320 px screen
   would need about zoom 7.1 to show every sign whole, where signs meet, so
   the westmost sign is cut by the edge there instead.
+
+- 2026-11-05: Bus frequency is measured per stretch of a route, not once per
+  route. The build cuts each drawn line into 50 m cells, matches them to GTFS
+  shapes, measures the weekday 9am to 3pm gap in each direction at the middle
+  of each stretch's longest run, and the worse direction sets the tier. Runs
+  under 600 m (300 m at a free end) merge into a neighbor. The Flatiron
+  Flyer family was drawn as every 15 min all the way to Aurora, where few
+  trips run, and routes 83, 225, 228, AB, AT and NB had the same error. 31 of
+  108 bus routes are split; `directory.json` keeps one entry per route.
+- 2026-11-05: When trips bunch, headway uses the average gap instead of the
+  median if the average is more than 1.5 times the median. In the November
+  2026 feed, bunched pairs ran at 4 times or more and ordinary drift stayed
+  under 1.4. Route 8's Broadway stretch went from every 7 min to every 30.
+- 2026-11-05: Streets shared by several routes get one label naming them
+  ("30 · 31"), from `busnames.geojson`, loaded lazily. This is naming only:
+  lines are still drawn per route, and combined frequency stays an open
+  question.
+- 2026-11-05: Stops carry `lines` (the drawn routes that stop there) and a
+  `heading`, because popups listed routes that pass but do not stop, with no
+  direction. `meta.json` gains `window`, `rail[].ends` and `counts.busnames`,
+  and `tiers` counts routes with a stretch in each tier. FlexRide `url` is
+  null for every zone; the page links RTD's general FlexRide page.
+- 2026-11-05: Basemap: Interstate and US highway shields fade out at 14.5–15
+  and 13–13.5, and US routes get their own notched shape, so "40" on Colfax
+  doesn't read as a bus tag. State highway numbers are not drawn. City names
+  fade out 12.5–13.5 and towns 13.5–14.5. From about zoom 14 street names sit
+  beside the street, not on it. Water names skip intermittent water.
+- 2026-11-05: Bus looks: every 31 min or more is one look and one key row
+  (`#78848F`), because the 30-minute, hourly and less-than-hourly looks could
+  not be told apart, and the key's swatches were in the wrong order.
+- 2026-11-05: The key's button shows a new icon, the word "Key" and the time
+  shown; the open key has "Buses", "Trains" and "On the map" sections, with
+  rows only for what the data has. Rail letters repeat about every 90 px on
+  phones and are placed before station names. Stations are ticks below zoom
+  10.25 and capsules from 11; a closed station's ring and name both show from
+  13.
+- 2026-11-05: The map is north-up and flat, with rotation and tilt off (also
+  stripped from the link), because a rotated map had no way back. It can't be
+  panned far outside RTD's area, a locate that lands outside leaves the map
+  where it was and says so, and a "Show the whole network" button joins the
+  map controls.
+- 2026-11-05: Short screens (under 500 px tall) open framed like phones, with
+  10 px side margins on phones. Known limit: on a tall phone the network
+  still fills only about a third of the height, because the line-end signs
+  set the opening zoom.
+- 2026-11-05: One panel replaces popups: a bottom sheet on phones (peek 120
+  px, half, full; opens fit to content up to half) and a 380 px card on the
+  left on desktop. A tag or rail letter opens its line; a shared-street label
+  opens a short list; a tap on lines opens "Routes here"; a stop, station
+  (trains first), Park-n-Ride or FlexRide zone opens its own panel; a tap on
+  nothing closes. A Park-n-Ride within 300 m of a station opens the station.
+- 2026-11-05: Route panels put the midday figure and "weekdays, 9am to 3pm"
+  together and the first and last trip on a separate line, and say "here"
+  and "No weekday service here; runs Saturday and Sunday" where stretches
+  differ. Choosing a route draws it over a white casing and fades the rest to
+  about 20%.
+- 2026-11-05: Loading order: `directory.json` after the first draw,
+  `busnames` from zoom 10.8, stops from zoom 14.
+- 2026-11-06: Search and the Lines list are built. Search is the top row on
+  phones and desktop, with a "Lines" button at its right end; the key moves
+  to the row under it. Search covers routes, stations, Park-n-Rides, transit
+  centers and stops, not addresses or landmarks. The review found nothing
+  could be found by name or opened by keyboard.
+- 2026-11-06: The separator in map labels is the bullet "•", not the middle
+  dot, because Overpass's middle dot has no width and "30 · 31" drew as
+  "30 ·31". Page text uses a drawn dot.
+- 2026-11-06: A highlighted bus route keeps each stretch's own tier color
+  and dash, so the lighter parts still read as less frequent.
+- 2026-11-06: Dark mode follows the system setting, with no toggle and
+  nothing stored. One palette (`palette.js` and CSS custom properties)
+  holds both themes, and a change re-colors in place. Bus tiers keep their
+  order (13.7, 7.9 and 3.9:1 on dark land). Rail colors under 4:1 on dark
+  land are lifted by rule (E, N and T today). This closes the "Dark mode"
+  open question.
+- 2026-11-06: A panel's title takes focus when it opens but shows no focus
+  ring, because the ring covered the line under it. Everything reachable by
+  Tab keeps its ring.
+- 2026-11-06: Where two stretches of a route meet, a stop or tap there
+  shows the busier stretch's frequency, because all of its buses pass that
+  spot. Stop 17731 showed route 83 as every 30 min when it is every 15.
+- 2026-11-06: In search, a station or Park-n-Ride whose whole name was
+  typed leads the list. "Union Station" used to open the C Line first.
+- 2026-11-06: A phone held sideways frames the network beside the search
+  bar and key. Under them, Boulder was cut off.
+- 2026-11-06: Shared-street labels name at most three routes when they would
+  run past 16 characters, never end in "+1", and repeat half as often when
+  long. Downtown Broadway read "0 • 0L • 83 • 10 +7" three times on one
+  phone screen; 41 labels ended in "+1"; the longest was 26 characters, now
+  17.
+- 2026-11-06: Every button and link gets `tabindex="0"`, because Safari's
+  Tab key skipped Lines, the map's buttons and every row in a panel. Checked
+  in Playwright's WebKit and Firefox builds: the Tab order now matches
+  Chrome's. The search box's focus ring and the results list's height have
+  fallbacks for browsers without `:has` and `dvh`.
+- 2026-11-06: Tall phones open centred on the full-strength network (rail
+  and buses every 30 minutes or better), not on rail alone: the stations'
+  width still sets the zoom, the frame grows north and south as far as the
+  height allows, and the bottom margin clears the buttons. Before, the
+  bottom third of a tall phone opened on empty map.
+- 2026-11-06: Every stretch was recounted from the raw GTFS, independently
+  of the build's code. Every "every N min" matched. One bug turned up: where
+  a shape passes a place twice, the build kept only the closer pass, and on
+  the airport approach that was the empty run back out past the last stop,
+  so the AB, AT and AL were drawn "a few trips a day" for 1 to 2 km where
+  their full service runs. Each trip pattern now takes its closest pass that
+  is in service. 170 stretches became 165; no other route changed.
+- 2026-11-06: Phones open zoomed in, not on the whole network (reverses
+  2026-11-01 and the phone framing of 2026-11-05). The whole network on a
+  phone was a strip of signs and station marks too small to read. Phones now
+  open on the middle 60% of weekday service, derived by the build
+  (`meta.bounds.core`; today central Denver and west Aurora, about zoom 10),
+  with a labelled "Whole network" button one tap away. Wider screens still
+  open on the whole network.
+- 2026-11-06: If the browser already allows location, the map opens on you
+  at zoom 13.5 (reverses "never centers on your location", 2026-11-01). The
+  page still never asks on load, a shared link still wins, and someone
+  outside RTD's area or already using the map is left where they are.
+- 2026-11-06: An overview below zoom 9: lines, a letter at each rail line's
+  end, and city names. Station ticks, the names on line-end signs, bus
+  numbers and FlexRide zones start at 9; station names and letters along the
+  lines at 9.75 (was 10.5), so every phone's opening view has them.
+- 2026-11-06: No sign at Union Station (reverses the ink hub sign of
+  2026-11-05). It named a station, not a line, over the busiest part of the
+  map; the station is named like any other.
+- 2026-11-06: City names are small letter-spaced capitals that give way to
+  rail, stations and station names from zoom 9 and sit beside their point
+  (replaces "City names come after signs", 2026-11-05). In the overview
+  they stay on their point.
+- 2026-11-06: Light-theme neighborhood, minor road, shield, water and park
+  labels darkened to 4.5:1 (closes the open question).
+- 2026-11-06: "Every mark earns its place" becomes a design principle,
+  after a review of the phone's opening view on a real phone found labels
+  placed where there was room, not where they were needed. Until zoom 11:
+  only stations where six or more routes meet are named (was: any station
+  with room, which named the N line's quiet end and left downtown bare);
+  towns, FlexRide zones, Interstate spurs and US highway shields are not
+  drawn; rail letters repeat every 110 px on phones, not 90. Towns are set
+  in small capitals like cities. "Whole network" hides while the whole
+  network is on screen.
+- 2026-11-06: Line-end signs are the line's letter alone at every zoom
+  (reverses "Line-end signs name where trains say they're going",
+  2026-11-01, and the names from zoom 9 in the overview entry above). Chris
+  asked for letters only; it was first applied only below zoom 9, which was
+  wrong. A destination on the map repeated the key and covered the map to
+  do it. End stations are named by the same rule as every other station.
+- 2026-11-06: Rail letters repeat every 90 px on phones narrower than
+  375 px, and stay at 110 px on the rest. With the smaller signs, 110 left
+  the C line with no letter in a 360 px phone's opening view.
+- 2026-11-06: "No name covers a line" becomes a design principle (Chris:
+  labels "should try to avoid covering lines at all costs. Even if that
+  means putting them a little off-centre"). Every drawn line holds names
+  off; a name moves up to 3.4 em to a clear spot or isn't drawn. Lighter
+  bus lines count from zoom 11.5. Station names may cross a lighter bus
+  line, nothing else may. Street names sit beside the street at every zoom.
+  City names follow the same rule at every zoom (ends "in the overview they
+  stay on their point", same day). Cost, accepted for now: DENVER and AURORA
+  are missing from some far-out views, Union Station is unnamed until about
+  zoom 12, and most main streets are named from about 13.5.
+- 2026-11-06: Line-end letters only below zoom 9.75 (was: to zoom 13). Chris:
+  with letters on the line close by, the ones at the ends "look
+  duplicative".
+- 2026-11-06: Shared track redone after Chris's screenshot of B, G, N and A
+  north of Union Station ("They don't line up"). Lines ease between slots
+  instead of stepping (closes the "smooth taper" gap); sharing carries
+  across lines 20 m apart in a chain; each pair of lines keeps its sides
+  through every place it runs through in a row (replaces "bigger places are
+  ordered first"); out-and-back stretches and sideways hops in RTD's paths
+  are dropped. B and G swapped sides at Union Station so they no longer
+  cross at Pecos Junction.
+- 2026-11-06: Reading right comes before matching the survey: the build may
+  nudge a line a little, by rule, where exact geometry looks wrong (Chris,
+  on the four lines ending raggedly at Union Station). First use: lines
+  that end side by side are carried on to end level.
+- 2026-11-06: New objective: the map looks designed, and is as accurate as
+  it can be while looking that way (Chris: "we want this to look intentional
+  and clean, like it was designed by a person"). Where exact geometry and a
+  clean drawing disagree, the clean drawing wins, within reason and by rule.
+  Applied to rail: lines sharing track are drawn as one pack on the middle
+  of their tracks and swing in and out of it over 300 m; every line is
+  rounded over 60 m either side, so corners in RTD's paths are curves.
+- 2026-11-06: The build places rail letters (replaces the spacing by screen
+  width, 110 and 90 px, of earlier entries). Lines on shared track
+  take turns by rule, not by which letter the map happened to draw; every
+  line has a letter at every zoom; letters keep clear of stations and each
+  other; and each letter sits on its own line rather than the middle of the
+  track.
+- 2026-11-06: Routes go by their timetable names, not RTD's map codes
+  (Chris: "BOND it's not the name of the route, it's the bound"). A map
+  route that is one GTFS route takes its `route_short_name`: BOND is shown
+  as Bound, FMR as MetroRide, FREE as FreeRide, LD as LD1. Families keep the
+  map's code. The map's code still works in search. With it, a service's
+  name at the start of every sign of a route is dropped from where it goes,
+  so the FreeRide goes to "Civic Center", not "MallRide Civic Center" (see
+  "Route panel wording"). Not changed: RTD's other sign abbreviations ("US36
+  & Bfld", "Gnprk/Lookout"); see "Open questions".
 
 ## Sources
 

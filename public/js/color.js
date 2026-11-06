@@ -63,6 +63,19 @@ export function darkenTo(color, background, ratio) {
   return '#000000';
 }
 
+// The dark theme's counterpart of darkenTo: the color itself if it already
+// stands out from `background` by `ratio`; otherwise the same hue, lightened
+// only as far as it needs to (OKLab lightness, chroma kept).
+export function lightenTo(color, background, ratio) {
+  if (contrast(color, background) >= ratio) return color;
+  const [L, a, b] = toOklab(color);
+  for (let k = 1; k <= 100; k++) {
+    const next = fromOklab([L + ((1 - L) * k) / 100, a, b]);
+    if (contrast(next, background) >= ratio) return next;
+  }
+  return '#ffffff';
+}
+
 // A darker shade of the same hue, for a line's outline: `factor` of its
 // lightness, and never less than `ratio` against `background`.
 export function shade(color, factor, background, ratio) {

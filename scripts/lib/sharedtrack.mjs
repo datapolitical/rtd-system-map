@@ -4,7 +4,10 @@
 // few meters, the two share track. Each line is cut into pieces wherever the
 // set of lines it shares with changes, and each piece gets a `slot`: how many
 // line widths to the side of the shared centerline it is drawn, which the map
-// turns into a `line-offset`.
+// turns into a `line-offset`. The pieces are not RTD's exact paths: lines
+// sharing track are moved onto the middle of their tracks, and every line is
+// rounded, so the map looks drawn on purpose (DESIGN.md, "It looks
+// designed").
 
 // Lines this close are on the same track (RTD's lines run 0 to 15 m apart).
 const SHARED_METERS = 20;
@@ -18,14 +21,59 @@ const LOOK_METERS = 1200;
 const TRIM_METERS = 300;
 // A path that doubles back over less than this is a kink in the data.
 const SPIKE_METERS = 100;
+// A path that turns around and comes back this close to itself is retracing
+// its steps.
+const RETRACE_METERS = 5;
+// Where a line leaves others it shared track with, it eases from its slot
+// beside them to its slot without them: done once they are this far away, or
+// this far along at the latest, and in steps of this part of a line's width.
+const APART_METERS = 250;
+const EASE_METERS = 1500;
+const EASE_STEP = 1 / 16;
+// Lines whose ends are this close, and run within 20 degrees of the same
+// way, end at the same station: their ends are drawn level (see flushEnds).
+const FLUSH_METERS = 150;
+const FLUSH_COS = Math.cos((20 * Math.PI) / 180);
+// Lines sharing track are drawn as one pack, on the middle of their tracks
+// (see packed). A line counts in full toward that middle while it is within
+// SHARED_METERS of another line of the pack, and less and less over this
+// much further. Where a line joins or leaves a pack it swings between its
+// own track and the pack's middle over BLEND_METERS.
+const PACK_FADE_METERS = 20;
+const BLEND_METERS = 300;
+// A line's path is rounded over this far either side of each point, sampled
+// this many times each side (see rounded).
+const ROUND_METERS = 60;
+const ROUND_STEPS = 12;
+// A station's point can be this far from its track (build-data.mjs snaps it
+// on). A station's mark is drawn on the track, so a line is eased before it
+// gets there: this far short of it, unless the station is this near the
+// start, where the line hasn't moved yet.
+const STATION_METERS = 200;
+const STATION_CLEAR_METERS = 100;
+// Letters along the lines: a set for each whole zoom from the first to the
+// last of these, with a letter on the track about this many pixels apart.
+// (The map shows letters from a little before the first; they sit closer
+// there, and phones that open either side of it show the same ones.)
+const LETTER_ZOOMS = [10, 16];
+const LETTER_PX = 100;
+// Two letters closer than this many pixels can touch; so can a letter and a
+// station's mark this close.
+const LETTER_CLEAR_PX = 28;
+const STATION_CLEAR_PX = 16;
 
 /**
- * `features` are rail line features ({ route } in properties). Returns new
- * features: each line in pieces, with `slot` in properties (0 where it runs
- * alone), and pieces on shared track all pointing the same way, since a line's
- * offset is to the right of the direction it's drawn in.
+ * `features` are rail line features ({ route } in properties). Returns
+ * `pieces`, new features: each line in pieces, with `slot` in properties (0
+ * where it runs alone), and pieces on shared track all pointing the same
+ * way, since a line's offset is to the right of the direction it's drawn in;
+ * and `letters`, point features (kind "letter", route, tier, from, to, sx,
+ * sy): where each line carries its letter between two zooms, on the track's
+ * middle, and how many line widths across and down the line is from there.
+ * `stations` are [lon, lat] points no line is eased past, and letters keep
+ * off.
  */
-export function sharedTrack(features) {
+export function sharedTrack(features, stations = []) {
   const origin = centerOf(features);
   const project = ([lon, lat]) => [(lon - origin[0]) * origin.kx, (lat - origin[1]) * origin.ky];
   const unproject = ([x, y]) => [round(x / origin.kx + origin[0]), round(y / origin.ky + origin[1])];
@@ -35,6 +83,7 @@ export function sharedTrack(features) {
     route: f.properties.route,
     parts: joinParts(ownTrack(partsOf(f.geometry).map((part) => densify(despike(part.map(project)))))),
   }));
+  flushEnds(lines);
 
   // A grid of every line's segments, to find nearby lines quickly.
   const grid = new Map();
@@ -48,31 +97,67 @@ export function sharedTrack(features) {
       }
     }
   }
+  // The lines on the same track as `route` at p: those within SHARED_METERS,
+  // and those within it of them in turn. Three lines on tracks side by side
+  // are then one bundle to each of them, though the outer two are further
+  // apart; otherwise each would be placed in a different bundle and two of
+  // them drawn in the same slot.
   const sharing = (route, p) => {
     const found = new Set([route]);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        const [cx, cy] = cell(...p).split(',').map(Number);
-        for (const s of grid.get(`${cx + dx},${cy + dy}`) ?? []) {
-          if (!found.has(s.route) && segmentDistance(p, s.a, s.b) <= SHARED_METERS) found.add(s.route);
+    const from = [p];
+    for (const at of from) {
+      const [cx, cy] = cell(...at).split(',').map(Number);
+      const nearest = new Map();
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (const s of grid.get(`${cx + dx},${cy + dy}`) ?? []) {
+            if (found.has(s.route)) continue;
+            const q = closestOnSegment(at, s.a, s.b);
+            const d = Math.hypot(q[0] - at[0], q[1] - at[1]);
+            if (d <= SHARED_METERS && !(nearest.get(s.route)?.d <= d)) nearest.set(s.route, { d, q });
+          }
         }
+      }
+      for (const [other, { q }] of nearest) {
+        found.add(other);
+        from.push(q);
       }
     }
     return [...found].sort().join(' ');
   };
+  // How far a point is from the nearest of some lines, as far as APART_METERS.
+  const reach = Math.ceil(APART_METERS / 100);
+  const apart = (routes, p) => {
+    let best = Infinity;
+    const [cx, cy] = cell(...p).split(',').map(Number);
+    for (let dx = -reach; dx <= reach; dx++) {
+      for (let dy = -reach; dy <= reach; dy++) {
+        for (const s of grid.get(`${cx + dx},${cy + dy}`) ?? []) {
+          if (routes.has(s.route)) best = Math.min(best, segmentDistance(p, s.a, s.b));
+        }
+      }
+    }
+    return best;
+  };
 
-  // Each part becomes runs of points that share with the same lines.
+  // Each part becomes runs of points that share with the same lines. A run
+  // knows the runs before and after it along its line.
   const runs = [];
   for (const line of lines) {
     for (const part of line.parts) {
       const sets = part.map((p) => sharing(line.route, p));
-      for (const run of smooth(runsOf(part, sets))) runs.push({ ...run, line });
+      const inPart = smooth(runsOf(part, sets)).map((run) => ({ ...run, line, part, flipped: false }));
+      inPart.forEach((run, i) => Object.assign(run, { before: inPart[i - 1], after: inPart[i + 1] }));
+      runs.push(...inPart);
     }
   }
 
   // Shared pieces all point the same way, so offsets land on the same side.
   for (const run of runs) {
-    if (run.set.includes(' ') && !forward(run.points)) run.points.reverse();
+    if (run.set.includes(' ') && !forward(run.points)) {
+      run.points.reverse();
+      run.flipped = true;
+    }
   }
 
   // The same lines can share track in more than one place; each place is
@@ -91,38 +176,440 @@ export function sharedTrack(features) {
   }
 
   // Lines take the side they leave the shared track toward, so lines don't
-  // cross where they part: past each end of the place, which side of it each
-  // line's track goes, then left to right. Lines that go on together into a
-  // bigger place keep the order they have there, so they don't cross where a
-  // line joins or leaves them; bigger places are ordered first.
-  const size = (pl) => [pl.set.split(' ').length, Math.max(...pl.runs.map((r) => length(r.points)))];
-  places.sort((a, b) => size(b)[0] - size(a)[0] || size(b)[1] - size(a)[1]);
-  const ordered = [];
+  // cross where they part: past each end of a place, which side of it each
+  // line's track goes (`score`, lower is further left).
   for (const place of places) {
+    place.routes = place.set.split(' ');
     const corridor = place.runs.reduce((a, b) => (length(b.points) > length(a.points) ? b : a)).points;
-    const score = new Map(place.set.split(' ').map((route) => [route, sideScore(lines.find((l) => l.route === route), corridor)]));
-    place.order = [...score].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).map(([route]) => route);
-    const next = ordered.find(
-      (pl) => pl.order.filter((r) => score.has(r)).length > 1 && pl.runs.some((r) => place.runs.some((q) => near(q.points, r.points))),
-    );
-    if (next) {
-      const together = next.order.filter((r) => score.has(r));
-      let k = 0;
-      place.order = place.order.map((r) => (together.includes(r) ? together[k++] : r));
+    const way = (points) => [points.at(-1)[0] - points[0][0], points.at(-1)[1] - points[0][1]];
+    for (const run of place.runs) {
+      // All of a place's runs point the way its longest does.
+      if (way(run.points)[0] * way(corridor)[0] + way(run.points)[1] * way(corridor)[1] < 0) {
+        run.points.reverse();
+        run.flipped = !run.flipped;
+      }
+      run.place = place;
     }
-    for (const run of place.runs) run.place = place;
-    ordered.push(place);
+    place.score = new Map(place.routes.map((route) => [route, sideScore(lines.find((l) => l.route === route), corridor)]));
+    place.left = new Map();
+  }
+  // Two lines that go on together from one place into the next say nothing
+  // there about which is left of the other. So each pair of lines is ordered
+  // once for all the places it runs through in a row, on what all of them
+  // say together, and doesn't swap sides on the way. `links`: the places a
+  // line runs straight on into, and whether both point the same way along it.
+  const links = new Map(places.map((place) => [place, []]));
+  for (const run of runs) {
+    const [a, b] = [run.place, run.after?.place];
+    if (!a || !b || a === b) continue;
+    const same = run.flipped === run.after.flipped;
+    links.get(a).push({ to: b, same });
+    links.get(b).push({ to: a, same });
+  }
+  for (const start of places) {
+    for (const [i, x] of start.routes.entries()) {
+      for (const y of start.routes.slice(i + 1)) {
+        if (start.left.has(`${x} ${y}`)) continue;
+        // 1 where a place points the way `start` does, -1 where it's turned
+        // around and left is right.
+        const sense = new Map([[start, 1]]);
+        let sum = 0;
+        for (const place of sense.keys()) {
+          sum += sense.get(place) * (place.score.get(y) - place.score.get(x));
+          for (const { to, same } of links.get(place)) {
+            if (!sense.has(to) && to.score.has(x) && to.score.has(y)) sense.set(to, same ? sense.get(place) : -sense.get(place));
+          }
+        }
+        for (const [place, s] of sense) place.left.set(`${x} ${y}`, sum >= 0 === s > 0);
+      }
+    }
+  }
+  for (const place of places) {
+    const leftOf = (x, y) => (x < y ? place.left.get(`${x} ${y}`) : !place.left.get(`${y} ${x}`));
+    const rank = (x) => place.routes.filter((y) => y !== x && leftOf(y, x)).length;
+    place.order = [...place.routes].sort((a, b) => rank(a) - rank(b) || place.score.get(a) - place.score.get(b) || a.localeCompare(b));
   }
 
-  return runs.map((run) => {
+  for (const run of runs) {
     const members = run.place?.order;
-    const slot = members ? members.indexOf(run.line.route) - (members.length - 1) / 2 : 0;
+    run.slot = members ? members.indexOf(run.line.route) - (members.length - 1) / 2 : 0;
+  }
+  // The nearest point of a line's track to p, and how far it is (within
+  // 100 m).
+  const onLine = (route, p) => {
+    const [cx, cy] = cell(...p).split(',').map(Number);
+    let best = null;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const s of grid.get(`${cx + dx},${cy + dy}`) ?? []) {
+          if (s.route !== route) continue;
+          const q = closestOnSegment(p, s.a, s.b);
+          const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+          if (!best || d < best.d) best = { q, d };
+        }
+      }
+    }
+    return best;
+  };
+  packed(runs, onLine);
+  rounded(runs);
+  const marks = stations.map(project);
+  for (const run of runs) run.slots = eased(run, apart, marks);
+  const pieces = runs.flatMap((run) =>
+    inPieces(run.points, run.slots).map(({ slot, points }) => ({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: simplifyCollinear(points).map(unproject) },
+      properties: { ...run.line.feature.properties, slot },
+    })),
+  );
+
+  // Each stretch of track once: where a line runs alone, and each place
+  // lines share, left to right.
+  const tracks = [
+    ...runs.filter((run) => !run.place).map((run) => [run]),
+    ...places.map((place) =>
+      place.order.map((route) => place.runs.filter((r) => r.line.route === route).reduce((a, b) => (length(b.points) > length(a.points) ? b : a))),
+    ),
+  ];
+  const metersPerPixel = (zoom) => (40075017 * Math.cos((origin[1] * Math.PI) / 180)) / (512 * 2 ** zoom);
+  const letters = lettersAlong(tracks, marks, metersPerPixel).map(({ run, zoom, point, meters }) => {
+    const { slot, right } = sideAt(run, meters);
     return {
       type: 'Feature',
-      geometry: { type: 'LineString', coordinates: simplifyCollinear(run.points).map(unproject) },
-      properties: { ...run.line.feature.properties, slot },
+      geometry: { type: 'Point', coordinates: unproject(point) },
+      // Shown from zoom `from` up to `to`: the first set from as far out as
+      // the map goes, the last as far in. `sx`, `sy`: how many line widths
+      // right and down the screen the line is drawn from this point, so the
+      // map can put the letter on the line and not on the track's middle.
+      properties: {
+        kind: 'letter',
+        route: run.line.route,
+        tier: run.line.feature.properties.tier,
+        from: zoom === LETTER_ZOOMS[0] ? 0 : zoom,
+        to: zoom === LETTER_ZOOMS[1] ? 99 : zoom + 1,
+        sx: Math.round(slot * right[0] * 100) / 100,
+        sy: Math.round(slot * -right[1] * 100) / 100,
+      },
     };
   });
+  return { pieces, letters };
+}
+
+// Lines that end side by side end together (DESIGN.md, "Shared track"). Each
+// line's path stops at its own platform, and platforms at one terminal are
+// staggered by a train's length or so; drawn that way the lines look ragged,
+// as if they ended at different places. The ends of lines that stop within
+// FLUSH_METERS of each other, running the same way, are carried on to where
+// the furthest of them stops, square across the track. No line is cut short.
+// `lines` are { route, parts }; their parts are changed in place.
+function flushEnds(lines) {
+  const ends = [];
+  for (const line of lines) {
+    for (const part of line.parts) {
+      for (const atEnd of [false, true]) {
+        const inward = atEnd ? [...part].reverse() : part;
+        const point = inward[0];
+        // Not where the line ends: another part of it carries on from here.
+        const others = line.parts.filter((p) => p !== part);
+        if (others.some((p) => p.slice(1).some((b, i) => segmentDistance(point, p[i], b) <= SHARED_METERS))) continue;
+        // The way the track runs out of its end, over its last 100 m.
+        const back = pointAlong(inward, Math.min(100, length(part)));
+        const far = Math.hypot(point[0] - back[0], point[1] - back[1]);
+        if (far) ends.push({ line, part, atEnd, point, out: [(point[0] - back[0]) / far, (point[1] - back[1]) / far] });
+      }
+    }
+  }
+  const together = (a, b) =>
+    a.line !== b.line &&
+    Math.hypot(a.point[0] - b.point[0], a.point[1] - b.point[1]) <= FLUSH_METERS &&
+    a.out[0] * b.out[0] + a.out[1] * b.out[1] >= FLUSH_COS;
+  const groups = [];
+  for (const end of ends) {
+    const joined = groups.filter((group) => group.some((other) => together(end, other)));
+    const group = [end, ...joined.flat()];
+    for (const old of joined) groups.splice(groups.indexOf(old), 1);
+    groups.push(group);
+  }
+  for (const group of groups) {
+    if (group.length < 2) continue;
+    // Square across the way they run, taken together.
+    const sum = group.reduce((s, e) => [s[0] + e.out[0], s[1] + e.out[1]], [0, 0]);
+    const way = [sum[0] / Math.hypot(...sum), sum[1] / Math.hypot(...sum)];
+    const along = (e) => e.point[0] * way[0] + e.point[1] * way[1];
+    const furthest = Math.max(...group.map(along));
+    for (const end of group) {
+      const more = furthest - along(end);
+      if (more < 1) continue;
+      const n = Math.ceil(more / STEP_METERS);
+      const added = Array.from({ length: n }, (_, k) => [end.point[0] + (way[0] * more * (k + 1)) / n, end.point[1] + (way[1] * more * (k + 1)) / n]);
+      if (end.atEnd) end.part.push(...added);
+      else end.part.unshift(...added.reverse());
+    }
+  }
+}
+
+// Lines that share track are drawn as one pack (DESIGN.md, "Shared track").
+// Each line's path is on its own track, and tracks side by side are anything
+// from 0 to 20 m apart; drawn there, each a slot to the side, the gaps
+// between the lines come out uneven. So every line of a pack is moved onto
+// the middle of the pack's tracks, where the slots space them evenly. Where a
+// line joins or leaves a pack, the run with fewer lines swings between the
+// two middles over BLEND_METERS, so a line never jumps sideways: lines leave
+// a pack together and then part. `onLine(route, p)` is the nearest point of
+// a line's track to p. Changes each run's points in place.
+function packed(runs, onLine) {
+  for (const run of runs) {
+    run.moves = run.points.map(() => [0, 0]);
+    if (!run.place) continue;
+    const others = run.place.routes.filter((route) => route !== run.line.route);
+    const middle = run.points.map((p) => {
+      // The lines on the track here, as in `sharing`: within SHARED_METERS
+      // of this one, or of one that is. A line that has started to leave
+      // (a run's ends are rounded to MIN_RUN_METERS) counts for less and
+      // less, not suddenly for nothing, and doesn't pull the rest after it.
+      const counted = [{ q: p, weight: 1 }];
+      const feet = others.map((route) => onLine(route, p)?.q).filter(Boolean);
+      while (feet.length) {
+        let next = null;
+        for (const q of feet) {
+          for (const c of counted) {
+            const d = Math.hypot(q[0] - c.q[0], q[1] - c.q[1]);
+            const weight = c.weight * Math.max(0, Math.min(1, 1 - (d - SHARED_METERS) / PACK_FADE_METERS));
+            if (!next || weight > next.weight) next = { q, weight };
+          }
+        }
+        if (!next.weight) break;
+        counted.push(next);
+        feet.splice(feet.indexOf(next.q), 1);
+      }
+      const total = counted.reduce((sum, c) => sum + c.weight, 0);
+      return [0, 1].map((k) => counted.reduce((sum, c) => sum + c.q[k] * c.weight, 0) / total);
+    });
+    run.moves = middle.map((c, i) => [c[0] - run.points[i][0], c[1] - run.points[i][1]]);
+  }
+
+  // Where one run meets the next, the one with fewer lines takes up the
+  // difference. `from` is the index of the point where they meet.
+  const head = (run) => (run.flipped ? run.points.length - 1 : 0);
+  const tail = (run) => (run.flipped ? 0 : run.points.length - 1);
+  const size = (run) => run.set.split(' ').length;
+  const less = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  const blends = [];
+  for (const run of runs) {
+    const next = run.after;
+    if (next) {
+      const [mine, theirs] = [run.moves[tail(run)], next.moves[head(next)]];
+      if (size(run) < size(next)) blends.push({ run, from: tail(run), by: less(theirs, mine) });
+      else blends.push({ run: next, from: head(next), by: less(mine, theirs) });
+    }
+    // An end with no run after it may join another part of its own line (a
+    // line's two directions on their own tracks): it follows that part.
+    for (const [other, from] of [[run.before, head(run)], [run.after, tail(run)]]) {
+      if (other) continue;
+      const p = run.points[from];
+      let best = null;
+      for (const r of runs) {
+        if (r.line !== run.line || r.part === run.part) continue;
+        for (let i = 1; i < r.points.length; i++) {
+          const d = segmentDistance(p, r.points[i - 1], r.points[i]);
+          if (d <= SHARED_METERS && !(best?.d <= d)) best = { d, move: r.moves[i] };
+        }
+      }
+      if (best) blends.push({ run, from, by: less(best.move, run.moves[from]) });
+    }
+  }
+  const ends = new Map();
+  for (const { run } of blends) ends.set(run, (ends.get(run) ?? 0) + 1);
+  for (const { run, from, by } of blends) {
+    if (Math.hypot(...by) < 0.01) continue;
+    // Back on its own middle within the run: by half way, if it swings at
+    // both ends.
+    const room = Math.min(BLEND_METERS, length(run.points) / ends.get(run));
+    const step = from ? -1 : 1;
+    let along = 0;
+    for (let k = from; k >= 0 && k < run.points.length; k += step) {
+      if (k !== from) along += Math.hypot(run.points[k][0] - run.points[k - step][0], run.points[k][1] - run.points[k - step][1]);
+      if (along >= room && k !== from) break;
+      const t = Math.min(1, along / room);
+      const keep = 1 - t * t * (3 - 2 * t);
+      run.moves[k] = [run.moves[k][0] + by[0] * keep, run.moves[k][1] + by[1] * keep];
+    }
+  }
+  for (const run of runs) run.points = run.points.map((p, i) => [p[0] + run.moves[i][0], p[1] + run.moves[i][1]]);
+}
+
+// Track doesn't turn at a point, but RTD's paths do: they are drawn with a
+// corner every hundred meters or so, and a line swinging into a pack adds
+// more. Each line is rounded: every point goes to the average of the path
+// for ROUND_METERS either side of it, nearer path counting for more. The
+// ends stay where they are, and lines on one path come out on one path.
+// Changes each run's points in place.
+function rounded(runs) {
+  for (const first of runs) {
+    if (first.before) continue;
+    const chain = [];
+    for (let run = first; run; run = run.after) chain.push(run);
+    // The whole part in the order the line runs; runs meet at a shared point.
+    const inOrder = (run) => (run.flipped ? [...run.points].reverse() : run.points);
+    const path = chain.flatMap((run, i) => inOrder(run).slice(i ? 1 : 0));
+    const along = [0];
+    for (let i = 1; i < path.length; i++) along.push(along[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+    const total = along.at(-1);
+    // The path `meters` along, looking from segment `i` on.
+    const at = (meters, i) => {
+      while (i > 1 && along[i - 1] > meters) i--;
+      while (i < path.length - 1 && along[i] < meters) i++;
+      const t = along[i] > along[i - 1] ? (meters - along[i - 1]) / (along[i] - along[i - 1]) : 0;
+      return [path[i - 1][0] + t * (path[i][0] - path[i - 1][0]), path[i - 1][1] + t * (path[i][1] - path[i - 1][1])];
+    };
+    const smooth = path.map((p, i) => {
+      const reach = Math.min(ROUND_METERS, along[i], total - along[i]);
+      if (reach < 1 || path.length < 3) return p;
+      let [x, y, n] = [0, 0, 0];
+      for (let k = -ROUND_STEPS; k <= ROUND_STEPS; k++) {
+        const q = at(along[i] + (k / ROUND_STEPS) * reach, Math.max(1, i));
+        const weight = 1 - Math.abs(k) / (ROUND_STEPS + 1);
+        x += q[0] * weight;
+        y += q[1] * weight;
+        n += weight;
+      }
+      return [x / n, y / n];
+    });
+    let from = 0;
+    for (const run of chain) {
+      const mine = smooth.slice(from, from + run.points.length);
+      run.points = run.flipped ? mine.reverse() : mine;
+      from += run.points.length - 1;
+    }
+  }
+}
+
+// Where each line carries its letter, zoom by zoom (DESIGN.md, "Rail
+// bullets"). A letter goes on the track every LETTER_PX or so. Lines sharing
+// the track take turns at those places: each goes to the line whose nearest
+// letter is furthest away, so every line is named wherever it runs; a line
+// alone takes every other one. Each letter sits clear of other letters and
+// of stations, and as far from a station as it can, within a quarter of the
+// way to the next place either side (half, if nowhere nearer is clear).
+// `tracks` are the runs side by side on each stretch of track; returns
+// { run, zoom, point, meters } for each letter, `meters` along its run.
+function lettersAlong(tracks, marks, metersPerPixel) {
+  const out = [];
+  for (let zoom = LETTER_ZOOMS[0]; zoom <= LETTER_ZOOMS[1]; zoom++) {
+    // The map shows this set from `zoom` to the next: sized for halfway.
+    const every = LETTER_PX * metersPerPixel(zoom + 0.5);
+    const clear = (LETTER_CLEAR_PX / LETTER_PX) * every;
+    const clearOfStation = (STATION_CLEAR_PX / LETTER_PX) * every;
+    const all = [];
+    const placed = new Map(tracks.flat().map((run) => [run.line.route, []]));
+    const away = (points, p) => Math.min(Infinity, ...points.map((q) => Math.hypot(q[0] - p[0], q[1] - p[1])));
+    const put = (run, meters, slack) => {
+      // Clear of the letters already there and of stations first (the map
+      // draws only one of two that touch), then as far from a station as it
+      // can be.
+      const room = (p) => Math.min(1, away(all, p) / clear, away(marks, p) / clearOfStation);
+      const best = (steps) =>
+        steps
+          .map((k) => meters + (k * slack) / 4)
+          .filter((m) => m > 0 && m < length(run.points))
+          .map((m) => ({ point: pointAlong(run.points, m), at: m }))
+          .reduce((a, b) => (room(b.point) !== room(a.point) ? (room(b.point) > room(a.point) ? b : a) : away(marks, b.point) > away(marks, a.point) + 1 ? b : a));
+      let { point, at } = best(slack ? [-4, -3, -2, -1, 0, 1, 2, 3, 4] : [0]);
+      // Nowhere clear that near: look twice as far each way.
+      if (slack && room(point) < 1) {
+        const wider = best([-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8]);
+        if (room(wider.point) > room(point)) ({ point, at } = wider);
+      }
+      out.push({ run, zoom, point, meters: at });
+      placed.get(run.line.route).push(point);
+      all.push(point);
+    };
+    for (const members of tracks) {
+      const reach = Math.max(...members.map((run) => length(run.points)));
+      for (let at = every / 2, k = 0; at < reach; at += every, k++) {
+        if (members.length === 1 && k % 2) continue;
+        // Its own run can be a little longer or shorter than the others'.
+        const here = (run) => pointAlong(run.points, (at / reach) * length(run.points));
+        const turn = members.reduce((a, b) => (away(placed.get(b.line.route), here(b)) > away(placed.get(a.line.route), here(a)) ? b : a));
+        put(turn, (at / reach) * length(turn.points), every / 4);
+      }
+    }
+    // A line too short to have come up anywhere: once, mid-way along its
+    // longest stretch.
+    for (const [route, points] of placed) {
+      if (points.length) continue;
+      const run = tracks.flat().filter((r) => r.line.route === route).reduce((a, b) => (length(b.points) > length(a.points) ? b : a));
+      put(run, length(run.points) / 2, 0);
+    }
+  }
+  return out;
+}
+
+// A run's slot at each of its points. It is the run's own slot, except past
+// an end where the line has just left others it shared track with: there it
+// starts in the slot it had beside them and eases to its own as they get
+// further away, so the line doesn't step sideways where the others leave, and
+// isn't drawn over one of them while their tracks are still close. Only the
+// run with fewer lines moves; the lines still together stay in their slots.
+function eased(run, apart, marks) {
+  const { points } = run;
+  const slots = points.map(() => run.slot);
+  const members = (r) => r.set.split(' ');
+  // `before` meets the run where it started, which is its last point if the
+  // run has been turned around.
+  const ends = [[run.before, !run.flipped], [run.after, run.flipped]]
+    .filter(([other]) => other && members(other).length > members(run).length)
+    // The other run's slot, as an offset to the right of this run's direction.
+    .map(([other, fromStart]) => ({ other, fromStart, shift: (other.flipped === run.flipped ? other.slot : -other.slot) - run.slot }))
+    .filter((end) => end.shift);
+  for (const { other, fromStart, shift } of ends) {
+    const gone = new Set(members(other).filter((route) => !members(run).includes(route)));
+    const order = points.map((_, i) => (fromStart ? i : points.length - 1 - i));
+    const along = [0];
+    for (let k = 1; k < order.length; k++) {
+      const [a, b] = [points[order[k - 1]], points[order[k]]];
+      along.push(along[k - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+    }
+    // Done by the first station along, by EASE_METERS, or within the run: by
+    // its middle if it moves over from both ends.
+    let room = Math.min(EASE_METERS, along.at(-1) / ends.length);
+    for (const mark of marks) {
+      let nearest = null;
+      for (let k = 0; k < order.length && along[k] <= EASE_METERS + STATION_METERS; k++) {
+        const d = Math.hypot(points[order[k]][0] - mark[0], points[order[k]][1] - mark[1]);
+        if (d <= STATION_METERS && (!nearest || d < nearest.d)) nearest = { d, at: along[k] };
+      }
+      if (nearest && nearest.at > STATION_CLEAR_METERS) room = Math.min(room, nearest.at - STATION_CLEAR_METERS);
+    }
+    let done = 0;
+    for (let k = 0; k < order.length && done < 1; k++) {
+      const farEnough = (apart(gone, points[order[k]]) - SHARED_METERS) / (APART_METERS - SHARED_METERS);
+      done = Math.max(done, Math.min(1, Math.max(farEnough, along[k] / room)));
+      // Eased at both ends, so the line bends into and out of the move.
+      slots[order[k]] += shift * (1 - done * done * (3 - 2 * done));
+    }
+  }
+  return slots;
+}
+
+// A run cut wherever its slot has moved another EASE_STEP: a line's offset
+// is one number for a whole piece, so a move across is many short pieces.
+function inPieces(points, slots) {
+  if (points.length < 2) return [{ slot: slots[0], points }];
+  const pieces = [];
+  for (let i = 1; i < points.length; i++) {
+    // A step between two points that moves further than that is cut again.
+    const n = Math.max(1, Math.ceil(Math.abs(slots[i] - slots[i - 1]) / EASE_STEP));
+    const at = (k) => [0, 1].map((c) => points[i - 1][c] + ((points[i][c] - points[i - 1][c]) * k) / n);
+    for (let k = 1; k <= n; k++) {
+      const middle = slots[i - 1] + ((slots[i] - slots[i - 1]) * (k - 0.5)) / n;
+      const slot = Math.round(middle / EASE_STEP) * EASE_STEP + 0;
+      const last = pieces.at(-1);
+      if (last && last.slot === slot) last.points.push(at(k));
+      else pieces.push({ slot, points: [at(k - 1), at(k)] });
+    }
+  }
+  return pieces;
 }
 
 // Which side of a shared corridor a line's track runs on just past its ends:
@@ -153,9 +640,10 @@ function sideScore(line, corridor) {
   return score;
 }
 
-// Whether two runs come within shared-track distance of each other.
+// Whether two runs come within shared-track distance of each other. Every
+// fifth point of `a` is tried, and its last: runs often touch only at an end.
 function near(a, b) {
-  for (let i = 0; i < a.length; i += 5) {
+  for (let i = 0; i < a.length; i = i === a.length - 1 ? a.length : Math.min(i + 5, a.length - 1)) {
     for (let j = 1; j < b.length; j++) if (segmentDistance(a[i], b[j - 1], b[j]) <= SHARED_METERS) return true;
   }
   return false;
@@ -172,15 +660,42 @@ function despike(points) {
       const [a, b, c] = [out[i - 1], out[i], out[i + 1]];
       const [u, v] = [[b[0] - a[0], b[1] - a[1]], [c[0] - b[0], c[1] - b[1]]];
       const [lu, lv] = [Math.hypot(...u), Math.hypot(...v)];
-      // Turned back by more than 120 degrees: track can't.
-      if ((u[0] * v[0] + u[1] * v[1]) / (lu * lv || 1) < -0.5 && Math.min(lu, lv) < SPIKE_METERS) {
+      // Turned back by more than 120 degrees: track can't. Nor can it step
+      // sideways onto the next track: a short step that turns more than 60
+      // degrees one way going in and the other coming out.
+      const d = out[i + 2];
+      const w = d && [d[0] - c[0], d[1] - c[1]];
+      const sharp = (p, q) => (p[0] * q[0] + p[1] * q[1]) / (Math.hypot(...p) * Math.hypot(...q) || 1) < 0.5;
+      const sidestep = w && lv < SHARED_METERS && sharp(u, v) && sharp(v, w) && (u[0] * v[1] - u[1] * v[0]) * (v[0] * w[1] - v[1] * w[0]) < 0;
+      if (sidestep || ((u[0] * v[0] + u[1] * v[1]) / (lu * lv || 1) < -0.5 && Math.min(lu, lv) < SPIKE_METERS)) {
         out = [...out.slice(0, i), ...out.slice(i + 1)];
         changed = true;
         break;
       }
     }
   }
-  return out;
+  const rest = withoutRetrace(out.filter((p, i) => !i || p[0] !== out[i - 1][0] || p[1] !== out[i - 1][1]));
+  // What a retrace leaves behind can be a kink of its own.
+  return rest.length < out.length ? despike(rest) : rest;
+}
+
+// A longer out-and-back, where the path turns around and comes back the way
+// it went (trains reversing on a siding): dropped where the rest of the path
+// runs alongside it anyway, so the line isn't drawn there twice. An
+// out-and-back to somewhere the path doesn't otherwise go is kept.
+function withoutRetrace(points) {
+  for (let i = 1; i < points.length - 1; i++) {
+    const [a, b, c] = [points[i - 1], points[i], points[i + 1]];
+    const [u, v] = [[b[0] - a[0], b[1] - a[1]], [c[0] - b[0], c[1] - b[1]]];
+    const [lu, lv] = [Math.hypot(...u), Math.hypot(...v)];
+    if ((u[0] * v[0] + u[1] * v[1]) / (lu * lv || 1) >= -0.5 || segmentDistance(c, a, b) > RETRACE_METERS) continue;
+    const rest = [...points.slice(0, i), ...points.slice(i + 1)];
+    const alongside = (p) => rest.some((q, j) => j && segmentDistance(p, rest[j - 1], q) <= SHARED_METERS);
+    const n = Math.ceil(lv / STEP_METERS);
+    const leg = Array.from({ length: n }, (_, k) => [b[0] + (v[0] * k) / n, b[1] + (v[1] * k) / n]);
+    if (leg.every(alongside)) return withoutRetrace(rest.filter((p, j) => !j || p[0] !== rest[j - 1][0] || p[1] !== rest[j - 1][1]));
+  }
+  return points;
 }
 
 // A line's track once: GTFS gives a path per direction, mostly on the same
@@ -236,6 +751,23 @@ function joinParts(parts) {
   return out;
 }
 
+// A run's slot `meters` along it, and the unit vector ([east, north]) to the
+// right of the way it's drawn there: the side a positive slot is on.
+function sideAt(run, meters) {
+  const { points, slots } = run;
+  let left = meters;
+  for (let i = 1; i < points.length; i++) {
+    const [dx, dy] = [points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]];
+    const d = Math.hypot(dx, dy);
+    if (d && (d >= left || i === points.length - 1)) {
+      const t = Math.min(1, left / d);
+      return { slot: slots[i - 1] + t * (slots[i] - slots[i - 1]), right: [dy / d, -dx / d] };
+    }
+    left -= d;
+  }
+  return { slot: run.slot, right: [0, 0] };
+}
+
 function pointAlong(points, meters) {
   let left = meters;
   for (let i = 1; i < points.length; i++) {
@@ -272,8 +804,9 @@ export function trackAt(pieces, point) {
       }
     }
   }
-  // Slots run from -(n - 1) / 2 to (n - 1) / 2.
-  return best ? { span: best.slot * 2 + 1, bearing: best.bearing } : { span: 1, bearing: 0 };
+  // Slots run from -(n - 1) / 2 to (n - 1) / 2. Rounded: a line easing out
+  // of a bundle nearby is a fraction of a slot off.
+  return best ? { span: Math.round(best.slot * 2) + 1, bearing: best.bearing } : { span: 1, bearing: 0 };
 }
 
 /**
@@ -421,11 +954,16 @@ function length(points) {
   return d;
 }
 
-function segmentDistance(p, a, b) {
+function closestOnSegment(p, a, b) {
   const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
   const l = dx * dx + dy * dy;
   const t = l ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l)) : 0;
-  return Math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1]);
+  return [a[0] + t * dx, a[1] + t * dy];
+}
+
+function segmentDistance(p, a, b) {
+  const q = closestOnSegment(p, a, b);
+  return Math.hypot(q[0] - p[0], q[1] - p[1]);
 }
 
 const partsOf = (g) => (g.type === 'LineString' ? [g.coordinates] : g.coordinates);

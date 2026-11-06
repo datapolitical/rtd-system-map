@@ -18,9 +18,14 @@ const END_METERS = 400;
  * RTD's stop and facility points, `service` the rail service from
  * stationService, and `busEnds` lineEnds' result for buses. `lineOf(code)`
  * names the map route a stop's route code belongs to, and `urls` holds each
- * route's page on RTD's site. Returns { routes, stations }.
+ * route's page on RTD's site. A route can be drawn as several features (rail
+ * in pieces of shared track, buses in stretches, each with its own
+ * frequency); `levels` holds each route's own properties, its frequency
+ * measured for the whole route, which is what its entry describes. Without
+ * it, a route takes its first feature's properties, with `route_tier` and
+ * `route_wk` over a stretch's. Returns { routes, stations }.
  */
-export function directory({ routes, stations, stops, facilities, service, busEnds, lineOf, urls }) {
+export function directory({ routes, stations, stops, facilities, service, busEnds, lineOf, urls, levels = new Map() }) {
   const byRoute = new Map();
   for (const f of routes) (byRoute.get(f.properties.route) ?? byRoute.set(f.properties.route, []).get(f.properties.route)).push(f);
 
@@ -43,8 +48,13 @@ export function directory({ routes, stations, stops, facilities, service, busEnd
     return [...found].sort(byNumber);
   });
 
+  // The words of RTD's own place names, to tell a place from a service's
+  // name on a bus sign (see place).
+  const placeWords = new Set([...stations, ...facilities].flatMap((f) => wordsOf(`${f.properties.name ?? ''} ${f.properties.label ?? ''}`)));
+
   const out = [...byRoute].map(([route, features]) => {
-    const p = features[0].properties;
+    const first = features[0].properties;
+    const p = levels.get(route) ?? { ...first, tier: first.route_tier ?? first.tier, wk: first.route_wk ?? first.wk };
     let goes;
     let order = null;
     if (p.mode === 'rail' && service.ends[route]) {
@@ -55,14 +65,14 @@ export function directory({ routes, stations, stops, facilities, service, busEnd
       });
       order = (service.order[route] ?? []).map((i) => stations[i].properties.id);
     } else {
-      goes = (busEnds.get(route) ?? [])
-        .filter((e) => e.headsigns.length)
-        .map((e) => {
-          // RTD's headsigns abbreviate; a station's own name doesn't.
-          const station = e.at && stations.find((s) => s.properties.served && meters(s.geometry.coordinates, e.at) <= END_METERS);
-          const label = station?.properties.label;
-          return { name: label ? (/\bstation\b/i.test(label) ? label : `${label} Station`) : place(e.headsigns, route), at: e.at };
-        });
+      const ends = (busEnds.get(route) ?? []).filter((e) => e.headsigns.length);
+      const brand = serviceName(ends.map((e) => e.headsigns[0]), route, placeWords);
+      goes = ends.map((e) => {
+        // RTD's headsigns abbreviate; a station's own name doesn't.
+        const station = e.at && stations.find((s) => s.properties.served && meters(s.geometry.coordinates, e.at) <= END_METERS);
+        const label = station?.properties.label;
+        return { name: label ? (/\bstation\b/i.test(label) ? label : `${label} Station`) : place(e.headsigns, route, brand), at: e.at };
+      });
       // A loop shows one end.
       if (goes.length === 2 && goes[0].name === goes[1].name) goes = goes.slice(0, 1);
       // The stations it stops at, in the order its first direction passes them.
@@ -85,6 +95,8 @@ export function directory({ routes, stations, stops, facilities, service, busEnd
     }
     return {
       route,
+      // RTD's map code for a route shown by its timetable name, for search.
+      ...(p.code ? { code: p.code } : {}),
       name: p.name,
       mode: p.mode,
       tier: p.tier,
@@ -130,9 +142,43 @@ export function directory({ routes, stations, stops, facilities, service, busEnd
 // Station". When the two most common share two or more leading words, those
 // are the place and the rest says how the bus gets there ("Union Station
 // All-Station", "Union Station Express").
-function place(headsigns, route) {
-  const number = new RegExp(`(^|\\s)${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'g');
-  const clean = (h) =>
+function place(headsigns, route, brand = []) {
+  const clean = (h) => cleanSign(h, route, brand);
+  const [first, second] = headsigns.map(clean);
+  if (second && second !== first) {
+    const [a, b] = [first.split(' '), second.split(' ')];
+    let k = 0;
+    while (k < a.length && a[k] === b[k]) k++;
+    if (k >= 2) return a.slice(0, k).join(' ');
+  }
+  return first;
+}
+
+// A bus sign that starts with the service's name rather than where the bus
+// goes: the words every direction's sign begins with, when none of them is a
+// word of an RTD station or facility name. The FreeRide's signs read "Free
+// MallRide Civic Center" and "Free MallRide Union Station" (RTD's old name
+// for it), so "MallRide" is the service and the places are Civic Center and
+// Union Station; route 37's "40th & Airport" and "40th & Colorado" share
+// "40th &", which names places, so both stay whole.
+function serviceName(signs, route, placeWords) {
+  const words = signs.map((h) => cleanSign(h, route).split(' '));
+  if (words.length < 2) return [];
+  const shared = [];
+  for (let k = 0; words.every((w) => w.length > k + 1 && w[k] === words[0][k]); k++) shared.push(words[0][k]);
+  return shared.length && shared.every((w) => !placeWords.has(fold(w))) ? shared : [];
+}
+
+const fold = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const wordsOf = (s) => s.split(/\s+/).map(fold).filter(Boolean);
+
+// A sign's words without the route's number, "free", "via ..." and the
+// service's name (see serviceName), and with RTD's abbreviations spelled out.
+function cleanSign(h, route, brand = []) {
+  const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const number = new RegExp(`(^|\\s)${escape(route)}(?=\\s|$)`, 'g');
+  const lead = brand.length ? new RegExp(`^\\s*${brand.map(escape).join('\\s+')}(?=\\s|$)`) : null;
+  return (
     h
       .replace(/\s+via\s+.*$/i, '')
       .replace(number, ' ')
@@ -145,15 +191,10 @@ function place(headsigns, route) {
       .replace(/\bAirpt\b/g, 'Airport')
       .replace(/\s+-\s+/g, ' – ')
       .replace(/\s+/g, ' ')
-      .trim();
-  const [first, second] = headsigns.map(clean);
-  if (second && second !== first) {
-    const [a, b] = [first.split(' '), second.split(' ')];
-    let k = 0;
-    while (k < a.length && a[k] === b[k]) k++;
-    if (k >= 2) return a.slice(0, k).join(' ');
-  }
-  return first;
+      .trim()
+      .replace(lead ?? /$^/, '')
+      .trim()
+  );
 }
 
 const count = (lines) => String(lines ?? '').split(' ').filter(Boolean).length;

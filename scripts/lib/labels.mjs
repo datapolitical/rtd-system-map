@@ -17,7 +17,7 @@ const SCALES = [175, 150, 110, 80, 60, 44, 32, 24, 18, 13, 10, 8];
 const SIGN_GAP = 4;
 // What a sign meeting another costs, against a rail point covered.
 const CLASH = 1000;
-// Ends shared by more lines than this are a hub, named without bullets.
+// Ends shared by more lines than this are a hub, named as a station is.
 const HUB_LINES = 3;
 
 // Each icon anchor, and which way the sign then extends from its point (x
@@ -38,9 +38,10 @@ export const ANCHORS = {
  * station features, `ends` each line's two end stations (indexes into
  * `stations`), `headsigns` what trains to each of those ends show, and
  * `frame` the [[west, south], [east, north]] wider screens open on. Returns
- * `labels`, point features: kind "end" or "hub" (lines, name, anchor) and kind
- * "bus" (route, tier); and `signBoxes`, the area each sign covers at the
- * opening view, as polygons.
+ * `labels`, point features: kind "end" (lines, name, anchor) and kind "bus"
+ * (route, tier); `signBoxes`, the area each sign covers from far out, as
+ * polygons; `endNames`, station index -> the name its line end goes by; and
+ * `hubs`, the indexes of end stations that get no sign.
  */
 export function labelPoints(routes, stations, ends, headsigns = {}, frame = null) {
   const origin = stations[0].geometry.coordinates;
@@ -49,7 +50,16 @@ export function labelPoints(routes, stations, ends, headsigns = {}, frame = null
   const project = ([lon, lat]) => [(lon - origin[0]) * kx, (lat - origin[1]) * ky];
 
   const rail = routes.filter((f) => f.properties.mode === 'rail');
-  const frequent = routes.filter((f) => f.properties.mode === 'bus' && f.properties.tier === 'frequent');
+  // Frequent buses, one entry per route with its frequent stretches' parts:
+  // a route drawn in stretches is frequent only along some, and its number
+  // can only go on those.
+  const frequent = [];
+  for (const f of routes) {
+    if (f.properties.mode !== 'bus' || f.properties.tier !== 'frequent') continue;
+    const same = frequent.find((g) => g.properties.route === f.properties.route);
+    if (same) same.geometry.coordinates.push(...partsOf(f.geometry));
+    else frequent.push({ properties: f.properties, geometry: { type: 'MultiLineString', coordinates: [...partsOf(f.geometry)] } });
+  }
   const railPoints = rail.flatMap((f) => sample(partsOf(f.geometry).map((p) => p.map(project))));
   // Phones open on the stations and are narrow, so signs at the network's
   // sides face inward; wider screens are short, so signs stay inside the
@@ -69,30 +79,31 @@ export function labelPoints(routes, stations, ends, headsigns = {}, frame = null
       if (name) (names.get(i) ?? names.set(i, []).get(i)).push(name);
     });
   }
+  const ended = [...byStation].map(([i, lines]) => {
+    const name = commonest(names.get(i) ?? []) ?? stations[i].properties.label;
+    return {
+      index: i,
+      station: stations[i],
+      at: project(stations[i].geometry.coordinates),
+      name,
+      lines: lines.sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
+      // The sign's size on screen, roughly: bullets, then the name, then
+      // the room its shadow takes.
+      width: lines.length * 18 + 4 + name.length * 6.6 + 19,
+    };
+  });
+  // A hub gets no sign: its row of bullets would be wider than the downtown
+  // it sits on, and every one of its lines has a sign at its other end.
+  const hubs = new Set(ended.filter((sign) => sign.lines.length > HUB_LINES).map((sign) => sign.index));
   // Each sign on its station's clearest side, where no two signs meet.
-  const order = [...byStation]
-    .map(([i, lines]) => {
-      const name = commonest(names.get(i) ?? []) ?? stations[i].properties.label;
-      const hub = lines.length > HUB_LINES;
-      return {
-        station: stations[i],
-        at: project(stations[i].geometry.coordinates),
-        name,
-        hub,
-        lines: lines.sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
-        // The sign's size on screen, roughly: bullets, then the name, then
-        // the room its shadow takes.
-        width: (hub ? 0 : lines.length * 18 + 4) + name.length * 6.6 + 19,
-      };
-    })
-    .sort((a, b) => b.lines.length - a.lines.length);
+  const order = ended.filter((sign) => !hubs.has(sign.index)).sort((a, b) => b.lines.length - a.lines.length);
   const options = order.map((sign) => sides(sign.at, sign.width, 30, railPoints, bounds));
   const picks = arrange(options);
   order.forEach((sign, k) => Object.assign(sign, options[k][picks[k]]));
-  const signs = order.map(({ station, name, hub, lines, anchor }) => ({
+  const signs = order.map(({ station, name, lines, anchor }) => ({
     type: 'Feature',
     geometry: station.geometry,
-    properties: { kind: hub ? 'hub' : 'end', lines: lines.join(' '), name, anchor },
+    properties: { kind: 'end', lines: lines.join(' '), name, anchor },
   }));
   // Where the signs reach at the opening view, so phones can open on them.
   const signBoxes = order.map(({ box: [w, s, e, n] }) => ({
@@ -192,7 +203,10 @@ export function labelPoints(routes, stations, ends, headsigns = {}, frame = null
     };
   });
 
-  return { labels: [...signs, ...tags], signBoxes };
+  // What each line-end sign says, by station, so the key can word a line's
+  // ends the way its signs do.
+  const endNames = new Map(ended.map(({ index, name }) => [index, name]));
+  return { labels: [...signs, ...tags], signBoxes, endNames, hubs };
 }
 
 // Each side of a point a sign of this size can take, with the box it covers

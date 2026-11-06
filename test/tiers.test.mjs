@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { tierOf } from '../scripts/lib/gtfs.mjs';
+import { directionSummary, tierOf } from '../scripts/lib/gtfs.mjs';
 
 const day = (fields) => ({ trips: 6, middayDepartures: 0, headway: null, morning: false, evening: false, ...fields });
 
@@ -24,4 +24,23 @@ test('one midday trip is infrequent, and no trips at all is none', () => {
   assert.equal(tierOf(day({ middayDepartures: 1 })), 'infrequent');
   assert.equal(tierOf(day({ trips: 0 })), 'none');
   assert.equal(tierOf(undefined), 'none');
+});
+
+// Departures from 9am with these gaps between them, in minutes.
+const departures = (gaps) => gaps.reduce((times, g) => [...times, times.at(-1) + g * 60], [9 * 3600 + 60]);
+const tierAt = (gaps) => tierOf({ trips: gaps.length + 1, ...directionSummary(departures(gaps)) });
+
+test('buses bunched in pairs are not frequent', () => {
+  // Two hourly patterns 7 minutes apart: the median gap is 7, but a rider
+  // usually waits most of an hour.
+  const pairs = [7, 53, 7, 53, 7, 53, 7, 53, 7, 53, 7];
+  // 12 departures over 307 minutes: about every 28.
+  assert.equal(directionSummary(departures(pairs)).headway, 28);
+  assert.equal(tierAt(pairs), 'every30');
+});
+
+test('a timetable drifting a minute or two keeps its headway', () => {
+  const drift = [30, 29, 31, 33, 30, 29, 31, 33, 30, 29, 31];
+  assert.equal(directionSummary(departures(drift)).headway, 30);
+  assert.equal(tierAt(drift), 'every30');
 });

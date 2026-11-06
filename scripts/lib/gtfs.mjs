@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import { unzipSync } from 'fflate';
 import { getBytes } from './http.mjs';
 
@@ -14,8 +15,16 @@ const FILES = [
   'shapes.txt',
 ];
 
-export async function loadGtfs(url) {
-  const bytes = await getBytes(url);
+/**
+ * Download and unpack the feed. With `cache`, a path, the feed is read from
+ * that file, and downloaded to it first if it isn't there.
+ */
+export async function loadGtfs(url, cache = null) {
+  let bytes = cache && (await readFile(cache).then((b) => new Uint8Array(b), () => null));
+  if (!bytes) {
+    bytes = await getBytes(url);
+    if (cache) await writeFile(cache, bytes);
+  }
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const zipped = unzipSync(bytes, { filter: (f) => FILES.includes(basename(f.name)) });
   const decoder = new TextDecoder();
@@ -154,6 +163,13 @@ export const MIDDAY = [9 * 3600, 15 * 3600];
 const MORNING = [0, 9 * 3600];
 const EVENING = [15 * 3600, 20 * 3600];
 const within = (t, [from, to]) => t >= from && t < to;
+// Buses that run in bunched pairs (two hourly patterns a few minutes apart)
+// have a short median gap but leave riders waiting most of an hour. Where the
+// average gap across the window is more than this many times the median, the
+// average is the headway. Chosen from the Nov 2026 feed: bunched pairs ran at
+// 4x or more, while ordinary drift (gaps of 29 to 35 on a 30-minute route)
+// and service stepping up partway through the window stayed under 1.4x.
+const BUNCHED = 1.5;
 
 /** A route's frequency tier for one kind of day, per DESIGN.md. */
 export function tierOf(day) {
@@ -181,7 +197,8 @@ const median = (xs) => {
 /**
  * How often each route runs on each kind of day, per DESIGN.md: the median
  * gap between midday departures at the route's busiest stop, in each
- * direction, keeping the less frequent direction.
+ * direction (the average gap where buses run in bunched pairs, see
+ * BUNCHED), keeping the less frequent direction.
  *
  * `groupOf(route_id)` names the line each GTFS route belongs to, so a family
  * that RTD draws as one line (FF1 to FF5 as FF) is measured as one route.
@@ -190,8 +207,13 @@ const median = (xs) => {
  * { trips, middayDepartures, headway (minutes or null), first, last, morning,
  * evening }, or missing when the route doesn't run that day. `morning` and
  * `evening` say whether it runs in each rush period.
+ *
+ * Reading stop_times.txt is the slow part of a build, so this pass can also
+ * keep each trip's stops for other measures: with `stopTimes`, a Map, every
+ * trip on a representative day that `keep(trip)` accepts gets
+ * trip_id -> { stops: [stop_id], times: [seconds or NaN] } in stop order.
  */
-export function routeFrequency(text, dates, groupOf = (id) => id) {
+export function routeFrequency(text, dates, groupOf = (id) => id, { stopTimes = null, keep = () => true } = {}) {
   const trips = new Map(readCsv(text['trips.txt']).map((t) => [t.trip_id, t]));
   const kindsByService = new Map();
   for (const [kind, { services }] of Object.entries(dates)) {
@@ -208,17 +230,23 @@ export function routeFrequency(text, dates, groupOf = (id) => id) {
     }
   }
 
+  const kept = new Map(); // trip_id -> [[sequence, stop, seconds]]
   const rows = csvRows(text['stop_times.txt']);
   const header = rows.next().value;
   const col = (name) => header.indexOf(name);
-  const [tripCol, depCol, stopCol, pickupCol] = ['trip_id', 'departure_time', 'stop_id', 'pickup_type'].map(col);
+  const [tripCol, depCol, arrCol, stopCol, seqCol, pickupCol] = ['trip_id', 'departure_time', 'arrival_time', 'stop_id', 'stop_sequence', 'pickup_type'].map(col);
   for (const row of rows) {
-    if (row[pickupCol] === '1' || !row[depCol]) continue; // no boarding here
     const trip = trips.get(row[tripCol]);
     const kinds = trip && kindsByService.get(trip.service_id);
     if (!kinds) continue;
+    const t = row[depCol] ? seconds(row[depCol]) : NaN;
+    if (stopTimes) {
+      let list = kept.get(row[tripCol]);
+      if (list === undefined) kept.set(row[tripCol], (list = keep(trip) ? [] : null));
+      if (list) list.push([Number(row[seqCol]), row[stopCol], row[depCol] ? t : row[arrCol] ? seconds(row[arrCol]) : NaN]);
+    }
+    if (row[pickupCol] === '1' || !row[depCol]) continue; // no boarding here
     const key = `${groupOf(trip.route_id)}|${trip.direction_id}`;
-    const t = seconds(row[depCol]);
     for (const kind of kinds) {
       let byStop = departures[kind].get(key);
       if (!byStop) departures[kind].set(key, (byStop = new Map()));
@@ -227,48 +255,67 @@ export function routeFrequency(text, dates, groupOf = (id) => id) {
       times.push(t);
     }
   }
+  for (const [id, list] of kept) {
+    if (!list) continue;
+    list.sort((a, b) => a[0] - b[0]);
+    stopTimes.set(id, { stops: list.map((r) => r[1]), times: list.map((r) => r[2]) });
+  }
 
   const result = new Map();
   for (const [kind, byDirection] of Object.entries(departures)) {
     const directions = new Map(); // route -> [summary per direction]
     for (const [key, byStop] of byDirection) {
       const route = key.slice(0, key.lastIndexOf('|'));
-      const stops = [...byStop.values()].map((all) => ({
-        all,
-        midday: all.filter((t) => t >= MIDDAY[0] && t < MIDDAY[1]).sort((a, b) => a - b),
-      }));
-      const { all: busiest, midday } = stops.sort(
-        (a, b) => b.midday.length - a.midday.length || b.all.length - a.all.length,
-      )[0];
-      const gaps = midday.slice(1).map((t, k) => t - midday[k]);
-      directions.set(route, [
-        ...(directions.get(route) ?? []),
-        {
-          middayDepartures: midday.length,
-          headway: gaps.length ? Math.round(median(gaps) / 60) : null,
-          first: Math.min(...busiest),
-          last: Math.max(...busiest),
-          morning: busiest.some((t) => within(t, MORNING)),
-          evening: busiest.some((t) => within(t, EVENING)),
-        },
-      ]);
+      const stops = [...byStop.values()].map((all) => ({ all, midday: all.filter((t) => within(t, MIDDAY)).length }));
+      const { all: busiest } = stops.sort((a, b) => b.midday - a.midday || b.all.length - a.all.length)[0];
+      directions.set(route, [...(directions.get(route) ?? []), directionSummary(busiest)]);
     }
     for (const [route, dirs] of directions) {
-      // The less frequent direction sets the route's frequency.
-      const worst = dirs.reduce((a, b) => (worse(b, a) ? b : a));
-      const day = {
-        trips: tripCounts[kind].get(route) ?? 0,
-        middayDepartures: worst.middayDepartures,
-        headway: worst.headway,
-        first: clock(Math.min(...dirs.map((d) => d.first))),
-        last: clock(Math.max(...dirs.map((d) => d.last))),
-        morning: dirs.some((d) => d.morning),
-        evening: dirs.some((d) => d.evening),
-      };
-      result.set(route, { ...(result.get(route) ?? {}), [kind]: day });
+      result.set(route, { ...(result.get(route) ?? {}), [kind]: daySummary(dirs, tripCounts[kind].get(route) ?? 0) });
     }
   }
   return result;
+}
+
+/**
+ * One direction's service at one place: `times` are every departure there
+ * that day, in seconds. Returns { middayDepartures, headway (the median gap
+ * between midday departures in minutes, or the average gap where buses run
+ * bunched, see BUNCHED; null with fewer than two), first, last (seconds),
+ * morning, evening }.
+ */
+export function directionSummary(times) {
+  const midday = times.filter((t) => within(t, MIDDAY)).sort((a, b) => a - b);
+  const gaps = midday.slice(1).map((t, k) => t - midday[k]);
+  const average = gaps.length ? (midday.at(-1) - midday[0]) / gaps.length : null;
+  const typical = gaps.length ? median(gaps) : null;
+  let [first, last] = [Infinity, -Infinity];
+  for (const t of times) [first, last] = [Math.min(first, t), Math.max(last, t)];
+  return {
+    middayDepartures: midday.length,
+    headway: gaps.length ? Math.round((average > BUNCHED * typical ? average : typical) / 60) : null,
+    first,
+    last,
+    morning: times.some((t) => within(t, MORNING)),
+    evening: times.some((t) => within(t, EVENING)),
+  };
+}
+
+/**
+ * A day's service from its directions' summaries: the less frequent direction
+ * sets the frequency. `trips` is how many trips run that day.
+ */
+export function daySummary(dirs, trips) {
+  const worst = dirs.reduce((a, b) => (worse(b, a) ? b : a));
+  return {
+    trips,
+    middayDepartures: worst.middayDepartures,
+    headway: worst.headway,
+    first: clock(Math.min(...dirs.map((d) => d.first))),
+    last: clock(Math.max(...dirs.map((d) => d.last))),
+    morning: dirs.some((d) => d.morning),
+    evening: dirs.some((d) => d.evening),
+  };
 }
 
 const worse = (a, b) =>
@@ -276,9 +323,32 @@ const worse = (a, b) =>
   ((a.headway ?? Infinity) === (b.headway ?? Infinity) && a.middayDepartures < b.middayDepartures);
 
 // GTFS times can pass 24:00 for trips after midnight; keep them as HH:MM.
-const clock = (s) => `${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
+export const clock = (s) => `${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
 
 // --- Shapes --------------------------------------------------------------
+
+const shapeCache = new WeakMap();
+
+/**
+ * Every shape in the feed, shape_id -> [[lon, lat], ...] in sequence order.
+ * shapes.txt is large, so it's read once per feed and shared by every measure
+ * that needs it.
+ */
+export function shapePoints(text) {
+  if (shapeCache.has(text)) return shapeCache.get(text);
+  const points = new Map();
+  if (text['shapes.txt']) {
+    const rows = csvRows(text['shapes.txt']);
+    const header = rows.next().value;
+    const [idCol, seqCol, lonCol, latCol] = ['shape_id', 'shape_pt_sequence', 'shape_pt_lon', 'shape_pt_lat'].map((n) => header.indexOf(n));
+    for (const row of rows) {
+      (points.get(row[idCol]) ?? points.set(row[idCol], []).get(row[idCol])).push([Number(row[seqCol]), Number(row[lonCol]), Number(row[latCol])]);
+    }
+    for (const [id, list] of points) points.set(id, list.sort((a, b) => a[0] - b[0]).map(([, lon, lat]) => [lon, lat]));
+  }
+  shapeCache.set(text, points);
+  return points;
+}
 
 /**
  * Where each line's trains run: for each line and direction, the shape most
@@ -299,23 +369,14 @@ export function lineShapes(text, lineOf, services = []) {
     const counts = byDirection.get(t.direction_id) ?? byDirection.set(t.direction_id, new Map()).get(t.direction_id);
     counts.set(t.shape_id, (counts.get(t.shape_id) ?? 0) + 1);
   }
-  const wanted = new Set([...uses.values()].flatMap((d) => [...d.values()].flatMap((counts) => [...counts.keys()])));
-  const points = new Map();
-  for (const row of readCsv(text['shapes.txt'])) {
-    if (!wanted.has(row.shape_id)) continue;
-    (points.get(row.shape_id) ?? points.set(row.shape_id, []).get(row.shape_id)).push([
-      Number(row.shape_pt_sequence),
-      Number(row.shape_pt_lon),
-      Number(row.shape_pt_lat),
-    ]);
-  }
+  const points = shapePoints(text);
   for (const [line, byDirection] of uses) {
     const paths = [];
     for (const counts of byDirection.values()) {
       const [best] = [...counts]
         .filter(([id]) => points.has(id))
         .sort((a, b) => b[1] - a[1] || points.get(b[0]).length - points.get(a[0]).length);
-      if (best) paths.push(points.get(best[0]).sort((a, b) => a[0] - b[0]).map(([, lon, lat]) => [lon, lat]));
+      if (best) paths.push(points.get(best[0]).map((p) => [...p]));
     }
     if (paths.length) result.set(line, paths);
   }
@@ -350,6 +411,29 @@ export function matchGtfs(mapRoute, gtfsRoutes, drawn = new Set()) {
   return [...exact, ...family];
 }
 
+/**
+ * What riders call each route on RTD's map (DESIGN.md, "Routes go by their
+ * timetable names"). The map's ROUTE field is RTD's own code, which is not
+ * always the name on the bus and the timetable: the map's BOND is the Bound,
+ * FREE the FreeRide. A map route that is one timetable route takes that
+ * route's name. A family drawn as one line keeps the map's code, the part its
+ * members share (FF for FF1 to FF5), and so does a route whose timetable name
+ * has a space (routes are listed with spaces between them) or is already
+ * another route's name. `matches` is map code -> its GTFS routes, from
+ * matchGtfs; returns map code -> name.
+ */
+export function riderNames(matches) {
+  const names = new Map([...matches.keys()].map((code) => [code, code]));
+  const taken = new Set(names.keys());
+  for (const [code, found] of matches) {
+    const name = found.length === 1 ? found[0].route_short_name : '';
+    if (!name || name === code || /\s/.test(name) || taken.has(name)) continue;
+    names.set(code, name);
+    taken.add(name);
+  }
+  return names;
+}
+
 // --- Line ends -----------------------------------------------------------
 
 /**
@@ -380,18 +464,8 @@ export function lineEnds(text, lineOf, services = []) {
     shapeOfTrip.set(t.trip_id, t.shape_id);
   }
   const top = (m) => [...m].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-  const wanted = new Set([...counts.values()].flatMap((d) => [...d.values()].map((c) => top(c.shapes)).filter(Boolean)));
-  const points = new Map();
-  if (text['shapes.txt']) {
-    const rows = csvRows(text['shapes.txt']);
-    const header = rows.next().value;
-    const [idCol, seqCol, lonCol, latCol] = ['shape_id', 'shape_pt_sequence', 'shape_pt_lon', 'shape_pt_lat'].map((n) => header.indexOf(n));
-    for (const row of rows) {
-      if (!wanted.has(row[idCol])) continue;
-      (points.get(row[idCol]) ?? points.set(row[idCol], []).get(row[idCol])).push([Number(row[seqCol]), Number(row[lonCol]), Number(row[latCol])]);
-    }
-  }
-  const path = (id) => points.get(id)?.sort((a, b) => a[0] - b[0]).map(([, lon, lat]) => [lon, lat]) ?? null;
+  const shapes = shapePoints(text);
+  const path = (id) => shapes.get(id)?.map((p) => [...p]) ?? null;
   // The last stop of each trip, by stop_sequence, and the stop itself.
   const stops = new Map();
   for (const row of readCsv(text['stops.txt'])) stops.set(row.stop_id, [Number(row.stop_lon), Number(row.stop_lat)]);
