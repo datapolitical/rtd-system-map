@@ -1671,10 +1671,11 @@ RTD GTFS ──────────────────────┼�
    builds `main` with `npm run build` on Node 22, output `public`; a deploy
    hook named `daily-refresh` exists; the refresh Worker is written in
    `refresh/` (`check.mjs` with tests, `worker.mjs`, `wrangler.toml`, hourly
-   at :23, no page of its own). Not yet done: the first production build,
-   the Worker's deploy and its `DEPLOY_HOOK` secret, the deployment-failure
-   email (Cloudflare dashboard, Notifications), making the repository
-   public, offline caching, a domain.
+   at :23, no page of its own). Live since 2026-11-06: the first production
+   build succeeded and the site answers at rtd-system-map.pages.dev; the
+   Worker is deployed with its `DEPLOY_HOOK` secret and cron. Not yet done:
+   the deployment-failure email (Cloudflare dashboard, Notifications), making
+   the repository public, offline caching, a domain.
 
 ## Open questions
 
@@ -2067,6 +2068,9 @@ RTD GTFS ──────────────────────┼�
   and dropped: GitHub stops them in a quiet public repository). The Worker
   treats a source it can't read as unchanged, so an RTD outage never
   triggers a rebuild that would fail on the same outage.
+- 2026-11-06: Live. First production build succeeded; the refresh Worker is
+  deployed (cron `23 * * * *`, `DEPLOY_HOOK` secret set). From here, RTD's
+  data changes reach the site within about an hour with no one involved.
 
 ## Sources
 
