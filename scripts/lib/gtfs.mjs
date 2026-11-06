@@ -327,54 +327,27 @@ export function lineShapes(text, lineOf, services = []) {
 const routeName = (s) => (s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 /**
- * Whether a GTFS route code is a variant of a route on RTD's map. RTD marks a
- * variant by adding a letter to a numbered route (225D and 83L beside 225 and
- * 83) or a number to a named one (FF1 and AB1 beside FF and AB). A code that
- * only shares a prefix across those two patterns, like ATA beside AT, is a
- * route of its own, not a variant.
- */
-export function isVariantOf(code, route) {
-  if (!code.startsWith(route) || code === route) return false;
-  const suffix = code.slice(route.length);
-  if (!/^[A-Z0-9]$/.test(suffix)) return false;
-  return /^\d+$/.test(route) ? /^[A-Z]$/.test(suffix) : /^\d$/.test(suffix);
-}
-
-/**
  * The GTFS routes behind one route on RTD's map (DESIGN.md, "Routes are
  * matched between ArcGIS and GTFS"): by route number or ID, and, additively,
- * the family RTD draws as one line, such as FF1 to FF5 as FF. A route that
- * matches by number still takes its variants, so a frequency counts every
- * trip riders on that line can take.
+ * the family RTD draws as one line, such as FF1 to FF5 as FF. A family member
+ * shares the map route's prefix and has exactly its route name. A route the
+ * map draws on its own, named in `drawn`, is never another's family, and a
+ * route that matches by number still takes its family, so a frequency counts
+ * every trip riders on that line can take.
  */
-export function matchGtfs(mapRoute, gtfsRoutes) {
+export function matchGtfs(mapRoute, gtfsRoutes, drawn = new Set()) {
   const exact = gtfsRoutes.filter((r) => r.route_short_name === mapRoute.route || r.route_id === mapRoute.route);
-  const family = gtfsRoutes.filter(
-    (r) =>
-      !exact.includes(r) &&
-      isVariantOf(r.route_short_name || r.route_id, mapRoute.route) &&
-      routeName(r.route_long_name) === routeName(mapRoute.name),
-  );
-  return [...exact, ...family];
-}
-
-/**
- * GTFS routes left out of the join that are variants of a route RTD's map
- * draws. A variant must count toward its line: leaving one out draws the line
- * less often than it runs, which is a bug in this build and not a change in
- * RTD's network, so the caller stops. `matched` names the route_ids already
- * joined.
- */
-export function unmatchedVariants(gtfsRoutes, mapRoutes, matched = []) {
-  const joined = new Set(matched);
-  const found = [];
-  for (const r of gtfsRoutes) {
-    if (joined.has(r.route_id)) continue;
+  const family = gtfsRoutes.filter((r) => {
     const code = r.route_short_name || r.route_id;
-    const parent = mapRoutes.find((p) => isVariantOf(code, p.route) && routeName(r.route_long_name) === routeName(p.name));
-    if (parent) found.push({ code, route: parent.route });
-  }
-  return found;
+    return (
+      !exact.includes(r) &&
+      !drawn.has(code) &&
+      !drawn.has(r.route_id) &&
+      code.startsWith(mapRoute.route) &&
+      routeName(r.route_long_name) === routeName(mapRoute.name)
+    );
+  });
+  return [...exact, ...family];
 }
 
 // --- Line ends -----------------------------------------------------------

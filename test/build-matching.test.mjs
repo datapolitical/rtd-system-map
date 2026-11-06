@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { lineEnds, matchGtfs, readCsv, routeFrequency, tierOf, unmatchedVariants } from '../scripts/lib/gtfs.mjs';
+import { lineEnds, matchGtfs, readCsv, routeFrequency, tierOf } from '../scripts/lib/gtfs.mjs';
 
 const csv = (rows) => rows.map((r) => r.join(',')).join('\n');
 const codes = (found) => found.map((r) => r.route_short_name || r.route_id).sort();
@@ -8,8 +8,7 @@ const codes = (found) => found.map((r) => r.route_short_name || r.route_id).sort
 // A tiny feed around (0, 0), a degree of longitude wide. The map draws one
 // Baseline line (225) and one airport line (AT). 225 runs hourly; 225D runs
 // the same stops half an hour later on a longer path, and 225T runs weekends.
-// ATA shares AT's name but is a different route, the way RTD's ATA positioning
-// trips are today.
+// ATA shares AT's name, so it counts as AT.
 const BASE_NAME = 'Boulder / Lafayette via Baseline';
 const AT_NAME = 'Arapahoe County / Denver Airport';
 
@@ -120,25 +119,16 @@ test("a drawn route's headway counts its variants' trips", () => {
 test('an exact route number still takes its family, and only its family', () => {
   const routes = readCsv(feed()['routes.txt']);
   assert.deepEqual(codes(matchGtfs({ route: '225', name: BASE_NAME }, routes)), ['225', '225D', '225T']);
-  // ATA shares AT's name but is not a variant of it: RTD adds a number to a
-  // named route (AB1, FF1) or a letter to a numbered one (225D, 83L), never a
-  // letter to a named one. It stays a route RTD's map doesn't draw.
-  assert.deepEqual(codes(matchGtfs({ route: 'AT', name: AT_NAME }, routes)), ['AT']);
+  assert.deepEqual(codes(matchGtfs({ route: 'AT', name: AT_NAME }, routes)), ['AT', 'ATA']);
+  // A shared prefix isn't enough: the family has exactly the route's name.
+  assert.deepEqual(codes(matchGtfs({ route: '22', name: 'Another route' }, routes)), []);
 });
 
-test('a variant the build failed to join is a build failure, not a note', () => {
+test('a route drawn on its own is never another\'s family', () => {
   const routes = readCsv(feed()['routes.txt']);
-  const drawn = [
-    { route: '225', name: BASE_NAME },
-    { route: 'AT', name: AT_NAME },
-  ];
-  // 225 matched by number only, as the old exact-first step did.
-  assert.deepEqual(unmatchedVariants(routes, drawn, ['225', 'AT']), [
-    { code: '225D', route: '225' },
-    { code: '225T', route: '225' },
-  ]);
-  // Once joined, nothing is left over; ATA never looks like a variant.
-  assert.deepEqual(unmatchedVariants(routes, drawn, ['225', '225D', '225T', 'AT', 'ATA']), []);
+  const drawn = new Set(['225', '225D']);
+  assert.deepEqual(codes(matchGtfs({ route: '225', name: BASE_NAME }, routes, drawn)), ['225', '225T']);
+  assert.deepEqual(codes(matchGtfs({ route: '225D', name: BASE_NAME }, routes, drawn)), ['225D']);
 });
 
 test('a route ends where its longest trip ends, not where its shape does', () => {

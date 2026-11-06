@@ -282,7 +282,12 @@ export function basemapLabels() {
         'text-size': ['interpolate', ['linear'], ['zoom'], 7, ['match', ['get', 'rank'], [1, 2, 3], 14, 11.5], 12, ['match', ['get', 'rank'], [1, 2, 3], 19, 15]],
         'text-letter-spacing': 0.01,
         'text-max-width': 8,
-        'text-padding': 1,
+        // Beside its point rather than gone, if a sign is on it: far enough
+        // to clear a sign that covers the point itself. No padding: a name's
+        // box is already a line tall, and on smaller phones Denver's only
+        // room between the signs around it is within a pixel of them.
+        'text-padding': 0,
+        'text-variable-anchor-offset': ['center', [0, 0], 'top', [0, 1.2], 'bottom', [0, -1.2], 'left', [1.2, 0], 'right', [-1.2, 0]],
         'symbol-sort-key': ['coalesce', ['get', 'rank'], 5],
       },
       paint: { 'text-color': P.city, ...halo, 'text-halo-width': 1.8 },

@@ -519,14 +519,17 @@ Routes are matched between ArcGIS and GTFS in this order:
    short name is `FreeRide`.
 2. As a family RTD draws as one line, such as `FF` for FF1 to FF5. Family
    members share the map route's prefix and have exactly the same route name.
-   A family's frequency is measured across all its members, as riders on the
-   shared trunk experience it.
+   A route RTD's map draws on its own is never another's family member, so
+   225D and 225T stay their own lines while ATA, which has AT's name, joins
+   AT. A family's frequency is measured across all its members, as riders on
+   the shared trunk experience it.
 3. Map routes that share a code with a FlexRide zone (`BMFX` and so on) are
    on-demand service with no timetable. The zone layer draws them, and they
    are left out of the route lines and the match check.
 
-The build reports any route that still doesn't match, and GTFS routes RTD's
-map doesn't draw (today 225D, 225T, and ATA).
+The build reports any map route that still doesn't match, and stops if more
+than 5% don't. It reports any GTFS route RTD's map doesn't draw (none today)
+without stopping.
 
 ### Live data: RTD's GTFS-realtime feeds
 
@@ -722,8 +725,14 @@ When numbers appear:
 
 - **Frequent routes:** from the opening zoom, one number per route, placed
   where the route runs alone, away from other frequent routes and well away
-  from rail, so it can only mean one line. Numbers repeat along the line from
-  11.5.
+  from rail, so it can only mean one line. The build places them one at a
+  time, the routes that run most alone first, each clear of the signs and of
+  the numbers before it on a phone, a laptop and a desktop. Where there's no
+  room, the route left without a number is one that shares its street with
+  another: downtown, the 0L, 15L and FreeRide, and on phones a few more in
+  central Denver. They get their numbers by zoom 10, except FreeRide, which
+  sits under the Denver name until numbers repeat along the line from 11.5.
+  A number sits on its line, or just beside it where a city name is.
 - **Every-30 routes:** from 11.5.
 - **Every route:** from 13.
 - **Not running:** no number.
@@ -759,10 +768,16 @@ Each bus tier fades in over about a zoom level rather than popping on.
   becomes "Jeffco", "Train to Alameda Station" becomes "Alameda"); a headsign
   that spells out the station's name uses that name ("Union Station"). Lines
   ending together share one sign. Where more than three end together (Union
-  Station), it's one ink sign with the name alone. The build places each sign
-  at the opening view's scale, on the side of its station that covers the
-  least track and no other sign, and phones open wide enough to show them
-  all.
+  Station), it's one ink sign with the name alone. The build picks every
+  sign's side together: the arrangement that covers the least track and
+  reaches least past the network's edges (the stations' width, which is what
+  phones fit, and the desktop's frame above and below), with no two signs
+  meeting at any scale from the smallest phone's opening view in to where
+  signs give way. Each pair is checked at a dozen scales, because two signs
+  facing each other can clear at one and meet at another. Phones open wide
+  enough to show every sign whole, from 360 px wide. Signs claim their space
+  first, then city names, which move just beside their point rather than
+  disappear, then route numbers.
 - **Rail bullets** ride along each line from zoom 10.5, so a line can be
   named anywhere on screen, not only in the key.
 - **Not running** (at the time shown): a hairline in the lightest bus gray,
@@ -865,7 +880,9 @@ Desktop (768 px and wider): the sheet becomes a panel on the left, about
 ### Opening state
 
 The first visit opens on the whole network, Live off. Phones frame the rail
-network; wider screens frame the whole district.
+network and its signs; wider screens frame the network drawn at full
+strength (rail and buses every 30 minutes or better), beside the open key, so
+the network rather than the district's far edges fills the screen.
 
 - **Returning visitors** open where they left off, with Live as they left it.
   Someone who rides with Live on gets it back.
@@ -963,9 +980,13 @@ phones, not a full-width bar.
 
 ## Quality floor
 
-- **Speed:** a usable map in under 2 seconds on a mid-range phone over 4G.
-  Load data for interactions (trips, stop names) only when needed. Pause live
-  updates when the tab is hidden. How:
+- **Speed:** a usable map in under 2 seconds on a mid-range phone over
+  typical 4G (170 ms latency, 9 Mbps, a 4x slower CPU), with slow 4G (150 ms,
+  1.6 Mbps) as a stretch. Measured 2026-11-05 on a 390 px phone: line-end
+  signs on screen at 1.5 s and rail at 1.7 s, settled at 2.4 s; on slow 4G,
+  rail at 5.5 s. The opening view downloads about 760 KB, which alone takes
+  nearly 4 s at 1.6 Mbps. Load data for interactions (trips, stop names) only
+  when needed. Pause live updates when the tab is hidden. How:
   - The page loads only `meta.json` (a few KB: bounds, rail lines, counts)
     before creating the map. The key is built from it.
   - Map layers are added as soon as the style is parsed, not on the map's
@@ -1128,7 +1149,8 @@ RTD GTFS ──────────────────────┼�
       s, and about 1 s on desktop. The 2.5 s first planned is out of reach
       on slow 4G, where the map library alone takes about 2 s to download.
       Step 3's own basemap style drops the 117 KB sprite, which helps
-      further.
+      further. Re-measured 2026-11-05 against the floor as it now reads
+      (typical 4G): 1.7 s to rail.
    2. **Build-step geometry and color.** Contrast-adjusted rail colors and
       bullet letter colors; computed shared track with per-line offsets
       (including one-way couplets); bus corridors with combined frequency.
@@ -1150,6 +1172,10 @@ RTD GTFS ──────────────────────┼�
       *Done when:* in the opening screenshot on a phone and on desktop, every
       line drawn has a name or number on screen, and the airport, downtown,
       Boulder, and every end of the rail network are labeled.
+      Revisited 2026-11-05: every sign, Union Station and Denver show on
+      phones from 360 px wide and on desktop. Frequent routes that share a
+      street downtown wait for zoom 10 for their numbers, FreeRide for 11.5
+      (see "Bus routes").
    5. **Interaction** (next). Highlight a route, the bottom sheet and desktop panel,
       station panels that lead with trains, the Lines list, keyboard access
       to all of it, and padding so panels never cover what they describe.
@@ -1319,6 +1345,28 @@ RTD GTFS ──────────────────────┼�
   headsign without the line's name) rather than the station's full name, so
   every sign fits on a phone ("Jeffco", not "Jefferson CO
   Government-Golden"). Phones open on the stations and the signs together.
+- 2026-11-05: Line-end signs are arranged together, clear of each other at
+  every scale from the smallest phone in, replacing one sign at a time at a
+  single scale, which let signs meet at other scales and hid Lincoln and the
+  Union Station sign. Wheat Ridge Ward faces west because no arrangement
+  clears otherwise, so phones open at about zoom 8.4.
+- 2026-11-05: City names come after signs and step beside their point when a
+  sign covers it, so Denver shows with the Union Station sign. Route numbers
+  come last, placed in order so the ones left out share a street.
+- 2026-11-05: Wider screens frame rail and buses every 30 minutes or better,
+  not every route, so the network fills the screen.
+- 2026-11-05: The speed floor is typical 4G, under 2 seconds; slow 4G is a
+  stretch.
+- 2026-11-05: Route families: a route RTD's map draws on its own is never
+  another's family member. The outside review's rule that a variant left
+  unjoined fails the build is reversed: it flagged routes RTD draws on their
+  own, and a build that stops over a name breaks the zero-maintenance rule.
+- 2026-11-05: A bus ending within 400 m of a station goes to that station
+  (was 300 m), so the 15 and 20 go to Colfax Station, not "Billings", now
+  that route ends come from the trips.
+- 2026-11-05: Phones narrower than 360 px are not a target. A 320 px screen
+  would need about zoom 7.1 to show every sign whole, where signs meet, so
+  the westmost sign is cut by the edge there instead.
 
 ## Sources
 

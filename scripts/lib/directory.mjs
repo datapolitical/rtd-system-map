@@ -11,7 +11,7 @@ const STOP_METERS = 250;
 // A Park-n-Ride serves the station within this distance.
 const PARKING_METERS = 400;
 // A bus whose trips end this close to a rail station goes to that station.
-const END_METERS = 300;
+const END_METERS = 400;
 
 /**
  * `routes` and `stations` are the features as drawn, `stops` and `facilities`

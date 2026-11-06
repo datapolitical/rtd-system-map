@@ -5,7 +5,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { discoverLayers, downloadLayer } from './lib/arcgis.mjs';
-import { csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, routeFrequency, tierOf, unmatchedVariants } from './lib/gtfs.mjs';
+import { csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, routeFrequency, tierOf } from './lib/gtfs.mjs';
 import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
@@ -106,14 +106,14 @@ async function main() {
   geo.routes = geo.routes.filter((f) => !flexCodes.has(f.properties.route));
   const members = new Map(); // map route -> its GTFS routes
   const groupOf = new Map(); // GTFS route_id -> map route
+  const drawn = new Set(geo.routes.map((f) => f.properties.route));
   for (const { properties: p } of geo.routes) {
-    const found = members.get(p.route) ?? matchGtfs(p, gtfsRoutes);
+    const found = members.get(p.route) ?? matchGtfs(p, gtfsRoutes, drawn);
     members.set(p.route, found);
     for (const r of found) groupOf.set(r.route_id, p.route);
   }
   const unmatched = [...members].filter(([, found]) => !found.length).map(([route]) => route);
-  const notOnMapRoutes = gtfsRoutes.filter((r) => !groupOf.has(r.route_id));
-  const notOnMap = notOnMapRoutes.map((r) => r.route_short_name || r.route_id);
+  const notOnMap = gtfsRoutes.filter((r) => !groupOf.has(r.route_id)).map((r) => r.route_short_name || r.route_id);
 
   console.log('Measuring frequency…');
   const timezone = readCsv(gtfs.text['agency.txt'])[0]?.agency_timezone || 'America/Denver';
@@ -187,12 +187,6 @@ async function main() {
   }
   const matchedShare = 1 - unmatched.length / members.size;
   if (matchedShare < 0.95) problems.push(`Only ${Math.round(matchedShare * 100)}% of map routes match GTFS (unmatched: ${unmatched.join(', ')})`);
-  // A GTFS route that is a variant of a line RTD draws but wasn't joined to it
-  // undercounts that line. That is a bug here, not a change in RTD's network,
-  // so it stops the build instead of being noted.
-  for (const v of unmatchedVariants(notOnMapRoutes, geo.routes.map((f) => f.properties))) {
-    problems.push(`GTFS route ${v.code} is a variant of drawn route ${v.route} but was not joined to it`);
-  }
   for (const f of rail) if (!f.properties.color) problems.push(`Rail line ${f.properties.route} has no color in GTFS`);
   if (counts.stations_served < geo.stations.length / 2) {
     problems.push(`Only ${counts.stations_served} of ${geo.stations.length} stations matched GTFS rail service`);
@@ -223,7 +217,11 @@ async function main() {
     const at = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), f.geometry.coordinates, SNAP_METERS);
     if (at) f.geometry = { type: 'Point', coordinates: at };
   }
-  const { labels, signBoxes } = labelPoints(geo.routes, geo.stations, service.ends, service.headsigns);
+  // Wider screens open on the routes drawn at full strength from far out,
+  // rail and buses every 30 minutes or better, not on the long reach of a few
+  // commuter routes.
+  const network = bbox(geo.routes.filter((f) => f.properties.mode === 'rail' || ['frequent', 'every30'].includes(f.properties.tier)));
+  const { labels, signBoxes } = labelPoints(geo.routes, geo.stations, service.ends, service.headsigns, network);
   geo.labels = labels;
   const endStations = new Set(Object.values(service.ends).flat());
   geo.stations.forEach((f, i) => {
@@ -268,12 +266,10 @@ async function main() {
     },
     dates: Object.fromEntries(Object.entries(dates).map(([k, d]) => [k, d.date])),
     // What the page needs before any GeoJSON arrives: where to open the map,
-    // and the rail lines for the legend. The map opens on the routes it draws
-    // at full strength from far out, rail and buses every 30 minutes or better,
-    // not on the long reach of a few commuter routes.
+    // and the rail lines for the legend.
     bounds: {
       routes: bbox(geo.routes),
-      network: bbox(geo.routes.filter((f) => f.properties.mode === 'rail' || ['frequent', 'every30'].includes(f.properties.tier))),
+      network,
       // Phones open on the stations and the signs naming the lines' ends.
       stations: bbox([...geo.stations, ...signBoxes]),
     },

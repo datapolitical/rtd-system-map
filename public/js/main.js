@@ -147,11 +147,12 @@ async function main() {
   wireInteractions(map, meta, lines);
 }
 
-// City names claim their space before route tags and the hub's sign, so the
-// region view always says where it is; line-end signs still come first.
+// Signs claim their space first, then city names, which step aside for them
+// (see 'city-label'), and only then route numbers, so the region view always
+// says where it is and where the lines go.
 function citiesFirst(layers) {
   const [city] = layers.splice(layers.findIndex((l) => l.id === 'city-label'), 1);
-  layers.splice(layers.findIndex((l) => l.id === 'line-signs'), 0, city);
+  layers.splice(layers.findIndex((l) => l.id === 'hub-signs'), 0, city);
   return layers;
 }
 
@@ -386,7 +387,11 @@ function transitMarks(lines) {
         'text-field': ['get', 'route'],
         'text-font': FONT.bold,
         'text-size': ['interpolate', ['linear'], ['zoom'], 8, 9.5, 11, 10.5],
+        // On its line if there's room, otherwise just beside it.
+        'text-variable-anchor': ['center', 'left', 'right', 'top', 'bottom'],
+        'text-radial-offset': 0.35,
         'text-padding': 1,
+        'symbol-sort-key': ['get', 'rank'],
       },
       paint: { 'text-color': tierMatch((t) => tagInk(t)), ...knockout },
     },
@@ -471,8 +476,7 @@ function transitMarks(lines) {
       paint: { 'text-color': INK, ...halo },
     },
     // Signs at the ends of rail lines, with each line's bullet and where it
-    // goes, so the opening view says what every line is. The hub, where most
-    // lines end, gives way to the city it's in; the other signs come first.
+    // goes, so the opening view says what every line is.
     sign('hub-signs', 'hub'),
     sign('line-signs', 'end'),
   ];
