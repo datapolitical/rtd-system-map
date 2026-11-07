@@ -14,7 +14,9 @@
     "check:report": "playwright show-report qa/report"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.11.0",
     "@mapbox/tiny-sdf": "2.3.0",
+    "@maplibre/maplibre-gl-style-spec": "26.5.1",
     "@napi-rs/canvas": "1.1.0",
     "@playwright/test": "1.55.1",
     "fflate": "0.8.3",
