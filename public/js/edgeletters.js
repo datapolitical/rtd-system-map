@@ -122,7 +122,8 @@ export function placeEdgeLetters(map) {
     out.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: { kind: 'letter', route, tier: run.tier, sx: Math.round(-run.slot * dy * 100) / 100, sy: Math.round(run.slot * dx * 100) / 100 },
+      // `rank` 0: the layer shares `rail-bullets`' sort key, and null there is a warning.
+      properties: { kind: 'letter', route, tier: run.tier, rank: 0, sx: Math.round(-run.slot * dy * 100) / 100, sy: Math.round(run.slot * dx * 100) / 100 },
     });
   }
   return out;

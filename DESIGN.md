@@ -2005,6 +2005,14 @@ one file:
   vehicles, the relay's protocol, the pill's words, and on-track checks.
 - `tabbable.js`: Tab order for Safari.
 
+Checks on the page live in `qa/checks/`: Playwright Test specs that open the
+site in headless Chromium (an iPhone 14 profile, light and dark) and measure
+what the map draws, one spec per "Done when" line of milestone 3 (`npm run
+check`, against a running `npm run dev`). `npm test` stays pure Node for the
+build's own modules. The specs are the record of what each step measured;
+the detectors that look for faults nobody has named yet (a line that breaks,
+marks that overlap, a letter missing) are the next thing to add there.
+
 ## Milestones
 
 1. **V1, the layout (done 2026-11-01):** the full data build, with sources
@@ -2764,6 +2772,13 @@ one file:
   (`legend.js`), so agents and people each edit one concern in one file. The
   sizes the build also needs are in one module (`sizes.js`) that both
   import; before, `stationmarks.mjs` and `basemap.js` copied them by hand.
+- 2026-11-07: The "Done when" measurements of milestone 3 are kept as
+  Playwright Test specs in `qa/checks/` (`npm run check`), light and dark,
+  rather than as scripts in a scratch folder, so each step can be re-measured
+  after any change. They run against a dev server already up and never start
+  one: a server started from the config hid a server that had died mid-run.
+  `npm run dev` gives wrangler a 4 GB heap, since it leaks under the checks'
+  traffic and died twice at about 1.4 GB.
 
 ## Sources
 

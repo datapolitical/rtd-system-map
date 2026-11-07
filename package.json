@@ -6,14 +6,17 @@
   "scripts": {
     "postinstall": "node scripts/vendor.mjs",
     "build": "node scripts/vendor.mjs && node scripts/build-data.mjs",
-    "dev": "wrangler pages dev public --port 8788",
+    "dev": "NODE_OPTIONS=--max-old-space-size=4096 wrangler pages dev public --port 8788",
     "dev:live": "wrangler dev --config live/wrangler.toml --port 8789",
     "start": "npm run build && npm run dev",
-    "test": "node --test"
+    "test": "node --test",
+    "check": "playwright test -c qa/playwright.config.mjs",
+    "check:report": "playwright show-report qa/report"
   },
   "devDependencies": {
     "@mapbox/tiny-sdf": "2.3.0",
     "@napi-rs/canvas": "1.1.0",
+    "@playwright/test": "1.55.1",
     "fflate": "0.8.3",
     "pbf": "5.1.2"
   },
