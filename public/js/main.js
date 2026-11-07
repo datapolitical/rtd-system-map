@@ -656,14 +656,13 @@ function transitMarks(lines) {
       source: 'stations',
       minzoom: NAMES_FROM,
       // Before every station has room for its name (EVERY_NAME_FROM), the
-      // ones named are where routes meet, not whichever have empty map
-      // beside them: that named the quiet ends of lines and left the middle
-      // bare. The station at a line's end follows the same rule as any other.
-      filter: [
-        'all',
-        served,
-        ['any', ['>=', ['zoom'], EVERY_NAME_FROM], ['>=', ['coalesce', ['get', 'links'], 0], HUB_LINKS]],
-      ],
+      // ones named are the ends of the rail lines, Union Station first: at
+      // the metro zooms the question is where the trains go. Naming the
+      // stations where the most bus routes meet instead was tried and read as
+      // a random handful (Decatur-Federal, Alameda, Englewood) while Union
+      // Station and the line ends went unnamed: the count is of lines a
+      // reader can't see at that zoom.
+      filter: ['all', served, ['any', ['>=', ['zoom'], EVERY_NAME_FROM], ['all', ['==', ['get', 'end'], true], ['!=', ['get', 'hub'], true]]]],
       layout: {
         'text-field': ['get', 'label'],
         'text-font': FONT.bold,
@@ -673,6 +672,27 @@ function transitMarks(lines) {
         'text-max-width': 8,
         // The stations where most routes meet claim their space first.
         'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'links'], 0]],
+      },
+      paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
+    },
+    // The hub where most lines end (Union Station) is the one name the metro
+    // zooms must have, and the one with the least room beside it: seven lines
+    // leave it in four directions. Until every station is named, its name may
+    // sit further out than any other, in the first clear space around the knot.
+    {
+      id: 'station-labels-hub',
+      type: 'symbol',
+      source: 'stations',
+      minzoom: NAMES_FROM,
+      maxzoom: EVERY_NAME_FROM,
+      filter: ['all', served, ['==', ['get', 'hub'], true]],
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-font': FONT.bold,
+        'text-size': ['interpolate', ['linear'], ['zoom'], 10.5, 10.5, 13, 12],
+        'text-variable-anchor-offset': [...BESIDE, ...FURTHER],
+        'text-justify': 'auto',
+        'text-max-width': 8,
       },
       paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
     },
@@ -761,15 +781,16 @@ function sign(id) {
 // start here: just under the zoom the smallest phones open at (about 9.9),
 // so every opening view has them.
 const NAMES_FROM = 9.75;
-// A station where at least this many routes meet, trains and buses together,
-// is one people change at, and is named from NAMES_FROM. Every other station
+// The ends of the rail lines are named from NAMES_FROM. Every other station
 // is named from EVERY_NAME_FROM, where stations are far enough apart that
 // most names fit. (A whole zoom: filters read the zoom in whole steps.)
-const HUB_LINKS = 6;
 const EVERY_NAME_FROM = DETAIL_FROM;
 // Where a station's name can sit: beside its mark, then further out, on any
 // side (ems; the first that is clear of every line and name wins).
-const BESIDE = [0.7, 1.2, 1.8, 2.6].flatMap((d) => ['left', [d, 0], 'right', [-d, 0], 'top', [0, d], 'bottom', [0, -d], 'top-left', [d, d], 'bottom-right', [-d, -d], 'top-right', [-d, d], 'bottom-left', [d, -d]]);
+const beside = (distances) => distances.flatMap((d) => ['left', [d, 0], 'right', [-d, 0], 'top', [0, d], 'bottom', [0, -d], 'top-left', [d, d], 'bottom-right', [-d, -d], 'top-right', [-d, d], 'bottom-left', [d, -d]]);
+const BESIDE = beside([0.7, 1.2, 1.8, 2.6]);
+// Further out still, for the hub's name alone (see station-labels-hub).
+const FURTHER = beside([3.6, 4.8, 6.2]);
 // Closed stations: ring and name from the same zoom.
 const UNSERVED_ZOOM = 13;
 // Stations are ticks until CAPSULE_FROM and capsules from CAPSULE_TO.

@@ -703,12 +703,20 @@ miss it? If not, it waits for the zoom where they would. Applied
 north end of the N line and almost none downtown, repeated each line's
 letter three or four times, and set town names where they read as stations:
 
-- **Station names go to where routes meet.** Until zoom 11 the only
-  stations named are those where six or more routes meet, trains and buses
-  together (the build counts them, `links`; today 17 stations: Union
-  Station, Nine Mile, Central Park, Federal Center, I-25 / Broadway and so
-  on). They're the ones people change at and ask for. Every station is named
-  from 11, the busiest first. Every station can be tapped at any zoom.
+- **Station names go to the ends of the lines.** Until zoom 11 the only
+  stations named are where a rail line ends (the build marks them, `end`;
+  Union Station among them), the station with the most routes first: at
+  the metro zooms the question is where the trains go. The first rule,
+  naming the stations where six or more routes meet (bus routes counted),
+  was dropped the same day it was applied: on Chris's phone it named
+  Decatur-Federal, Alameda, I-25 / Broadway, Englewood and Olde Town Arvada
+  and left Union Station and every line's end bare, which read as a random
+  handful, because the count is of lines a reader can't see at that zoom.
+  Union Station, where more lines end than get a sign (`hub`), is the one
+  name these zooms must have and the one with the least room beside it,
+  so until 11 its name alone may sit further out, in the first clear space
+  around the knot of lines. Every station is named from 11, the busiest
+  first. Every station can be tapped at any zoom.
 - **A line's letter appears as often as it takes for every line in view to
   have one,** and no more. The build places them (see "Rail bullets").
 - **Places are named by cities until zoom 11.** Towns and villages start
@@ -1013,7 +1021,7 @@ Each bus tier fades in over about a zoom level rather than popping on.
 | Zoom | Shows | Also in Live |
 |---|---|---|
 | Below 9 (the overview: a phone's "Whole network") | District wash and relief. Rail, with each line's letter at both ends and nothing else on it. Frequent buses as lines, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
-| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of stations where six or more routes meet. Hourly and less from 10.5. Stations are small ticks to 10.25; capsules from 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 11, closed stations |
+| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Hourly and less from 10.5. Stations are small ticks to 10.25; capsules from 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 11, closed stations |
 | 11.5–13 | Names keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. No bus numbers (see "Numbers"). | |
 | 13–14.5 | Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
 | 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15. | Closed stops crossed out |
@@ -2081,6 +2089,14 @@ RTD GTFS ──────────────────────┼�
   back. Rail letters, station names and street names stay for now; they are
   the next things to question. The shared-street reader is still built and
   tested, not drawn. The panels' bus bullets keep the pill look.
+- 2026-11-06: Station names at the metro zooms (9.75 to 11) go to the ends
+  of the rail lines, Union Station first, not to the stations where six or
+  more routes meet. Chris: "the station labels don't make sense"; the
+  screenshot named Decatur-Federal, Alameda, I-25 / Broadway, Englewood and
+  Olde Town Arvada and not Union Station or any line's end. Union Station's
+  name gets further anchor offsets of its own, since nothing nearer was ever
+  clear (see "Reading the map", "Station names go to the ends of the
+  lines").
 
 ## Sources
 

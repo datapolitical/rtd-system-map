@@ -277,9 +277,12 @@ async function main() {
   geo.labels = [...labels, ...letters];
   const endStations = new Set(Object.values(service.ends).flat());
   geo.stations.forEach((f, i) => {
-    // `end`: a sign names this station, so its own name waits for the sign
-    // to go. A hub has no sign and is named like any station.
-    f.properties.end = endStations.has(i) && !hubs.has(i);
+    // `end`: a rail line ends here (Union Station included). From the metro
+    // zooms these are the stations named: where the trains go.
+    f.properties.end = endStations.has(i);
+    // `hub`: more lines end here than get a sign (Union Station). Its name
+    // may sit further out, since the lines around it leave no room beside it.
+    f.properties.hub = hubs.has(i);
     Object.assign(f.properties, f.properties.served ? trackAt(pieces, f.geometry.coordinates) : { span: 1, bearing: 0 });
   });
 
