@@ -22,7 +22,7 @@ import { TIERS, TIER_RANK, bullet, dayFreq, date, esc, freq, goesText, isPhone, 
 
 const ROUTE_LAYERS = ['bus', 'bus-part-time', 'bus-limited', 'rail', 'rail-part-time'];
 const STATION_LAYERS = ['stations', 'stations-dot', 'stations-unserved'];
-const TAG_LAYERS = ['rail-bullets', 'bus-pills', 'bus-numbers', 'bus-tags-region', 'line-signs'];
+const TAG_LAYERS = ['rail-bullets', 'line-signs'];
 const POINTER_LAYERS = [...ROUTE_LAYERS, ...STATION_LAYERS, 'facilities', 'stops', ...TAG_LAYERS, 'flexride-fill'];
 
 // A park-and-ride or transit center this close to a station is that station's
