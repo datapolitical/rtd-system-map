@@ -583,7 +583,11 @@ function transitMarks(lines) {
     },
     // In the overview stations aren't marked: a corridor of them is a ladder
     // over its line. From there a station is a small tick across the track,
-    // which grows into the capsule by zoom 11.
+    // which grows into the capsule by zoom 11. The build says how (DESIGN.md,
+    // "Stations"): `tick` is the lines it spans (1, a dot, where they part
+    // within its length), `tickBearing` the stretch's direction, and
+    // `tickFrom` the zoom from which it's clear of a stronger station nearby.
+    // The hub has its own ring from HUB_FROM.
     {
       id: 'stations-dot',
       type: 'symbol',
@@ -592,16 +596,20 @@ function transitMarks(lines) {
       maxzoom: CAPSULE_TO,
       filter: served,
       layout: {
-        'icon-image': ['concat', 'dot-', ['get', 'span']],
+        'icon-image': ['concat', 'dot-', ['coalesce', ['get', 'tick'], ['get', 'span']]],
         'icon-size': stationSize,
-        'icon-rotate': ['get', 'bearing'],
+        'icon-rotate': ['coalesce', ['get', 'tickBearing'], ['get', 'bearing']],
         'icon-rotation-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
       },
-      paint: { 'icon-opacity': ['interpolate', ['linear'], ['zoom'], OVERVIEW_UNTIL, 0, OVERVIEW_UNTIL + 0.4, fade(onRoute), CAPSULE_FROM, fade(onRoute), CAPSULE_TO, 0] },
+      paint: {
+        'icon-opacity': farOpacity((z) => (z < OVERVIEW_UNTIL + 0.4 ? (z - OVERVIEW_UNTIL) / 0.4 : z <= CAPSULE_FROM ? 1 : Math.max(0, (CAPSULE_TO - z) / (CAPSULE_TO - CAPSULE_FROM))), { hub: false }),
+      },
     },
     // A white capsule across the track, as wide as the lines through it.
+    // Until CAPSULE_TO, while it crossfades with the tick, it takes the
+    // tick's span and direction, so the two are one mark.
     {
       id: 'stations',
       type: 'symbol',
@@ -609,14 +617,32 @@ function transitMarks(lines) {
       minzoom: CAPSULE_FROM,
       filter: served,
       layout: {
-        'icon-image': ['concat', 'station-', ['get', 'span']],
+        'icon-image': ['step', ['zoom'], ['concat', 'station-', ['coalesce', ['get', 'tick'], ['get', 'span']]], CAPSULE_TO, ['concat', 'station-', ['get', 'span']]],
         'icon-size': stationSize,
-        'icon-rotate': ['get', 'bearing'],
+        'icon-rotate': ['step', ['zoom'], ['coalesce', ['get', 'tickBearing'], ['get', 'bearing']], CAPSULE_TO, ['get', 'bearing']],
         'icon-rotation-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
       },
-      paint: { 'icon-opacity': ['interpolate', ['linear'], ['zoom'], CAPSULE_FROM, 0, CAPSULE_TO, fade(onRoute)] },
+      paint: { 'icon-opacity': farOpacity((z) => Math.min(1, Math.max(0, (z - CAPSULE_FROM) / (CAPSULE_TO - CAPSULE_FROM))), { until: CAPSULE_TO + FAR_STEP }) },
+    },
+    // The place where the most lines meet (Union Station): a ring around the
+    // knot from HUB_FROM, where its name and the lines' letters arrive, until
+    // its capsule takes over. Nothing else on the map is a ring this size.
+    {
+      id: 'stations-hub',
+      type: 'symbol',
+      source: 'stations',
+      minzoom: HUB_FROM,
+      maxzoom: CAPSULE_TO,
+      filter: ['all', served, ['==', ['get', 'meet'], true]],
+      layout: {
+        'icon-image': ['concat', 'hub-', ['get', 'span']],
+        'icon-size': stationSize,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+      paint: { 'icon-opacity': ['interpolate', ['linear'], ['zoom'], HUB_FROM, 0, HUB_FROM + 0.15, fade(onRoute), CAPSULE_FROM, fade(onRoute), CAPSULE_TO, 0] },
     },
     {
       id: 'facilities',
@@ -668,8 +694,9 @@ function transitMarks(lines) {
       // stations where the most bus routes meet instead was tried and read as
       // a random handful (Decatur-Federal, Alameda, Englewood) while Union
       // Station and the line ends went unnamed: the count is of lines a
-      // reader can't see at that zoom.
-      filter: ['all', served, ['any', ['>=', ['zoom'], EVERY_NAME_FROM], ['all', ['==', ['get', 'end'], true], ['!=', ['get', 'hub'], true]]]],
+      // reader can't see at that zoom. The hub is named by its own layer
+      // (station-labels-hub), before all of these.
+      filter: ['all', served, ['!', isHub], ['any', ['>=', ['zoom'], EVERY_NAME_FROM], ['==', ['get', 'end'], true]]],
       layout: {
         'text-field': ['get', 'label'],
         'text-font': FONT.bold,
@@ -682,31 +709,37 @@ function transitMarks(lines) {
       },
       paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
     },
-    // The hub where most lines end (Union Station) is the one name the metro
-    // zooms must have, and the one with the least room beside it: seven lines
-    // leave it in four directions. Until every station is named, its name may
-    // sit further out than any other, in the first clear space around the knot.
+    // Rail and the frequent buses take up their own room here (basemap.js),
+    // so everything placed after them, which is every name on the map, stays
+    // off them. Above these: only what names a line and so sits on it. The
+    // hub's name is placed between the two (see below).
+    ...lineKeepOut().filter((l) => l.id !== 'keep-out-rail'),
+    // The hub (Union Station: where the most lines meet, and more end than
+    // get a sign) is the one name the metro zooms must have, and the one with
+    // the least room beside it: seven lines leave it in four directions, and
+    // frequent buses fill the rest. So at every zoom its name is placed
+    // before every other station's and before the frequent
+    // buses claim their room: it stays off rail, may cross a bus line, and
+    // sits as near its ring as any other name sits to its mark. It used to
+    // go up to six ems out, a quarter of a phone's width, where it read as
+    // some other place's.
     {
       id: 'station-labels-hub',
       type: 'symbol',
       source: 'stations',
       minzoom: NAMES_FROM,
-      maxzoom: EVERY_NAME_FROM,
-      filter: ['all', served, ['==', ['get', 'hub'], true]],
+      filter: ['all', served, isHub],
       layout: {
         'text-field': ['get', 'label'],
         'text-font': FONT.bold,
-        'text-size': ['interpolate', ['linear'], ['zoom'], 10.5, 10.5, 13, 12],
-        'text-variable-anchor-offset': [...BESIDE, ...FURTHER],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 10.5, 10.5, 13, 12, 16, 14.5],
+        'text-variable-anchor-offset': HUB_BESIDE,
         'text-justify': 'auto',
         'text-max-width': 8,
       },
       paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
     },
-    // Rail and the frequent buses take up their own room here (basemap.js),
-    // so everything placed after them, which is every name on the map, stays
-    // off them. Above these: only what names a line and so sits on it.
-    ...lineKeepOut(),
+    ...lineKeepOut().filter((l) => l.id === 'keep-out-rail'),
     // Rail letters ride along their lines, placed before the bus numbers
     // below. The build says where (scripts/lib/sharedtrack.mjs): lines that
     // share track take turns, so each is named, and a letter sits between
@@ -721,6 +754,8 @@ function transitMarks(lines) {
       layout: {
         'icon-image': ['concat', 'bullet-', ['get', 'route']],
         'text-field': ['get', 'route'],
+        // A line's first letter on a piece of track is drawn before the rest.
+        'symbol-sort-key': ['get', 'rank'],
         'text-font': FONT.heavy,
         'text-size': LETTER_SIZE,
         'icon-size': ['interpolate', ['linear'], ['zoom'], LETTER_SCALE[0].zoom, LETTER_SCALE[0].size, LETTER_SCALE[1].zoom, LETTER_SCALE[1].size],
@@ -792,8 +827,10 @@ const NAMES_FROM = 9.75;
 // is named from EVERY_NAME_FROM, where stations are far enough apart that
 // most names fit. (A whole zoom: filters read the zoom in whole steps.)
 const EVERY_NAME_FROM = DETAIL_FROM;
-// Where a station's name can sit: beside its mark, within about two ems
-// (the first that is clear of every line and name wins). A name that can't
+// Where a station's name can sit: beside its mark, its nearest corner at
+// most 1.4 ems across and 1.4 down from the station, so under two ems away
+// (the first that is clear of every line and name wins). Until 2026-11-07
+// the last ring was 1.8, two and a half ems on the diagonal. A name that can't
 // sit that near isn't drawn at that zoom: further out it reads as some other
 // place's (DESIGN.md, "Where the labeling rules come from"). The corners
 // first, up and to the right before the others, then the sides: the
@@ -804,14 +841,39 @@ const beside = (distances) =>
     'bottom-left', [d, -d], 'bottom-right', [-d, -d], 'top-left', [d, d], 'top-right', [-d, d],
     'left', [d, 0], 'right', [-d, 0], 'top', [0, d], 'bottom', [0, -d],
   ]);
-const BESIDE = beside([0.7, 1.2, 1.8]);
-// Further out, for the hub's name alone (see station-labels-hub).
-const FURTHER = beside([2.6, 3.6, 4.8, 6.2]);
+const BESIDE = beside([0.7, 1.1, 1.4]);
+// The hub's name starts a little further out, clear of its ring (about 0.85
+// em across at the metro zooms), and goes no further than any other's.
+const HUB_BESIDE = beside([1, 1.4]);
+// The hub: where the most lines meet (`meet`), and where more lines end than
+// get a sign (`hub`); the same station on RTD's network.
+const isHub = ['any', ['==', ['get', 'hub'], true], ['==', ['get', 'meet'], true]];
 // Closed stations: ring and name from the same zoom.
 const UNSERVED_ZOOM = 13;
 // Stations are ticks until CAPSULE_FROM and capsules from CAPSULE_TO.
 const CAPSULE_FROM = 10.25;
 const CAPSULE_TO = 11;
+// The hub's ring from here (scripts/lib/stationmarks.mjs, HUB_FROM).
+const HUB_FROM = NAMES_FROM;
+// A station's tick waits for zoom `tickFrom`, in quarter zooms, where a
+// stronger station is too near (scripts/lib/stationmarks.mjs, STEP).
+const FAR_STEP = 0.25;
+// The opacity of a station's far-out mark: `base(zoom)` (its fade in and its
+// crossfade with the capsule) where the station is clear of the stronger one
+// beside it, fading in over the quarter after `tickFrom`. With `hub: false`,
+// the hub's tick gives way to its ring from HUB_FROM. A paint property can
+// read the zoom as it is, so this is a stop for every quarter.
+function farOpacity(base, { hub = true, until = CAPSULE_TO } = {}) {
+  const stops = [];
+  for (let z = OVERVIEW_UNTIL; z <= until + 1e-9; z += FAR_STEP / 2) stops.push(Math.round(z * 1000) / 1000);
+  return ['interpolate', ['linear'], ['zoom'], ...stops.flatMap((z) => {
+    const from = ['coalesce', ['get', 'tickFrom'], OVERVIEW_UNTIL];
+    const clear = ['any', ['<=', from, OVERVIEW_UNTIL], ['<=', from, z - FAR_STEP]];
+    const shown = !hub && z >= HUB_FROM ? ['all', clear, ['!=', ['get', 'meet'], true]] : clear;
+    const b = Math.round(Math.max(0, Math.min(1, base(z))) * 1000) / 1000;
+    return [z, b ? ['case', shown, ['*', b, fade(onRoute)], 0] : 0];
+  })];
+}
 // Which way a symbol sits from its point, on screen, for each icon anchor.
 const SIGN_REACH = 14;
 const AWAY = {
@@ -895,12 +957,13 @@ function addSymbol(map, id, lines) {
     return add(ctx);
   }
 
-  // Stations from far out: "dot-3" is a small tick across three lines; a
-  // station where lines meet is a little stronger than one that serves one.
-  if (id.startsWith('dot-')) {
-    const span = Number(id.slice('dot-'.length)) || 1;
-    const stroke = 1.6;
-    const d = span > 1 ? 8 : 6;
+  // Station marks are drawn at the widest zoom's line spacing and scaled down
+  // with the lines (stationSize), to under half size at zoom 9. An edge drawn
+  // for full size is then most of a small mark: a dark-mode tick, dark with a
+  // light edge, read as a light pill. So each mark's edge is drawn for the
+  // size it's mostly seen at, about a pixel on screen, and the fill is most
+  // of the mark.
+  const capsule = (span, d, stroke) => {
     const length = (span - 1) * STATION_SPACING + d;
     const ctx = canvas(length + 2, d + 2);
     roundRect(ctx, 1 + stroke / 2, 1 + stroke / 2, length - stroke, d - stroke, (d - stroke) / 2);
@@ -910,16 +973,36 @@ function addSymbol(map, id, lines) {
     ctx.strokeStyle = P.station.edge;
     ctx.stroke();
     return add(ctx);
+  };
+
+  // Stations from far out: "dot-3" is a small tick across three lines, "dot-1"
+  // a dot; a station where lines meet is a little stronger than one that
+  // serves one. Seen at about half size (zoom 9 to 11), so a 1.1 px edge is
+  // about half a pixel and the fill three quarters of the mark. Its size
+  // across the track is TICK in scripts/lib/stationmarks.mjs.
+  if (id.startsWith('dot-')) {
+    const span = Number(id.slice('dot-'.length)) || 1;
+    return capsule(span, span > 1 ? 10 : 8, 1.1);
   }
 
-  // Stations: "station-3" spans three lines side by side.
+  // Stations: "station-3" spans three lines side by side. Seen from about
+  // half size at zoom 11 to full size at 16: a 1.5 px edge is 0.8 px to 1.5.
   if (id.startsWith('station-')) {
     const span = Number(id.slice('station-'.length)) || 1;
-    const stroke = 2;
-    const d = RAIL_WIDTH.at(-1) + 4;
-    const length = (span - 1) * STATION_SPACING + d;
-    const ctx = canvas(length + 2, d + 2);
-    roundRect(ctx, 1 + stroke / 2, 1 + stroke / 2, length - stroke, d - stroke, (d - stroke) / 2);
+    return capsule(span, RAIL_WIDTH.at(-1) + 4, 1.5);
+  }
+
+  // The hub, "hub-3": a ring around the lines that meet there, as wide as a
+  // tick across `span` lines plus HUB_EXTRA in scripts/lib/stationmarks.mjs,
+  // so it encloses the knot. Not turned: lines leave it every way. A heavier
+  // edge than a tick's, about 1.2 px on screen, so it reads as a ring.
+  if (id.startsWith('hub-')) {
+    const span = Number(id.slice('hub-'.length)) || 1;
+    const d = (span - 1) * STATION_SPACING + 12;
+    const stroke = 2.6;
+    const ctx = canvas(d + 2, d + 2);
+    ctx.beginPath();
+    ctx.arc(1 + d / 2, 1 + d / 2, (d - stroke) / 2, 0, Math.PI * 2);
     ctx.fillStyle = P.station.fill;
     ctx.fill();
     ctx.lineWidth = stroke;

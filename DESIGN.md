@@ -837,9 +837,14 @@ what it leaves to us:
   ranking of positions): up and to the right first, then the other corners,
   then the sides; "as close as possible to their symbols without touching
   them"; a point beside a line takes its label on the point's side. So:
-  station names sit in the corners first, within about two ems, and a name
-  that would have to go further isn't drawn. Only the hub's name may go
-  further, because at the metro zooms the map must have it.
+  station names sit in the corners first, the name's nearest corner at most
+  1.4 ems across and 1.4 down from the station (under two ems, about 25 px
+  at zoom 14), and a name that would have to go further isn't drawn. The
+  hub's name keeps the same distance, but is placed first, before every
+  other name and before the frequent buses claim their room, because at the
+  metro zooms the map must have it: it stays off rail and may cross a bus
+  line. (Until 2026-11-07 it could go six ems out and sat a quarter of a
+  phone's width from the knot, in empty space.)
 - **Line labels** (Imhof): follow the line; if repeated, the copies are
   evenly spaced; on long lines in dense networks a label "may be repeated
   occasionally," and "too much repetition can be overwhelming." So: a
@@ -980,13 +985,51 @@ screen in V2 step 3.
 
 | State | How it's drawn |
 |---|---|
-| Served | no mark below zoom 9 (stations a few pixels apart read as noise); from 9 to 10.25 a small tick across the track; from 11 a white capsule with an ink edge laid across the track, as wide as the lines it serves and turned to the track's direction (a circle where one line stops), crossfading with the tick from 10.25 to 11 |
+| Served | no mark below zoom 9 (stations a few pixels apart read as noise); from 9 to 10.25 a small tick across the track, or a dot (see "From far out"); from 11 a white capsule with an ink edge laid across the track, as wide as the lines it serves and turned to the track's direction (a circle where one line stops), crossfading with the tick from 10.25 to 11. The hub has a ring from 9.75 |
 | Returning | hollow gray ring and gray label, both from zoom 13. Panel: "Trains return Nov 23" |
 | No current service | hollow gray ring and gray label, both from zoom 13. Panel: "No train service right now" |
 
 The state comes from GTFS on every build (see "Station service"), so stations
 that lose or regain trains change on their own. The key shows the gray
 station only when at least one station is unserved.
+
+**From far out (zoom 9 to 11).** One mark per cluster of stations, square
+to the lines it spans, and one mark that says "this is where the lines
+meet". The build decides each station's mark from the drawn track
+(`scripts/lib/stationmarks.mjs`, with `test/stationmarks.test.mjs`), so a new
+station, line or split needs no change:
+
+- *The tick spans its lines only where they run together.* A tick is turned
+  across the lines it serves only if, for the tick's own length either way
+  along the track, the lines stay the same distance apart as drawn (within
+  a pixel), checked at zooms 9, 10 and 11. Where they part within that
+  length (a split, a line easing out of a pack) the station is a dot
+  instead. The tick is turned to the track's direction over that whole
+  stretch, not at the one point the station stands on, so on a bend it isn't
+  crooked. On RTD's network today this makes Pecos Junction (B and G part
+  there), Auraria West, Empower Field, I-25 / Broadway, Alameda,
+  Belleview and RidgeGate Parkway dots; 41st / Fox, where B and G still
+  run together, a tick square to both.
+- *Stations too close to tell apart collapse to the strongest.* A station
+  waits (`tickFrom`, in quarter zooms) until it is the longer mark's length
+  plus 4 px from every stronger station along the track. Stronger is more
+  lines, then the hub, then more routes. A station waits only for one that
+  every one of its lines also stops at, and the end of a line never waits,
+  so no line loses its mark where it stops alone or where it ends. Every
+  station has its mark again from 11, with the capsules.
+- *The hub has a ring.* The place where the most lines meet (`meet`; Union
+  Station) is found from the data, not named. From 9.75, where its name and
+  the lines' letters arrive, it is drawn as a ring as wide as a tick across
+  its lines plus 12 px of the widest zoom (about 17 px at 10), not turned,
+  since lines leave it every way. Nothing else is a ring that size. It
+  crossfades into its capsule from 10.25 to 11, as ticks do.
+- *Edges are drawn for the size they're seen at.* Station marks are drawn at
+  the widest zoom's spacing and scaled with the lines, to under half size at
+  9. A tick's edge is 1.1 px before scaling (about half a pixel at 9 to 11),
+  a capsule's 1.5 (0.8 px at 11, 1.5 at 16), the ring's 2.6. At 1.6 px on a
+  6 to 8 px tick, the edge was most of the mark, and a dark-mode tick (dark
+  fill, light edge) read as a light pill. Ticks across lines are 10 px
+  before scaling (5 at zoom 10), a dot 8.
 
 ### Shared track
 
@@ -1150,7 +1193,7 @@ Each bus tier fades in over about a zoom level rather than popping on.
 | Zoom | Shows | Also in Live |
 |---|---|---|
 | Below 9 (the overview: a phone's "Whole network") | District wash and relief. Rail, with each line's letter at both ends and nothing else on it. Frequent buses as lines, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
-| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Hourly and less from 10.5. Stations are small ticks to 10.25; capsules from 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 9.75, closed stations |
+| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Hourly and less from 10.5. Stations are small ticks (or dots, where lines part) to 10.25, one per cluster; capsules from 11. The hub's ring from 9.75 to 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 9.75, closed stations |
 | 11.5–13 | Names keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. No bus numbers (see "Numbers"). | |
 | 13–14.5 | Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
 | 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15. | Closed stops crossed out |
@@ -1208,8 +1251,16 @@ Each bus tier fades in over about a zoom level rather than popping on.
     three T's or three E's on one phone screen.
   - On shared track the spacing is 380 px divided by the lines there, and
     the lines take turns: each place goes to the line whose nearest letter
-    (on any stretch) is furthest away. So every line is named along track
-    it shares at the same rate as a line alone.
+    (on any stretch) is furthest away, but only among lines with no letter
+    yet on this stretch, until every line on it has one (the stretch gets
+    at least a place for each line, as far as they fit 28 px apart). So
+    every line is named on every piece of track it shares, before any is
+    named twice, and then at the same rate as a line alone. Each line's
+    first letter on a stretch has `rank` 0 and the rest 1; the layer's
+    `symbol-sort-key` is the rank, so where the map is short of room the
+    first letters are drawn before the second ones. A line's letter claims
+    its space before a station's name does (letters are placed before names
+    in `lettersFirst`).
   - Each letter moves along its line, up to 60 px (120, if it must), to sit
     clear of stations (16 px) and of other letters (28 px). The map draws
     only one of two symbols that touch, so a letter placed on a station was
@@ -1872,20 +1923,35 @@ RTD GTFS ──────────────────────┼�
       with and without a mid-session switch, found every station image and
       every rendered mark in the right theme. What looked wrong is the
       edge's weight at small sizes, handled in step 2.
-   2. **Shared track from 9 to 11.** On shared track, one mark per station
-      cluster below 11: stations on the same piece closer than a bar's
-      length collapse to the strongest, and a bar is turned only where the
-      lines it spans are parallel for its whole length, otherwise it is a
-      dot. A hub mark for the place where the most lines meet from 9.75.
-      The tick's edge scaled with its size, so from 9 to 11 the fill is most
-      of the mark and a dark-mode tick reads dark.
+   2. **Shared track from 9 to 11** (done 2026-11-07). On shared track,
+      one mark per station cluster below 11: stations on the same piece
+      closer than a bar's length collapse to the strongest, and a bar is
+      turned only where the lines it spans are parallel for its whole
+      length, otherwise it is a dot. A hub mark for the place where the
+      most lines meet from 9.75. The tick's edge scaled with its size, so
+      from 9 to 11 the fill is most of the mark and a dark-mode tick reads
+      dark.
       *Done when:* at 10 and 10.5 on a phone, no two station marks overlap
       downtown, the bar at the B and G split is square to both lines, and
       Union Station has a mark.
-   3. **Names stay with their marks.** Station names sit within a short,
-      fixed distance of their mark at every zoom, the hub's name first.
+      Measured on a 390 px phone over the hub in both themes: overlapping
+      marks 1, 1 at 10 and 10.5 before, 0, 0 after; marks nearer each other
+      than the longer one's length 7 and 5 before, 0 and 0 after. The split
+      (Pecos Junction) is a dot; at 41st / Fox, where B and G still run
+      together, the tick is square to both. Ticks in dark mode: median
+      luminance across the mark 88 before, 48 after, at 10. Still open: at
+      11 the Auraria West and Empower Field capsules (300 m apart) touch;
+      the collapse covers ticks only, as this step asked.
+   3. **Names stay with their marks** (done 2026-11-07). Station names sit
+      within a short, fixed distance of their mark at every zoom, the hub's
+      name first.
       *Done when:* at 10 to 14, every station name on screen is within that
       distance of its mark, checked headlessly for the downtown stations.
+      Measured from MapLibre's placed text boxes at 10, 10.5, 11, 12, 13 and
+      14 in both themes: every station name within 24.4 px (under two of
+      its ems) of its station, Union Station's at every zoom; before, Union
+      Station's was 53 and 71 px out at 10 and 10.5, absent at 11, and
+      Decatur-Federal's 27 px at 11.
    4. **Every line named on every screen.** Letters along rail lines at
       least once per phone screen, with one where a line enters the view.
       *Done when:* twenty random phone views at 10 to 12 each show a letter
@@ -2446,6 +2512,31 @@ RTD GTFS ──────────────────────┼�
   when the zoom settles across a threshold, not on every zoom tick. It
   clears itself, and never replaces a loading or failure line. The pill is
   not used for this, so it keeps one job, saying how fresh the data is.
+- 2026-11-07: On shared track every line gets a letter before any gets a
+  second (a place for each line, if they fit), and each line's first letter
+  on a stretch is drawn first (`rank`, the layer's symbol-sort-key). Not yet
+  checked in a browser; roadmap step 4 stays open.
+- 2026-11-07: Station marks from 9 to 11 are decided by the build from the
+  drawn track (`scripts/lib/stationmarks.mjs`, "Stations", "From far out").
+  A tick spans its lines only where they stay the same distance apart for
+  its own length either way, otherwise it is a dot (Pecos Junction, where B
+  and G part, was a crooked bar), turned to the stretch's direction rather
+  than the point's. A station nearer a stronger one along the track than the
+  longer mark plus 4 px waits for the zoom where it is clear, in quarter
+  zooms; only for one all its lines stop at, and never at a line's end. The
+  hub, found as the place where the most lines meet, has a ring from 9.75.
+  Edges are drawn for the size marks are seen at (1.1 px tick, 1.5 capsule
+  before scaling), so dark-mode ticks read dark. On a phone over the hub at
+  10 and 10.5, marks nearer than a mark's length went from 7 and 5 pairs to
+  none, overlapping ones from 1 to 0.
+- 2026-11-07: Station names sit with their nearest corner at most 1.4 ems
+  across and down from the station (was 1.8, and up to 6.2 for the hub),
+  so under two ems. The hub's name keeps that distance at every zoom and is
+  placed before every other station name and before the frequent buses'
+  keep-out, so it stays off rail and may cross a bus line; until now it
+  found room only a quarter of a phone's width away. Measured headlessly
+  over the hub at 10 to 14: every name within 24.4 px of its station, Union
+  Station's within 19 to 24 px at every zoom (was 53 and 71 at 10 and 10.5).
 
 ## Sources
 
