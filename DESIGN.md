@@ -1226,6 +1226,10 @@ Each bus tier fades in over about a zoom level rather than popping on.
 
 ### Symbols
 
+Every symbol below is drawn once, by `addSymbol` in `public/js/main.js` or by
+its layer's paint, and the key shows that same drawing at the size the map
+draws it at its zoom (see "The key"). Nothing in the key is a second drawing.
+
 - **Park-n-Ride:** a small slate "P" sign drawn as an icon, not a text
   square, set just up and to the left of its spot so it never covers a
   station. One size for all; the panel gives the number of spaces.
@@ -1691,10 +1695,37 @@ and the time the lines show ("Weekdays, 9am to 3pm"; later "Sunday, 9am to
   `none`.
 - **Trains:** each rail line with its bullet, where it goes ("A to Airport"),
   and a "How often" column.
-- **On the map:** Rail station; "Closed: no trains this week"; Park-n-Ride;
-  Transit center; Bus stop, when zoomed in close; "FlexRide: book a ride in
-  this area"; "Outside RTD's district". In Live this would include vehicles
-  and the alert mark.
+- **On the map:** Rail station; the hub ("Union Station, where the most
+  lines meet", its name from the data) while its ring is drawn; "Closed: no
+  trains this week"; Park-n-Ride; Transit center; Bus stop, when zoomed in
+  close; "FlexRide: book a ride in this area"; "Outside RTD's district".
+- **Live**, only while Live is on: a train (the first rail line's arrow) and
+  a bus, each "zoom in to see them" below the zoom their layer starts at,
+  and the dot on the Live pill in words: fresh (pulsing, positions up to
+  `STALE_S` old, 2 min), stale (dimmed and still, nothing newer), off
+  (gray). The words are `dotStates` in `public/js/age.js`. The alert mark
+  joins this list when alerts are drawn.
+
+**The key draws nothing of its own.** Every mark in it is the map's: a
+station, sign or vehicle is the map's image (`addSymbol`, by the same id the
+layer asks for), shown at the size its layer draws it at the map's zoom now
+(the layer's `icon-size`, worked out for that zoom by `public/js/evaluate.js`
+from the layer definition itself, so no size is typed twice). A closed
+station and a bus stop are drawn from their circle layer's paint, FlexRide
+from its fill's hatch and its edge's dash, the district from its wash, and
+each bus tier's swatch is its bus layer's own width, color, dash and cap at
+zoom 13. The station row follows the zoom: below 9, "Rail stations: zoom in
+to see them"; from 9 to 11 the tick or dot for a one-line station and for
+one across the most lines (both picked from the data); from where the
+capsule is at least half crossfaded in (10.625), the capsules. The hub's
+row is there only while its ring is at least half drawn (9.8 to 10.625).
+Marks that arrive only closer in (closed stations, signs, stops, FlexRide)
+are shown as they first look once faded in, since the row says what they
+are. The key's marks are drawn again
+when it opens, when the zoom settles while it is open, on a theme change,
+and when Live turns on or off. Each image has an alt naming the mark ("Small
+tick across the lines", "Train arrow"). The key's button icon and the rail
+bullets in the Trains list are the interface's own, not marks on the map.
 - A note: not affiliated with RTD, and when the data was updated.
 
 Once the other times (Weekday evening, Saturday, Sunday, Pick a day and
@@ -2071,6 +2102,19 @@ RTD GTFS ──────────────────────┼�
       as the map's marks, at the zoom the Key is opened at, with a Live row
       (train arrow, bus arrow) when Live is on.
       *Done when:* no symbol in the Key is a second drawing of anything.
+      (Done 2026-11-07; "The key".) Measured headlessly on an iPhone 14
+      profile near Union Station at 8.5, 10, 10.6, 12 and 14 in both themes:
+      the station row is "zoom in to see them" at 8.5, `dot-1` and `dot-3`
+      at 0.492 (10) and 0.522 (10.6), `station-1` and `station-3` at 0.606
+      (12) and 0.762 (14); the hub row (`hub-3`) at 10 and 10.6 only; the
+      train arrow from 10 (0.713 to 1.069), the bus arrow at 14 (1.007).
+      Each Key image against the same image drawn by the map with the
+      layer's own icon-size, over the land: mean difference 0.4 to 7.4 of
+      255 per pixel, 91 to 99.5% of pixels within 24, the rest at the
+      edges (resampling). The CSS-drawn `.flex` and `.outside` spans and
+      their colors are gone, and the Key no longer uses `.station-dot` or
+      `.stop-dot` (search results still do). Tier swatches read width,
+      color, dash and cap from the bus layers themselves.
    7. **Live says what it shows.** (Done 2026-11-07.) Trains from the letter
       zoom (9.75), which held up on screen; below the bus zoom the map says
       "Trains are on the map. Zoom in for buses." (a status line, not the
@@ -2674,6 +2718,16 @@ RTD GTFS ──────────────────────┼�
   line's track is drawn at 45% (`public/js/track.js`); trains in service
   measured within 120 m, the Union Station yard 226 to 310. Roadmap step 5
   is done.
+- 2026-11-07: The Key draws nothing of its own (roadmap step 6). Every mark
+  is the map's image (`addSymbol`) at its layer's icon-size for the map's
+  zoom, or its layer's paint (circles, FlexRide, the district wash, bus
+  tiers), worked out from the layer definitions by `public/js/evaluate.js`.
+  The station row follows the zoom (none below 9, tick or dot to 10.625,
+  capsules after), the hub row shows while its ring does, and a Live
+  section (train and bus arrows, the pill dot's fresh, stale and off) shows
+  while Live is on. Redrawn on open, zoom, theme and Live. Below the
+  vehicles' zooms the Live rows say "zoom in to see them" rather than a
+  zoom number, which riders never see.
 
 ## Sources
 

@@ -93,7 +93,7 @@ export function vehicleLayers(lines) {
   ];
 }
 
-export function initLive(map, { meta, status }) {
+export function initLive(map, { meta, status, changed = () => {} }) {
   const button = document.getElementById('live-button');
   const text = button.querySelector('.live-text');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -280,6 +280,7 @@ export function initLive(map, { meta, status }) {
     watch = setInterval(check, 5000);
     if (!latest) say('Finding the trains and buses…');
     else note();
+    changed(true);
   };
 
   const stop = () => {
@@ -302,6 +303,7 @@ export function initLive(map, { meta, status }) {
     dropNote();
     say(null);
     label();
+    changed(false);
   };
 
   button.addEventListener('click', () => (on ? stop() : start()));

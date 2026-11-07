@@ -30,3 +30,17 @@ export const NOTES = [
   null,
 ];
 export const zoomNote = (zoom, trainsFrom, busesFrom) => NOTES[band(zoom, trainsFrom, busesFrom)];
+
+/**
+ * What the dot on the Live pill means in each of its states, for the key's
+ * Live rows. `staleS` is the age past which positions are stale (STALE_S in
+ * realtime.js, which live.js dims the dot by).
+ */
+export function dotStates(staleS) {
+  const min = Math.round(staleS / 60);
+  return [
+    { state: 'fresh', text: `Fresh: the dot on Live pulses. The positions are up to ${min} min old.` },
+    { state: 'stale', text: `Stale: the dot dims and stops. Nothing newer than ${min} min has come; the pill says how old the positions are.` },
+    { state: 'off', text: 'Off: the dot is gray, and the map shows the usual service.' },
+  ];
+}
