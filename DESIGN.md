@@ -2779,6 +2779,10 @@ marks that overlap, a letter missing) are the next thing to add there.
   one: a server started from the config hid a server that had died mid-run.
   `npm run dev` gives wrangler a 4 GB heap, since it leaks under the checks'
   traffic and died twice at about 1.4 GB.
+- 2026-11-07: The checks name Chromium as their browser. Playwright's iPhone
+  14 profile defaults to WebKit, so they had been running there, where the
+  software-GL flags do nothing. WebKit's GPU process reached 8.4 GB in 90
+  seconds, and the 16 GB Mac ran out of memory and restarted.
 
 ## Sources
 
