@@ -7,7 +7,7 @@ import * as maplibregl from '../vendor/maplibre-gl.mjs';
 import { BASEMAP_SOURCES, FONT, GLYPHS, TERRAIN, basemapBelow, basemapLabels, lineKeepOut } from './basemap.js';
 import { lightenTo, shade, textOn } from './color.js';
 import { DARK_RAIL_MIN, P, PALETTES, followScheme } from './palette.js';
-import { DETAIL_FROM, OVERVIEW_UNTIL, PART_TIME, PHONE_QUERY, TIERS, TIER_RANK, ZOOMS, byZoom, tierMatch, tierWidth, tagInk, bullet, esc, ends, mapDots, middayLabel, setWindow } from './shared.js';
+import { DETAIL_FROM, OVERVIEW_UNTIL, PART_TIME, PHONE_QUERY, TIERS, TIER_RANK, ZOOMS, byZoom, tierMatch, tierWidth, tagInk, pillStyle, bullet, esc, ends, mapDots, middayLabel, setWindow } from './shared.js';
 import { STATE, fade, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
 import { initSelection, closePanel, loadDirectory } from './select.js';
 import { initSearch } from './search.js';
@@ -734,59 +734,53 @@ function transitMarks(lines) {
       paint: { 'text-color': tierMatch((t) => tagInk(t)), 'text-opacity': fade(isRoute()), ...knockout },
     },
     // Closer in, numbers ride along the buses. Where routes share a street they
-    // share one label ("30 · 31"), so the street reads as a whole instead of
-    // alternating numbers (busnames.geojson, scripts/lib/busnames.mjs): below
-    // zoom 13 only the routes that come at least every 30 minutes, then all.
-    // Long labels (LONG_LABEL characters or more, from the build's `chars`)
-    // are in their own layer, '-long', so they repeat half as often.
-    ...[false, true].map((long) => ({
-      id: long ? 'bus-numbers-long' : 'bus-numbers',
+    // share one label, so the street reads as a whole instead of alternating
+    // numbers (busnames.geojson, scripts/lib/busnames.mjs). To zoom 13 it
+    // names the routes that come at least every 30 minutes, as text knocked
+    // out of the line ("30 • 31"), one label per stretch of street and about
+    // once a screen along a long one.
+    {
+      id: 'bus-numbers',
       type: 'symbol',
       source: 'busnames',
       minzoom: 11.5,
-      maxzoom: BUS_TAGS_FROM,
-      filter: [
-        'all',
-        ['any', ['>=', ['zoom'], 13], ['!=', ['coalesce', ['get', 'label_main'], ''], '']],
-        longLabel(long),
-      ],
+      maxzoom: BUS_PILLS_FROM,
+      filter: ['!=', ['coalesce', ['get', 'text_main'], ''], ''],
       layout: {
         'symbol-placement': 'line',
-        'symbol-spacing': long ? LONG_SPACING : 300,
+        'symbol-spacing': ROW_SPACING,
         'text-rotation-alignment': 'viewport',
-        'text-field': ['step', ['zoom'], ['get', 'label_main'], 13, ['get', 'label']],
+        'text-field': ['get', 'text_main'],
         'text-font': FONT.bold,
-        // A run of many routes is set a little smaller so it stays quiet.
-        'text-size': ['interpolate', ['linear'], ['zoom'], 11.5, runSize(10.5), 14, runSize(11.5)],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 11.5, 10.5, 13, 11],
         'text-max-angle': 30,
         'symbol-sort-key': tierMatch((t) => 10 - TIER_RANK[t.id]),
       },
       paint: { 'text-color': tierMatch((t) => tagInk(t)), 'text-opacity': fade(inList('routes')), ...knockout },
-    })),
-    // Close in, where lines are wide and streets are named, numbers get
-    // tags outlined in their line's ink.
-    ...[false, true].map((long) => ({
-      id: long ? 'bus-tags-long' : 'bus-tags',
+    },
+    // From 13, where every route is numbered and streets are named, the label
+    // is a row of pills, one per route, filled in the tier's color like the
+    // bullets in the panels. A row names at most four routes; a "+" pill
+    // stands for the rest (tap it for the list). From 15, where the stops are
+    // drawn, a row with a "+" is left out: the stops say what serves the
+    // street, and the rows on a downtown trunk were the same block after block.
+    {
+      id: 'bus-pills',
       type: 'symbol',
       source: 'busnames',
-      minzoom: BUS_TAGS_FROM,
-      filter: longLabel(long),
+      minzoom: BUS_PILLS_FROM,
+      filter: ['any', ['<', ['zoom'], STOPS_ZOOM], ['!=', ['coalesce', ['get', 'more'], 0], 1]],
       layout: {
         'symbol-placement': 'line',
-        'symbol-spacing': long ? LONG_SPACING : 300,
-        'icon-image': tierMatch((t) => `tag-${t.id}`),
-        'icon-text-fit': 'both',
-        'icon-text-fit-padding': [1.5, 3.5, 0.5, 3.5],
+        'symbol-spacing': ROW_SPACING,
+        'icon-image': ['concat', 'pills|', ['get', 'pills']],
         'icon-rotation-alignment': 'viewport',
-        'text-rotation-alignment': 'viewport',
-        'text-field': ['get', 'label'],
-        'text-font': FONT.bold,
-        'text-size': ['interpolate', ['linear'], ['zoom'], 14, runSize(10.5), 16, runSize(11)],
-        'text-max-angle': 30,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], BUS_PILLS_FROM, 0.85, 15, 1],
+        'icon-padding': 2,
         'symbol-sort-key': tierMatch((t) => 10 - TIER_RANK[t.id]),
       },
-      paint: { 'text-color': tierMatch((t) => tagInk(t)), 'text-opacity': fade(inList('routes')), 'icon-opacity': fade(inList('routes')) },
-    })),
+      paint: { 'icon-opacity': fade(inList('routes')) },
+    },
     // In the overview, where no letters ride the lines yet, each rail line
     // has its letter at each end. The station where many lines end has none
     // (scripts/lib/labels.mjs).
@@ -833,20 +827,9 @@ function sign(id) {
   };
 }
 
-// Shared-street labels this many characters or longer repeat LONG_SPACING px
-// apart instead of 300, so a long tag isn't seen over and over on one street.
-// `chars` / `chars_main` are the lengths of `label` / `label_main`
-// (scripts/lib/busnames.mjs); data without them counts as short.
-const LONG_LABEL = 12;
-const LONG_SPACING = 600;
-const longLabel = (long) => [
-  '==',
-  ['>=', ['coalesce', ['case', ['>=', ['zoom'], 13], ['get', 'chars'], ['get', 'chars_main']], 0], LONG_LABEL],
-  long,
-];
-
-// A label run of four or more routes is set 10% smaller.
-const runSize = (size) => ['case', ['>=', ['coalesce', ['get', 'n'], 1], 4], size * 0.9, size];
+// A street's label repeats this far apart along a long stretch (about once a
+// phone screen); a short stretch gets one, in its middle, if it fits.
+const ROW_SPACING = 400;
 
 // The names of stations where routes meet, and the letters along rail lines,
 // start here: just under the zoom the smallest phones open at (about 9.9),
@@ -866,9 +849,9 @@ const UNSERVED_ZOOM = 13;
 // Stations are ticks until CAPSULE_FROM and capsules from CAPSULE_TO.
 const CAPSULE_FROM = 10.25;
 const CAPSULE_TO = 11;
-// Bus numbers get tags from this zoom; further out they're knocked out of
-// their lines.
-const BUS_TAGS_FROM = 14;
+// Bus numbers are rows of pills from this zoom, where every route is numbered;
+// further out they're knocked out of their lines.
+const BUS_PILLS_FROM = 13;
 // Which way a symbol sits from its point, on screen, for each icon anchor.
 const SIGN_REACH = 14;
 const AWAY = {
@@ -906,20 +889,52 @@ function addSymbol(map, id, lines) {
   const add = (ctx, options = {}) =>
     map.addImage(id, ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height), { pixelRatio: RATIO, ...options });
 
-  // Bus route tags: white, outlined in the route's ink, stretched to fit
-  // the number (9-slice). Quieter than the trains' solid bullets.
-  if (id.startsWith('tag-')) {
-    const tier = TIERS.find((t) => `tag-${t.id}` === id) ?? TIERS.at(-1);
-    const ctx = canvas(16, 16);
-    roundRect(ctx, 0.75, 0.75, 14.5, 14.5, 3.5);
-    ctx.fillStyle = P.tagFill;
-    ctx.fill();
-    ctx.strokeStyle = tier.color;
-    ctx.lineWidth = tier.id === 'frequent' ? 1.3 : 1;
-    ctx.stroke();
-    const r = 5 * RATIO;
-    const s = 16 * RATIO;
-    return add(ctx, { stretchX: [[r, s - r]], stretchY: [[r, s - r]], content: [r, r, s - r, s - r] });
+  // A street's bus routes: "pills|0:frequent 15:frequent +:more". One pill
+  // per route, in the same look as the bullets in the panels (pillStyle):
+  // filled in the tier's color for routes every 30 minutes or better,
+  // outlined for slower ones and for the "+" that stands for routes the row
+  // doesn't name. A ring of land color around each pill knocks the row out
+  // of the line, so a navy pill reads on a navy line.
+  if (id.startsWith('pills|')) {
+    const pills = id
+      .slice('pills|'.length)
+      .split(' ')
+      .filter(Boolean)
+      .map((s) => ({ text: s.slice(0, s.lastIndexOf(':')), tier: s.slice(s.lastIndexOf(':') + 1) }));
+    const h = 15;
+    const pad = 4;
+    const gap = 3;
+    const ring = 1.5;
+    const font = '800 10.5px Overpass, system-ui, sans-serif';
+    const measure = canvas(1, 1);
+    measure.font = font;
+    const widths = pills.map((p) => Math.max(h, Math.ceil(measure.measureText(p.text).width) + pad * 2));
+    const w = widths.reduce((a, b) => a + b, 0) + gap * (pills.length - 1);
+    const ctx = canvas(w + ring * 2, h + ring * 2);
+    ctx.translate(ring, ring);
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    let x = 0;
+    pills.forEach((p, i) => {
+      const style = pillStyle(p.tier);
+      roundRect(ctx, x, 0, widths[i], h, 4);
+      ctx.lineWidth = ring * 2;
+      ctx.strokeStyle = P.land;
+      ctx.stroke();
+      ctx.fillStyle = style.fill;
+      ctx.fill();
+      if (style.edge) {
+        roundRect(ctx, x + 0.5, 0.5, widths[i] - 1, h - 1, 3.5);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = style.edge;
+        ctx.stroke();
+      }
+      ctx.fillStyle = style.text;
+      const cap = ctx.measureText(p.text).actualBoundingBoxAscent;
+      ctx.fillText(p.text, x + widths[i] / 2, h / 2 + cap / 2);
+      x += widths[i] + gap;
+    });
+    return add(ctx);
   }
 
   // Line-end signs: "sign|E R|". A white sign with the lines' bullets. (A

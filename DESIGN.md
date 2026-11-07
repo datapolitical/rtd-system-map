@@ -524,12 +524,14 @@ publishes:
   the full map draws with nothing else loaded.
 - **Shared-street labels** (`busnames.geojson`, loaded lazily): where several
   routes share a street (within 35 m, within 25 degrees of bearing), one
-  label run naming them, strongest tier first and then in number order,
-  joined with " · ", the strongest two or three named and the rest counted
-  as "+N" when the label would run long (see "Route numbers"). Fields:
-  `label`, `label_main` (only the routes every 30 minutes or better),
-  `routes`, `tier`, `n`, and `chars` and `chars_main` (the length of each
-  label, which sets how far apart it repeats). This is naming only: lines are still drawn per route, not by
+  label run naming them, strongest tier first and then in number order, as a
+  row of pills, at most four, with a "+" pill for the rest (see "Bus
+  routes"). Fields: `pills` (`"0:frequent 15:frequent 9:slow +:more"`: each
+  pill's look, the two main tiers and one look for every slower tier, so a
+  route's hourly and rush-hour stretches share a row), `text_main`
+  (the routes every 30 minutes or better, as text, for the zooms before the
+  pills), `more` (1 when the row doesn't name every route), `routes`, `tier`
+  and `n`. This is naming only: lines are still drawn per route, not by
   combined frequency (see "Open questions").
 - **Stops** with `lines`, the drawn map routes that actually stop there
   (families mapped to the drawn code, so FF1 is FF), and `heading`
@@ -962,15 +964,24 @@ share one look and one key row, "Every 31 min or more".
 Each stretch of a route takes the tier measured for it (see "Bus routes are
 measured by stretch"), so one route can change weight where its service does.
 
-Route numbers sit in their lines until zoom 14: bold numbers in the line's
+Route numbers sit in their lines until zoom 13: bold numbers in the line's
 ink, knocked out of the line, so the line breaks around its number. Between
-11.5 and 14 the numbers that repeat along a line come from the shared-street
-labels below, so a street with several routes reads "30 • 31". From 14,
-where lines are wide and streets are named, numbers get small white tags
-outlined in the line's ink. Filled tags from far out were tried and rejected:
-they read as highway shields, covered streets, and outweighed the buses they
-named. A number follows the tier at the time shown, so the 15 is navy at noon
-and may be slate at 10pm.
+11.5 and 13 the numbers that repeat along a line come from the shared-street
+labels below, so a street with several routes reads "30 • 31". From 13,
+where every route is numbered and streets are named, a street's routes are a
+row of **pills, one per route**, the way bus maps generally number their
+lines (a pill is a highway shield for a bus): each filled in its tier's
+color with the number knocked out, slower tiers outlined in their lighter
+ink instead, so the row keeps the tiers' order of weight, and each pill
+ringed in land color so a navy pill reads on a navy line. The same pill is
+the route's bullet in the panels and lists, so a number on the map and the
+same number in a list are one thing. Filled tags further out were tried and
+rejected: at zoom 12 a filled pill is five times its line's width, reads as
+a highway shield, and outweighs the bus it names. The white tag outlined in
+the line's ink that preceded the pills was dropped too: on the dark map its
+outline was the color of the streets, so a box of numbers read as part of
+the street grid. A number follows the tier at the time shown, so the 15 is
+navy at noon and may be slate at 10pm.
 
 When numbers appear:
 
@@ -992,21 +1003,27 @@ When numbers appear:
 one label so the street reads as a whole instead of alternating numbers
 (30, 31, 30, 31). The build (`scripts/lib/busnames.mjs`) finds routes within
 35 m of each other and within 25 degrees of the same bearing, and makes one
-label run naming them all: strongest tier first, then in number order,
-joined with " · " in the data and drawn with a bullet ("30 • 31"). Up to
-three routes are always named. Four are named if the label fits in 16
-characters. Otherwise the strongest three are named (two, if three don't
-fit) and the rest are counted: "0 • 0L • 83 +8". A label never ends in "+1",
-which is as wide as the number it hides. That keeps a tag under about 40% of
-a phone's width; the rest of the routes are in the list a tap opens. Labels
-of 12 characters or more repeat every 600 px along the street, shorter ones
-every 300 px, so a long tag shows about once per screen. (MapLibre can't
-vary spacing by feature, so the long labels are drawn by twin layers,
-`bus-numbers-long` and `bus-tags-long`; code that lists tag layers lists
-both.) Before zoom 13
-only the routes every 30 minutes or better are named; from 13, all of them.
-This is naming only. Each route is still drawn as its own line, with its own
-tier.
+label run naming them all: strongest tier first, then in number order. A row
+names at most four routes (about 40% of a phone's width). Where more share a
+street, the strongest three are named and a fourth pill, "+", stands for the
+rest: tapping it opens the list of all of them. Counting them ("+13") was
+tried first and dropped: no one can act on the count, and because every
+block downtown gains or loses a route, the count made every block's row
+different, so the same three numbers repeated block after block. With a
+plain "+", neighbouring stretches whose rows would read the same are one
+stretch, named once, and the list a tap opens names every route along it.
+For the same reason every tier below every-30 is one look on the map, and a
+route's drawn stretches (one per tier) are joined end to end before the
+street is read, so a route going from hourly to rush-hours-only halfway
+along a street does not cut the row there: on Wadsworth, "76 9" was four
+rows before that and is one.
+A label repeats every 400 px along a long stretch (about once a screen); a
+short stretch gets one in its middle if it fits, and none if it doesn't.
+Before zoom 13 only the routes every 30 minutes or better are named, as text
+in the line; from 13, all of them, as pills. From 15, where the stops are
+drawn, a row with a "+" is left out: the stops say what serves the street,
+and these rows, on the downtown trunks, were the ones that repeated. This is
+naming only. Each route is still drawn as its own line, with its own tier.
 
 **Corridors by combined frequency are not built.** Where several routes share
 a street and its stops, riders can take whichever comes first, so two routes
@@ -1023,9 +1040,9 @@ Each bus tier fades in over about a zoom level rather than popping on.
 |---|---|---|
 | Below 9 (the overview: a phone's "Whole network") | District wash and relief. Rail, with each line's letter at both ends and nothing else on it. Frequent buses as lines, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
 | 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks and one number on each frequent bus, from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of stations where six or more routes meet. Hourly and less from 10.5. Stations are small ticks to 10.25; capsules from 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 11, closed stations |
-| 11.5–13 | Every-30 numbers, in shared-street labels. Names now keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. | |
-| 13–14.5 | Every route's number, in tags from 14. Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
-| 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15 | Closed stops crossed out |
+| 11.5–13 | Every-30 numbers, in shared-street labels knocked out of the line. Names now keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. | |
+| 13–14.5 | Every route's number, as a row of pills, one per route, four at most and then a "+". Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
+| 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15; from 15 the rows that end in "+" are gone, and the stops carry those streets. | Closed stops crossed out |
 | 16 and up | Stop names, with the routes that serve each stop | Vehicles' route numbers |
 
 ### Symbols
@@ -1123,9 +1140,11 @@ package), with no request to Google. Map labels use Overpass too: the build
 generates MapLibre glyph files from the same font (`scripts/glyphs.mjs`), so
 the map and the interface share one typeface.
 
-**Route bullets:** rail lines are a circle with the letter; bus routes are a
-white rounded rectangle with the number, outlined in the route's ink. They are the only strongly colored
-elements in the interface itself.
+**Route bullets:** rail lines are a circle with the letter; bus routes are
+the map's pill (see "Bus routes"): a rounded rectangle filled in the tier's
+color for routes every 30 minutes or better, outlined in the slow tiers'
+color for the rest. They are the only strongly colored elements in the
+interface itself.
 
 ### Dark mode
 
@@ -1307,7 +1326,8 @@ Without a card or a caption, the first screen answers:
   400 m.
 - Tap an alert mark (Live): the alert.
 - Tap a route's tag or a rail letter: that line.
-- Tap a shared-street label such as "30 • 31": a short list of those routes.
+- Tap a shared-street label, "30 • 31" or a row of pills: a short list of
+  those routes, every one along that stretch when the row ends in "+".
 - Tap on or near lines: "Routes here", strongest first.
 - Tap a FlexRide zone: a FlexRide panel, or the last row of a list when lines
   are there too.
@@ -2071,6 +2091,16 @@ RTD GTFS ──────────────────────┼�
 - 2026-11-06: Live. First production build succeeded; the refresh Worker is
   deployed (cron `23 * * * *`, `DEPLOY_HOOK` secret set). From here, RTD's
   data changes reach the site within about an hour with no one involved.
+- 2026-11-06: Bus numbers from zoom 13 are rows of pills, one per route,
+  filled in the tier's color, instead of one outlined box of numbers with a
+  count ("0 • 15 • 15L +13"). Chris's phone screenshot of downtown at night:
+  the boxes' outlines were the color of the streets, the dots between
+  numbers looked like stops, the same three numbers sat in three boxes
+  within four blocks, and nobody can act on "+13". One pill per route is how
+  bus maps number their lines. The count became a "+" pill, so stretches
+  with the same row merge; rows with a "+" leave at 15, where stops take
+  over. The panels' bus bullets are the same pill, so the map and the lists
+  match.
 
 ## Sources
 

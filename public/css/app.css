@@ -40,7 +40,6 @@
   --page: #eef1f2; /* behind the map while it loads */
   --on-ink: #ffffff; /* text on a fill of --ink */
   --handle: #cbd3da; /* the sheet's drag handle */
-  --tag-bg: #ffffff; /* a bus route's tag */
   --stop-fill: #ffffff;
   --stop-edge: #6f7c89;
   --station-fill: #ffffff;
@@ -371,16 +370,16 @@ body {
 
 /* A bullet carries its colors for both themes (bullet() in js/shared.js):
    --b1/--t1 are the fill and letter on the light map, --b2/--t2 on the dark
-   one, and --e1/--e2 a bus tag's outline. */
-.bullet.rail {
+   one, and --e1/--e2 a bus pill's outline (transparent when it is filled). */
+.bullet.rail,
+.bullet.bus {
   background: var(--b1);
   color: var(--t1);
 }
 
-/* Bus routes: a tag outlined in the route's ink, like the map's. */
+/* Bus routes: a pill like the map's, filled in the tier's color for routes
+   every 30 minutes or better, outlined for slower ones. */
 .bullet.bus {
-  background: var(--tag-bg);
-  color: var(--t1);
   box-shadow: inset 0 0 0 1.25px var(--e1);
 }
 
@@ -1282,7 +1281,6 @@ body {
     --page: #0e1216;
     --on-ink: #0f1419;
     --handle: #4a5560;
-    --tag-bg: #1c2229;
     --stop-fill: #1c2229;
     --stop-edge: #8a97a4;
     --station-fill: #0f1317;
@@ -1301,13 +1299,13 @@ body {
     stroke: var(--key-rail-dark, #6ccf7c);
   }
 
-  .bullet.rail {
+  .bullet.rail,
+  .bullet.bus {
     background: var(--b2);
     color: var(--t2);
   }
 
   .bullet.bus {
-    color: var(--t2);
     box-shadow: inset 0 0 0 1.25px var(--e2);
   }
 

@@ -2,6 +2,7 @@
 // drawn, the words we use for frequency (DESIGN.md, "Voice"), and small
 // formatting helpers. Nothing here knows any route, station or id.
 
+import { textOn } from './color.js';
 import { P, PALETTES } from './palette.js';
 
 // Phones, and any short screen (a phone on its side): framing, key closed,
@@ -59,10 +60,27 @@ export const tierMatch = (pick, key = 'tier') => ['match', ['get', key], ...TIER
 export const tierWidth = (extra = 0) =>
   ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, tierMatch((t) => t.width[i] + extra)])];
 
-// A tag's number, in its route's ink, darkened for the lightest routes.
-// `scheme` names a theme other than the one in use ('light' or 'dark').
+// A number knocked out of its line, in its route's ink, darkened for the
+// lightest routes. `scheme` names a theme other than the one in use ('light'
+// or 'dark').
 export const tierColor = (t, scheme) => PALETTES[scheme].tier[t.look];
 export const tagInk = (t, scheme = P.scheme) => (TIER_RANK[t.id] >= TIER_RANK.every30 ? tierColor(t, scheme) : PALETTES[scheme].tagSlow);
+
+// A bus route's pill, on the map and in the panels alike: filled in the tier's
+// color for routes every 30 minutes or better, with the number in white or
+// ink, whichever reads better on it; outlined in the slow tiers' color, with
+// the number in their darker ink, for slower routes and for the "+" that
+// stands for routes a row doesn't name (tier 'more'). So a row of pills keeps
+// the tiers' order of weight.
+export function pillStyle(tierId, scheme = P.scheme) {
+  const pal = PALETTES[scheme];
+  const t = TIERS.find((x) => x.id === tierId);
+  if (t && TIER_RANK[t.id] >= TIER_RANK.every30) {
+    const fill = tierColor(t, scheme);
+    return { fill, text: textOn(fill, pal.onColor), edge: null };
+  }
+  return { fill: pal.tagFill, text: pal.tagSlow, edge: pal.tier.slow };
+}
 
 // --- Words ------------------------------------------------------------------
 
@@ -117,10 +135,11 @@ export function ends(name) {
 export const goesText = (r) => (r.goes?.length ? r.goes.map((g) => g.name).join(' – ') : r.name);
 
 // The route's bullet: a lettered circle in the line's colour for rail, a
-// tag in the route's ink for bus. `lines` is the rail style (railStyle in main.js).
-// Both themes' colours ride on the element as custom properties and app.css
-// picks the pair that matches the system setting, so a bullet already on the
-// page (a panel, the results) follows a change of theme with no redraw.
+// pill in the route's tier for bus (pillStyle, as on the map). `lines` is the
+// rail style (railStyle in main.js). Both themes' colours ride on the element
+// as custom properties and app.css picks the pair that matches the system
+// setting, so a bullet already on the page (a panel, the results) follows a
+// change of theme with no redraw.
 export function bullet(r, lines) {
   if (r.mode === 'rail') {
     const line = lines.byRoute.get(r.route);
@@ -128,8 +147,9 @@ export function bullet(r, lines) {
     const [l, d] = [pair('light'), pair('dark')];
     return `<span class="bullet rail" style="--b1:${l.color};--t1:${l.letter};--b2:${d.color};--t2:${d.letter}">${esc(r.route)}</span>`;
   }
-  const tier = TIERS.find((t) => t.id === r.tier) ?? TIERS.at(-1);
-  return `<span class="bullet bus" style="--t1:${tagInk(tier, 'light')};--e1:${tierColor(tier, 'light')};--t2:${tagInk(tier, 'dark')};--e2:${tierColor(tier, 'dark')}">${esc(r.route)}</span>`;
+  const [l, d] = [pillStyle(r.tier, 'light'), pillStyle(r.tier, 'dark')];
+  const vars = `--b1:${l.fill};--t1:${l.text};--e1:${l.edge ?? 'transparent'};--b2:${d.fill};--t2:${d.text};--e2:${d.edge ?? 'transparent'}`;
+  return `<span class="bullet bus" style="${vars}">${esc(r.route)}</span>`;
 }
 
 // A stretch with no weekday trips, said honestly: "No weekday service here;

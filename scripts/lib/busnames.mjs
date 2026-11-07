@@ -27,14 +27,13 @@ const ANGLE_COS = Math.cos((25 * Math.PI) / 180);
 const OWN = 30;
 // Runs shorter than this are smoothed into a neighbour.
 export const MIN_RUN = 150;
-// A tag names at most this many routes, and its text is meant to stay within
-// MAX_CHARS characters (about 40% of a phone's width): when four routes or
-// more share a street and naming them all is longer than that, the strongest
-// two or three are named and the rest counted ("+2"). Never "+1": that is as
-// wide as the one number it hides, so that route is named instead.
-export const MAX_NAMES = 4;
-export const NAMED = 3;
-export const MAX_CHARS = 16;
+// A row names at most this many routes, one pill each (about 40% of a
+// phone's width). When more share a street, the strongest MAX_PILLS - 1 are
+// named and a "+" pill stands for the rest: tap it for the list. Counting
+// them ("+13") was tried first: no one can act on the count, and it made
+// every block's row different, so rows repeated block after block.
+export const MAX_PILLS = 4;
+export const MORE = '+';
 const SEPARATOR = ' · ';
 // Tiers a run's main label names: the routes drawn at strength from far out.
 const MAIN = ['frequent', 'every30'];
@@ -43,31 +42,41 @@ const rank = (tier) => (TIERS.includes(tier) ? TIERS.indexOf(tier) : TIERS.lengt
 const collator = new Intl.Collator('en', { numeric: true });
 const byNumber = (a, b) => collator.compare(a, b);
 
+// How a pill is drawn: the two main tiers each have a look of their own, and
+// every slower tier shares one (DESIGN.md, "Bus routes"). Rows carry the
+// look, not the tier, so a street whose hourly route becomes a rush-hour one
+// keeps one row, as its pills would look the same.
+const look = (tier) => (MAIN.includes(tier) ? tier : 'slow');
+
 /**
- * A label for some routes, strongest tier first, then in number order.
- * Up to three routes are always all named. Four are named too if that fits
- * `maxChars`. Otherwise (or with more) the strongest NAMED that fit, at least
- * two, then "+N" for the rest, so N is at least 2 and never 1. `routes` are
- * [{ route, tier }].
+ * The pills for some routes, strongest tier first, then in number order:
+ * [{ text, tier }] with `tier` the pill's look, all of them when they are
+ * `max` or fewer, otherwise the strongest `max` - 1 and then
+ * { text: '+', tier: 'more' }. `routes` are [{ route, tier }].
  */
-export function routeLabel(routes, maxChars = MAX_CHARS) {
-  const names = [...routes].sort((a, b) => rank(a.tier) - rank(b.tier) || byNumber(a.route, b.route)).map((r) => r.route);
-  const n = names.length;
-  const text = (k) => names.slice(0, k).join(SEPARATOR) + (k < n ? ` +${n - k}` : '');
-  if (n <= NAMED || (n <= MAX_NAMES && text(n).length <= maxChars)) return text(n);
-  let k = Math.min(NAMED, n - 2);
-  while (k > 2 && text(k).length > maxChars) k--;
-  return text(k);
+export function pillRow(routes, max = MAX_PILLS) {
+  const pills = [...routes].sort((a, b) => rank(a.tier) - rank(b.tier) || byNumber(a.route, b.route)).map((r) => ({ text: r.route, tier: look(r.tier) }));
+  if (pills.length <= max) return pills;
+  return [...pills.slice(0, max - 1), { text: MORE, tier: 'more' }];
 }
+
+// A row as the data carries it: "0:frequent 15:frequent +:more".
+export const pillsText = (pills) => pills.map((p) => `${p.text}:${p.tier}`).join(' ');
+// A row as text: "0 · 15 · 15L", with " +" when not every route is named.
+export const rowText = (pills) =>
+  pills.filter((p) => p.tier !== 'more').map((p) => p.text).join(SEPARATOR) + (pills.some((p) => p.tier === 'more') ? ` ${MORE}` : '');
 
 /**
  * `features` are the bus route features as drawn (stretches with `route` and
- * `tier`). Returns LineString features with `label`, `label_main` (only the
- * routes that are frequent or every 30 there, or ''), `routes` (every route,
- * space-separated), `tier` (the strongest), `n` (how many routes), and
- * `chars` / `chars_main` (the length of `label` / `label_main`).
+ * `tier`). Returns LineString features with `pills` (the row for every route
+ * there, see pillsText), `text_main` (the routes that are frequent or every
+ * 30 there, as text, or ''), `more` (1 when the row doesn't name every
+ * route), `routes` (every route, space-separated), `tier` (the strongest)
+ * and `n` (how many routes). Where neighbouring runs on a street would get
+ * the same row they are one run, so a row isn't repeated block after block
+ * as routes join and leave a downtown street.
  */
-export function busNames(features, { precision = 5, simplify: tolerance = 1, maxChars = MAX_CHARS } = {}) {
+export function busNames(features, { precision = 5, simplify: tolerance = 1, max = MAX_PILLS } = {}) {
   const first = features.find((f) => partsOf(f.geometry).some((p) => p.length));
   if (!first) return [];
   const origin = partsOf(first.geometry).find((p) => p.length)[0];
@@ -90,6 +99,7 @@ export function busNames(features, { precision = 5, simplify: tolerance = 1, max
   const tracks = []; // { route, points: [[x, y]], tiers: [tier], dirs: [[ux, uy]] }
   for (const [route, list] of pieces) {
     const kept = new Grid(OWN);
+    const mine = [];
     list.sort((a, b) => length(b.points) - length(a.points));
     for (const { points, tier } of list) {
       const own = points.map((p) => kept.near(p, OWN).length > 0);
@@ -100,12 +110,13 @@ export function busNames(features, { precision = 5, simplify: tolerance = 1, max
         if (!free && start >= 0) {
           // Keep a point of overlap at each end, so the line stays joined.
           const run = points.slice(Math.max(0, start - 1), Math.min(points.length, i + 1));
-          if (run.length >= 2 && length(run) >= STEP) tracks.push({ route, points: run, tiers: run.map(() => tier) });
+          if (run.length >= 2 && length(run) >= STEP) mine.push({ route, points: run, tiers: run.map(() => tier) });
           start = -1;
         }
       }
       for (let i = 1; i < points.length; i++) kept.add(points[i - 1], points[i], { route, tier });
     }
+    tracks.push(...chain(mine));
   }
   for (const t of tracks) t.dirs = t.points.map((_, i) => direction(t.points, i));
   // Routes in number order, compared by position (sorting by name is slow).
@@ -169,35 +180,96 @@ export function busNames(features, { precision = 5, simplify: tolerance = 1, max
       short.key = into ? into.key : null;
       runs = merge(runs, t.points);
     }
+    // Each owned run's row. Neighbouring runs with the same pills become one
+    // run naming every route along it: the pills stay the same, since both
+    // had the same strongest routes, and the list a tap opens has them all.
+    const rows = [];
     for (const run of runs) {
-      if (run.key == null) continue;
+      if (run.key == null) {
+        rows.push(null);
+        continue;
+      }
+      const set = new Map(
+        run.key.split(' ').map((s) => {
+          const at = s.lastIndexOf(':');
+          return [s.slice(0, at), s.slice(at + 1)];
+        }),
+      );
+      const { pills } = rowOf(set, max);
+      const last = rows.at(-1);
+      if (last && last.pills === pills) {
+        last.to = run.to;
+        for (const [route, tier] of set) if (!last.set.has(route) || rank(tier) < rank(last.set.get(route))) last.set.set(route, tier);
+      } else rows.push({ from: run.from, to: run.to, set, pills });
+    }
+    for (const row of rows) {
+      if (!row) continue;
       // A run reaches to the next point, so runs meet end to end.
-      const points = t.points.slice(run.from, Math.min(t.points.length, run.to + 1));
+      const points = t.points.slice(row.from, Math.min(t.points.length, row.to + 1));
       if (points.length < 2) continue;
-      const set = run.key.split(' ').map((s) => {
-        const at = s.lastIndexOf(':');
-        return { route: s.slice(0, at), tier: s.slice(at + 1) };
-      });
-      const main = set.filter((r) => MAIN.includes(r.tier));
-      const strongest = set.reduce((a, b) => (rank(b.tier) < rank(a.tier) ? b : a)).tier;
-      const [label, labelMain] = [routeLabel(set, maxChars), main.length ? routeLabel(main, maxChars) : ''];
+      const tiers = [...row.set.values()];
       out.push({
         type: 'Feature',
         geometry: { type: 'LineString', coordinates: dedupe(simplify(points, tolerance).map(unproject)) },
         properties: {
-          label,
-          label_main: labelMain,
-          routes: set.map((r) => r.route).sort(byNumber).join(' '),
-          tier: strongest,
-          n: set.length,
-          // Characters in each label, for spacing long tags further apart.
-          chars: label.length,
-          chars_main: labelMain.length,
+          ...rowOf(row.set, max),
+          routes: [...row.set.keys()].sort(byNumber).join(' '),
+          tier: tiers.reduce((a, b) => (rank(b) < rank(a) ? b : a)),
+          n: row.set.size,
         },
       });
     }
   }
   return out.filter((f) => f.geometry.coordinates.length >= 2);
+}
+
+// The row for a set of routes (Map route -> tier): `pills` for every route,
+// `text_main` for the main tiers, and `more` when the pills don't name them all.
+function rowOf(set, max) {
+  const routes = [...set].map(([route, tier]) => ({ route, tier }));
+  const pills = pillRow(routes, max);
+  const main = routes.filter((r) => MAIN.includes(r.tier));
+  return {
+    pills: pillsText(pills),
+    text_main: main.length ? rowText(pillRow(main, max)) : '',
+    more: pills.some((p) => p.tier === 'more') ? 1 : 0,
+  };
+}
+
+// A route's stretches, joined where one ends where the next begins (a route is
+// drawn in stretches, one per tier), so the labels along a street don't break
+// where the route's tier changes. The tier at a join is the earlier stretch's.
+function chain(list) {
+  const out = [];
+  const used = new Set();
+  const meet = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) <= OWN;
+  const reversed = (t) => ({ points: [...t.points].reverse(), tiers: [...t.tiers].reverse() });
+  for (let i = 0; i < list.length; i++) {
+    if (used.has(i)) continue;
+    used.add(i);
+    let { points, tiers } = list[i];
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (let j = 0; j < list.length; j++) {
+        if (used.has(j)) continue;
+        const t = list[j];
+        const [first, last] = [t.points[0], t.points.at(-1)];
+        const after = meet(points.at(-1), first) ? t : meet(points.at(-1), last) ? reversed(t) : null;
+        const before = after ? null : meet(points[0], last) ? t : meet(points[0], first) ? reversed(t) : null;
+        if (after) {
+          points = points.concat(after.points.slice(1));
+          tiers = tiers.concat(after.tiers.slice(1));
+        } else if (before) {
+          points = before.points.concat(points.slice(1));
+          tiers = before.tiers.concat(tiers.slice(1));
+        } else continue;
+        used.add(j);
+        grew = true;
+      }
+    }
+    out.push({ route: list[i].route, points, tiers });
+  }
+  return out;
 }
 
 // Runs of equal keys along a track: { key, from, to (exclusive), length }.
