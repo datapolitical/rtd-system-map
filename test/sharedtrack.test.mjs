@@ -164,16 +164,37 @@ test('every line carries its letter at every zoom, and lines sharing track take 
       assert.ok(shown.some((f) => f.properties.route === route), `${route} has a letter at zoom ${zoom}`);
     }
   }
-  // At zoom 12 the 8 km shared has room for several letters.
-  const shared = letters.filter((f) => f.properties.from === 12 && Math.abs(km(f.geometry.coordinates)[0]) < 0.01 && km(f.geometry.coordinates)[1] < 7);
+  // At zoom 13 the 8 km shared (about 1200 px) has room for a few letters.
+  // Counted to just past the fork: a line's letter past the fork counts as
+  // its turn there (the line with the nearer letter yields the place).
+  const shared = sharedLetters(letters, 13, 9);
   const count = (route) => shared.filter((f) => f.properties.route === route).length;
-  assert.ok(count('X') > 0 && count('Y') > 0, 'both lines are named on the track they share');
+  assert.ok(count('X') > 0 && count('Y') > 0, `both lines are named on the track they share: X ${count('X')}, Y ${count('Y')}`);
   assert.ok(Math.abs(count('X') - count('Y')) <= 1, `turns: X ${count('X')}, Y ${count('Y')}`);
 });
 
+test('a line is lettered about once a screen, not more', () => {
+  const { letters } = sharedTrack(network());
+  // Z alone, 20 km. Sized for halfway through each zoom's range.
+  for (let zoom = 10; zoom <= 16; zoom++) {
+    const mine = letters.filter((f) => f.properties.route === 'Z' && f.properties.from <= zoom && zoom < f.properties.to).map((f) => km(f.geometry.coordinates)[1]).sort((a, b) => a - b);
+    const px = (kms) => (kms * 1000) / (40075017 / (512 * 2 ** (zoom + 0.5)));
+    assert.ok(mine.length >= 1, `Z has a letter at zoom ${zoom}`);
+    for (let i = 1; i < mine.length; i++) {
+      assert.ok(px(mine[i] - mine[i - 1]) >= 350, `letters ${Math.round(px(mine[i] - mine[i - 1]))} px apart at zoom ${zoom}`);
+    }
+    assert.ok(mine.length <= Math.ceil(px(20) / 700) + 1, `${mine.length} letters on ${Math.round(px(20))} px of line at zoom ${zoom}`);
+  }
+});
+
+// The letters on the track X and Y share, in the set for `zoom`, up to
+// `until` km north (short of where Y leaves, by default).
+const sharedLetters = (letters, zoom, until = 7.5) => letters.filter((f) => f.properties.from === zoom && Math.abs(km(f.geometry.coordinates)[0]) < 0.01 && km(f.geometry.coordinates)[1] < until);
+
 test("a letter says which side of the track its line is drawn on", () => {
   const { letters } = sharedTrack(network());
-  const shared = letters.filter((f) => f.properties.from === 12 && Math.abs(km(f.geometry.coordinates)[0]) < 0.01 && km(f.geometry.coordinates)[1] < 7);
+  const shared = sharedLetters(letters, 13);
+  assert.ok(shared.length > 0, 'letters on the shared track');
   for (const f of shared) {
     // The track runs north: Y is half a line east (right on screen), X west.
     assert.equal(f.properties.sx, f.properties.route === 'Y' ? 0.5 : -0.5);

@@ -52,11 +52,20 @@ const ROUND_STEPS = 12;
 const STATION_METERS = 200;
 const STATION_CLEAR_METERS = 100;
 // Letters along the lines: a set for each whole zoom from the first to the
-// last of these, with a letter on the track about this many pixels apart.
-// (The map shows letters from a little before the first; they sit closer
-// there, and phones that open either side of it show the same ones.)
+// last of these, with each line's letter about this many pixels apart along
+// it: about once per phone screen, so a line is named wherever it is looked
+// at and repeated only occasionally (DESIGN.md, "Where the labeling rules
+// come from"). (The map shows letters from a little before the first; they
+// sit closer there, and phones that open either side of it show the same
+// ones.)
 const LETTER_ZOOMS = [10, 16];
-const LETTER_PX = 100;
+const LETTER_PX = 700;
+// A letter sits this far past a fork, where a line leaves others; a stretch
+// shorter than LETTER_MIN_PX gets none of its own; a letter may move this
+// far along its line to sit clear of stations and other letters.
+const LETTER_FORK_PX = 90;
+const LETTER_MIN_PX = 60;
+const LETTER_SLACK_PX = 60;
 // Two letters closer than this many pixels can touch; so can a letter and a
 // station's mark this close.
 const LETTER_CLEAR_PX = 28;
@@ -485,21 +494,23 @@ function rounded(runs) {
 }
 
 // Where each line carries its letter, zoom by zoom (DESIGN.md, "Rail
-// bullets"). A letter goes on the track every LETTER_PX or so. Lines sharing
-// the track take turns at those places: each goes to the line whose nearest
-// letter is furthest away, so every line is named wherever it runs; a line
-// alone takes every other one. Each letter sits clear of other letters and
-// of stations, and as far from a station as it can, within a quarter of the
-// way to the next place either side (half, if nowhere nearer is clear).
+// bullets"). Each line gets a letter just past each fork it leaves, and
+// about every LETTER_PX along it between, evenly. On shared track the
+// spacing is LETTER_PX divided by the lines there, and the lines take turns:
+// each place goes to the line whose nearest letter is furthest away, so
+// every line is named along track it shares at the same rate as a line
+// alone. Each letter sits clear of other letters and of stations, and as far
+// from a station as it can, within LETTER_SLACK_PX either way (twice that,
+// if nowhere nearer is clear).
 // `tracks` are the runs side by side on each stretch of track; returns
 // { run, zoom, point, meters } for each letter, `meters` along its run.
 function lettersAlong(tracks, marks, metersPerPixel) {
   const out = [];
   for (let zoom = LETTER_ZOOMS[0]; zoom <= LETTER_ZOOMS[1]; zoom++) {
     // The map shows this set from `zoom` to the next: sized for halfway.
-    const every = LETTER_PX * metersPerPixel(zoom + 0.5);
-    const clear = (LETTER_CLEAR_PX / LETTER_PX) * every;
-    const clearOfStation = (STATION_CLEAR_PX / LETTER_PX) * every;
+    const px = (n) => n * metersPerPixel(zoom + 0.5);
+    const clear = px(LETTER_CLEAR_PX);
+    const clearOfStation = px(STATION_CLEAR_PX);
     const all = [];
     const placed = new Map(tracks.flat().map((run) => [run.line.route, []]));
     const away = (points, p) => Math.min(Infinity, ...points.map((q) => Math.hypot(q[0] - p[0], q[1] - p[1])));
@@ -526,12 +537,28 @@ function lettersAlong(tracks, marks, metersPerPixel) {
     };
     for (const members of tracks) {
       const reach = Math.max(...members.map((run) => length(run.points)));
-      for (let at = every / 2, k = 0; at < reach; at += every, k++) {
-        if (members.length === 1 && k % 2) continue;
+      if (reach < px(LETTER_MIN_PX)) continue;
+      // A stretch ends at a fork (a line on it goes on along other track)
+      // or at the end of its lines. A letter sits just past each fork, where
+      // the branches are told apart, and the rest are spread evenly between,
+      // never further apart than the spacing. A stretch with no fork at
+      // either end is lettered from its middle out.
+      const spacing = px(LETTER_PX) / members.length;
+      const edge = px(LETTER_FORK_PX);
+      const forkAtStart = members.some((run) => (run.flipped ? run.after : run.before));
+      const forkAtEnd = members.some((run) => (run.flipped ? run.before : run.after));
+      const first = forkAtStart ? edge : Math.min(spacing / 2, reach / 2);
+      const last = reach - (forkAtEnd ? edge : Math.min(spacing / 2, reach / 2));
+      const count = last < first ? 1 : Math.round((last - first) / spacing) + 1;
+      const places =
+        last < first
+          ? [forkAtStart === forkAtEnd ? reach / 2 : forkAtStart ? first : last]
+          : Array.from({ length: count }, (_, k) => (count === 1 ? (first + last) / 2 : first + ((last - first) * k) / (count - 1)));
+      for (const at of places) {
         // Its own run can be a little longer or shorter than the others'.
         const here = (run) => pointAlong(run.points, (at / reach) * length(run.points));
         const turn = members.reduce((a, b) => (away(placed.get(b.line.route), here(b)) > away(placed.get(a.line.route), here(a)) ? b : a));
-        put(turn, (at / reach) * length(turn.points), every / 4);
+        put(turn, (at / reach) * length(turn.points), Math.min(px(LETTER_SLACK_PX), spacing / 4));
       }
     }
     // A line too short to have come up anywhere: once, mid-way along its

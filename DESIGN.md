@@ -33,11 +33,14 @@ fix. Instead, the map reads well at every zoom, and tapping anything (a
 line, a station, a stop, a FlexRide zone, a spot on the map) explains it. We
 specialize only after seeing what people actually do.
 
-**Name what you draw.** Every line on screen says what it is at the zoom
-where it appears: a train line carries its letter and where it goes, a bus
-its number. A map that shows service without naming it says less than it
-seems to. That was V2's biggest gap, found by comparing it with other
-agencies' maps (see "Why").
+**Name what can be read as named.** A train line carries its letter along
+it, so any line on screen can be told from the others; a station is named
+where its name can sit beside it; a bus is named by a tap. A label goes on
+the map only where a reader can tell at a glance what it belongs to. Bus
+numbers along shared streets were tried three ways and failed that test, so
+the map carries none (see "Map design"). Comparing V2 with other agencies'
+maps had found unnamed lines its biggest gap (see "Why"); a week of
+screenshots found labels that couldn't be tied to their lines a worse one.
 
 **It looks designed, and it is as accurate as it can be while looking that
 way.** The map should look as if a person drew it on purpose: lines that run
@@ -682,18 +685,28 @@ on the map, so a rail line can be found at a glance. Buses are drawn in a
 single dark ink, and how often they come is shown by weight and darkness.
 Everything else (streets, parks, water, labels) steps back.
 
-The second principle is **name what you draw**. Every line on screen is
-identified at the zoom where it appears, without a tap:
+The second principle is **name what can be read as named**. A label is on
+the map only where a reader can tell at a glance which line or place it
+belongs to (Imhof's second aim, "Where the labeling rules come from",
+below):
 
-- Rail carries its letter along the line, on the line itself. Only below
-  zoom 9.75, where there are no letters along the lines yet, the letter sits
-  at each end instead: both at once said the same thing twice. The letter is
-  the whole label: where a line goes is in the key, the Lines list and the
-  line's panel, not on the map.
-- Buses carry their number, starting with the frequent ones.
+- Rail carries its letter along the line, on the line itself, about once a
+  screen. Only below zoom 9.75, where there are no letters along the lines
+  yet, the letter sits at each end instead: both at once said the same thing
+  twice. The letter is the whole label: where a line goes is in the key, the
+  Lines list and the line's panel, not on the map.
+- Buses carry no number. On a shared street a number beside the line can't
+  be tied to one of the lines there, and a tap says which route it is (see
+  "Bus routes", "Numbers"). The lines' weight says how often a bus comes,
+  which is what the map is for.
+- A station's name sits within about two ems of its mark, or isn't drawn at
+  that zoom. The one exception is the hub where most lines end (Union
+  Station), whose name may go further out until every station is named.
 
-When something is drawn but there's no room to name it, it's drawn lighter
-until there is. The by-zoom table below is built on this rule.
+The earlier form of this principle, "name what you draw" (every line
+identified at the zoom where it appears), put numbers on the bus lines from
+2026-11-02 to 2026-11-06. They were read but not understood, which is a
+label failing at its one job.
 
 The third is **every mark earns its place**. A label is on the map at a
 given zoom because someone looking at that much of the city needs it, not
@@ -717,8 +730,11 @@ letter three or four times, and set town names where they read as stations:
   so until 11 its name alone may sit further out, in the first clear space
   around the knot of lines. Every station is named from 11, the busiest
   first. Every station can be tapped at any zoom.
-- **A line's letter appears as often as it takes for every line in view to
-  have one,** and no more. The build places them (see "Rail bullets").
+- **A line's letter appears about once a screen,** evenly spaced along the
+  line (about every 700 px, a phone screen's height), so a line is named
+  wherever it is looked at and repeated only occasionally. Until 2026-11-06 a
+  line alone was lettered every 200 px, which put three C's on one phone
+  screen. The build places them (see "Rail bullets").
 - **Places are named by cities until zoom 11.** Towns and villages start
   there, in the same small capitals as cities, so a place name is never
   taken for a station.
@@ -754,6 +770,73 @@ layers):
   can cross a lighter bus line. Downtown those are a block apart, and a
   station with no name is worse than a name across one of them.
 - Highway shields give way to lines like any other name.
+
+### Where the labeling rules come from
+
+Chris, 2026-11-06, after the bus numbers came off: "there have to be best
+practices that should inform what these rules should be." There are, and
+the rules above are checked against them. What the literature settles, and
+what it leaves to us:
+
+- **Imhof's three aims** (1962, 1975), which every later placement rule is
+  built on: names should be legible, easily associated with the features
+  they describe, and should not overlap other map content, in that order of
+  priority; and "names should not be evenly dispersed over the map, nor
+  should names be densely clustered." The bus pills failed the second aim
+  (a row of numbers beside a gray street belonged to nothing a reader could
+  see); three C's on one screen failed the third and the density rule. So:
+  a label that can't be unambiguously associated with its line is dropped,
+  not nudged, and no name covers a line.
+- **Point labels** (Imhof; Brewer, *Designing Better Maps*; Penn State's
+  ranking of positions): up and to the right first, then the other corners,
+  then the sides; "as close as possible to their symbols without touching
+  them"; a point beside a line takes its label on the point's side. So:
+  station names sit in the corners first, within about two ems, and a name
+  that would have to go further isn't drawn. Only the hub's name may go
+  further, because at the metro zooms the map must have it.
+- **Line labels** (Imhof): follow the line; if repeated, the copies are
+  evenly spaced; on long lines in dense networks a label "may be repeated
+  occasionally," and "too much repetition can be overwhelming." So: a
+  letter about once a screen, evenly, on shared track at the same rate per
+  line as alone.
+- **Transit maps name their termini** ("Route termini should be clearly
+  marked, especially if trains or buses refer to those endpoints on their
+  signboards," Railway Technology on transit map design; Nöllenburg & Wolff
+  2011 make non-overlapping station labels a hard constraint and prefer
+  horizontal labels kept to one side of a line). So: at the metro zooms the
+  stations named are the ends of the lines and the hub, and they win every
+  collision; every station from zoom 11, which is also where Mapbox Streets
+  begins its transit stop labels.
+- **Frequency maps are read by tracing lines** (Walker; TriMet's 2015 map,
+  whose base labels are a brown close to the background; Spokane's). Walker
+  on his own Seattle map: "I try to keep the labels to a minimum, sufficient
+  to connect the dots." So: labels exist to connect dots (which line, where
+  it ends, where am I), not to annotate every stretch.
+- **Bus numbers work only with an unambiguous line.** Halifax's redesign
+  draws one black line per street with one box of numbers for it; the
+  Glasgow taxonomy of bus maps notes that numbers beside lines make readers
+  "read the number above each line to tell routes apart," which only works
+  when each number has its own line; a 2021 study (MDPI, IJGI 11(6):338)
+  found map-style bus layouts impose more cognitive load than linear ones.
+  Our pills sat on streets shared by two to four routes of different tiers,
+  the known-bad case. So: no numbers on the map; if they come back it is
+  Halifax-style, one line and one box per street.
+- **Density by zoom** is an industry convention, not a measured rule: Mapbox
+  tiers its data by zoom and shows transit stops from 11; the Google and
+  Apple transit patents keep line colors at every zoom and hold station
+  detail for high zooms. No source gives a tested spacing for repeated
+  labels or a tested zoom for bus numbers, so those numbers (700 px, zoom
+  11) are ours, and are judged on the fixed phone views below.
+
+What the literature does not have: a controlled test of where route numbers
+belong on a street-geography bus map, and a public TfL standard for bus
+maps (its published standards cover line diagrams and stop graphics).
+
+**How a label change is judged.** Before and after, the same four phone
+views (390 × 844, dark where the night screenshots came from): the metro at
+10.5 over downtown, the west side at 10.7, the south at 10.2, downtown at
+14.3 (`node views.cjs` in the session scratchpad takes them headless). The
+change gets a decision-log line that says what the views showed.
 
 ### Hierarchy (strongest to quietest)
 
@@ -1049,7 +1132,7 @@ Each bus tier fades in over about a zoom level rather than popping on.
   from the end on that side. A phone's "Whole network" view shows every
   letter whole, from 360 px wide; its opening view is closer in and has the
   letters along the lines instead. Signs and rail letters claim their space
-  first, then bus numbers, then station names, then every other name. `meta.rail[].ends` still carries each line's end names,
+  first, then station names, then every other name. `meta.rail[].ends` still carries each line's end names,
   worded from the GTFS headsign without the line's own name ("W-Line Jeffco"
   becomes "Jeffco"), for the key and the Lines list.
 - **Rail bullets** ride along each line from zoom 9.75, so a line can be
@@ -1057,17 +1140,26 @@ Each bus tier fades in over about a zoom level rather than popping on.
   (`lettersAlong` in `scripts/lib/sharedtrack.mjs`), once for each whole
   zoom from 10 to 16; the map shows the set for the zoom it is at (the
   zoom-10 set from 9.75, the zoom-16 set from 16 in).
-  - A place for a letter comes up about every 100 px along each stretch of
-    track.
-  - Lines sharing the track take turns at those places: each goes to the
-    line whose nearest letter is furthest away. So every line is named along
-    track it shares, about every 100 px times the number of lines.
-  - A line alone takes every other place (about every 200 px), so a line in
-    open country (the N) isn't lettered three times in one screen.
-  - Each letter moves along its line, up to a quarter of the way to the next
-    place (half, if it must), to sit clear of stations (16 px) and of other
-    letters (28 px). The map draws only one of two symbols that touch, so a
-    letter placed on a station was a letter not drawn.
+  - A letter sits just past each fork (90 px), where a line leaves the
+    others it shared track with: that is where the branches have to be told
+    apart, and on this network, nine lines radiating from one station, it is
+    the downtown view's only chance at a letter for each. Transit diagrams
+    label lines at their branch points for the same reason.
+  - Between the forks, letters come about every 700 px along the line, a
+    phone screen's height, spread evenly: once wherever the line is looked
+    at, repeated occasionally (see "Where the labeling rules come from"). A
+    stretch with no fork is lettered from its middle out; one shorter than
+    60 px gets none of its own. Until 2026-11-06 a place came up every
+    100 px and a line alone took every other one, which put three C's,
+    three T's or three E's on one phone screen.
+  - On shared track the spacing is 700 px divided by the lines there, and
+    the lines take turns: each place goes to the line whose nearest letter
+    (on any stretch) is furthest away. So every line is named along track
+    it shares at the same rate as a line alone.
+  - Each letter moves along its line, up to 60 px (120, if it must), to sit
+    clear of stations (16 px) and of other letters (28 px). The map draws
+    only one of two symbols that touch, so a letter placed on a station was
+    a letter not drawn.
   - A line too short to have come up gets one letter mid-way along its
     longest stretch. So every line has a letter at every zoom
     (`test/sharedtrack.test.mjs`).
@@ -1077,9 +1169,14 @@ Each bus tier fades in over about a zoom level rather than popping on.
     gold G used to sit on the purple N.
 
   Letters are placed before station names, so lines keep their letters at
-  middle zooms. Measured 2026-11-06: every line in view has a letter in the
-  opening view of 360, 375, 390, 412 and 430 px phones and at zooms 9.8, 11,
-  13 and 16 around downtown.
+  middle zooms. A line too short to have come up anywhere gets one letter
+  mid-way along its longest stretch, so every line has a letter at every
+  zoom (the test above). A line that only enters the screen's edge may have
+  its letter just off screen, which the once-a-screen rate accepts.
+  Measured 2026-11-06 on a 390 × 844 phone: the opening view (zoom 10.1)
+  has every line's letter once (the E twice); at 10.5 over the metro the W
+  and G, which enter from the west edge, have theirs just off it; downtown
+  at 12.3 every line but the N has one.
 - **Not running** (at the time shown): a hairline in the lightest bus gray,
   with no tag, so the network keeps its shape without claiming service.
 - **Vehicles** (Live): a small rounded arrow pointing where the vehicle is
@@ -2097,6 +2194,23 @@ RTD GTFS ──────────────────────┼�
   name gets further anchor offsets of its own, since nothing nearer was ever
   clear (see "Reading the map", "Station names go to the ends of the
   lines").
+- 2026-11-06: The labeling rules grounded in the cartographic and transit-map
+  literature (new section, "Where the labeling rules come from"), at Chris's
+  ask: "there have to be best practices that should inform what these rules
+  should be." Two rules changed as a result, and the second principle was
+  reworded from "name what you draw" to "name what can be read as named",
+  which is what the week's failures had in common. Rail letters go from
+  every 200 px on a lone line (every 100 px shared among lines on shared
+  track) to one just past each fork and about once per line per screen,
+  700 px, evenly, between, after Imhof on repeating line labels: the phone
+  views had three C's, T's or E's each. The fork letter was added the same
+  hour: with letters only at the middles of lines, the phone's opening view
+  lost the W's, R's and A's (their middles are off its edge) and the
+  downtown view lost five of nine, since all nine radiate from one station
+  and their middles are miles out.
+  Station names stay within about two ems of their mark, corners first
+  (Imhof, Brewer), or aren't drawn; the hub's name alone may go further.
+  Judged on the four fixed phone views before and after.
 
 ## Sources
 
@@ -2148,5 +2262,28 @@ RTD GTFS ──────────────────────┼�
   the MTA's [maps](https://www.mta.info/maps); Google Maps' transit layer.
 - Walker, J., on TriMet's frequent-network map and the history of frequent
   network maps. [2015](https://humantransit.org/2015/10/new-trimet-map-focuses-more-heavily-on-the-frequent-network.html),
-  [2009](https://humantransit.org/2009/06/frequent-network-maps-an-obvious-idea-that-took-forever-to-happen.html)
+  [2009](https://humantransit.org/2009/06/frequent-network-maps-an-obvious-idea-that-took-forever-to-happen.html);
+  on his own [Seattle](https://humantransit.org/?p=22774) and on
+  [Spokane's](https://humantransit.org/?p=22139) frequent network maps.
+- Labeling (read 2026-11-06 for "Where the labeling rules come from"):
+  Imhof, E. (1975). Positioning names on maps. *The American Cartographer*
+  2(2), as summarized with later practice in
+  [Labeling (map design)](https://en.wikipedia.org/wiki/Labeling_(map_design));
+  Brewer, C. (2015). *Designing Better Maps*, and Penn State's
+  [label placement](https://courses.ems.psu.edu/geog486/node/557) lesson
+  built on it; Kern & Brewer (2008) on Imhof's rules as the basis of
+  automated placement
+  ([Cartographic Perspectives 60](https://cartographicperspectives.org/index.php/journal/article/download/cp60-kern-brewer/pdf/1397));
+  Nöllenburg & Wolff (2011). Drawing and labeling high-quality metro maps by
+  mixed-integer programming. *IEEE TVCG* 17(5)
+  ([PDF](https://i11www.iti.kit.edu/extra/publications/nw-dlhqm-10.pdf));
+  Railway Technology, [Easy as A to B: the art of the transit map](https://www.railway-technology.com/features/featureeasy-as-a-to-b-the-art-of-the-transit-map-4215400/);
+  Halifax Transit's bus map redesign
+  ([SEGD](https://segd.org/projects/content-halifax-transit-bus-map-and-street-signage-redesign/));
+  Classifying the diversity of bus mapping systems
+  ([Glasgow](http://eprints.gla.ac.uk/150750/1/150750.pdf));
+  Bus route map design and cognitive load, *IJGI* 11(6):338
+  ([MDPI](https://www.mdpi.com/2220-9964/11/6/338));
+  Mapbox, [optimize map label placement](https://docs.mapbox.com/help/dive-deeper/optimize-map-label-placement/)
+  and Mapbox Streets v8's zoom tiers.
   [PDF](https://ad-publications.informatik.uni-freiburg.de/SIGSPATIAL_transitmaps_2018.pdf)

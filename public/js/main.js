@@ -785,12 +785,21 @@ const NAMES_FROM = 9.75;
 // is named from EVERY_NAME_FROM, where stations are far enough apart that
 // most names fit. (A whole zoom: filters read the zoom in whole steps.)
 const EVERY_NAME_FROM = DETAIL_FROM;
-// Where a station's name can sit: beside its mark, then further out, on any
-// side (ems; the first that is clear of every line and name wins).
-const beside = (distances) => distances.flatMap((d) => ['left', [d, 0], 'right', [-d, 0], 'top', [0, d], 'bottom', [0, -d], 'top-left', [d, d], 'bottom-right', [-d, -d], 'top-right', [-d, d], 'bottom-left', [d, -d]]);
-const BESIDE = beside([0.7, 1.2, 1.8, 2.6]);
-// Further out still, for the hub's name alone (see station-labels-hub).
-const FURTHER = beside([3.6, 4.8, 6.2]);
+// Where a station's name can sit: beside its mark, within about two ems
+// (the first that is clear of every line and name wins). A name that can't
+// sit that near isn't drawn at that zoom: further out it reads as some other
+// place's (DESIGN.md, "Where the labeling rules come from"). The corners
+// first, up and to the right before the others, then the sides: the
+// cartographic convention for naming a point, since a name directly beside
+// a mark runs into it.
+const beside = (distances) =>
+  distances.flatMap((d) => [
+    'bottom-left', [d, -d], 'bottom-right', [-d, -d], 'top-left', [d, d], 'top-right', [-d, d],
+    'left', [d, 0], 'right', [-d, 0], 'top', [0, d], 'bottom', [0, -d],
+  ]);
+const BESIDE = beside([0.7, 1.2, 1.8]);
+// Further out, for the hub's name alone (see station-labels-hub).
+const FURTHER = beside([2.6, 3.6, 4.8, 6.2]);
 // Closed stations: ring and name from the same zoom.
 const UNSERVED_ZOOM = 13;
 // Stations are ticks until CAPSULE_FROM and capsules from CAPSULE_TO.
