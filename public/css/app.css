@@ -1325,7 +1325,7 @@ body {
 
 /* Live: the one labeled button, in the key's row at the right (DESIGN.md,
    "Interface"). Off, white with the word. On, filled with the live mark and
-   the time of the positions shown; the mark stops pulsing while positions
+   how old the positions shown are; the mark stops pulsing while positions
    aren't arriving. */
 .live-button {
   position: absolute;

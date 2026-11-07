@@ -173,17 +173,22 @@ test('every line carries its letter at every zoom, and lines sharing track take 
   assert.ok(Math.abs(count('X') - count('Y')) <= 1, `turns: X ${count('X')}, Y ${count('Y')}`);
 });
 
-test('a line is lettered about once a screen, not more', () => {
+test('a line is lettered at least once a phone screen at any zoom its set is shown', () => {
   const { letters } = sharedTrack(network());
-  // Z alone, 20 km. Sized for halfway through each zoom's range.
+  // Z alone, 20 km. A set is shown for a whole zoom, so the spacing on
+  // screen runs from `zoom` to `zoom + 1`: it must be 270 to 540 px.
   for (let zoom = 10; zoom <= 16; zoom++) {
     const mine = letters.filter((f) => f.properties.route === 'Z' && f.properties.from <= zoom && zoom < f.properties.to).map((f) => km(f.geometry.coordinates)[1]).sort((a, b) => a - b);
-    const px = (kms) => (kms * 1000) / (40075017 / (512 * 2 ** (zoom + 0.5)));
+    const px = (kms, at) => (kms * 1000) / (40075017 / (512 * 2 ** at));
     assert.ok(mine.length >= 1, `Z has a letter at zoom ${zoom}`);
     for (let i = 1; i < mine.length; i++) {
-      assert.ok(px(mine[i] - mine[i - 1]) >= 350, `letters ${Math.round(px(mine[i] - mine[i - 1]))} px apart at zoom ${zoom}`);
+      // A third of a phone's height, as the closest two may be when the map
+      // is in as far as the set goes; a screen's worth, as the furthest
+      // apart when it is out as far.
+      const [closest, furthest] = [px(mine[i] - mine[i - 1], zoom + 1), px(mine[i] - mine[i - 1], zoom)];
+      assert.ok(closest >= 240, `letters ${Math.round(closest)} px apart at zoom ${zoom + 1}`);
+      assert.ok(furthest <= 600, `letters ${Math.round(furthest)} px apart at zoom ${zoom}`);
     }
-    assert.ok(mine.length <= Math.ceil(px(20) / 700) + 1, `${mine.length} letters on ${Math.round(px(20))} px of line at zoom ${zoom}`);
   }
 });
 

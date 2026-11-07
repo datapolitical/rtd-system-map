@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ALERTS_EVERY_MS, STALE_S, VEHICLE_COLUMNS, alertsFrom, emptyState, message, refresh, routeOf, tick, vehicle, vehiclesFrom } from '../public/js/realtime.js';
+import { ageText, band, pillText, zoomNote } from '../public/js/age.js';
 import { routeAliases } from '../scripts/lib/realtime.mjs';
 
 const T = 1794063578; // a feed time, seconds
@@ -176,4 +177,31 @@ test('the page puts a vehicle on its line by the learned table, then by the patt
   assert.equal(routeOf('101E', aliases, known), 'E', 'a train the build never saw still finds its line');
   assert.equal(routeOf('BOND', aliases, known), null, 'a route not on the map is not drawn');
   assert.equal(routeOf('', aliases, known), null);
+});
+
+test('the pill says how old the positions are, never the time of day', () => {
+  assert.equal(ageText(0), 'just now');
+  assert.equal(ageText(-5), 'just now');
+  assert.equal(ageText(29), 'just now');
+  assert.equal(ageText(30), '1 min ago');
+  assert.equal(ageText(90), '2 min ago');
+  assert.equal(ageText(125), '2 min ago');
+  assert.equal(ageText(600), '10 min ago');
+  assert.equal(ageText(3 * 3600), '3 hr ago');
+  assert.equal(ageText(3 * 86400), 'over a day ago');
+  assert.equal(pillText(null), 'Live');
+  assert.equal(pillText(NaN), 'Live');
+  assert.equal(pillText(10), 'Live, just now');
+  assert.equal(pillText(200), 'Live, 3 min ago');
+  for (const s of [0, 20, 45, 150, 4000, 90000]) assert.doesNotMatch(pillText(s), /\d:\d|[ap]m\b/i);
+});
+
+test('the zoom note names what is missing, and is silent when everything shows', () => {
+  assert.equal(band(9, 9.75, 13), 0);
+  assert.equal(band(9.75, 9.75, 13), 1);
+  assert.equal(band(12.99, 9.75, 13), 1);
+  assert.equal(band(13, 9.75, 13), 2);
+  assert.equal(zoomNote(9, 9.75, 13), 'Zoom in to see the trains.');
+  assert.equal(zoomNote(11, 9.75, 13), 'Trains are on the map. Zoom in for buses.');
+  assert.equal(zoomNote(14, 9.75, 13), null);
 });

@@ -5,12 +5,13 @@
 import { FONT } from './basemap.js';
 import { P } from './palette.js';
 import { byZoom } from './shared.js';
+import { band, pillText, zoomNote } from './age.js';
 import { POLL_MS, SCHEMA, STALE_S, routeOf, vehicle } from './realtime.js';
 import { loadDirectory, openRoute } from './select.js';
 
 // The zoom ladder for vehicles (DESIGN.md, "By zoom level"): trains from the
 // city zoom, buses from the neighborhood zoom, their names closer in.
-const TRAINS_FROM = 11;
+const TRAINS_FROM = 9.75;
 const BUSES_FROM = 13;
 const LETTERS_FROM = 12.5;
 const NUMBERS_FROM = 16;
@@ -75,8 +76,6 @@ export function vehicleLayers(lines) {
   ];
 }
 
-const timeOf = (s) => new Date(s * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
-
 export function initLive(map, { meta, status }) {
   const button = document.getElementById('live-button');
   const text = button.querySelector('.live-text');
@@ -102,11 +101,46 @@ export function initLive(map, { meta, status }) {
     said = line;
   };
 
+  // How old the newest positions are, in seconds; null before any arrive.
+  const ageNow = () => (latest?.vehicles ? (Date.now() - skew) / 1000 - latest.vehicles.at : null);
+
+  // The pill shows the age of the positions, never a clock time, and keeps
+  // showing it (dimmed) when they go stale.
   const label = () => {
-    const fresh = latest?.vehicles && (Date.now() - skew) / 1000 - latest.vehicles.at <= STALE_S;
-    text.textContent = on && fresh ? `Live, ${timeOf(latest.vehicles.at)}` : 'Live';
-    button.classList.toggle('stale', on && !fresh);
+    const age = on ? ageNow() : null;
+    text.textContent = pillText(age);
+    button.classList.toggle('stale', on && (age == null || age > STALE_S) && heard > 0);
   };
+
+  // The zoom note: said once when Live is on and not everything it draws is
+  // in view, and again only after the zoom crosses into another band.
+  let noted = -1; // the band last told about
+  let noting = null; // the note on screen, if any
+  let noteTimer = null;
+  let settle = null;
+  const dropNote = () => {
+    clearTimeout(noteTimer);
+    if (noting && said === noting) say(null);
+    noting = null;
+  };
+  const note = () => {
+    if (!on) return;
+    const b = band(map.getZoom(), TRAINS_FROM, BUSES_FROM);
+    if (b === noted) return;
+    // Wait while a more important line (loading, failure) is up.
+    if (said && said !== noting) return;
+    noted = b;
+    const line = zoomNote(map.getZoom(), TRAINS_FROM, BUSES_FROM);
+    dropNote();
+    if (!line) return;
+    noting = line;
+    say(line);
+    noteTimer = setTimeout(dropNote, 7000);
+  };
+  map.on('zoomend', () => {
+    clearTimeout(settle);
+    settle = setTimeout(note, 600);
+  });
 
   // What the map can draw: vehicles on a route it knows, reported recently.
   const features = (dir) => {
@@ -166,7 +200,8 @@ export function initLive(map, { meta, status }) {
         shown = new Map();
         draw([]);
       }
-    } else if (latest?.vehicles) say(null);
+    } else if (latest?.vehicles && !noting) say(null);
+    note();
   };
 
   const handle = (raw) => {
@@ -215,11 +250,13 @@ export function initLive(map, { meta, status }) {
       /* private mode */
     }
     heard = 0;
+    noted = -1;
     since = Date.now();
     label();
     connect();
     watch = setInterval(check, 5000);
     if (!latest) say('Finding the trains and buses…');
+    else note();
   };
 
   const stop = () => {
@@ -238,6 +275,8 @@ export function initLive(map, { meta, status }) {
     socket = null;
     shown = new Map();
     draw([]);
+    clearTimeout(settle);
+    dropNote();
     say(null);
     label();
   };

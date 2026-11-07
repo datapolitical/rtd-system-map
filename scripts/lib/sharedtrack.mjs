@@ -52,14 +52,18 @@ const ROUND_STEPS = 12;
 const STATION_METERS = 200;
 const STATION_CLEAR_METERS = 100;
 // Letters along the lines: a set for each whole zoom from the first to the
-// last of these, with each line's letter about this many pixels apart along
-// it: about once per phone screen, so a line is named wherever it is looked
-// at and repeated only occasionally (DESIGN.md, "Where the labeling rules
-// come from"). (The map shows letters from a little before the first; they
-// sit closer there, and phones that open either side of it show the same
-// ones.)
+// last of these. The map shows a set across its whole zoom (a filter sees
+// the zoom as a whole number, so it can't change sets any finer), and
+// screen spacing doubles across it. LETTER_PX is the spacing, in pixels, at
+// the middle of that range; at its two ends the same letters are 0.7 and 1.4
+// times as far apart (270 and 540 px). So a line has a letter at least once
+// per phone screen (the screen is 844 px tall, 390 wide, and a line crossing
+// it is mostly 500 px or more of it) wherever in the zoom it is looked at,
+// and two letters of one line are never much closer than a third of a screen
+// (DESIGN.md, "Rail bullets"). (The map shows letters from a little before
+// the first zoom; they sit closer there.)
 const LETTER_ZOOMS = [10, 16];
-const LETTER_PX = 700;
+const LETTER_PX = 380;
 // A letter sits this far past a fork, where a line leaves others; a stretch
 // shorter than LETTER_MIN_PX gets none of its own; a letter may move this
 // far along its line to sit clear of stations and other letters.

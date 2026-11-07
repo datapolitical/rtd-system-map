@@ -286,8 +286,9 @@ map for right now:
   keeps its shape. Each says when it starts again.
 - **Calendar:** holidays and service changes come from the feed's calendar,
   so on Thanksgiving Live shows Thanksgiving service.
-- **Vehicles:** trains move at their live positions from city zoom, and buses
-  from neighborhood zoom.
+- **Vehicles:** trains move at their live positions from zoom 9.75, where
+  the rail letters begin, and buses from zoom 13. When Live is on and part of
+  that is out of view, the map says so once (see below).
 - **Alerts:** RTD's service alerts are drawn where they apply.
   - A line with no service, a detour, or major delays gets an alert mark on
     its bullet or tag.
@@ -298,8 +299,20 @@ map for right now:
     the panels.
   - A line whose alert stops all its service draws as not running.
 
-While Live is on, the button reads "Live, 9:41 pm" with the live mark. Tapping
-it again returns to the full map.
+While Live is on, the button reads "Live, just now" with the live mark: the
+age of the positions shown, never a clock time. Under 30 seconds old it says
+"just now"; after that "1 min ago", "2 min ago", and so on, redrawn every few
+seconds as time passes, not only when positions arrive. Past two minutes the
+dot stops pulsing and dims, and the age stays on the pill. Before the first
+positions arrive it reads just "Live". Tapping it again returns to the full
+map.
+
+Live says why when the screen shows nothing live. When it's turned on, and
+when the zoom later settles on the other side of a threshold, a line on the
+map says what's missing: below 9.75, "Zoom in to see the trains."; from 9.75
+to 13, "Trains are on the map. Zoom in for buses."; from 13, nothing. It waits
+for the zoom to rest for a moment, so a pinch doesn't make it chatter, and
+goes after a few seconds. A loading or failure line takes its place.
 
 If RTD's live feeds fail, Live still shows the schedule for now and says
 plainly that positions and alerts aren't loading.
@@ -721,8 +734,8 @@ the map only where a reader can tell at a glance which line or place it
 belongs to (Imhof's second aim, "Where the labeling rules come from",
 below):
 
-- Rail carries its letter along the line, on the line itself, about once a
-  screen. Only below zoom 9.75, where there are no letters along the lines
+- Rail carries its letter along the line, on the line itself, at least once
+  a screen. Only below zoom 9.75, where there are no letters along the lines
   yet, the letter sits at each end instead: both at once said the same thing
   twice. The letter is the whole label: where a line goes is in the key, the
   Lines list and the line's panel, not on the map.
@@ -761,11 +774,13 @@ letter three or four times, and set town names where they read as stations:
   so until 11 its name alone may sit further out, in the first clear space
   around the knot of lines. Every station is named from 11, the busiest
   first. Every station can be tapped at any zoom.
-- **A line's letter appears about once a screen,** evenly spaced along the
-  line (about every 700 px, a phone screen's height), so a line is named
-  wherever it is looked at and repeated only occasionally. Until 2026-11-06 a
-  line alone was lettered every 200 px, which put three C's on one phone
-  screen. The build places them (see "Rail bullets").
+- **A line's letter appears at least once a screen,** evenly spaced along
+  the line (270 to 540 px apart on screen, 380 at the middle of each zoom), so
+  a line is named wherever it is looked at and repeated only occasionally.
+  Until 2026-11-06 a line alone was lettered every 200 px, which put three
+  C's on one phone screen; from then to 2026-11-07 every 700 px, which was
+  990 px at the far end of each zoom and left the W and T crossing a phone
+  with no letter. The build places them (see "Rail bullets").
 - **Places are named by cities until zoom 11.** Towns and villages start
   there, in the same small capitals as cities, so a place name is never
   taken for a station.
@@ -828,8 +843,8 @@ what it leaves to us:
 - **Line labels** (Imhof): follow the line; if repeated, the copies are
   evenly spaced; on long lines in dense networks a label "may be repeated
   occasionally," and "too much repetition can be overwhelming." So: a
-  letter about once a screen, evenly, on shared track at the same rate per
-  line as alone.
+  letter at least once a screen, evenly, on shared track at the same rate
+  per line as alone.
 - **Transit maps name their termini** ("Route termini should be clearly
   marked, especially if trains or buses refer to those endpoints on their
   signboards," Railway Technology on transit map design; Nöllenburg & Wolff
@@ -1135,7 +1150,7 @@ Each bus tier fades in over about a zoom level rather than popping on.
 | Zoom | Shows | Also in Live |
 |---|---|---|
 | Below 9 (the overview: a phone's "Whole network") | District wash and relief. Rail, with each line's letter at both ends and nothing else on it. Frequent buses as lines, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
-| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Hourly and less from 10.5. Stations are small ticks to 10.25; capsules from 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 11, closed stations |
+| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Hourly and less from 10.5. Stations are small ticks to 10.25; capsules from 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 9.75, closed stations |
 | 11.5–13 | Names keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. No bus numbers (see "Numbers"). | |
 | 13–14.5 | Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
 | 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15. | Closed stops crossed out |
@@ -1176,14 +1191,22 @@ Each bus tier fades in over about a zoom level rather than popping on.
     apart, and on this network, nine lines radiating from one station, it is
     the downtown view's only chance at a letter for each. Transit diagrams
     label lines at their branch points for the same reason.
-  - Between the forks, letters come about every 700 px along the line, a
-    phone screen's height, spread evenly: once wherever the line is looked
-    at, repeated occasionally (see "Where the labeling rules come from"). A
+  - Between the forks, letters come about every 380 px along the line,
+    spread evenly: once a screen wherever the line is looked at, repeated
+    occasionally (see "Where the labeling rules come from"). The 380 is the
+    spacing at the middle of the zoom the set is shown for. The map can
+    change sets only at a whole zoom (a filter sees the zoom as a whole
+    number), and on screen the same letters are 1.4 times as far apart at
+    the zoom's far end as at its middle and 0.7 times at its near end: 270
+    to 540 px. A phone screen is 844 px tall and 390 wide, so a stretch of
+    line as long as the screen is never lacks a letter, and two letters of
+    one line are never much nearer than a third of its height. (At 700 the
+    far end was 990 px: the W and the T crossed a phone with no letter.) A
     stretch with no fork is lettered from its middle out; one shorter than
     60 px gets none of its own. Until 2026-11-06 a place came up every
     100 px and a line alone took every other one, which put three C's,
     three T's or three E's on one phone screen.
-  - On shared track the spacing is 700 px divided by the lines there, and
+  - On shared track the spacing is 380 px divided by the lines there, and
     the lines take turns: each place goes to the line whose nearest letter
     (on any stretch) is furthest away. So every line is named along track
     it shares at the same rate as a line alone.
@@ -1692,12 +1715,13 @@ each of these; the roadmap under "Milestones" says in what order.
 
 **Correctness**
 
-- Station marks draw in the wrong theme. In dark mode the single-line
-  station dots are dark with a light edge, as the palette says, but every
-  shared-track bar is white: the light theme's fill. At 11.2 black and
-  white capsules share one screen, and in light mode at 12 Alameda and
-  I-25/Broadway draw black. The theme pass that redraws images misses the
-  ones added after the first paint.
+- Station marks looked like the other theme's. In dark mode the shared-track
+  bars read as bright white pills while single-line dots read dark. Checked
+  2026-11-07 with pixel probes in headless captures: every mark is drawn in
+  the right theme. The tick's light edge is 1.6 px on a mark 6 to 8 px tall,
+  drawn at 60 to 80 percent of its size from zoom 9 to 11, so the edge
+  covers most of the mark and a dark fill with a light edge reads light. A
+  weight problem, folded into step 2 of the roadmap.
 - The Key says "Weekdays, 9am to 3pm" on a Saturday morning, beside a Live
   pill that says now. The two claims sit on one row.
 - Live is on at zoom 10 and nothing on the screen is live: trains draw
@@ -1714,8 +1738,9 @@ each of these; the roadmap under "Milestones" says in what order.
 - Union Station has no mark of its own from 9.75 to 11, and its name sits a
   quarter of the screen west of it, in empty space. "Alameda",
   "Decatur-Federal" and "Sheridan" float with no visible tie to a mark.
-- Rail letters are spaced about once a screen, so the W and the T cross a
-  phone screen with no letter: a color and nothing else.
+- Rail letters were spaced 700 px apart, so the W and the T crossed a phone
+  screen with no letter: a color and nothing else. (Fixed 2026-11-07, step
+  4: 380 px, "Rail bullets".)
 - In dark mode frequent buses are white lines on a near-black ground, and
   the bus network reads as a street grid; the ribbon up I-25 with the 25
   shield on it reads as a freeway. Nothing outside the collapsed Key says
@@ -1842,17 +1867,18 @@ RTD GTFS ──────────────────────┼�
    V2 review found, then finish Live and other times, in this order. Steps
    1 to 7 are the first screen, each a few hours and independent of the
    schedule work; 8 to 10 are the build; 11 closes the version.
-   1. **Station marks hold their theme.** Every image is drawn from the
-      current palette, including ones added after the first paint, and a
-      theme change redraws all of them.
-      *Done when:* headless captures at 10.3, 11.2, 12 and 14 in each theme
-      show no station of the other theme's fill, and that check runs with
-      the tests.
+   1. **Station marks hold their theme.** Withdrawn 2026-11-07: pixel
+      probes of headless captures at 10.3, 11.2, 12 and 14 in both themes,
+      with and without a mid-session switch, found every station image and
+      every rendered mark in the right theme. What looked wrong is the
+      edge's weight at small sizes, handled in step 2.
    2. **Shared track from 9 to 11.** On shared track, one mark per station
       cluster below 11: stations on the same piece closer than a bar's
       length collapse to the strongest, and a bar is turned only where the
       lines it spans are parallel for its whole length, otherwise it is a
       dot. A hub mark for the place where the most lines meet from 9.75.
+      The tick's edge scaled with its size, so from 9 to 11 the fill is most
+      of the mark and a dark-mode tick reads dark.
       *Done when:* at 10 and 10.5 on a phone, no two station marks overlap
       downtown, the bar at the B and G split is square to both lines, and
       Union Station has a mark.
@@ -1875,9 +1901,10 @@ RTD GTFS ──────────────────────┼�
       as the map's marks, at the zoom the Key is opened at, with a Live row
       (train arrow, bus arrow) when Live is on.
       *Done when:* no symbol in the Key is a second drawing of anything.
-   7. **Live says what it shows.** Trains from the letter zoom (9.75) unless
-      it fails on screen; below the bus zoom the pill says "Live, zoom in for
-      buses"; the pill shows age ("just now", "2 min ago"), never a clock;
+   7. **Live says what it shows.** (Done 2026-11-07.) Trains from the letter
+      zoom (9.75), which held up on screen; below the bus zoom the map says
+      "Trains are on the map. Zoom in for buses." (a status line, not the
+      pill); the pill shows age ("just now", "2 min ago"), never a clock;
       the dot's states (fresh, stale, off) are named in the Key's Live row.
       *Done when:* Live on at any zoom shows something live or says why
       not, and nothing on the pill can be read as the time of day.
@@ -1909,7 +1936,7 @@ RTD GTFS ──────────────────────┼�
        *Done when:* the five tasks are measured and what failed is listed
        under a V3 review.
    Started 2026-11-07: the relay (a Durable Object, see "Live data"), the
-   Live button, and vehicles on the map: trains from zoom 11 in their line's
+   Live button, and vehicles on the map: trains from zoom 9.75 (at first 11) in their line's
    color with the letter from 12.5, buses from 13 with the number from 16,
    gliding between updates; a tap on a vehicle opens its route; Live is
    remembered between visits; stale or missing positions are said so. The
@@ -2391,6 +2418,34 @@ RTD GTFS ──────────────────────┼�
   Live pill that says what it shows), then other times, live tiers, alerts
   and predictions, then the five-person test. Ordered so the first screen
   is right before the schedule work, which is larger and separable.
+- 2026-11-07: Rail letters are placed 380 px apart (at the middle of each
+  zoom's range) instead of 700. A set is shown for a whole zoom because a
+  filter sees the zoom as a whole number, so 700 meant 990 px at the far end
+  and lines crossing a phone with no letter; 380 is 270 to 540 px.
+- 2026-11-07: The V2 review's "wrong theme" station marks did not
+  reproduce: pixel probes of headless captures at 10.3, 11.2, 12 and 14 in
+  both themes, with and without a mid-session switch, found every station
+  image and every rendered mark in the right theme. The look comes from the
+  tick's 1.6 px light edge on a 6 to 8 px mark drawn below full size, which
+  is most of the mark. No code changed; roadmap step 1 is withdrawn and the
+  edge's weight moves into step 2.
+- 2026-11-07: Live trains draw from zoom 9.75 (was 11), the letter zoom.
+  Checked on a phone in both themes at 9.75, 10.3 and 11 with Live on: about
+  31, 19 and 13 trains in view, small arrows in the line's color that sit on
+  the lines without covering the rail letters or station ticks, so nothing
+  failed and the lower zoom stays. Train letters stay at 12.5; at these
+  sizes they would cover the line's own letter bullets. Buses stay at 13.
+- 2026-11-07: The Live pill shows the age of the positions ("Live, just
+  now", "Live, 2 min ago"), never a clock time, and is redrawn every few
+  seconds. "Just now" is under 30 s, about the feed's own update interval.
+  Past the stale limit the age stays and the dot dims. The time it showed
+  read as the time of day, not as how current the data was.
+- 2026-11-07: When Live is on and trains or buses are out of view for the
+  zoom, a status line says so once ("Zoom in to see the trains." below 9.75;
+  "Trains are on the map. Zoom in for buses." to 13), on turning Live on and
+  when the zoom settles across a threshold, not on every zoom tick. It
+  clears itself, and never replaces a loading or failure line. The pill is
+  not used for this, so it keeps one job, saying how fresh the data is.
 
 ## Sources
 
