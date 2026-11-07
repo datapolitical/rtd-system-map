@@ -4,6 +4,7 @@
 
 import { textOn } from './color.js';
 import { P, PALETTES } from './palette.js';
+import { ZOOMS } from './sizes.js';
 
 // Phones, and any short screen (a phone on its side): framing, key closed,
 // panel as a bottom sheet. The same query is in app.css.
@@ -40,21 +41,18 @@ export const TIERS = [
 export const PART_TIME = ['peak', 'limited', 'none', 'unknown'];
 export const TIER_RANK = Object.fromEntries(TIERS.map((t, i) => [t.id, TIERS.length - i]));
 
-// Below this zoom the map is an overview of the whole network: the lines, a
-// letter at each rail line's end, and city names. Station marks, the names
-// on end signs, bus numbers and FlexRide zones start here, where stations
-// along a line are far enough apart on screen to tell apart. A phone showing
-// the whole network is below it; a laptop is just above.
-export const OVERVIEW_UNTIL = 9;
-// Between the overview and here, the map names only what someone choosing a
-// line or a place to change needs: lines, the stations where routes meet,
-// frequent buses, cities. Every other station's name, town names, FlexRide
+// Below OVERVIEW_UNTIL (sizes.js) the map is an overview of the whole
+// network. Between the overview and here, the map names only what someone
+// choosing a line or a place to change needs: lines, the stations where
+// routes meet, frequent buses, cities. Every other station's name, town names, FlexRide
 // zones and the smaller highway numbers start here, where there's room for
 // them and a reason to read them. (A whole zoom: filters read the zoom in
 // whole steps.)
 export const DETAIL_FROM = 11;
 
-export const ZOOMS = [9, 11, 13, 16];
+// ZOOMS is in sizes.js, beside the widths given at it; exported here too,
+// beside byZoom.
+export { ZOOMS };
 export const byZoom = (values) => ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, values[i]])];
 export const tierMatch = (pick, key = 'tier') => ['match', ['get', key], ...TIERS.flatMap((t) => [t.id, pick(t)]), pick(TIERS.at(-1))];
 export const tierWidth = (extra = 0) =>
@@ -136,7 +134,7 @@ export const goesText = (r) => (r.goes?.length ? r.goes.map((g) => g.name).join(
 
 // The route's bullet: a lettered circle in the line's colour for rail, a
 // pill in the route's tier for bus (pillStyle, as on the map). `lines` is the
-// rail style (railStyle in main.js). Both themes' colours ride on the element
+// rail style (railStyle in network.js). Both themes' colours ride on the element
 // as custom properties and app.css picks the pair that matches the system
 // setting, so a bullet already on the page (a panel, the results) follows a
 // change of theme with no redraw.

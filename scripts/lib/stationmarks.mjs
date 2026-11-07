@@ -10,31 +10,26 @@
 // one wait until they're clear), whether the tick can be turned across the
 // lines or must be a dot, and which station is the hub.
 
-// The map's rail sizes (public/js/main.js: RAIL_WIDTH, RAIL_GAP, and the zooms
-// in public/js/shared.js: ZOOMS). Kept in step by hand: a mismatch only makes
-// the spacing here a little off, never hides a line's only station.
-export const RAIL_WIDTH = [3, 4, 5.6, 9];
-export const RAIL_GAP = 2;
-export const ZOOMS = [9, 11, 13, 16];
-// The tick (main.js, "dot-"): its size across the track, before scaling, and
-// how far it reaches past the outer lines. Spacing is a line's width and gap
+// The map's rail and station sizes and the zooms its station marks change
+// at, from the page's own module (public/js/sizes.js), so the two can't
+// disagree: RAIL_WIDTH and RAIL_GAP, the ZOOMS they're given at, the tick's
+// size across the track (TICK, drawn as "dot-" in symbols.js) and the hub
+// ring's extra width (HUB_EXTRA, "hub-"). Spacing is a line's width and gap
 // at the widest zoom, as the images are drawn there.
-export const SPACING = RAIL_WIDTH.at(-1) + RAIL_GAP;
-export const TICK = { across: 10, single: 8 };
-// The hub's ring (main.js, "hub-"): as wide as a tick across its lines plus
-// this much, so it encloses the knot.
-export const HUB_EXTRA = 12;
-// Ticks are drawn from TICK_FROM, the hub's ring from HUB_FROM, both until
-// TICK_TO, where every station has its full mark.
-export const TICK_FROM = 9;
-export const HUB_FROM = 9.75;
-export const TICK_TO = 11;
+import { CAPSULE_TO, FAR_STEP, HUB_EXTRA, HUB_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, TICK, ZOOMS } from '../../public/js/sizes.js';
+export const SPACING = STATION_SPACING;
+// Ticks are drawn from TICK_FROM (the end of the overview), the hub's ring
+// from HUB_FROM, both until TICK_TO, where every station has its full mark
+// (the page's CAPSULE_TO).
+export const TICK_FROM = OVERVIEW_UNTIL;
+export { HUB_FROM };
+export const TICK_TO = CAPSULE_TO;
 // Two marks on one track count as clear of each other when they are the
 // longer one's length apart plus this (px): two dots 4 px wide and 5 px apart
 // read as one blot.
 export const CLEAR_PX = 4;
 // Collapse is decided in quarter zooms: the map fades a tick in over one.
-export const STEP = 0.25;
+export const STEP = FAR_STEP;
 // Lines a tick spans are parallel if, over the tick's length either way along
 // the track, their drawn distance apart changes by less than this (px).
 const PARALLEL_PX = 1;
@@ -49,7 +44,7 @@ export function metersPerPixel(zoom, lat) {
 }
 
 /**
- * The scale the map draws station images at (main.js `stationSize`): a line's
+ * The scale the map draws station images at (network.js `stationSize`): a line's
  * width and gap at `zoom` over SPACING, interpolated as MapLibre does
  * (exponential, base 1.4) between ZOOMS.
  */

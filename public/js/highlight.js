@@ -2,7 +2,7 @@
 // strength and fades the rest of the network to about 20%.
 //
 // The fading is done with MapLibre global state, so the layer definitions in
-// main.js carry the rule once and choosing a route is two cheap property
+// network.js carry the rule once and choosing a route is two cheap property
 // writes (no layer is rebuilt and no tile reloads):
 //   sel          the route code, or '' when nothing is chosen
 //   selStations  the ids of the stations on it, as " 89 232 "
@@ -38,7 +38,7 @@ const broken = tierIs(PART_TIME);
 // stretch keeps its own tier's colour, dash and width (only a little bolder),
 // so the lighter parts are still the parts that come less often. Dashes can't
 // vary by feature in MapLibre, so there is one layer per dash pattern, drawn
-// with the same filters as the network layers they sit over (main.js).
+// with the same filters as the network layers they sit over (network.js).
 const SEL_PARTS = [
   { id: 'sel-bus', where: ['!', broken], cap: 'round' },
   { id: 'sel-bus-dashed', where: ['all', broken, ['!=', ['get', 'tier'], 'limited']], dash: [3, 2] },

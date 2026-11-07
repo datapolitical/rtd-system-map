@@ -1226,8 +1226,8 @@ Each bus tier fades in over about a zoom level rather than popping on.
 
 ### Symbols
 
-Every symbol below is drawn once, by `addSymbol` in `public/js/main.js` or by
-its layer's paint, and the key shows that same drawing at the size the map
+Every symbol below is drawn once, by `addSymbol` in `public/js/symbols.js` or
+by its layer's paint, and the key shows that same drawing at the size the map
 draws it at its zoom (see "The key"). Nothing in the key is a second drawing.
 
 - **Park-n-Ride:** a small slate "P" sign drawn as an icon, not a text
@@ -1973,6 +1973,37 @@ RTD GTFS ──────────────────────┼�
   dev` runs the site locally with `wrangler pages dev`, and `npm run
   dev:live` the relay beside it, which the site finds on its own.
 - Updates are automatic (see "Zero maintenance").
+
+The page is plain ES modules in `public/js/`, served as they are (no
+bundler), one concern to a file, so a change to one concern is a change to
+one file:
+
+- `main.js`: startup only. Makes the map, its controls and framing ("Opening
+  state", "Layout"), the theme switch, and wires the other modules to it.
+- `network.js`: RTD's network as map layers: each line's colors in both
+  themes (`railStyle`), lines and areas (`transitLines`), stations, signs,
+  letters and names (`transitMarks`), their zooms, and the data sources.
+- `symbols.js`: every picture the map draws on a canvas, by image id
+  (stations, bullets, signs, vehicles, shields, icons), drawn on demand.
+- `legend.js`: the key ("The key"), drawn from the layers and `symbols.js`.
+- `sizes.js`: rail widths, station mark sizes and the zooms marks change at.
+  No DOM or MapLibre, so the build imports the same file
+  (`scripts/lib/stationmarks.mjs`) rather than a copy kept in step by hand;
+  it sits in `public/` because that is served with no copy step.
+- `basemap.js`: our basemap's layers on OpenFreeMap tiles ("Basemap").
+- `palette.js`, `color.js`: every color in both themes, and the rules that
+  keep RTD's colors legible ("Dark mode", "Rail line colors").
+- `shared.js`: bus tiers, frequency words and formatting both the map and
+  the panels use.
+- `highlight.js`: fading the rest of the network when a route is open.
+- `select.js`, `panel.js`: what a tap opens, the panels' words, and the
+  panel container ("One tap model").
+- `search.js`: the search box ("Search").
+- `edgeletters.js`: a line's letter where it enters the screen.
+- `evaluate.js`: style expressions worked out for one zoom, for the key.
+- `live.js`, `realtime.js`, `age.js`, `track.js`: Live: the button and
+  vehicles, the relay's protocol, the pill's words, and on-track checks.
+- `tabbable.js`: Tab order for Safari.
 
 ## Milestones
 
@@ -2728,6 +2759,11 @@ RTD GTFS ──────────────────────┼�
   while Live is on. Redrawn on open, zoom, theme and Live. Below the
   vehicles' zooms the Live rows say "zoom in to see them" rather than a
   zoom number, which riders never see.
+- 2026-11-07: The page's code is split by concern: startup (`main.js`),
+  layers (`network.js`), drawn symbols (`symbols.js`) and the key
+  (`legend.js`), so agents and people each edit one concern in one file. The
+  sizes the build also needs are in one module (`sizes.js`) that both
+  import; before, `stationmarks.mjs` and `basemap.js` copied them by hand.
 
 ## Sources
 

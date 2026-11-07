@@ -6,7 +6,8 @@
 // layer lists are functions, called again when the system theme changes.
 
 import { P } from './palette.js';
-import { DETAIL_FROM, OVERVIEW_UNTIL, TIERS, ZOOMS, tierWidth } from './shared.js';
+import { DETAIL_FROM, TIERS, tierWidth } from './shared.js';
+import { OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, ZOOMS } from './sizes.js';
 
 // Overpass, the interface's own face, drawn from glyphs the site makes itself
 // (scripts/glyphs.mjs).
@@ -142,10 +143,8 @@ const clear =(id, source, rest) => ({
   layout: { 'icon-image': 'clear', 'icon-allow-overlap': true, 'icon-ignore-placement': false, 'icon-padding': 0, ...rest.layout },
   ...Object.fromEntries(Object.entries(rest).filter(([k]) => k !== 'layout')),
 });
-// Rail's footprint in px at the ZOOMS stops, matching RAIL_WIDTH and RAIL_GAP
-// in main.js (a line's width, and the gap between lines sharing track).
-const RAIL_WIDTH = [3, 4, 5.6, 9];
-const RAIL_GAP = 2;
+// Rail's footprint in px at the ZOOMS stops: RAIL_WIDTH and RAIL_GAP
+// (sizes.js, a line's width, and the gap between lines sharing track).
 const byZoom = (values) => ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, values[i]])];
 const slot = ['abs', ['coalesce', ['get', 'slot'], 0]];
 const KEEP_OUT = 2; // px of clear space on each side, besides the shield's own icon-padding
@@ -154,7 +153,7 @@ const KEEP_OUT = 2; // px of clear space on each side, besides the shield's own 
 // number. The lines are what the map is of, and a name can sit a little to
 // one side where a line can't. Every rail and bus line that is drawn takes up
 // its own room, and every name is placed after it. Only what names a line is
-// placed before: its letter or number, which sits on it (main.js puts these
+// placed before: its letter or number, which sits on it (network.js puts these
 // layers just under those and above the station names).
 //
 // Rail and the strongest bus tier are kept clear at every zoom. The other bus
@@ -184,7 +183,7 @@ const busKeepOut = () =>
       layout: { ...alongLine, 'icon-size': tierWidth(1) },
     });
   });
-// Rail and the strongest bus tier: what station names stay off (main.js).
+// Rail and the strongest bus tier: what station names stay off (network.js).
 export const lineKeepOut = () => [
   busKeepOut()[0],
   clear('keep-out-rail', 'routes', {
@@ -445,7 +444,7 @@ export function basemapLabels() {
     }),
   ];
   // Stacking is placement priority (the top goes first), and every one of
-  // these is placed after the lines, the stations and their names (main.js).
+  // these is placed after the lines, the stations and their names (network.js).
   // From the top: stations and stops, which hold all of these back; city
   // names; the other place names; the lighter bus lines' room below
   // THIN_CLEAR_FROM; highway numbers; street names.

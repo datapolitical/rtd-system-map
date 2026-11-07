@@ -314,7 +314,7 @@ async function main() {
   // Stations know their buses too, so a highlighted bus keeps the stations
   // it stops at.
   // And how many routes meet there, trains and buses together: the stations
-  // people change at are the ones named first (main.js, 'station-labels').
+  // people change at are the ones named first (network.js, 'station-labels').
   const count = (list) => (list ? String(list).split(' ').filter(Boolean).length : 0);
   index.stations.forEach((s, i) => {
     const p = geo.stations[i].properties;

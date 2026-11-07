@@ -6,7 +6,7 @@
 //
 // The theme follows the system setting. There is no toggle and nothing is
 // stored. A rail line's colour is not here: it comes from RTD's data, and
-// railStyle (main.js) adjusts it for each theme by rule.
+// railStyle (network.js) adjusts it for each theme by rule.
 //
 // Contrast against the land is the rule for anything a rider must read or
 // follow: text 4.5:1 (3:1 for large text), essential lines 3:1. The bus tiers
@@ -146,7 +146,7 @@ const dark = {
 export const PALETTES = { light, dark };
 
 // Rail colours from RTD's data are lifted until they reach this contrast
-// against the dark land (railStyle, main.js). Light colours are left alone.
+// against the dark land (railStyle, network.js). Light colours are left alone.
 export const DARK_RAIL_MIN = 4;
 
 const query = matchMedia('(prefers-color-scheme: dark)');

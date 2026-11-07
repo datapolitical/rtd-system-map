@@ -39,7 +39,7 @@ const offFaint = ['case', ['boolean', ['get', 'off'], false], OFF_TRACK_OPACITY,
 
 /**
  * The vehicle layers, above everything else. Each vehicle is a rounded arrow
- * (drawn in main.js, addSymbol) turned to its heading, with its letter or
+ * (drawn in symbols.js, addSymbol) turned to its heading, with its letter or
  * number upright over it from closer in. Re-applied on a theme change.
  */
 export function vehicleLayers(lines) {
