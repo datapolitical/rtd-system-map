@@ -12,6 +12,7 @@ import { STATE, fade, isRoute, inList, onRoute, selectionLines, selectionMarks }
 import { initSelection, closePanel, loadDirectory } from './select.js';
 import { initSearch } from './search.js';
 import { keepTabbable } from './tabbable.js';
+import { initLive, vehicleLayers } from './live.js';
 
 // Start the map's worker downloading while the network summary loads.
 maplibregl.prewarm();
@@ -186,7 +187,7 @@ async function main() {
       glyphs: GLYPHS,
       state: STATE,
       sources: { ...BASEMAP_SOURCES, ...dataSources() },
-      layers: lettersFirst([...basemapBelow(), ...transitLines(lines), ...basemapLabels(), ...transitMarks(lines)]),
+      layers: [...lettersFirst([...basemapBelow(), ...transitLines(lines), ...basemapLabels(), ...transitMarks(lines)]), ...vehicleLayers(lines)],
     },
     bounds: start.bounds,
     fitBoundsOptions: { padding: start.padding },
@@ -303,7 +304,11 @@ async function main() {
   let ready = false;
   map.once('load', () => (ready = true));
   followScheme(() => (ready ? applyTheme(map, lines, legend) : map.once('load', () => applyTheme(map, lines, legend))));
-  initSelection(map, { lines, legend, opening });
+  const context = { lines, legend, opening };
+  initSelection(map, context);
+  // Live: the button, the relay connection and the vehicles. A tap on a
+  // vehicle is the selection code's first question.
+  context.tapped = initLive(map, { meta, status: showStatus }).tapped;
   initSearch({ lines });
   map.getCanvas().setAttribute('aria-label', 'Map of RTD bus and rail routes. Arrow keys move the map; plus and minus zoom. To open a route or place, use Search or Lines.');
 }
@@ -348,7 +353,7 @@ async function openNearby(map, locate, inArea) {
 // every drawn symbol (tags, signs, stations, shields, icons) redrawn at the
 // same size, then the key.
 function applyTheme(map, lines, legend) {
-  const layers = [...basemapBelow(), ...transitLines(lines), ...basemapLabels(), ...transitMarks(lines), ...(map.getSource('terrain') ? TERRAIN.layers : [])];
+  const layers = [...basemapBelow(), ...transitLines(lines), ...basemapLabels(), ...transitMarks(lines), ...(map.getSource('terrain') ? TERRAIN.layers : []), ...vehicleLayers(lines)];
   for (const { id, paint } of layers) {
     if (!map.getLayer(id)) continue;
     for (const [name, value] of Object.entries(paint ?? {})) map.setPaintProperty(id, name, value);
@@ -380,6 +385,8 @@ function dataSources() {
     ),
     // The route that is open: its two ends, named on the map.
     selection: { type: 'geojson', data: EMPTY },
+    // Vehicles at their live positions (live.js), while Live is on.
+    vehicles: { type: 'geojson', data: EMPTY },
   };
 }
 
@@ -922,6 +929,34 @@ function addSymbol(map, id, lines) {
   }
 
   // Rail bullets: a circle in the line's color, outlined like the line.
+  // Vehicles (Live): a rounded arrow, a circle drawn out to a point, turned
+  // to the vehicle's heading by the layer. "vehicle-E" is a train in its
+  // line's color, "vehicle-bus" a bus in ink; both sit on a ring of land
+  // color so they read on top of their line. The letter or number is text
+  // over it, so it stays upright however the arrow turns.
+  const vehicle = id.match(/^vehicle-(.+)$/);
+  if (vehicle) {
+    const train = vehicle[1] !== 'bus';
+    const line = train ? lines.of(vehicle[1]) : null;
+    const size = train ? 24 : 16;
+    const r = train ? 7.5 : 5;
+    const c = size / 2;
+    const tip = c - r * 1.55; // how far the point reaches past the circle
+    const spread = Math.acos(r / (c - tip)); // where the point's sides meet the circle
+    const ctx = canvas(size, size);
+    ctx.beginPath();
+    ctx.moveTo(c, tip);
+    ctx.arc(c, c, r, -Math.PI / 2 - spread, -Math.PI / 2 + spread, true);
+    ctx.closePath();
+    ctx.fillStyle = train ? (line?.color ?? P.ink) : P.ink;
+    ctx.fill();
+    ctx.lineWidth = train ? 1.75 : 1.5;
+    ctx.strokeStyle = P.land;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    return add(ctx);
+  }
+
   if (id.startsWith('bullet-')) {
     const line = lines.of(id.slice('bullet-'.length));
     const ctx = canvas(20, 20);

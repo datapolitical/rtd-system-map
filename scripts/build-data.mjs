@@ -6,6 +6,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { discoverLayers, downloadLayer } from './lib/arcgis.mjs';
 import { clock, csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, riderNames, routeFrequency, tierOf } from './lib/gtfs.mjs';
+import { RT_FEEDS, liveRoutes } from './lib/realtime.mjs';
 import { coreBounds } from './lib/core.mjs';
 import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
@@ -135,6 +136,11 @@ async function main() {
   const renamed = [...nameOf].filter(([code, name]) => code !== name);
   const unmatched = [...members].filter(([, found]) => !found.length).map(([route]) => route);
   const notOnMap = gtfsRoutes.filter((r) => !groupOf.has(r.route_id)).map((r) => r.route_short_name || r.route_id);
+
+  // Live: what RTD's realtime feeds call each route, learned from the trips
+  // both feeds name (scripts/lib/realtime.mjs). A feed that's down teaches
+  // nothing today and never fails the build.
+  const live = await liveRoutes(gtfs.text, groupOf);
 
   console.log('Measuring frequency…');
   const timezone = readCsv(gtfs.text['agency.txt'])[0]?.agency_timezone || 'America/Denver';
@@ -373,6 +379,9 @@ async function main() {
       .map((p) => ({ ...p, ends: railEnds(p.route) })),
     counts,
     tiers,
+    // The Live relay's feeds, and the realtime route ids that belong to a map
+    // route under another name (public/js/realtime.js, routeOf).
+    live: { feeds: RT_FEEDS, routes: live.routes },
     stations: {
       unserved: unserved.map((f) => ({ name: f.properties.name, returns: f.properties.returns })),
       gtfsRailStationsNotOnMap: service.unmatched,
@@ -416,6 +425,9 @@ async function main() {
   if (renamed.length) console.log(`  shown by their timetable name: ${renamed.map(([code, name]) => `${code} as ${name}`).join(', ')}`);
   if (unmatched.length) console.log(`  map routes not in GTFS: ${unmatched.join(', ')}`);
   if (notOnMap.length) console.log(`  GTFS routes not on RTD's map: ${notOnMap.join(', ')}`);
+  console.log(`  realtime route names learned from ${live.seen} trips: ${live.learned.map((id) => `${id} is ${live.routes[id]}`).join(', ') || 'none'}`);
+  for (const line of live.conflicts) console.log(`  realtime route name in doubt, ${line}`);
+  for (const line of live.failed) console.log(`  realtime feed not read: ${line}`);
 }
 
 // GTFS times are HH:MM:SS and may pass 24:00.

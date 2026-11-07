@@ -12,5 +12,6 @@ RTD's data at build time so RTD's changes flow through with no code change
 
 - `npm run build` downloads RTD's public ArcGIS layers and GTFS into
   `public/data/` (generated, not committed).
-- `npm run dev` serves the site and the GTFS-realtime relay locally with
-  `wrangler pages dev` on port 8788.
+- `npm run dev` serves the site locally with `wrangler pages dev` on port 8788;
+  `npm run dev:live` runs the Live relay (a Durable Object in `live/`) beside
+  it on 8789, which the site finds on its own.

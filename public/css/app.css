@@ -53,6 +53,7 @@
   --locate-icon-off: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M16.5 3.5 3.5 9.3l5.9 1.3 1.3 5.9z' fill='none' stroke='%239aa5b0' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
   --ctrl-hover: rgba(0, 0, 0, 0.05);
   --top-row: 64px; /* the key button sits under the search box */
+  --live: #e89a00; /* the Live button when on, and the live mark (DESIGN.md, "Visual tokens") */
   --panel-top: 116px; /* and a card on wide screens under both */
 }
 
@@ -1319,5 +1320,84 @@ body {
   .maplibregl-ctrl button:not(:disabled):hover,
   .maplibregl-ctrl button:not(:disabled):active {
     background-color: var(--ctrl-hover);
+  }
+}
+
+/* Live: the one labeled button, in the key's row at the right (DESIGN.md,
+   "Interface"). Off, white with the word. On, filled with the live mark and
+   the time of the positions shown; the mark stops pulsing while positions
+   aren't arriving. */
+.live-button {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--top-row) + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 16px 0 14px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 700 15px/1 var(--font);
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.live-button .live-text {
+  padding-top: 2px; /* Overpass sits high in its line */
+}
+
+.live-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.live-button[aria-pressed='true'] {
+  background: var(--live);
+  color: #17222e;
+}
+
+.live-button[aria-pressed='true'] .live-dot {
+  background: #17222e;
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+.live-button.stale[aria-pressed='true'] .live-dot {
+  animation: none;
+  opacity: 0.4;
+}
+
+.live-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-button[aria-pressed='true'] .live-dot {
+    animation: none;
+  }
+}
+
+/* On a phone the open key fills the width, so the button waits beneath it. */
+@media (max-width: 767px) {
+  .legend[open] ~ .live-button {
+    display: none;
   }
 }

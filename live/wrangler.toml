@@ -1,0 +1,23 @@
+# The Live relay: a Durable Object (live/src/worker.mjs) that polls RTD's
+# GTFS-realtime feeds while anyone has Live on and pushes changes to the pages
+# over WebSockets. The Pages project binds to it (wrangler.toml at the root).
+# Deploy from the repository root:
+#   npx wrangler deploy --config live/wrangler.toml
+name = "rtd-system-map-live"
+main = "src/worker.mjs"
+compatibility_date = "2025-06-01"
+workers_dev = false
+
+[durable_objects]
+bindings = [{ name = "LIVE_ROOM", class_name = "LiveRoom" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveRoom"]
+
+[vars]
+# Where RTD publishes VehiclePosition.pb, TripUpdate.pb and Alerts.pb.
+FEEDS = "https://open-data.rtd-denver.com/files/gtfs-rt/rtd/"
+
+[observability]
+enabled = true

@@ -67,6 +67,12 @@
       <div class="legend-more" aria-hidden="true"><span>More below</span></div>
     </details>
 
+    <!-- Live: the one labeled button, because it changes what the map means.
+         Off, the word; on, the live mark and the time of the positions shown. -->
+    <button class="live-button" id="live-button" type="button" aria-pressed="false" title="Show the trains and buses where they are right now">
+      <span class="live-dot" aria-hidden="true"></span><span class="live-text">Live</span>
+    </button>
+
     <div id="map" role="region" aria-label="Map"></div>
 
     <!-- The panel for whatever is open: a bottom sheet on phones, a card on

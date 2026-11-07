@@ -23,7 +23,7 @@ import { TIERS, TIER_RANK, bullet, dayFreq, date, esc, freq, goesText, isPhone, 
 const ROUTE_LAYERS = ['bus', 'bus-part-time', 'bus-limited', 'rail', 'rail-part-time'];
 const STATION_LAYERS = ['stations', 'stations-dot', 'stations-unserved'];
 const TAG_LAYERS = ['rail-bullets', 'line-signs'];
-const POINTER_LAYERS = [...ROUTE_LAYERS, ...STATION_LAYERS, 'facilities', 'stops', ...TAG_LAYERS, 'flexride-fill'];
+const POINTER_LAYERS = [...ROUTE_LAYERS, ...STATION_LAYERS, 'facilities', 'stops', ...TAG_LAYERS, 'flexride-fill', 'vehicles-rail', 'vehicles-bus'];
 
 // A park-and-ride or transit center this close to a station is that station's
 // (the data puts every station's own facility within 260 m, and the next
@@ -621,6 +621,9 @@ async function onTap(e) {
   const pad = coarse.matches ? 16 : 8;
   const at = [e.lngLat.lng, e.lngLat.lat];
   if (isPhone()) setLegend(false);
+
+  // A vehicle (Live): its route. live.js answers, when Live is on.
+  if (ctx.tapped?.(e.point, pad)) return;
 
   // A place: station (whichever symbol was hit), then Park-n-Ride, then stop.
   const station = closest(near(e.point, pad, STATION_LAYERS), e.point);

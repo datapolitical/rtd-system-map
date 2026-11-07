@@ -651,11 +651,37 @@ every 30 seconds. VehiclePosition is about 32 KB and covers about 380 vehicles
 with route, trip, position, heading, and occupancy. TripUpdate is about 340 KB.
 
 These feeds don't allow cross-site requests (no CORS headers, and the
-browser's preflight check gets a 403). The site therefore relays them through a
-same-origin Cloudflare Pages Function. The relay passes the raw bytes through
-and caches each feed for about 10 seconds at the edge, so RTD sees roughly one
-request per feed per edge location no matter how many people are viewing. The
-browser decodes the protobuf itself.
+browser's preflight check gets a 403), so the page can't read them itself. The
+site relays them, and the relay pushes rather than being polled: one
+Cloudflare Durable Object (`live/`, class `LiveRoom`) fetches the feeds
+while anyone has Live on and sends each change to every open page over a
+WebSocket (`/live/stream`, a Pages Function that hands the socket to the
+object; same-origin only). The object polls RTD every 15 seconds, asks for
+alerts once a minute, stores the latest decoded state, and stops polling when
+the last page leaves, so RTD sees at most four requests a minute from the
+whole site, and nothing at all when nobody is watching. A page that connects
+gets the current state at once; one that sees nothing new gets a small tick
+so it knows the relay is alive. The object decodes the protobuf
+(`live/src/gtfsrt.mjs`, a hand-written reader of the few fields used, no
+dependencies) and sends compact JSON, so the page has no decoder to load.
+
+This replaced the first plan, a pull relay (a Pages Function per request with
+a 10-second edge cache). That costs a Pages Function invocation for every
+poll by every viewer, about 240 an hour per person with Live on, against a
+free allowance of 100,000 a day. A push relay costs about one request per
+page per visit plus a fixed four a minute, however many people are watching;
+the nextride departures board uses the same shape of relay.
+
+RTD's realtime feeds name some routes differently from its GTFS: its trains
+report as 101E, 103W, 107R and so on where GTFS says E, W and R, and some
+bus variants (83L, FF1, AB3) report under names GTFS folds into one route.
+The build reads the vehicle and trip-update feeds and learns the table from
+the trips both feeds name (`scripts/lib/realtime.mjs`), writing it to
+`meta.json` as `live.routes`; nothing is listed by hand, and a feed that's
+down at build time teaches nothing that day without failing the build. The
+page puts a vehicle on its route by that table, and for an id the build never
+saw, tries the pattern the table shows (the leading number removed) if that
+names a route on the map; otherwise the vehicle isn't drawn.
 
 What each feed is used for:
 
@@ -665,12 +691,17 @@ What each feed is used for:
 | TripUpdate | Predicted departures in stop and station panels, and how late a vehicle is |
 | Alerts | Alert marks on the map, and alert text in panels |
 
-The page polls vehicles and alerts only while Live is on and the tab is
-visible, about every 15 seconds. Predictions are fetched while a stop or
-station panel is open, in either view. Vehicles glide between updates unless the user prefers
-reduced motion. A position more than two minutes old is dropped rather than
-shown as current. A departure is called live only when it comes from a
-prediction. Otherwise it's scheduled, and looks it.
+The page listens only while Live is on and the tab is visible; a hidden tab
+closes its socket and reconnects, getting the current state at once, when it's
+looked at again. A dropped connection is reopened with a growing wait, up to
+half a minute, spread so a relay restart isn't met by every page at once.
+Predictions (TripUpdate) are not relayed yet; they will be asked for per stop
+over the same socket while a stop or station panel is open. Vehicles glide
+between updates unless the user prefers reduced motion. A vehicle whose own
+report is more than two minutes old is not drawn, and when the newest feed the
+relay has is that old, Live says positions aren't loading and shows the map
+without them. A departure is called live only when it comes from a prediction.
+Otherwise it's scheduled, and looks it.
 
 ### Addresses
 
@@ -1289,8 +1320,8 @@ The controls:
 
 ### Layout
 
-Phone: full-screen map, with search at the top and the key under it (Live
-joins the key's row when it ships). A bottom sheet appears only when
+Phone: full-screen map, with search at the top and the key under it, with
+Live at the right of the key's row. A bottom sheet appears only when
 something is open.
 
 ```
@@ -1665,15 +1696,20 @@ RTD Experience item                /              static map app, service worker
 RTD GTFS ──────────────────────┼─> /data/meta.json  source versions used
                                │   /data/schedule   summary for any time of week
                                │   /data/timetables/{route}  for panels
-                               │   /rt/{feed}     Pages Function relay
-             checks pass? ─────┘                   └─> RTD GTFS-realtime
+                               │   /live/stream   WebSocket to the Live relay
+             checks pass? ─────┘                        │
+                                   Live relay Worker (live/): one Durable Object
+                                    polls RTD GTFS-realtime every 15 s while
+                                    anyone is connected, pushes each change
 ```
 
-- Static site with no backend beyond the relay function and the refresh
-  Worker. Live tiers are computed in the page from the schedule summary and
-  the clock, so the server never does per-visitor work. The relay caches each
-  feed at the edge for 10 seconds, so RTD sees a few requests a minute however
-  many people have Live on.
+- Static site with no backend beyond the Live relay and the refresh Worker.
+  Live tiers are computed in the page from the schedule summary and the
+  clock, so the server never does per-visitor work. The relay is one Durable
+  Object that polls RTD while anyone has Live on and pushes to every page
+  over WebSockets, so RTD sees at most four requests a minute however many
+  people are watching, and the site's cost is a request per connection, not
+  per poll (see "Live data").
 - MapLibre GL JS for the map, plain ES modules, no framework. MapLibre
   rather than Leaflet because the basemap is vector tiles we restyle, shared
   track depends on `line-offset` (parallel lines a fixed pixel distance apart
@@ -1683,7 +1719,8 @@ RTD GTFS ──────────────────────┼�
   but carry an unpatched attribution XSS (fixed in 6.4.1) and get no fixes.
   The page preloads the main module and starts the worker early.
 - `npm run build` discovers, fetches, checks, and writes the data; `npm run
-  dev` runs the site and relay locally with `wrangler pages dev`.
+  dev` runs the site locally with `wrangler pages dev`, and `npm run
+  dev:live` the relay beside it, which the site finds on its own.
 - Updates are automatic (see "Zero maintenance").
 
 ## Milestones
@@ -1757,6 +1794,15 @@ RTD GTFS ──────────────────────┼�
    the schedule says that night), every idle line says when it starts, and
    stopping the relay leaves a working map that says it's showing the
    schedule.
+   Started 2026-11-07: the relay (a Durable Object, see "Live data"), the
+   Live button, and vehicles on the map: trains from zoom 11 in their line's
+   color with the letter from 12.5, buses from 13 with the number from 16,
+   gliding between updates; a tap on a vehicle opens its route; Live is
+   remembered between visits; stale or missing positions are said so. The
+   build learns the realtime route names. Not done: the schedule summary and
+   live tiers, the not-running hairlines, the key's time choices, alerts on
+   the map (the relay carries them, the page doesn't draw them yet),
+   predictions and vehicle panels.
 4. **From here, search, near me, shareable links, Directions.**
 5. **Task testing** with five people; fix what fails.
 6. **Publish** to Cloudflare Pages from a public GitHub repo, with the hourly
@@ -2211,6 +2257,20 @@ RTD GTFS ──────────────────────┼�
   Station names stay within about two ems of their mark, corners first
   (Imhof, Brewer), or aren't drawn; the hub's name alone may go further.
   Judged on the four fixed phone views before and after.
+- 2026-11-07: The Live relay is a Durable Object that pushes, not a Pages
+  Function that is polled. The pull relay planned in V1 would have cost a
+  function invocation for every poll by every viewer (about 240 an hour each)
+  against a free allowance of 100,000 a day, and a hundred people with Live
+  on for an evening would have used most of it. One object polls RTD every
+  15 seconds while anyone is connected, stops when nobody is, and pushes
+  each change to every page over a hibernating WebSocket, so the cost is one
+  request per connection plus a fixed four a minute. Modelled on the
+  nextride departures board's relay, with no home server and no key: the
+  object fetches RTD's public feeds itself. The realtime route names (101E,
+  103W, 83L) are learned at build time from the trips both feeds name, not
+  listed, keeping Rule 1. Each vehicle is a rounded arrow turned to its
+  heading, a train in its line's color with its letter upright over it, a bus
+  in ink; distinct from the letter bullets that sit on the lines.
 
 ## Sources
 
