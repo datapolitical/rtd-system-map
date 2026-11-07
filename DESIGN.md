@@ -1684,6 +1684,59 @@ transit. "Transit visible" here is when the first transit layer was added;
 filmed, transit reached the phone's screen with the basemap, at 8.4 s. V2's
 step 1 shows it at 6.7 s, measured the same way. Compressed sizes: routes 141 KB, stops 121 KB, boundary 28 KB.
 
+## V2 review (red team, 2026-11-07)
+
+What V2 gets wrong, measured on Chris's phone in dark mode at zoom 10.5 and
+on headless captures at 9.2, 10.3, 11.2, 12 and 14 in both themes. V3 fixes
+each of these; the roadmap under "Milestones" says in what order.
+
+**Correctness**
+
+- Station marks draw in the wrong theme. In dark mode the single-line
+  station dots are dark with a light edge, as the palette says, but every
+  shared-track bar is white: the light theme's fill. At 11.2 black and
+  white capsules share one screen, and in light mode at 12 Alameda and
+  I-25/Broadway draw black. The theme pass that redraws images misses the
+  ones added after the first paint.
+- The Key says "Weekdays, 9am to 3pm" on a Saturday morning, beside a Live
+  pill that says now. The two claims sit on one row.
+- Live is on at zoom 10 and nothing on the screen is live: trains draw
+  from 11 and buses from 13, and nothing says to zoom in. The pill's time
+  reads as a clock, not as the age of the data.
+
+**Marks and hierarchy**
+
+- Shared-track stations pile up. Between 10 and 11 the C, E and W corridor
+  has five stations within about a mile; each bar is as wide as three lines
+  and turned to the track where the track is curving, so they stack as
+  rotated pills at the one place people look first. The bar at the B and G
+  split sits crooked because the lines it spans aren't parallel there yet.
+- Union Station has no mark of its own from 9.75 to 11, and its name sits a
+  quarter of the screen west of it, in empty space. "Alameda",
+  "Decatur-Federal" and "Sheridan" float with no visible tie to a mark.
+- Rail letters are spaced about once a screen, so the W and the T cross a
+  phone screen with no letter: a color and nothing else.
+- In dark mode frequent buses are white lines on a near-black ground, and
+  the bus network reads as a street grid; the ribbon up I-25 with the 25
+  shield on it reads as a freeway. Nothing outside the collapsed Key says
+  white means bus.
+- At 14 in light mode buses are ink arrows on ink bus lines and vanish into
+  the 16th Street grid; their numbers wait for 16.
+- The Key draws a rail station as a hollow ring; the map draws a dot at 10
+  and a capsule from 11, and the dot looks like the Key's bus stop.
+- A train in the Union Station yard draws in a park with no track near it
+  and reads as an error.
+
+**What holds**
+
+Shared track (C, E and W; E and R; B and G; A and N) reads as separate
+ribbons with no overlap in both themes at every zoom. Rail leads buses,
+buses lead streets. The overview at 9 is a clean diagram. The train arrows
+read as vehicles, not stations, keep their letter upright, and open their
+route on a tap. The Union Station capsule at 14 is the mark this document
+describes. Live works end to end against the deployed relay, and its stale
+and failure states have words.
+
 ## Architecture
 
 ```
@@ -1785,15 +1838,76 @@ RTD GTFS ──────────────────────┼�
       "From here", and a check with a real screen reader.
       *Done when:* every route and station can be opened by keyboard, and a
       tapped route is unmistakable on a phone.
-3. **Live and other times.** The schedule summary and per-route timetables
-   in the build; the key's time choices; the Live button, with next-90-minute
-   tiers, not-running hairlines, and the minute-by-minute refresh; the relay;
-   vehicles, predictions, and alerts; scheduled departures in panels when
-   Live is off or its feeds fail; returning visitors open as they left.
-   *Done when:* at 9pm on a weekday, Live draws 5 frequent lines (or whatever
-   the schedule says that night), every idle line says when it starts, and
-   stopping the relay leaves a working map that says it's showing the
-   schedule.
+3. **V3, right now: what the map says matches the moment.** Fix what the
+   V2 review found, then finish Live and other times, in this order. Steps
+   1 to 7 are the first screen, each a few hours and independent of the
+   schedule work; 8 to 10 are the build; 11 closes the version.
+   1. **Station marks hold their theme.** Every image is drawn from the
+      current palette, including ones added after the first paint, and a
+      theme change redraws all of them.
+      *Done when:* headless captures at 10.3, 11.2, 12 and 14 in each theme
+      show no station of the other theme's fill, and that check runs with
+      the tests.
+   2. **Shared track from 9 to 11.** On shared track, one mark per station
+      cluster below 11: stations on the same piece closer than a bar's
+      length collapse to the strongest, and a bar is turned only where the
+      lines it spans are parallel for its whole length, otherwise it is a
+      dot. A hub mark for the place where the most lines meet from 9.75.
+      *Done when:* at 10 and 10.5 on a phone, no two station marks overlap
+      downtown, the bar at the B and G split is square to both lines, and
+      Union Station has a mark.
+   3. **Names stay with their marks.** Station names sit within a short,
+      fixed distance of their mark at every zoom, the hub's name first.
+      *Done when:* at 10 to 14, every station name on screen is within that
+      distance of its mark, checked headlessly for the downtown stations.
+   4. **Every line named on every screen.** Letters along rail lines at
+      least once per phone screen, with one where a line enters the view.
+      *Done when:* twenty random phone views at 10 to 12 each show a letter
+      for every rail line that crosses them.
+   5. **Buses look like buses.** A dark-mode bus tint that isn't road white,
+      roads and shields kept under it; bus arrows with a ring that reads on
+      a bus line in both themes, numbers from 14.5; a train off its track
+      drawn fainter.
+      *Done when:* at 14 downtown in light, every bus arrow is countable in
+      a screenshot, and the Key's bus swatch is the map's line in both
+      themes.
+   6. **The Key matches the map.** Key symbols are drawn by the same code
+      as the map's marks, at the zoom the Key is opened at, with a Live row
+      (train arrow, bus arrow) when Live is on.
+      *Done when:* no symbol in the Key is a second drawing of anything.
+   7. **Live says what it shows.** Trains from the letter zoom (9.75) unless
+      it fails on screen; below the bus zoom the pill says "Live, zoom in for
+      buses"; the pill shows age ("just now", "2 min ago"), never a clock;
+      the dot's states (fresh, stale, off) are named in the Key's Live row.
+      *Done when:* Live on at any zoom shows something live or says why
+      not, and nothing on the pill can be read as the time of day.
+   8. **Other times: the key's time choices.** The schedule summary in the
+      build (tiers per route for weekday midday, weekday evening, Saturday,
+      Sunday, and now), and a chooser in the Key's title. The Key opens on
+      the time it is, so a Saturday morning says Saturday.
+      *Done when:* validation task 5 is answerable, and the Key never names
+      a time other than the one the lines are drawn for.
+   9. **Live tiers and hairlines.** From the summary and the feeds, the
+      next-90-minute tier per route when Live is on, hairlines for lines not
+      running with when they start, holding a tier a few minutes at the
+      edges of the day (see "Live window").
+      *Done when:* at 9pm on a weekday, Live draws the lines the schedule
+      says that night and every idle line says when it starts.
+   10. **Alerts, predictions, vehicle panels.** Marks for alerts whose
+       effect is no service, detour, reduced service, significant delay or a
+       moved stop, the rest in panels (see "Alert noise"); next departures
+       from TripUpdate in stop and station panels, scheduled when Live is
+       off or its feeds fail; a vehicle panel with where it's going, its
+       next stop and how full it is.
+       *Done when:* validation task 6 is answerable, and stopping the relay
+       leaves a working map that says it's showing the schedule.
+   11. **Close the version.** Shareable links; a real screen reader pass;
+       the headless captures from steps 1 to 7 re-run; then milestone 5's
+       five people on V3. Publishing (milestone 6) continues beside all of
+       this: the failure email, the public repository, offline caching, a
+       domain.
+       *Done when:* the five tasks are measured and what failed is listed
+       under a V3 review.
    Started 2026-11-07: the relay (a Durable Object, see "Live data"), the
    Live button, and vehicles on the map: trains from zoom 11 in their line's
    color with the letter from 12.5, buses from 13 with the number from 16,
@@ -2271,6 +2385,12 @@ RTD GTFS ──────────────────────┼�
   listed, keeping Rule 1. Each vehicle is a rounded arrow turned to its
   heading, a train in its line's color with its letter upright over it, a bus
   in ink; distinct from the letter bullets that sit on the lines.
+- 2026-11-07: V3 is "right now": the V2 review's fixes first (station marks
+  in both themes, shared-track stations and names from 9 to 11, a letter on
+  every screen, buses that read as buses, a Key drawn by the map's code, a
+  Live pill that says what it shows), then other times, live tiers, alerts
+  and predictions, then the five-person test. Ordered so the first screen
+  is right before the schedule work, which is larger and separable.
 
 ## Sources
 
