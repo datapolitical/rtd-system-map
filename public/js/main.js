@@ -13,6 +13,7 @@ import { initSelection, closePanel, loadDirectory } from './select.js';
 import { initSearch } from './search.js';
 import { keepTabbable } from './tabbable.js';
 import { initLive, vehicleLayers } from './live.js';
+import { edgeLetterLayer, initEdgeLetters } from './edgeletters.js';
 
 // Start the map's worker downloading while the network summary loads.
 maplibregl.prewarm();
@@ -298,6 +299,7 @@ async function main() {
   });
 
   loadWhenNeeded(map);
+  initEdgeLetters(map);
   // The theme follows the system setting, and keeps following it while the page
   // is open: the layers and drawn symbols are re-colored in place, so the map
   // keeps its position, zoom, open route and loaded tiles.
@@ -368,7 +370,8 @@ function applyTheme(map, lines, legend) {
 // letter can't be named, and a number has the rest of its route to sit on.
 function lettersFirst(layers) {
   const [letters] = layers.splice(layers.findIndex((l) => l.id === 'rail-bullets'), 1);
-  layers.splice(layers.findIndex((l) => l.id === 'line-signs'), 0, letters);
+  // The letters added where a line enters the screen (edgeletters.js) go right after.
+  layers.splice(layers.findIndex((l) => l.id === 'line-signs'), 0, letters, edgeLetterLayer(letters));
   return layers;
 }
 
@@ -383,6 +386,8 @@ function dataSources() {
     ...Object.fromEntries(
       DATA_SOURCES.map((name) => [name, { type: 'geojson', data: LAZY.includes(name) ? EMPTY : `data/${name}.geojson` }]),
     ),
+    // A letter for each rail line on screen that has none (edgeletters.js).
+    'rail-edge-letters': { type: 'geojson', data: EMPTY },
     // The route that is open: its two ends, named on the map.
     selection: { type: 'geojson', data: EMPTY },
     // Vehicles at their live positions (live.js), while Live is on.
@@ -892,6 +897,9 @@ const AWAY = {
 // Never below 2, so symbols stay sharp when a screen is zoomed.
 const RATIO = Math.max(2, Math.ceil(devicePixelRatio || 1));
 
+// A live bus arrow's ring, in px outside its edge (addSymbol).
+const BUS_RING = 2.5;
+
 function canvas(width, height) {
   const c = document.createElement('canvas');
   c.width = width * RATIO;
@@ -1014,15 +1022,18 @@ function addSymbol(map, id, lines) {
   // Rail bullets: a circle in the line's color, outlined like the line.
   // Vehicles (Live): a rounded arrow, a circle drawn out to a point, turned
   // to the vehicle's heading by the layer. "vehicle-E" is a train in its
-  // line's color, "vehicle-bus" a bus in ink; both sit on a ring of land
-  // color so they read on top of their line. The letter or number is text
-  // over it, so it stays upright however the arrow turns.
+  // line's color on a ring of land color. "vehicle-bus" is a bus in ink on
+  // a wide ring of the casing color (white in light, near-black in dark): a
+  // bus sits on a bus line, which in light is the same ink, so the ring is
+  // what cuts it out of the line (DESIGN.md, "Symbols"). The ring is drawn
+  // first and the arrow over it, so all of its width shows. The letter or
+  // number is text over it, so it stays upright however the arrow turns.
   const vehicle = id.match(/^vehicle-(.+)$/);
   if (vehicle) {
     const train = vehicle[1] !== 'bus';
     const line = train ? lines.of(vehicle[1]) : null;
-    const size = train ? 24 : 16;
-    const r = train ? 7.5 : 5;
+    const size = 24;
+    const r = train ? 7.5 : 5.5;
     const c = size / 2;
     const tip = c - r * 1.55; // how far the point reaches past the circle
     const spread = Math.acos(r / (c - tip)); // where the point's sides meet the circle
@@ -1031,12 +1042,20 @@ function addSymbol(map, id, lines) {
     ctx.moveTo(c, tip);
     ctx.arc(c, c, r, -Math.PI / 2 - spread, -Math.PI / 2 + spread, true);
     ctx.closePath();
-    ctx.fillStyle = train ? (line?.color ?? P.ink) : P.ink;
-    ctx.fill();
-    ctx.lineWidth = train ? 1.75 : 1.5;
-    ctx.strokeStyle = P.land;
     ctx.lineJoin = 'round';
-    ctx.stroke();
+    if (train) {
+      ctx.fillStyle = line?.color ?? P.ink;
+      ctx.fill();
+      ctx.lineWidth = 1.75;
+      ctx.strokeStyle = P.land;
+      ctx.stroke();
+    } else {
+      ctx.lineWidth = BUS_RING * 2;
+      ctx.strokeStyle = P.casing;
+      ctx.stroke();
+      ctx.fillStyle = P.ink;
+      ctx.fill();
+    }
     return add(ctx);
   }
 
@@ -1223,6 +1242,9 @@ function buildLegend(meta, lines) {
     legend.style.setProperty('--key-rail', first.light.edge);
     legend.style.setProperty('--key-rail-dark', first.dark.color);
   }
+  // Its bus line: the frequent tier, as the map draws it in each theme.
+  legend.style.setProperty('--key-bus', PALETTES.light.tier.frequent);
+  legend.style.setProperty('--key-bus-dark', PALETTES.dark.tier.frequent);
 
   // Each line with where it goes and how often it comes at midday, in plain
   // sight (a tooltip is no use on a phone).

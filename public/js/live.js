@@ -7,14 +7,26 @@ import { P } from './palette.js';
 import { byZoom } from './shared.js';
 import { band, pillText, zoomNote } from './age.js';
 import { POLL_MS, SCHEMA, STALE_S, routeOf, vehicle } from './realtime.js';
-import { loadDirectory, openRoute } from './select.js';
+import { loadData, loadDirectory, openRoute } from './select.js';
+import { offTrack, trackIndex } from './track.js';
 
 // The zoom ladder for vehicles (DESIGN.md, "By zoom level"): trains from the
 // city zoom, buses from the neighborhood zoom, their names closer in.
 const TRAINS_FROM = 9.75;
 const BUSES_FROM = 13;
 const LETTERS_FROM = 12.5;
-const NUMBERS_FROM = 16;
+// From here a bus's route number sits under its arrow: downtown at 14 the
+// arrows are a block apart, and the next question is which bus it is.
+const NUMBERS_FROM = 14.5;
+// A train further than this from its own line's track is drawn at
+// OFF_TRACK_OPACITY (DESIGN.md, "2. Live"): one laid over in a yard or on a
+// tail track past an end, or running on another line's track. Measured over
+// twenty minutes on 2026-11-07: trains in service came within 120 m of their
+// line (the A between 61st / Pena and the airport, where RTD's drawn line
+// runs about 100 m off the track; most trains within 30), and trains in the
+// Union Station yard 226 to 310 m.
+const OFF_TRACK_M = 200;
+const OFF_TRACK_OPACITY = 0.45;
 // A position moves to its new place over this long, unless motion is reduced.
 const GLIDE_MS = 700;
 // No word from the relay for this long and the socket is reopened.
@@ -23,6 +35,7 @@ const REMEMBER = 'live';
 
 const trains = ['==', ['get', 'mode'], 'rail'];
 const buses = ['==', ['get', 'mode'], 'bus'];
+const offFaint = ['case', ['boolean', ['get', 'off'], false], OFF_TRACK_OPACITY, 1];
 
 /**
  * The vehicle layers, above everything else. Each vehicle is a rounded arrow
@@ -54,7 +67,11 @@ export function vehicleLayers(lines) {
         'text-field': ['step', ['zoom'], '', NUMBERS_FROM, ['get', 'route']],
         'text-size': 11,
         'text-anchor': 'top',
-        'text-offset': [0, 0.9],
+        'text-offset': [0, 1],
+        // Two buses at one stop keep both arrows; the second number waits
+        // until they part, rather than printing over the first.
+        'text-allow-overlap': false,
+        'text-optional': true,
       },
       paint: { 'text-color': P.ink, 'text-halo-color': P.land, 'text-halo-width': 1.2 },
     },
@@ -71,7 +88,7 @@ export function vehicleLayers(lines) {
         'text-field': ['step', ['zoom'], '', LETTERS_FROM, ['get', 'route']],
         'text-size': byZoom([8, 9, 11, 14]),
       },
-      paint: { 'text-color': lines.letter },
+      paint: { 'text-color': lines.letter, 'icon-opacity': offFaint, 'text-opacity': offFaint },
     },
   ];
 }
@@ -93,6 +110,7 @@ export function initLive(map, { meta, status }) {
   let since = 0; // when Live was turned on
   let shown = new Map(); // vehicle id -> [lon, lat] as drawn
   let glide = null;
+  let track = null; // each rail line's track (track.js), once loaded
 
   const say = (line) => {
     if (line === said) return;
@@ -153,7 +171,8 @@ export function initLive(map, { meta, status }) {
       const route = routeOf(v.route, aliases, (r) => dir.routes.has(r));
       if (!route) continue;
       const r = dir.routes.get(route);
-      out.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [v.lon, v.lat] }, properties: { id: v.id, route, mode: r.mode, tier: r.tier, trip: v.trip, bearing: v.bearing } });
+      const off = r.mode === 'rail' && offTrack(track, route, v.lon, v.lat, OFF_TRACK_M);
+      out.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [v.lon, v.lat] }, properties: { id: v.id, route, mode: r.mode, tier: r.tier, trip: v.trip, bearing: v.bearing, off } });
     }
     return out;
   };
@@ -165,6 +184,10 @@ export function initLive(map, { meta, status }) {
   const redraw = async () => {
     const dir = await loadDirectory().catch(() => null);
     if (!dir || !on) return;
+    // The track, to tell a train off its line. Without it every train is
+    // drawn at full strength.
+    track ??= await loadData('routes').then(trackIndex, () => null);
+    if (!on) return;
     const next = features(dir);
     const from = new Map([...shown].filter(([id]) => next.some((f) => f.properties.id === id)));
     shown = new Map(next.map((f) => [f.properties.id, f.geometry.coordinates]));

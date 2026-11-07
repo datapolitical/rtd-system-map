@@ -287,8 +287,25 @@ map for right now:
 - **Calendar:** holidays and service changes come from the feed's calendar,
   so on Thanksgiving Live shows Thanksgiving service.
 - **Vehicles:** trains move at their live positions from zoom 9.75, where
-  the rail letters begin, and buses from zoom 13. When Live is on and part of
-  that is out of view, the map says so once (see below).
+  the rail letters begin, and buses from zoom 13, with their route numbers
+  from 14.5. When Live is on and part of that is out of view, the map says
+  so once (see below).
+- **A train off its track is drawn fainter**, at 45%: one more than 200 m
+  from its own line's track, as the map draws it (the routes file, read in
+  the page and measured at each update; `public/js/track.js`). That is a
+  train laid over in a yard or on a tail track past a line's end, or
+  running on another line's track to get there, and drawn at full strength
+  in a park it read as an error. Measured 2026-11-07 over twenty minutes of
+  RTD's feed (952 positions of 52 trains): trains in service came within
+  120 m of their line, 83% within 30 (the 120 is the A between 61st / Pena
+  and the airport, where RTD's drawn line runs about 100 m off the real
+  track); trains at an end platform within 95 m. Trains in the Union
+  Station yard were 226 to 310 m off, so 200 leaves 80 m on each side.
+  Trains on tail tracks past an end measured 130 to 380 m: past Wheat
+  Ridge / Ward Road and Littleton / Mineral (230 to 380) they are faint,
+  past RidgeGate (130 to 196) and Lincoln not. A T running on another line's
+  track to or from a yard is faint when it is that far from the T's own
+  line. A line the map has no track for is never judged.
 - **Alerts:** RTD's service alerts are drawn where they apply.
   - A line with no service, a detour, or major delays gets an alert mark on
     its bullet or tag.
@@ -918,7 +935,15 @@ carry the sense of place:
 - **Interstate and US highway numbers** in quiet gray shields: the main
   Interstates from zoom 8.5, spurs and US routes from 11
   ("east of I-25" is how people say where they are). The shield shape keeps
-  them from being read as bus route numbers. Interstates have their own
+  them from being read as bus route numbers. A shield never sits on a bus
+  line that is drawn, at any zoom: a bus route that runs up a highway
+  would wear that highway's number, and a bus line with a shield on it
+  reads as the highway. So where buses run on a highway, its shield gives
+  way to them (I-25 through central Denver has none from 10; US 6, I-76,
+  I-270 and US 285 none at 11 over the metro, where they had three to
+  five a phone screen). From 11.5 the lighter bus lines' own room does
+  this, as for every name; below it, copies of that room are placed just
+  before the shields and street names and hold back only those. Interstates have their own
   shield and fade out from 14.5 to 15. US highways have a notched US-route
   shield, so "40" on Colfax doesn't read as a bus tag, and fade out from 13
   to 13.5. State highway numbers are not drawn.
@@ -1196,8 +1221,8 @@ Each bus tier fades in over about a zoom level rather than popping on.
 | 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Hourly and less from 10.5. Stations are small ticks (or dots, where lines part) to 10.25, one per cluster; capsules from 11. The hub's ring from 9.75 to 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 9.75, closed stations |
 | 11.5–13 | Names keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. No bus numbers (see "Numbers"). | |
 | 13–14.5 | Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
-| 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15. | Closed stops crossed out |
-| 16 and up | Stop names, with the routes that serve each stop | Vehicles' route numbers |
+| 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15. | Buses' route numbers, closed stops crossed out |
+| 16 and up | Stop names, with the routes that serve each stop | |
 
 ### Symbols
 
@@ -1260,7 +1285,13 @@ Each bus tier fades in over about a zoom level rather than popping on.
     `symbol-sort-key` is the rank, so where the map is short of room the
     first letters are drawn before the second ones. A line's letter claims
     its space before a station's name does (letters are placed before names
-    in `lettersFirst`).
+    in `lettersFirst`). A line with a letter of its own within 110 px of a
+    place (on a neighboring stretch, in a knot of short ones) counts as
+    named there, so downtown's second and third B don't take the room of
+    another line's first letter. Letters are kept clear of each other by
+    28 px as the map shows them at the near end of their zoom (where the same
+    meters are fewest pixels), not at its middle: at the middle they were 22
+    px apart at the near end and the map drew one of two.
   - Each letter moves along its line, up to 60 px (120, if it must), to sit
     clear of stations (16 px) and of other letters (28 px). The map draws
     only one of two symbols that touch, so a letter placed on a station was
@@ -1276,18 +1307,62 @@ Each bus tier fades in over about a zoom level rather than popping on.
   Letters are placed before station names, so lines keep their letters at
   middle zooms. A line too short to have come up anywhere gets one letter
   mid-way along its longest stretch, so every line has a letter at every
-  zoom (the test above). A line that only enters the screen's edge may have
-  its letter just off screen, which the once-a-screen rate accepts.
+  zoom (the test above). The build can't know where the screen is, so a
+  line that only clips a corner, or whose nearest letter is just off an
+  edge, is covered by edge letters (below).
   Measured 2026-11-06 on a 390 × 844 phone: the opening view (zoom 10.1)
   has every line's letter once (the E twice); at 10.5 over the metro the W
   and G, which enter from the west edge, have theirs just off it; downtown
   at 12.3 every line but the N has one.
+
+  **Edge letters** (`public/js/edgeletters.js`, layer `rail-edge-letters`,
+  from the letters' zoom): when the map comes to rest, each rail line on
+  screen that has no letter drawn gets one, a little in from where it
+  enters. Lines and where they run are read from what the map has drawn (the
+  rail layer, and the letters drawn by `rail-bullets`), so nothing about the
+  network is written into the code. Where the screen holds a line's visible
+  length as several pieces, the longest takes the letter, 18 px in from the
+  edge (the bullet's radius and 8 px, so it isn't clipped); a line wholly
+  inside the screen with nothing to enter from gets it mid-way. Letters are
+  kept 28 px from each other and from the letters already drawn: a line is
+  pushed further along its track until there is room, and lines that enter
+  together on shared track are done in route order so they stack the same
+  way each time. The layer copies `rail-bullets` (image, text, size, offset
+  by zoom, fade when a route is open) so an edge letter and an ordinary one
+  look alike, and the build's `sx`/`sy` are worked out from the line's slot
+  and direction on screen. It draws over other symbols (overlap allowed) but
+  does not ignore placement, so station names placed after it keep clear.
+  "On screen" means the part of the map no control covers: the search and Key
+  cards, the Live, locate and whole-network buttons and the panel are read
+  from the page, and the map less a full-width band for each of the top and
+  bottom ones is where a letter counts, so a line seen only under a card gets
+  none and a letter hidden under one does not name its line.
+  It runs once after each move, only over the rail layer (1 to 2 ms at zoom
+  12 on the phone profile), never while the map moves. Why not more
+  letters in the build: a set is shown across a whole zoom, so the spacing
+  runs 270 to 540 px, and a stretch of a line under 300 px or a stub at the
+  edge can fall between two (measured 2026-11-07: 16 of 20 random phone
+  views).
 - **Not running** (at the time shown): a hairline in the lightest bus gray,
   with no tag, so the network keeps its shape without claiming service.
 - **Vehicles** (Live): a small rounded arrow pointing where the vehicle is
-  heading. Trains in their line's color with the letter; buses in ink, with
-  the route number from zoom 16. A vehicle running late says so in its panel,
-  not on the map.
+  heading. Trains in their line's color with the letter, on a thin ring of
+  land color. Buses in ink (the light theme's text ink, near-white in dark)
+  on a wide ring of the casing color, white in light and near-black in
+  dark, 2.5 px all round, with the route number under it from zoom 14.5.
+  A bus is almost always on a bus line, and in light its line is the same
+  ink: with a hairline ring of land color (until 2026-11-07) an arrow on a
+  frequent line read as a bump in the line, and downtown at 14 the buses on
+  the 16th Street grid could not be counted. A fill other than ink was the
+  other way, and was not taken: a white arrow with an ink edge is the
+  station capsule's look, and the arrow should stay the strongest mark. So
+  the ring is what cuts the arrow out of the line: 13.5:1 against a
+  frequent line in light, 10.3:1 in dark, and wide enough to see at a
+  glance.
+  The body is 11 px across at 14, three times a frequent line's width. Two
+  buses at one stop keep both arrows; the second number waits until they
+  part. A train more than 200 m from its own line's track is drawn at 45%
+  ("2. Live"). A vehicle running late says so in its panel, not on the map.
 - **Alert mark** (Live): a small triangle on the line's bullet or tag, or on
   the station. It's identified by shape, never by a color that could be a rail
   line. A closed stop or station is crossed out. The exact color is settled on
@@ -1341,9 +1416,22 @@ the map and interface re-color in place and the map stays where it was.
   in `app.css`, with a dark set under the media query. No color literal sits
   in a layer definition.
 - **The hierarchy is the same, inverted.** On dark land (`#161B21`) the most
-  frequent buses are the brightest and thickest (`#DCE6EF`, 13.7:1), then
-  `#9FB1C3` (7.9:1), then `#687A8E` (3.9:1), with the same widths and the
-  same dashes and dots as the light theme (12.3, 7.4 and 3.5:1).
+  frequent buses are the brightest and thickest, with the same widths and the
+  same dashes and dots as the light theme (12.3, 7.4 and 3.5:1 there).
+- **Buses are a hue, not white.** On a dark map, near-white lines are what
+  streets look like, and a white bus grid read as a street grid: the bus up
+  I-25, with the 25 shield on it, read as the freeway (V2 review). So the
+  dark tiers are one periwinkle, OKLCH hue 265, lighter and stronger by
+  tier: `#A1BDF9`, `#7C92C1`, `#667493`. Against the land 9.2, 5.6 and
+  3.7:1; against a dark road (`#2B343D`) 6.7, 4.1 and 2.7:1, so even the
+  lightest tier stands off the street it runs on. The hue is the light
+  theme's navy ink (hue 251) turned a little toward violet, so the two
+  themes' buses are one family, and it sits in the widest gap between rail
+  colors: the A's sky blue is 226 and the E's purple, lifted, 303. It is not
+  amber (Live) or green (parks). Frequent buses are no longer brighter than
+  the rail lines (lightness 0.80, where the A is 0.76 and the G 0.81), so
+  rail still leads. Roads keep their dark gray and draw under every bus line,
+  and a highway shield gives way to any bus line drawn ("Basemap").
 - **Rail colors still come from RTD's data.** In dark, a line whose official
   color is under 4:1 against the dark land is lifted in lightness, keeping
   its hue, until it reaches 4:1 (today the E, N and T). Brighter colors are
@@ -1795,13 +1883,16 @@ each of these; the roadmap under "Milestones" says in what order.
 - In dark mode frequent buses are white lines on a near-black ground, and
   the bus network reads as a street grid; the ribbon up I-25 with the 25
   shield on it reads as a freeway. Nothing outside the collapsed Key says
-  white means bus.
+  white means bus. (Fixed 2026-11-07, step 5: a periwinkle, and shields
+  give way to bus lines; "Dark mode".)
 - At 14 in light mode buses are ink arrows on ink bus lines and vanish into
-  the 16th Street grid; their numbers wait for 16.
+  the 16th Street grid; their numbers wait for 16. (Fixed 2026-11-07, step
+  5: a wide white ring, numbers from 14.5; "Symbols".)
 - The Key draws a rail station as a hollow ring; the map draws a dot at 10
   and a capsule from 11, and the dot looks like the Key's bus stop.
 - A train in the Union Station yard draws in a park with no track near it
-  and reads as an error.
+  and reads as an error. (Fixed 2026-11-07, step 5: drawn at 45% when over
+  200 m from its line; "2. Live".)
 
 **What holds**
 
@@ -1952,17 +2043,30 @@ RTD GTFS ──────────────────────┼�
       its ems) of its station, Union Station's at every zoom; before, Union
       Station's was 53 and 71 px out at 10 and 10.5, absent at 11, and
       Decatur-Federal's 27 px at 11.
-   4. **Every line named on every screen.** Letters along rail lines at
+   4. **Every line named on every screen** (done 2026-11-07: 10 of 20, then
+      15, 16, and 20 of 20 in light and in dark). Letters along rail lines at
       least once per phone screen, with one where a line enters the view.
       *Done when:* twenty random phone views at 10 to 12 each show a letter
       for every rail line that crosses them.
-   5. **Buses look like buses.** A dark-mode bus tint that isn't road white,
-      roads and shields kept under it; bus arrows with a ring that reads on
-      a bus line in both themes, numbers from 14.5; a train off its track
-      drawn fainter.
+   5. **Buses look like buses** (done 2026-11-07). A dark-mode bus tint
+      that isn't road white, roads and shields kept under it; bus arrows
+      with a ring that reads on a bus line in both themes, numbers from
+      14.5; a train off its track drawn fainter.
       *Done when:* at 14 downtown in light, every bus arrow is countable in
       a screenshot, and the Key's bus swatch is the map's line in both
       themes.
+      Measured headlessly on a 390 px phone downtown at 14: 20 to 26 bus
+      arrows placed in light, each with a 2.5 px ring outside its edge at
+      13.5:1 against a frequent line (10.3:1 in dark); before, a 0.75 px
+      edge left them as bumps in the line. The Key's bus swatch, the drawn
+      frequent paint and a line pixel agree: #1d3044 in light, #a1bdf9 in
+      dark (was #dce6ef, the road white). The dark frequent tier against
+      land 13.7 before, 9.2 after; against a road 10.0 before, 6.7 after.
+      Shields on a bus line in dark at 11, three views: 3 to 5 before, 0
+      after. Faint trains, 3 of 46 at one time: an E 209 m past RidgeGate,
+      a T at 10th / Osage on another line's track, a B 243 m past
+      Westminster. Still open: tail-track layovers within 200 m (RidgeGate,
+      Lincoln) are not faded; arrows at one stop overlap, ring on each.
    6. **The Key matches the map.** Key symbols are drawn by the same code
       as the map's marks, at the zoom the Key is opened at, with a Live row
       (train arrow, bus arrow) when Live is on.
@@ -2003,8 +2107,8 @@ RTD GTFS ──────────────────────┼�
        under a V3 review.
    Started 2026-11-07: the relay (a Durable Object, see "Live data"), the
    Live button, and vehicles on the map: trains from zoom 9.75 (at first 11) in their line's
-   color with the letter from 12.5, buses from 13 with the number from 16,
-   gliding between updates; a tap on a vehicle opens its route; Live is
+   color with the letter from 12.5, buses from 13 with the number from 16
+   (14.5 since step 5), gliding between updates; a tap on a vehicle opens its route; Live is
    remembered between visits; stale or missing positions are said so. The
    build learns the realtime route names. Not done: the schedule summary and
    live tiers, the not-running hairlines, the key's time choices, alerts on
@@ -2514,8 +2618,19 @@ RTD GTFS ──────────────────────┼�
   not used for this, so it keeps one job, saying how fresh the data is.
 - 2026-11-07: On shared track every line gets a letter before any gets a
   second (a place for each line, if they fit), and each line's first letter
-  on a stretch is drawn first (`rank`, the layer's symbol-sort-key). Not yet
-  checked in a browser; roadmap step 4 stays open.
+  on a stretch is drawn first (`rank`, the layer's symbol-sort-key). The
+  browser check showed that was not enough: in downtown, letters of two
+  lines 22 px apart at the near end of a zoom collided and the map drew
+  one, and a line's second and third letters took room from another's
+  first. Letters now keep 28 px clear at the near end of their zoom, and a
+  line with a letter within 110 px counts as named there. Measured with
+  `check.cjs` on twenty seeded phone views at zoom 10 to 12: 10 of 20 at
+  700 px, 15 at 380, 16 of 20 now. The four that fail: two with a line's
+  stub of 60 to 130 px at the screen's edge (B, G, N; W), and two (C and W,
+  290 to 310 px of C on screen) where the nearest letters sit 95 to 105 px
+  off screen: a set is shown across a whole zoom, so spacing runs 270 to 540
+  px and cannot be both under 300 and over a third of a screen. Step 4
+  stays open.
 - 2026-11-07: Station marks from 9 to 11 are decided by the build from the
   drawn track (`scripts/lib/stationmarks.mjs`, "Stations", "From far out").
   A tick spans its lines only where they stay the same distance apart for
@@ -2537,6 +2652,28 @@ RTD GTFS ──────────────────────┼�
   found room only a quarter of a phone's width away. Measured headlessly
   over the hub at 10 to 14: every name within 24.4 px of its station, Union
   Station's within 19 to 24 px at every zoom (was 53 and 71 at 10 and 10.5).
+- 2026-11-07: Edge letters: a runtime layer (`public/js/edgeletters.js`,
+  `rail-edge-letters`) puts a letter on each rail line on screen that has
+  none, 18 px in from where it enters, 28 px from other letters, once after
+  each move. Build-time letters can't know the screen, and sets that switch
+  only at whole zooms left 4 of 20 phone views with a line unnamed (edge
+  stubs, and 300 px stretches between two letters). Twenty random phone views
+  at zoom 10 to 12 now show a letter for every rail line that crosses them,
+  20 of 20 in light and 20 of 20 in dark. Roadmap step 4 is done.
+
+- 2026-11-07: Buses in dark mode are a periwinkle (OKLCH hue 265; frequent
+  #a1bdf9, every 30 #7c92c1, slow #667493), not near-white, which read as
+  streets: 9.2, 5.6 and 3.7 against land, 6.7, 4.1 and 2.7 against a road.
+  The Key's bus swatch is set from the palette, so it is the map's line in
+  both themes. A bus arrow is ink with a 2.5 px casing ring outside its
+  edge (13.5:1 against a frequent line in light, 10.3:1 in dark), and
+  20 to 26 are countable at 14 downtown. Bus numbers from 14.5 (was 16),
+  optional, so a number never hides an arrow. Highway shields give way to
+  every drawn bus line below the thin-line zoom, so none sit on a bus line
+  (3 to 5 per screen at 11 before). A train more than 200 m from its own
+  line's track is drawn at 45% (`public/js/track.js`); trains in service
+  measured within 120 m, the Union Station yard 226 to 310. Roadmap step 5
+  is done.
 
 ## Sources
 

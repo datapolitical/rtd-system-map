@@ -18,7 +18,7 @@ export const isPhone = () => matchMedia(PHONE_QUERY).matches;
 // every 30 is one thin, light look (`hourly` and `infrequent` stay separate in
 // the data). Their colours are in the palette (palette.js), one set for each
 // theme, and `color` reads the theme in use. Contrast against the land, light
-// theme: 12.3, 7.4, 3.5; dark theme: 13.7, 7.9, 3.8. The dashed and dotted
+// theme: 12.3, 7.4, 3.5; dark theme: 9.2, 5.6, 3.7. The dashed and dotted
 // tiers share the lightest look.
 const tier = (look, spec) => ({
   ...spec,

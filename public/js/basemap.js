@@ -197,6 +197,17 @@ export const lineKeepOut = () => [
   }),
 ];
 
+// Highway numbers stay off every bus line that is drawn, at every zoom: a
+// shield on a bus line reads as that line's number, and a bus line with a
+// shield on it reads as the highway (DESIGN.md, "Basemap"). From
+// THIN_CLEAR_FROM the lighter lines' own room (markKeepOut) does that; below
+// it these copies do, placed after every name but the shields and street
+// names, so they hold back only those.
+const shieldKeepOut = () =>
+  busKeepOut()
+    .slice(1)
+    .map((l, i) => ({ ...l, id: `keep-out-bus-shields-${i + 1}`, minzoom: BUS_FROM[i + 1], maxzoom: THIN_CLEAR_FROM }));
+
 // Stations and stops hold back the basemap's names too, and so do the lighter
 // bus lines. Not the stations' own names: those sit beside their mark.
 const markKeepOut = () => [
@@ -436,12 +447,13 @@ export function basemapLabels() {
   // Stacking is placement priority (the top goes first), and every one of
   // these is placed after the lines, the stations and their names (main.js).
   // From the top: stations and stops, which hold all of these back; city
-  // names; the other place names; highway numbers; street names.
+  // names; the other place names; the lighter bus lines' room below
+  // THIN_CLEAR_FROM; highway numbers; street names.
   const streets = ['water-label', 'road-label-minor', 'road-label'];
   const shields = ['highway-shield', 'highway-shield-us'];
   const pick = (ids) => ids.map((id) => labels.find((l) => l.id === id));
   const places = labels.filter((l) => ![...streets, ...shields].includes(l.id));
-  return [...pick(streets), ...pick(shields), ...places, ...markKeepOut()];
+  return [...pick(streets), ...pick(shields), ...shieldKeepOut(), ...places, ...markKeepOut()];
 }
 
 // Relief: the mountains are west, the region's best sense of direction, and

@@ -192,6 +192,28 @@ test('a line is lettered at least once a phone screen at any zoom its set is sho
   }
 });
 
+test('every line on a piece of shared track is named on it before any is named twice', () => {
+  // Five lines share 6 km north from the origin, then fan out. (Below zoom 12 the piece
+  // is too short for a letter each, 28 px apart.)
+  const fan = [[-6, 12], [-3, 12], [0, 12], [3, 12], [6, 12]];
+  const lines = fan.map((end, i) => line('LMNOP'[i], [[0, 0], [0, 6], end]));
+  const { letters } = sharedTrack(lines);
+  for (let zoom = 12; zoom <= 14; zoom++) {
+    // Counted to just past the fork, where a line's own letter names it.
+    const here = letters.filter((f) => f.properties.from === zoom && Math.abs(km(f.geometry.coordinates)[0]) < 1.5 && km(f.geometry.coordinates)[1] < 7.5);
+    const count = (route) => here.filter((f) => f.properties.route === route).length;
+    const counts = [...'LMNOP'].map(count);
+    assert.ok(Math.min(...counts) >= 1, `each line is named on the shared piece at zoom ${zoom}: ${counts}`);
+    assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, `turns at zoom ${zoom}: ${counts}`);
+    // Within a screen's worth of each other along the piece, for each line.
+    const px = (kms) => (kms * 1000) / (40075017 / (512 * 2 ** zoom));
+    for (const route of 'LMNOP') {
+      const ys = here.filter((f) => f.properties.route === route).map((f) => km(f.geometry.coordinates)[1]).sort((x, y) => x - y);
+      for (let i = 1; i < ys.length; i++) assert.ok(px(ys[i] - ys[i - 1]) <= 600, `${route} letters ${Math.round(px(ys[i] - ys[i - 1]))} px apart at zoom ${zoom}`);
+    }
+  }
+});
+
 // The letters on the track X and Y share, in the set for `zoom`, up to
 // `until` km north (short of where Y leaves, by default).
 const sharedLetters = (letters, zoom, until = 7.5) => letters.filter((f) => f.properties.from === zoom && Math.abs(km(f.geometry.coordinates)[0]) < 0.01 && km(f.geometry.coordinates)[1] < until);

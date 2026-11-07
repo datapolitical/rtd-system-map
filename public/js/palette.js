@@ -113,8 +113,11 @@ const dark = {
   white: '#ffffff',
   casing: '#0b0e12',
   clear: 'rgba(11, 14, 18, 0)',
-  // Contrast against land: 13.7, 7.9, 3.8.
-  tier: { frequent: '#dce6ef', every30: '#9fb1c3', slow: '#687a8e' },
+  // A periwinkle, not white: near-white lines on the dark land read as
+  // streets (DESIGN.md, "Dark mode"). One hue (OKLCH 265, between the A's
+  // sky blue at 226 and the E's purple at 303), lighter and stronger by tier.
+  // Contrast against land: 9.2, 5.6, 3.7; against a road (`road`): 6.7, 4.1, 2.7.
+  tier: { frequent: '#a1bdf9', every30: '#7c92c1', slow: '#667493' },
   tagSlow: '#a9b7c5',
   tagFill: '#1c2229',
   stop: { fill: '#1c2229', edge: '#8a97a4' },
