@@ -10,7 +10,7 @@
 // words by padding both sides with spaces.
 
 import { FONT } from './basemap.js';
-import { PART_TIME, tierMatch, tierWidth } from './shared.js';
+import { PART_TIME, busOffset, tierMatch, tierWidth } from './shared.js';
 import { P } from './palette.js';
 
 export const DIM = 0.2;
@@ -57,7 +57,7 @@ export function selectionLines() {
       source: 'routes',
       filter: chosen(''),
       layout: layout('round'),
-      paint: { 'line-color': P.casing, 'line-width': tierWidth(4.2), 'line-opacity': 0.92 },
+      paint: { 'line-color': P.casing, 'line-width': tierWidth(4.2), 'line-offset': busOffset(), 'line-opacity': 0.92 },
     },
     ...SEL_PARTS.map(({ id, where, dash, cap }) => ({
       id,
@@ -65,7 +65,7 @@ export function selectionLines() {
       source: 'routes',
       filter: within(where, ''),
       layout: layout(cap),
-      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(1.6), ...(dash ? { 'line-dasharray': dash } : {}) },
+      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(1.6), 'line-offset': busOffset(), ...(dash ? { 'line-dasharray': dash } : {}) },
     })),
   ];
 }

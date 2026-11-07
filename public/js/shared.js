@@ -171,3 +171,31 @@ export const joinDot = (parts) =>
     .map(esc)
     .join('<span class="dot" aria-hidden="true"></span><span class="sr-only">, </span>');
 export const mapDots = (text) => text.replaceAll(' \u00b7 ', ' \u2022 ');
+
+// Bus routes that share a street are drawn side by side (prototype,
+// scripts/lib/busbundles.mjs): each piece is `slot` slots from the street's
+// middle, a slot being a frequent bus's width times BUS_PITCH, the same for
+// every route in a bundle so thin routes don't overlap thick ones. Further
+// out than BUS_BUNDLE_FROM a bundle doesn't fit between the blocks either
+// side of it, so the routes are drawn on one line, the strongest on top; the
+// slots open over the BUS_BUNDLE_OPEN zooms before it.
+export const BUS_PITCH = 1.15;
+export const BUS_BUNDLE_FROM = 12.5;
+const BUS_BUNDLE_OPEN = 0.25;
+// A frequent bus's width at `zoom`, as tierWidth interpolates it.
+export const frequentWidth = (zoom) => {
+  const w = TIERS[0].width;
+  if (zoom <= ZOOMS[0]) return w[0];
+  for (let i = 1; i < ZOOMS.length; i++) {
+    if (zoom > ZOOMS[i]) continue;
+    const t = (1.4 ** (zoom - ZOOMS[i - 1]) - 1) / (1.4 ** (ZOOMS[i] - ZOOMS[i - 1]) - 1);
+    return w[i - 1] + t * (w[i] - w[i - 1]);
+  }
+  return w.at(-1);
+};
+export const busOffset = () => {
+  const slot = ['coalesce', ['get', 'slot'], 0];
+  const from = BUS_BUNDLE_FROM;
+  const stops = [from, ...ZOOMS.filter((z) => z > from)];
+  return ['interpolate', ['exponential', 1.4], ['zoom'], from - BUS_BUNDLE_OPEN, 0, ...stops.flatMap((z) => [z, ['*', slot, frequentWidth(z) * BUS_PITCH]])];
+};
