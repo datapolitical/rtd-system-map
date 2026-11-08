@@ -1,0 +1,42 @@
+# On every push to main and every pull request: the unit tests (npm test),
+# which are plain Node and need no browser, network data or build; and a
+# dry-run bundle of the two Workers deployed by hand (the Live relay and the
+# hourly refresh), so a broken import fails here rather than at deploy. The
+# site itself, data build included, is built by Cloudflare Pages on each push.
+# The headless browser checks run in checks-nightly.yml against the live site
+# and checks-preview.yml against each branch's preview.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  workers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Bundle the Live relay
+        run: npx --yes wrangler@4.80.0 deploy --dry-run --outdir "$RUNNER_TEMP/live" --config live/wrangler.toml
+      - name: Bundle the refresh Worker
+        run: npx --yes wrangler@4.80.0 deploy --dry-run --outdir "$RUNNER_TEMP/refresh" --config refresh/wrangler.toml

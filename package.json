@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "description": "A clean, mobile-friendly map of the RTD transit system, built from RTD's public data.",
+  "license": "Apache-2.0",
   "scripts": {
     "postinstall": "node scripts/vendor.mjs",
     "build": "node scripts/vendor.mjs && node scripts/build-data.mjs",

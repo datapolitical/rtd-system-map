@@ -1,0 +1,58 @@
+# The nightly watchdog: the fast browser checks (qa/checks/) against the live
+# site, so faults are found before a rider does, and each failing spec gets an
+# issue labelled "found by checks" with its findings and a link to the run.
+# When a spec passes again, its issue is commented on and closed. The checks
+# read the site's own data (CHECK_URL), so there is no build or server here.
+# visual.spec.mjs skips on Linux until Linux baselines are committed, and
+# @deep stays out for now (DESIGN.md, "Design review rubric"; this file's
+# sibling checks-preview.yml runs the same set on every branch preview).
+name: Checks (nightly)
+
+on:
+  schedule:
+    # 01:20 in Denver in winter (02:20 in summer); a quiet hour, and after
+    # Cloudflare's own hourly rebuild has had time to finish.
+    - cron: '20 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: checks-nightly
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    # Pinned: Playwright 1.55.1 has no build for Ubuntu 26.04, which
+    # ubuntu-latest now is.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run the fast checks against the live site
+        env:
+          CHECK_URL: https://rtd-system-map.pages.dev
+          CHECK_JSON: qa/report/results.json
+        run: npm run check
+      - name: Upload the report and captures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: checks-nightly-${{ github.run_id }}
+          path: |
+            qa/report/
+            qa/checks/out/
+          if-no-files-found: warn
+      - name: Open, comment on or close the issue for each spec
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node qa/checks/github.mjs issues --site "https://rtd-system-map.pages.dev" --close

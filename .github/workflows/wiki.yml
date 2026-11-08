@@ -1,0 +1,51 @@
+# Publishes DESIGN.md as the repository's wiki, one page per section, each
+# time it changes on main (scripts/wiki.mjs). DESIGN.md stays the only source:
+# every run replaces all the wiki's pages, so edits made on the wiki are lost.
+# GitHub creates a wiki's repository only when its first page is made on the
+# website; until then this run notes that and stops without failing.
+name: Wiki
+
+on:
+  push:
+    branches: [main]
+    paths: [DESIGN.md, scripts/wiki.mjs, .github/workflows/wiki.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: true
+
+jobs:
+  wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: node scripts/wiki.mjs DESIGN.md "$RUNNER_TEMP/pages"
+      - name: Replace the wiki's pages
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+          if ! git ls-remote "$url" >/dev/null 2>&1; then
+            echo "::notice::The wiki has no pages yet. Create its first page on GitHub, then run this workflow again."
+            exit 0
+          fi
+          git clone --depth 1 "$url" "$RUNNER_TEMP/wiki"
+          cd "$RUNNER_TEMP/wiki"
+          git rm -q --ignore-unmatch -- '*.md'
+          cp "$RUNNER_TEMP"/pages/*.md .
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The wiki already matches DESIGN.md."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -q -m "Generate from DESIGN.md at ${GITHUB_SHA::7}"
+          git push -q

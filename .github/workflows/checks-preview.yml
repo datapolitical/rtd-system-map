@@ -1,0 +1,72 @@
+# On every push to a branch but main: wait for that commit's Cloudflare Pages
+# preview, run the fast browser checks against it, capture the design review's
+# fixed views in both themes on one contact sheet, and leave all of it in the
+# run's artifact. A failing spec opens or comments on its "found by checks"
+# issue; the run's one-line result is a commit status named checks/preview.
+# Quiet runs finish green without touching anything.
+name: Checks (branch preview)
+
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+  issues: write
+  statuses: write
+
+concurrency:
+  group: checks-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    # Pinned: Playwright 1.55.1 has no build for Ubuntu 26.04, which
+    # ubuntu-latest now is.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for this commit's Cloudflare Pages preview
+        id: preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node qa/checks/preview.mjs
+      - name: Run the fast checks against the preview
+        if: steps.preview.outputs.url != ''
+        env:
+          CHECK_URL: ${{ steps.preview.outputs.url }}
+          CHECK_JSON: qa/report/results.json
+        run: npm run check
+      - name: Capture the design review's fixed views
+        if: always() && steps.preview.outputs.url != ''
+        env:
+          CHECK_URL: ${{ steps.preview.outputs.url }}
+        run: node qa/checks/review-captures.mjs --out qa/review
+      - name: Upload the report, captures and contact sheet
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: checks-preview-${{ github.ref_name }}-${{ github.run_id }}
+          path: |
+            qa/report/
+            qa/checks/out/
+            qa/review/
+          if-no-files-found: warn
+      - name: Open or comment on the issue for each failing spec
+        if: always() && steps.preview.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node qa/checks/github.mjs issues --site "${{ steps.preview.outputs.url }} (branch ${{ github.ref_name }})"
+      - name: Post the result as a commit status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NO_PREVIEW: ${{ steps.preview.outcome == 'success' && steps.preview.outputs.url == '' }}
+        run: node qa/checks/github.mjs status

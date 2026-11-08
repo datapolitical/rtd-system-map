@@ -9,6 +9,10 @@
 // diff, and if the change was meant, refresh the baselines with
 // `npm run check:baselines`.
 //
+// The baselines are one platform's: the committed ones are `-darwin.png`.
+// On a platform that has none (Linux on GitHub, for now) each comparison
+// skips rather than fails, so `npm run check` still runs the rest.
+//
 // The views are the busiest station (from stations.geojson) at 9, 11.5 and 14.
 import fs from 'node:fs';
 import { test, expect, siteData, pixels } from './fixtures.mjs';
@@ -21,7 +25,9 @@ const hubOf = async () => {
 };
 
 for (const zoom of ZOOMS) {
-  test(`looks as it did at ${zoom}`, async ({ mapPage }) => {
+  test(`looks as it did at ${zoom}`, async ({ mapPage }, testInfo) => {
+    const baseline = testInfo.snapshotPath(`hub-${zoom}.png`);
+    test.skip(testInfo.config.updateSnapshots === 'none' && !fs.existsSync(baseline), `no -${process.platform}.png baseline yet (npm run check:baselines on this platform)`);
     const [lon, lat] = await hubOf();
     await mapPage.goto({ zoom, lat, lon });
     await mapPage.jump({ zoom, lat, lon });
