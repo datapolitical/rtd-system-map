@@ -137,6 +137,22 @@ function howOften(r) {
   return 'No weekday trains';
 }
 
+// One-way streets (network.js, 'street-oneway'): a frequent street as the
+// map draws it once its arrows are in, with an arrow inside it in the
+// palette's arrow tint, as the map draws them.
+function oneWay(arrows, street) {
+  if (!arrows || !street) return null;
+  const z = Math.max(arrows.minzoom ?? 0, settledFrom(arrows.paint['icon-opacity'], arrows.minzoom ?? 0));
+  const at = { zoom: z, props: { cls: 'c10', n: 1, routes: '', oneway: 1 }, state: KEY_STATE };
+  const w = evaluate(street.paint['line-width'], at);
+  const h = Math.max(8, Math.ceil(w) + 2);
+  const c = h / 2;
+  const a = Math.min(w * 0.36, 5);
+  const chevron = (x) => `<path d="M${x - a * 0.7} ${c - a}L${x + a * 0.7} ${c}L${x - a * 0.7} ${c + a}" fill="none" stroke="${P.arrow}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />`;
+  const svg = `<svg class="swatch" viewBox="0 0 36 ${h}" width="36" height="${h}" aria-hidden="true" data-mark="street-oneway"><path d="M1 ${c}H35" stroke="${evaluate(street.paint['line-color'], at)}" stroke-width="${w}" />${chevron(12)}${chevron(26)}</svg>`;
+  return [svg, 'One-way street: buses go the way the arrows point'];
+}
+
 const row = (icon, text) => `<li><span class="sym">${icon}</span><span>${text}</span></li>`;
 
 export function buildLegend(meta, lines) {
@@ -236,6 +252,7 @@ export function buildLegend(meta, lines) {
       unserved.length ? [circleImage(layers.get('stations-unserved'), at(settled(layers.get('stations-unserved')), { served: false }), 'Gray ring'), 'Closed: no trains this week'] : null,
       counts.facilities ? [icon(layers.get('facilities'), settled(layers.get('facilities')), { spaces: 1 }, 'P sign'), 'Park-n-Ride'] : null,
       counts.facilities ? [symbolImage('transit-center', lines, 'Bus sign', evaluate(layers.get('facilities').layout['icon-size'], at(settled(layers.get('facilities'))))), 'Transit center'] : null,
+      oneWay(layers.get('street-oneway'), layers.get('street')),
       counts.stops ? [circleImage(layers.get('stops'), at(settled(layers.get('stops'))), 'Small dot'), 'Bus stop, when zoomed in close'] : null,
       counts.flexride
         ? (() => {

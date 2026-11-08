@@ -17,6 +17,7 @@ import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
 import { busStretches } from './lib/stretches.mjs';
 import { busStreets } from './lib/streets.mjs';
+import { generalize } from './lib/generalize.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
@@ -219,7 +220,12 @@ async function main() {
   // Rail is drawn whole; its route values are its own.
   const rails = geo.routes.filter((f) => f.properties.mode !== 'bus');
   for (const { properties: p } of rails) Object.assign(p, { route_tier: p.tier, route_wk: p.wk });
-  geo.routes = [...split.features, ...rails];
+  // Drawn as a transit map draws them: loops, ramp circles and second
+  // carriageways simplified from each route's own line (DESIGN.md, "Bus
+  // routes", "Readable geometry"; scripts/lib/generalize.mjs).
+  const laps = [];
+  geo.routes = [...generalize(split.features, { precision: PRECISION, report: laps, places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates) }), ...rails];
+  console.log(`  bus laps generalized: ${laps.filter((l) => l.kind === 'turn').length} turns, ${laps.filter((l) => l.kind === 'end').length} short ends`);
   const splitRoutes = split.report.filter((r) => r.stretches > 1);
   console.log(`  bus routes in stretches: ${splitRoutes.length} of ${split.report.length} split, ${split.features.length} stretches`);
   console.log(`    ${splitRoutes.map((r) => `${r.route} ${r.stretches}`).join(', ')}`);

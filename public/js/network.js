@@ -12,7 +12,7 @@ import { FONT, lineKeepOut } from './basemap.js';
 import { lightenTo, shade, textOn } from './color.js';
 import { DARK_RAIL_MIN, P, PALETTES } from './palette.js';
 import { CLASS_RANK, DETAIL_FROM, PART_TIME, byZoom, classMatch, classWidth, classWidthAt, classWidthTimes, tierMatch, tierWidth } from './shared.js';
-import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
+import { CAPSULE_FROM, CAPSULE_TO, CHEVRON, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
 import { fade, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
 import { edgeLetterLayer } from './edgeletters.js';
 
@@ -54,6 +54,22 @@ const strandRoom = (zoom) => ['>=', ['/', classMatch((c) => classWidthAt(c.id, z
 const strandZooms = Array.from({ length: Math.round((18 - STRANDS_FROM) / 0.5) + 1 }, (_, i) => STRANDS_FROM + i / 2);
 const strandFade = ['step', ['zoom'], 0, ...strandZooms.flatMap((z) => [z, ['case', strandRoom(z), fade(onStreet), 0]])];
 const coreFade = ['interpolate', ['linear'], ['zoom'], STRANDS_FROM, 0, STRANDS_FROM + 1, fade(onStreet)];
+// One-way streets (the build's `oneway`, drawn the way the buses go) carry
+// small chevrons from ARROWS_FROM, ARROW_SPACING px apart; two-way streets
+// none, so an arrow means "one way" (DESIGN.md, "Bus routes"). Where the
+// street is at least ARROW_INSIDE px wide the chevron sits inside it, about
+// ARROW_SHARE of its width, in the arrow tint; on a thinner street it is
+// ARROW_MIN px across, in the street's own color, like an arrowhead.
+const ARROWS_FROM = 14;
+const ARROW_SPACING = 150;
+const ARROW_INSIDE = 7;
+const ARROW_SHARE = 0.72;
+const ARROW_MIN = 9;
+const arrowZooms = Array.from({ length: Math.round((18 - ARROWS_FROM) / 0.5) + 1 }, (_, i) => ARROWS_FROM + i / 2);
+const arrowInside = (cls, zoom) => classWidthAt(cls, zoom) >= ARROW_INSIDE;
+const arrowImage = ['step', ['zoom'], classMatch((c) => (arrowInside(c.id, ARROWS_FROM) ? 'chevron-in' : `chevron-${c.id}`)), ...arrowZooms.slice(1).flatMap((z) => [z, classMatch((c) => (arrowInside(c.id, z) ? 'chevron-in' : `chevron-${c.id}`))])];
+const arrowSize = ['interpolate', ['linear'], ['zoom'], ...arrowZooms.flatMap((z) => [z, classMatch((c) => (arrowInside(c.id, z) ? classWidthAt(c.id, z) * ARROW_SHARE : ARROW_MIN) / CHEVRON[1])])];
+const arrowFade = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0, ARROWS_FROM + 0.5, fade(onStreet)];
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -244,6 +260,26 @@ export function transitLines(lines) {
       filter: ['>', ['get', 'n'], STRANDS_MAX],
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: { 'line-color': P.strand, 'line-width': classWidthTimes(0.34), 'line-opacity': coreFade },
+    },
+
+    {
+      id: 'street-oneway',
+      type: 'symbol',
+      source: 'streets',
+      minzoom: ARROWS_FROM,
+      filter: ['==', ['get', 'oneway'], 1],
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': ARROW_SPACING,
+        'icon-image': arrowImage,
+        'icon-size': arrowSize,
+        'icon-rotation-alignment': 'map',
+        'icon-keep-upright': false,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-padding': 0,
+      },
+      paint: { 'icon-opacity': arrowFade },
     },
 
     // The open bus route, drawn over its faded neighbours.

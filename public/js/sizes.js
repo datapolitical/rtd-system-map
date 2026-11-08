@@ -43,3 +43,6 @@ export const HUB_FROM = NAMES_FROM;
 // A station's tick waits for zoom `tickFrom`, in quarter zooms, where a
 // stronger station is too near (the build decides it in these steps).
 export const FAR_STEP = 0.25;
+// A one-way chevron's picture (symbols.js), in px [along, across] at
+// icon-size 1.
+export const CHEVRON = [10, 14];

@@ -7,7 +7,7 @@
 // use; sizes shared with the build are in sizes.js.
 
 import { P } from './palette.js';
-import { HUB_EXTRA, RAIL_WIDTH, STATION_SPACING, TICK } from './sizes.js';
+import { CHEVRON, HUB_EXTRA, RAIL_WIDTH, STATION_SPACING, TICK } from './sizes.js';
 
 // Never below 2, so symbols stay sharp when a screen is zoomed.
 export const RATIO = Math.max(2, Math.ceil(devicePixelRatio || 1));
@@ -240,6 +240,27 @@ export function addSymbol(map, id, lines) {
     ctx.fill();
     ctx.lineWidth = 3;
     ctx.strokeStyle = P.selEnd.ring;
+    ctx.stroke();
+    return add(ctx);
+  }
+
+  // One-way chevrons (network.js, 'street-oneway'), pointing along the
+  // line: 'chevron-in' sits inside a street wide enough to hold it, in the
+  // palette's arrow tint; 'chevron-<class>' rides a thinner street, a little
+  // wider than it, in the street's own color, like an arrowhead.
+  const chevron = id.match(/^chevron-(in|c\d+)$/);
+  if (chevron) {
+    const [w, h] = [CHEVRON[0], CHEVRON[1]];
+    const ctx = canvas(w, h);
+    const pad = 2;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(w - pad, h / 2);
+    ctx.lineTo(pad, h - pad);
+    ctx.lineWidth = 2.4;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = chevron[1] === 'in' ? P.arrow : P.freq[chevron[1]];
     ctx.stroke();
     return add(ctx);
   }

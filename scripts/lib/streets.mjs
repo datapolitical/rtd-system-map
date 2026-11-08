@@ -49,6 +49,11 @@ const CELL = 60;
 // same buses read a little differently (a trip at the window's edge), and
 // takes its neighbour's class.
 export const CLASS_MIN = 200;
+// Buses the other way at most this share of the busier way's: one way.
+const ONE_WAY = 0.15;
+// One way or two for less than this is the same street read a little
+// differently (a cell at a corner), and takes its neighbour's.
+const ONE_WAY_MIN = 150;
 // A run's loose end joins another run's end this close (a junction).
 const JOIN = ALONG + STEP;
 // Tiers that run through the window and so count toward the street.
@@ -116,6 +121,19 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
     }
   }
 
+  // Alongside goes both ways: where one route finds another beside it but
+  // not the other way round (an end, a sharper bend), the other is told,
+  // so the route first in number order, which draws the street, knows it
+  // does, and the street has no gap.
+  for (const t of tracks) {
+    t.beside.forEach((m, i) => {
+      for (const f of m.values()) {
+        const back = f.track.beside[f.k];
+        if (!back.has(t.route)) back.set(t.route, { track: t, k: i, at: t.points[i], flipped: f.flipped });
+      }
+    });
+  }
+
   // Where routes run together, each point is drawn in the middle of them. A
   // route that has started to leave counts for less and less (from CLOSE
   // away to ALONG), so it doesn't pull the street after it.
@@ -133,6 +151,7 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
   // 3. Buses per hour at each point: every all-day route alongside, merged
   // each way along this track's line.
   for (const t of tracks) {
+    const dirs = [];
     t.bph = t.points.map((p, i) => {
       const w = [...t.load[i].with];
       const a = [...t.load[i].against];
@@ -141,8 +160,12 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
         w.push(...(f.flipped ? l.against : l.with));
         a.push(...(f.flipped ? l.with : l.against));
       }
-      return Math.max(rate(w), rate(a));
+      // One way: buses run only with the line, or only against it.
+      const [rw, ra] = [rate(w), rate(a)];
+      dirs[i] = rw > 0 && ra <= ONE_WAY * rw ? 1 : ra > 0 && rw <= ONE_WAY * ra ? -1 : 0;
+      return Math.max(rw, ra);
     });
+    t.oneway = steady(t, dirs, ONE_WAY_MIN);
     t.routes = t.points.map((p, i) => [t.route, ...t.beside[i].keys()].sort(byNumber));
     t.n = t.points.map((p, i) => (t.allDay[i] ? 1 : 0) + [...t.beside[i].values()].filter((f) => f.track.allDay[f.k]).length);
     t.cls = smoothClasses(t, t.bph.map(classOf));
@@ -157,7 +180,7 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
   const runs = [];
   for (const t of tracks) {
     const owned = t.routes.map((rs) => rs.every((r) => position.get(r) >= position.get(t.route)));
-    const key = (i) => (owned[i] ? `${t.routes[i].join(' ')}|${t.cls[i]}` : null);
+    const key = (i) => (owned[i] ? `${t.routes[i].join(' ')}|${t.cls[i]}|${t.oneway[i]}` : null);
     const n = t.points.length;
     const cuts = [0];
     for (let i = 1; i < n; i++) if (key(i) !== key(i - 1)) cuts.push(i);
@@ -177,6 +200,7 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
         routes: t.routes[a],
         n: t.n[a],
         cls: t.cls[a],
+        oneway: t.oneway[a],
         bph: median(Array.from({ length: b - a }, (_, j) => t.bph[a + j])),
         // A loose end: the track goes on, but another route owns the street
         // there. It is joined to the run that has the street.
@@ -202,18 +226,25 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
   }
 
   return runs
-    .map((run) => ({
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: dedupe(simplify(dedupe(run.points), tolerance).map(unproject)) },
-      properties: {
-        mode: 'bus',
-        routes: run.routes.join(' '),
-        n: run.n,
-        bph: Math.round(run.bph * 10) / 10,
-        hw: run.bph > 0 ? Math.max(1, Math.round(60 / run.bph)) : null,
-        cls: run.cls,
-      },
-    }))
+    .map((run) => {
+      // A one-way street is drawn the way its buses go, so its arrows point
+      // that way.
+      const coords = dedupe(simplify(dedupe(run.points), tolerance).map(unproject));
+      if (run.oneway < 0) coords.reverse();
+      return {
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: coords },
+        properties: {
+          mode: 'bus',
+          routes: run.routes.join(' '),
+          n: run.n,
+          bph: Math.round(run.bph * 10) / 10,
+          hw: run.bph > 0 ? Math.max(1, Math.round(60 / run.bph)) : null,
+          cls: run.cls,
+          ...(run.oneway ? { oneway: 1 } : {}),
+        },
+      };
+    })
     .filter((f) => f.geometry.coordinates.length >= 2);
 }
 
@@ -235,7 +266,19 @@ function buildTracks(features, loads, project) {
     const mine = [];
     list.sort((a, b) => length(b.points) - length(a.points));
     for (const { points, tier, wk } of list) {
-      const own = points.map((p) => kept.near(p, OWN).length > 0);
+      // Its own street already kept, or this piece's own earlier line (a
+      // piece that goes out and comes back along one street).
+      const cum = [0];
+      for (let i = 1; i < points.length; i++) cum.push(cum[i - 1] + dist(points[i - 1], points[i]));
+      const self = new Grid(OWN);
+      let added = 0;
+      const own = points.map((p, i) => {
+        while (added + 1 < i && cum[i] - cum[added + 1] > 3 * OWN) {
+          self.add(points[added], points[added + 1], added);
+          added++;
+        }
+        return kept.near(p, OWN).length > 0 || self.near(p, OWN).length > 0;
+      });
       let start = -1;
       for (let i = 0; i <= points.length; i++) {
         const free = i < points.length && !own[i];
@@ -285,7 +328,9 @@ function buildTracks(features, loads, project) {
 function chain(list) {
   const out = [];
   const used = new Set();
-  const meet = (a, b) => dist(a, b) <= OWN;
+  // Ends this close are one line broken where a bit of it was dropped as
+  // the route's own street (a few meters of RTD's line left over).
+  const meet = (a, b) => dist(a, b) <= OWN + STEP;
   const reversed = (t) => ({ points: [...t.points].reverse(), tiers: [...t.tiers].reverse(), wks: [...t.wks].reverse() });
   for (let i = 0; i < list.length; i++) {
     if (used.has(i)) continue;
@@ -347,6 +392,27 @@ function smoothClasses(t, cls) {
     if (!candidates.length) return out;
     const { r, into } = candidates[0];
     for (let i = r.from; i < r.to; i++) out[i] = out[into.from];
+  }
+  return out;
+}
+
+// A run of one value shorter than `min` takes its longer neighbour's,
+// shortest first, so a street isn't one way for a few meters.
+function steady(t, values, min) {
+  const out = [...values];
+  for (let pass = 0; pass < 100; pass++) {
+    const runs = [];
+    for (let i = 0; i < out.length; ) {
+      let j = i;
+      while (j < out.length && out[j] === out[i]) j++;
+      runs.push({ from: i, to: j, length: length(t.points.slice(i, Math.min(out.length, j + 1))) });
+      i = j;
+    }
+    if (runs.length < 2) return out;
+    const short = runs.map((r, k) => ({ r, k })).filter(({ r }) => r.length < min).sort((a, b) => a.r.length - b.r.length)[0];
+    if (!short) return out;
+    const near = [runs[short.k - 1], runs[short.k + 1]].filter(Boolean).sort((a, b) => b.length - a.length)[0];
+    for (let i = short.r.from; i < short.r.to; i++) out[i] = out[near.from];
   }
   return out;
 }

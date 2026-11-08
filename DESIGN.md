@@ -1316,6 +1316,48 @@ together, then the third:
 6. Separate lines at hard junctions only: rejected, it is the trunk idea
    where the map is densest.
 
+**Readable geometry: options 1 and 2 built (2026-11-08).** The build
+generalizes each bus route's line from its own shape before the streets are
+built (`scripts/lib/generalize.mjs`; frequency is measured first and is
+unchanged):
+
+- *Pieces* of a route that meet end to end are one line, so a lap or a
+  carriageway RTD draws in pieces is seen whole.
+- *Carriageways*: where a route runs beside itself, parallel within 60 m
+  for 100 m or more (both halves of a divided road, a highway's two
+  carriageways or ramps), both are drawn on the middle line, fully within
+  40 m. A one-way pair a block apart (about 100 m) stays two streets.
+- *Laps*: where a route comes back to within 30 m of itself after 60 m to
+  2 km, a lap reaching less than 220 m from where it began (a ramp circle,
+  a turn round a block) becomes the point the bus turns at. A bigger one (a
+  terminal or layover loop) becomes a short end, the shorter way round to
+  the station or transit center within 250 m of it (from RTD's station and
+  facility layers), or with none, to its farthest point. A thin lap (a
+  one-way pair, out and back on one street) is two streets and stays, and
+  so does a loop that would leave more than 700 m of its own streets
+  undrawn (1.5 km if it turns at a station): a circuit its arrows explain.
+  A short thin lap off a line that goes on is a spur, and goes.
+- *Loose ends*: a piece that starts a little past where another piece of its
+  route ends and runs on through it is trimmed to start there, so the two
+  are one line with no stub.
+
+*One-way arrows*: the build marks a street `oneway` where departures one
+way are no more than 15% of the other's, steady for 150 m or more, and
+draws it the way its buses go (`streets.mjs`). The page draws small
+chevrons inside the line from zoom 14 (`street-oneway` in `network.js`),
+every 150 px, in the palette's arrow tint (a shade off the line, in both
+themes) where the line is wide enough to hold one, or in the street's own
+color as an arrowhead on a thinner line. Two-way streets have no arrows.
+The Key has a row for them.
+
+Still to do: a few highway interchanges where several express routes part on
+separate ramps (I-25 by 38th and Fox) still draw a small triangle where
+the streets' combined lines meet; the Union Station express routes still
+draw the block they use in and out (both directions on different streets,
+which is accurate, but reads as a loop); the 3L, EV and PD Civic Center
+loop runs up Broadway and down Lincoln, a one-way pair, so it stays two
+streets with arrows.
+
 ### By zoom level
 
 Each bus tier fades in over about a zoom level rather than popping on.
@@ -2995,6 +3037,11 @@ marks that overlap, a letter missing) are the next thing to add there.
   figured out how to do it, so it didn't make sense to put them on until we
   had a good solution." "Numbers" now states the goal and what a scheme must
   avoid, in place of "the map starts bare".
+- 2026-11-08: Readable bus geometry, options 1 and 2, built: the build
+  generalizes each route's line from its own shape (carriageways onto one
+  line, ramp circles to a turn point, terminal loops to a short end at the
+  station they serve) and marks one-way streets, which the page draws with
+  chevrons inside the line from zoom 14 (Bus routes, "Readable geometry").
 
 ## Sources
 
