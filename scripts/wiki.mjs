@@ -18,7 +18,7 @@ const GROUPS = [
   ['What the map is for', ['Objective', 'Who it is for', 'Why', 'Non goals',
     'What people can do in priority order']],
   ['How it is built', ['Zero maintenance', 'Data', 'Map design', 'Interface',
-    'Installed on a phone', 'Voice', 'Architecture']],
+    'Installed on a phone', 'Voice', 'Architecture', 'Unattended work']],
   ['How it is checked', ['Quality floor', 'Design review rubric', 'Validation']],
   ['Plans and decisions', ['Milestones', 'Open questions', 'Decision log']],
   ['The record', ['V1 review', 'V2 review', 'Sources']],
