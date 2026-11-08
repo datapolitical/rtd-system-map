@@ -88,14 +88,14 @@ jobs:
         run: |
           # Brief = the ground rules (CLAUDE.md is in the repo) plus the
           # job brief. Free models first; DeepSeek V4.1 Flash last.
-          JOB=$(python3 -c 'import json; print(json.load(open("job.json"))["job"])')
+          JOB=$(python3 -c "import json; print(json.load(open('job.json'))['job'])")
           if [ "$JOB" = "find" ]; then
-            LENS=$(python3 -c 'import json; print(json.load(open("job.json")).get("lens","rail"))')
+            LENS=$(python3 -c "import json; print(json.load(open('job.json')).get('lens','rail'))")
             BRIEF=$(cat .github/daily/find.md)
             ASSIGN="Lens: $LENS. Read it from .github/daily/lenses.json."
           else
             BRIEF=$(cat .github/daily/fix.md)
-            ASSIGN=$(python3 -c 'import json; j=json.load(open("job.json")); print(f"Issue: #{j.get(\"issue\")} branch={j.get(\"branch\") or \"new\"} kind={j.get(\"kind\")}")')
+            ASSIGN=$(python3 -c "import json; j=json.load(open('job.json')); print('Issue: #'+str(j.get('issue'))+' branch='+(j.get('branch') or 'new')+' kind='+str(j.get('kind')))")
           fi
           PROMPT_FILE="$RUNNER_TEMP/brief.txt"
           { echo "You are working on datapolitical/rtd-system-map. Read CLAUDE.md in the worktree root and DESIGN.md before changing anything."; echo; echo "$BRIEF"; echo; echo "## Today's assignment"; echo "$ASSIGN"; echo "Date: $(date -u +%F). Run folder: $PWD/run."; } > "$PROMPT_FILE"

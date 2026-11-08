@@ -45,10 +45,20 @@ if (job.job === 'find' && job.lens) {
   for (const n of job.filed || []) ledger.filed.push?.({ issue: n, lens: job.lens, date: entry.date, outcome: 'open' });
 }
 ledger.runs.push(entry);
-fs.writeFileSync('ledger.json', JSON.stringify(ledger, null, 2) + '\n');
-execFileSync('git', ['checkout', '--orphan', 'daily-ledger'], { stdio: 'inherit' });
-execFileSync('git', ['rm', '-rfq', '.'], { stdio: 'inherit' });
+fs.writeFileSync('/tmp/ledger.json', JSON.stringify(ledger, null, 2) + '\n');
+// Update the orphan branch in a temp worktree so the runner's checkout is untouched.
+run('git fetch origin daily-ledger --quiet 2>/dev/null || true');
+let onLedger = false;
+try { run('git rev-parse --verify origin/daily-ledger >/dev/null'); onLedger = true; } catch {}
+if (onLedger) {
+  execFileSync('git', ['checkout', '-q', '-B', 'daily-ledger', 'origin/daily-ledger'], { stdio: 'inherit' });
+} else {
+  execFileSync('git', ['checkout', '-q', '--orphan', 'daily-ledger'], { stdio: 'inherit' });
+  execFileSync('git', ['rm', '-rfq', '.'], { stdio: 'inherit' });
+}
+run('cp /tmp/ledger.json ledger.json');
 execFileSync('git', ['add', 'ledger.json'], { stdio: 'inherit' });
 execFileSync('git', ['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-q', '-m', `Ledger: ${job.summary || job.job} on ${entry.date}`], { stdio: 'inherit' });
 execFileSync('git', ['push', '-u', 'origin', 'daily-ledger'], { stdio: 'inherit' });
+execFileSync('git', ['checkout', '-q', '-'], { stdio: 'inherit' });
 console.log(`ledger updated: ${entry.date} ${job.job}${job.issue ? ' #' + job.issue : ''} model=${model || 'none'}`);
