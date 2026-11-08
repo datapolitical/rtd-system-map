@@ -1844,6 +1844,11 @@ shown side by side. Each score cites the capture that earns it. The measured
 checks (`npm run check`, the sweep) back the rows they can (Drawn on
 purpose, Association, Legible, Phone), and a failing check caps its row at
 1. Chris's verdict on the screenshots overrides the card.
+The second reviewer is the project's `design-reviewer` agent
+(`.claude/agents/design-reviewer.md`): it takes its own captures from a
+running server, never sees the builder's report, judges against the
+hand-drawn Denver transit poster (kept outside the repo), and returns a card
+without editing anything.
 
 ## Validation
 
@@ -2842,6 +2847,11 @@ marks that overlap, a letter missing) are the next thing to add there.
   and the scorer is never whoever did the work. Chris asked
   for it after the bus bundling prototype was called a success for being
   countable when it did not yet look good.
+
+- 2026-11-08: An independent `design-reviewer` agent does the second
+  scoring: read-only, its own Chromium captures, blind to the builder's
+  report. Chris asked whether a special-purpose reviewer should audit the
+  work.
 
 ## Sources
 
