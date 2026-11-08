@@ -7,16 +7,22 @@ clear picture of where Denver has useful service. A button called Live turns
 the same map into right now: what is running, and where the trains and buses
 are. It is built for phones first.
 
-Live site: https://rtd-system-map.pages.dev
+**Open it: [rtd-system-map.pages.dev](https://rtd-system-map.pages.dev)**
 
 This is unofficial. It is built only from RTD's public data and is not
 affiliated with RTD.
 
-<!-- Screenshot: add one here (phone, opening view). -->
+<p align="center">
+  <img src="docs/screenshot-light.jpg" width="300" alt="The map's opening view on a phone: Denver's rail lines and frequent bus corridors, light theme">
+  &nbsp;
+  <img src="docs/screenshot-dark.jpg" width="300" alt="The same view in the dark theme">
+</p>
 
 ## Run it
 
-```
+You need Node 22 and Cloudflare's Wrangler CLI (`npm install -g wrangler`).
+
+```sh
 npm install        # also copies MapLibre and the font into public/vendor/
 npm run build      # downloads RTD's public data into public/data/
 npm run dev        # serves the site at http://127.0.0.1:8788
@@ -26,7 +32,7 @@ npm run check      # headless browser checks (see qa/checks/README.md)
 ```
 
 `npm run check` needs `npm run dev` running (and `npm run dev:live` for the
-Live check), and Playwright with Chromium installed.
+Live check), and Playwright's Chromium (`npx playwright install chromium`).
 
 ## Design
 
@@ -62,9 +68,8 @@ network is written into the code; the build derives it from RTD's data.
 - Street addresses use Photon, an OpenStreetMap geocoder. The basemap uses
   OpenFreeMap's vector tiles.
 
-DESIGN.md says the data is public and keyless, but it does not record
-licence terms for any of these sources. Check each provider's terms before
-reusing the data.
+All of these are public and need no key. Check each provider's terms before
+reusing their data.
 
 ## Licence
 
