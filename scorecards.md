@@ -33,3 +33,36 @@ below 2) and is not better than main: Useful rises, seven rows fall. Lowest
 rows, the next work: Hierarchy, Drawn on purpose, Calm, Across zooms,
 Gorgeous. Main fails too, on Useful (1): it can't say where buses go, which
 is why this work exists.
+
+### Second card, by the design-reviewer agent (independent)
+
+Its own Chromium captures (iPhone 14, Live off), both themes: the fixed
+views, the hub at 12.5 to 16, Civic Center and Union Station transit centers
+at 15, a quarter-zoom sweep 13.75 to 15.25, and the Broadway/Lincoln
+corridor at 12.5 and 14.5. Captures in `qa/.scratch/review-2026-11-08-bundles-r2/`
+(not kept in git). Scored before reading the card above.
+
+| Row | main | round two | Evidence |
+|---|---|---|---|
+| Useful | 1 | 1 | Round two: a line can be traced along 15th/17th but not through the Broadway/Lawrence crossing or either terminal; no route numbers. |
+| Hierarchy | 2 | 1 | Squinted, bus packs of 8 to 12 are the heaviest mass downtown; in dark, solid bands as wide as the rail pack. |
+| Association | 2 | 1 | No member of a pack tied to its route without a tap; "Union Station" on the bus knot at 16 (main puts it on one bus line). |
+| Drawn on purpose | 2 | 1 | Knots at both terminals, dash fragments attached to nothing, beads, stubs, a bowtie pinch near I-25/Broadway. One good concentric corner at 17th. |
+| Calm | 2 | 1 | 15th and 17th become walls of lines; every crossing a knot. |
+| Legible | 3 | 2 | Members 1.15 widths apart: a gap under 1 px at 15, so neighbors fuse, worst in dark. |
+| Accurate | 3 | 0 | The northbound 0 and 0L are moved off Lincoln onto Broadway for about 2.5 km; about 60 km of every-30-minute-or-better service is drawn more than 40 m from where main draws it. |
+| Across zooms | 2 | 1 | One line becomes up to twelve in one step at 14.5. |
+| Phone | 2 | 2 | Unchanged. |
+| Gorgeous | 2 | 1 | Unfinished next to the poster's downtown inset, worst at the terminals. |
+| **Total** | **21** | **11** | |
+
+Verdict: round two fails (Accurate 0) and is not better: no row up, eight
+down. Where the cards disagree: the orchestrator gave Accurate 2 and missed
+that whole routes leave their street (checked: in round two Lincoln keeps
+only the dashed rush-hour line, and the rest is drawn on Broadway); the
+reviewer gives Useful 1, since without numbers and with routes on the wrong
+streets a rider still can't say where a bus goes; and it marks main's
+Hierarchy, Association and Calm 2, not 3. The next work, in order: Accurate
+(bundle only routes that run on that street; every route stays within tens
+of meters of its own), then the terminal and crossing knots, then pack
+weight, spacing and a gradual opening across zooms.
