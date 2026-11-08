@@ -101,9 +101,15 @@ const findingLines = (entry) => {
 };
 
 function openIssues() {
-  const out = gh('issue', 'list', '--label', LABEL, '--state', 'open', '--json', 'number,title,comments', '--limit', '100');
+  const out = gh('issue', 'list', '--label', LABEL, '--state', 'open', '--json', 'number,title,body,comments', '--limit', '100');
   return out ? JSON.parse(out) : [];
 }
+
+/** The issue a spec's failures belong to: its own title, or any issue whose
+ *  body carries the spec's mark. A retitled issue is still that spec's issue
+ *  (#31 was retitled as a map problem and a nightly opened a duplicate). */
+const belongs = (file) => `<!-- spec: ${file} -->`;
+const findIssue = (open, title, file) => open.find((i) => i.title === title || (i.body || '').includes(belongs(file)));
 
 /** A comment is sent once per site and failure signature, not on every push. */
 function seen(issue, marker) {
@@ -122,7 +128,7 @@ function issuesMode() {
     const title = `Checks: ${name(entry.file)} fails`;
     const fingerprint = crypto.createHash('sha1').update(entry.failed.slice().sort().join('|')).digest('hex').slice(0, 10);
     const marker = `<!-- checks ${crypto.createHash('sha1').update(site).digest('hex').slice(0, 8)} ${fingerprint} -->`;
-    const issue = open.find((i) => i.title === title);
+    const issue = findIssue(open, title, entry.file);
     const testLines = entry.failed.map((t) => `- ${t}`).join('\n');
     const messageLines = entry.messages.slice(0, 5).map((m) => `- ${m.slice(0, 300)}`);
     const findings = findingLines(entry);
@@ -135,6 +141,7 @@ function issuesMode() {
       ...(findings.length ? ['', `Findings (${entry.findings.length}):`, ...findings] : []),
       '',
       `The report and captures are the run's artifact: ${runUrl}#artifacts`,
+      belongs(entry.file),
       marker,
     ].join('\n');
     if (issue) {
@@ -153,7 +160,7 @@ function issuesMode() {
   if (!args.includes('--close')) return;
   for (const entry of passed) {
     const title = `Checks: ${name(entry.file)} fails`;
-    const issue = open.find((i) => i.title === title);
+    const issue = findIssue(open, title, entry.file);
     if (!issue) continue;
     const marker = `<!-- checks ${crypto.createHash('sha1').update(site).digest('hex').slice(0, 8)} pass -->`;
     const body = `Passing again on ${site} in [this run](${runUrl}).\n${marker}`;
