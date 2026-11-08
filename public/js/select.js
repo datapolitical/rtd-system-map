@@ -629,7 +629,9 @@ async function onTap(e) {
   // A place: station (whichever symbol was hit), then a terminal's building,
   // then Park-n-Ride, then stop.
   const station = closest(near(e.point, pad, STATION_LAYERS), e.point);
-  const terminal = map.getLayer('bus-terminal') ? map.queryRenderedFeatures(e.point, { layers: ['bus-terminal'] })[0] : null;
+  const terminal = map.getLayer('bus-terminal')
+    ? map.queryRenderedFeatures(e.point, { layers: ['bus-terminal', 'bus-terminal-under'].filter((id) => map.getLayer(id)) })[0]
+    : null;
   const facility = closest(near(e.point, pad, ['facilities']), e.point);
   const stop = closest(near(e.point, pad, ['stops']), e.point);
   if (station) return open(stationView(Number(station.properties.id)), false);

@@ -26,6 +26,8 @@ export const BUILDING_R = 220;
 export const GATE_R = 160;
 // A building smaller than this is a shelter or a kiosk, not a terminal.
 export const MIN_AREA = 80;
+// A bus platform can be a narrow strip, but below this it is a kerb.
+export const PLATFORM_MIN_AREA = 30;
 // Shapes are simplified to a metre, the same as the map's lines.
 const SHAPE_TOLERANCE = 1;
 
@@ -46,15 +48,17 @@ export function inRing(p, ring) {
 export function area(ring) {
   const kx = 111320 * Math.cos((ring[0][1] * Math.PI) / 180);
   const ky = 110540;
+  const pts = ring.map((p) => [(p[0] - ring[0][0]) * kx, (p[1] - ring[0][1]) * ky]);
   let sum = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) sum += (ring[j][0] - ring[i][0]) * kx * (ring[j][1] + ring[i][1]) * ky;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) sum += pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1];
   return Math.abs(sum / 2);
 }
 
 /**
- * The closed ways with a `building` tag in an OSM XML document from the map
+ * The closed ways that describe a place in an OSM XML document from the map
  * call, as `{ id, tags, ring }` with `ring` the way's corners in lon/lat
- * (not repeated at the end). Relations and open ways are left out.
+ * (not repeated at the end): buildings, a bus station's hall, and the bus
+ * platforms at its gates. Open ways, routes and relations are left out.
  */
 export function parseOsm(xml) {
   const nodes = new Map();
@@ -63,7 +67,8 @@ export function parseOsm(xml) {
   for (const m of xml.matchAll(/<way\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/way>/g)) {
     const tags = {};
     for (const t of m[2].matchAll(/<tag\b[^>]*\bk="([^"]*)"[^>]*\bv="([^"]*)"/g)) tags[t[1]] = t[2];
-    if (!tags.building) continue;
+    const busPlatform = tags.public_transport === 'platform' && tags.bus === 'yes';
+    if (!tags.building && tags.amenity !== 'bus_station' && !busPlatform) continue;
     const refs = [...m[2].matchAll(/<nd\b[^>]*\bref="([^"]+)"/g)].map((r) => r[1]);
     if (refs.length < 4 || refs[0] !== refs.at(-1)) continue;
     const ring = refs.slice(0, -1).map((ref) => nodes.get(ref)).filter(Boolean);
@@ -74,38 +79,74 @@ export function parseOsm(xml) {
 
 // A building that is the station itself, not just a building the station is in.
 const isStation = (tags) => tags.amenity === 'bus_station' || tags.public_transport === 'station' || tags.railway === 'station' || tags.building === 'transportation';
+// A parking structure is never the terminal: buses board beside it, not in it.
+const isParking = (tags) => tags.building === 'parking' || tags.amenity === 'parking' || tags.parking !== undefined;
+// A bus station's hall, above or below ground, and its bus platforms: both
+// are the place a bus boards, whatever else stands there.
+const isBusHall = (tags) => tags.amenity === 'bus_station';
+const isBusPlatform = (tags) => tags.public_transport === 'platform' && tags.bus === 'yes';
+// Below ground when OSM says so: a layer under the street, or the hall itself
+// marked as underground.
+const isUnderground = (tags) => Number(tags.layer) < 0 || tags.location === 'underground';
+// A bus platform this close to a gate is the gate's platform (the stops often
+// sit in the lane between two platforms).
+export const PLATFORM_GATE_R = 30;
+
+/**
+ * The shape a terminal is, from the areas around it: its bus hall if OSM has
+ * one, else the bus platforms its gates stand on, else the station building
+ * the gates stand in, else the building holding the most gates — and never a
+ * parking structure. Returns `{ ways, rings, kind, underground }` or null when
+ * nothing quality stands there (a park-n-ride lot has no shape to draw).
+ */
+export function terminalShapeOf(areas, point, gates) {
+  const usable = areas.filter((a) => area(a.ring) >= PLATFORM_MIN_AREA);
+  const holds = (a, g) => inRing(g, a.ring);
+  const count = (a) => gates.filter((g) => holds(a, g)).length;
+  const near = (a, r) => gates.some((g) => holds(a, g) || ringGap(g, a.ring) <= r);
+  const pick = (list) => list.sort((x, y) => count(y) - count(x) || Number(holds(y, point)) - Number(holds(x, point)) || area(x.ring) - area(y.ring))[0] ?? null;
+  const big = (a) => area(a.ring) >= MIN_AREA;
+
+  const hall = pick(usable.filter((a) => isBusHall(a.tags) && big(a) && (count(a) || holds(a, point))));
+  if (hall) return { ways: [hall], rings: [hall.ring], kind: 'bus_station', underground: isUnderground(hall.tags) };
+  const platforms = usable.filter((a) => isBusPlatform(a.tags) && near(a, PLATFORM_GATE_R));
+  if (platforms.length) return { ways: platforms, rings: platforms.map((a) => a.ring), kind: 'platform', underground: platforms.some((a) => isUnderground(a.tags)) };
+  const station = pick(usable.filter((a) => isStation(a.tags) && big(a) && !isParking(a.tags) && (count(a) || holds(a, point))));
+  if (station) return { ways: [station], rings: [station.ring], kind: 'station', underground: isUnderground(station.tags) };
+  const building = pick(usable.filter((a) => a.tags.building && big(a) && !isParking(a.tags) && (count(a) || holds(a, point))));
+  if (building) return { ways: [building], rings: [building.ring], kind: 'building', underground: isUnderground(building.tags) };
+  return null;
+}
+
+// How far `p` is from a ring's edge.
+export function ringGap(p, ring) {
+  let best = Infinity;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const kx = 111320 * Math.cos((p[1] * Math.PI) / 180);
+    const ky = 110540;
+    const [ax, ay] = [(ring[j][0] - p[0]) * kx, (ring[j][1] - p[1]) * ky];
+    const [bx, by] = [(ring[i][0] - p[0]) * kx, (ring[i][1] - p[1]) * ky];
+    const [dx, dy] = [bx - ax, by - ay];
+    const len = dx * dx + dy * dy;
+    const t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
 
 /**
  * The building a terminal is, from the buildings around it: the station
  * building if one of them is the station, else the one holding the most of
  * the terminal's `gates` (stop points), and never a building the gates are not
  * in or around. Null when nothing qualifies — a park-n-ride's lot has no
- * building, and drawing the shop beside it would be a lie.
+ * building, and drawing the shop beside it would be a lie. Kept as the shape's
+ * headline building; `terminalShapeOf` is what the build uses.
  */
 export function footprintOf(buildings, point, gates) {
-  const candidates = [];
-  for (const b of buildings) {
-    const size = area(b.ring);
-    if (size < MIN_AREA) continue;
-    const holds = inRing(point, b.ring);
-    const inside = gates.filter((g) => inRing(g, b.ring)).length;
-    if (!holds && !inside) continue;
-    candidates.push({ b, size, holds, inside, station: isStation(b.tags) });
-  }
-  if (!candidates.length) return null;
-  candidates.sort(
-    (x, y) =>
-      Number(y.station) - Number(x.station) ||
-      y.inside - x.inside ||
-      Number(y.holds) - Number(x.holds) ||
-      // Two buildings that both hold the gates: the tighter fit is the one
-      // the gates stand in, not the block it sits on.
-      x.size - y.size,
-  );
-  return candidates[0].b;
+  return terminalShapeOf(buildings, point, gates)?.ways[0] ?? null;
 }
 
-/** The buildings in an OSM map box around `point`, or an error the caller can decide about. */
+/** The areas in an OSM map box around `point`, or an error the caller can decide about. */
 export async function buildingsAround(point, { radius = OSM_RADIUS, fetchText = defaultFetch } = {}) {
   const [lon, lat] = point;
   const box = [lon - radius, lat - radius, lon + radius, lat + radius].map((v) => v.toFixed(5)).join(',');
@@ -121,52 +162,94 @@ async function defaultFetch(url) {
   return res.text();
 }
 
-// A footprint as the page draws it: closed ring, simplified to a metre, rounded.
+// A footprint as the page draws it: a closed ring, simplified to a metre, rounded.
 function shapeOf(way, point) {
   const { project, unproject } = projection(point, 5);
   const ring = simplify(way.ring.map(project), SHAPE_TOLERANCE).map(unproject);
   return [...ring, ring[0]];
 }
 
+// Every ring a terminal feature's geometry holds, for the street net.
+function ringsOfFeature(feature) {
+  const g = feature.geometry;
+  const polygons = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+  return polygons.map((p) => p[0]);
+}
+
+// A roof over a place: what riders see from the street above a bus hall.
+export const ROOF_R = 2;
+const isRoof = (tags) => tags.building === 'roof' || tags['man_made'] === 'canopy';
+
 /**
- * Find the footprint of each terminal. `facilities` are the facility features
+ * Find the shape of each terminal. `facilities` are the facility features
  * and `indexes` the ones the street net found to be terminals; `stops` are the
- * stop features, read for the gates. `previous` is last build's terminals file,
- * kept for a terminal whose box OpenStreetMap would not answer for, so a bad
- * day at OSM costs nothing. Returns a Map from facility index to `{ ring,
- * feature }`: the building's corners in lon/lat, and the GeoJSON feature the
- * page draws.
+ * stop features, read for the gates. `busOnly` are the indexes at a rail
+ * station, where only a bus hall or bus platforms may be drawn: the rail
+ * station is already the place, and the office block beside it is not.
+ * `previous` is last build's terminals file, kept for a terminal whose box
+ * OpenStreetMap would not answer for, so a bad day at OSM costs nothing.
+ * Returns `{ terminals, canopies }`: a Map from facility index to `{ rings,
+ * feature }`, and the roofs over those shapes, to draw as canopies.
  */
-export async function terminalFootprints({ facilities, indexes, stops, previous = [], fetchText, log = console.log }) {
+export async function terminalFootprints({ facilities, indexes, stops, previous = [], busOnly = new Set(), fetchText, log = console.log }) {
   const before = new Map(previous.map((f) => [String(f.properties.id), f]));
-  const found = new Map();
+  const terminals = new Map();
+  const canopies = [];
   for (const i of indexes) {
     const facility = facilities[i];
     const point = facility.geometry.coordinates;
     const gates = stops.map((f) => f.geometry.coordinates).filter((c) => metres(c, point) <= GATE_R);
-    let way = null;
-    let failed = false;
+    const id = String(facility.properties.id);
+    let areas = null;
     try {
-      way = footprintOf(await buildingsAround(point, { fetchText }), point, gates);
+      areas = await buildingsAround(point, { radius: radiusFor(point, gates), fetchText });
     } catch (err) {
-      failed = true;
       log(`  ${facility.properties.name}: no building looked up (${err.message})`);
     }
-    const id = String(facility.properties.id);
-    if (failed && before.has(id)) {
-      const feature = before.get(id);
-      found.set(i, { ring: feature.geometry.coordinates[0], feature });
+    if (!areas) {
+      if (before.has(id)) terminals.set(i, { rings: ringsOfFeature(before.get(id)), feature: before.get(id) });
       continue;
     }
-    if (!way) continue;
-    found.set(i, {
-      ring: way.ring,
+    const shape = terminalShapeOf(areas, point, gates);
+    if (!shape) continue;
+    if (busOnly.has(i) && !['bus_station', 'platform'].includes(shape.kind)) continue;
+    const rings = shape.rings.map((r) => shapeOf({ ring: r }, point));
+    terminals.set(i, {
+      rings: shape.rings,
       feature: {
         type: 'Feature',
-        geometry: { type: 'Polygon', coordinates: [shapeOf(way, point)] },
-        properties: { id, name: facility.properties.name, class: facility.properties.class, gates: gates.filter((g) => inRing(g, way.ring)).length },
+        geometry: rings.length === 1 ? { type: 'Polygon', coordinates: rings } : { type: 'MultiPolygon', coordinates: rings.map((r) => [r]) },
+        properties: {
+          id,
+          name: facility.properties.name,
+          class: facility.properties.class,
+          gates: gates.filter((g) => shape.rings.some((r) => inRing(g, r))).length,
+          kind: shape.kind,
+          underground: shape.underground ? 1 : 0,
+        },
       },
     });
+    // The roof over it, if OSM draws one: the curved canopy above Civic
+    // Center's hall, the canopy over Nine Mile's bays.
+    for (const a of areas) {
+      if (!isRoof(a.tags) || area(a.ring) < MIN_AREA) continue;
+      if (!shape.rings.some((r) => inRing(a.ring[0], r) || ringGap(a.ring[0], r) <= ROOF_R || inRing(r[0], a.ring))) continue;
+      const ring = shapeOf(a, point);
+      canopies.push({
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: { kind: 'canopy', name: facility.properties.name, terminal: id, station: '' },
+      });
+    }
   }
-  return found;
+  return { terminals, canopies };
+}
+
+// The box to ask OSM for: the place, its gates and a margin for the buildings
+// and hall they stand in.
+function radiusFor(point, gates) {
+  const lons = [point[0], ...gates.map((g) => g[0])];
+  const lats = [point[1], ...gates.map((g) => g[1])];
+  const span = Math.max((Math.max(...lons) - Math.min(...lons)) / 0.85, (Math.max(...lats) - Math.min(...lats)) / 1.1);
+  return Math.max(OSM_RADIUS, span + 0.0012);
 }

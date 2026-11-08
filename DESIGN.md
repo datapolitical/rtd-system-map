@@ -1101,11 +1101,15 @@ knows nothing about a station, a platform or a line
   that, or at that distance with no line in common, they are two. A stop
   between two others makes one group of all three, so a long platform is not
   split in two.
-- *Where a group's mark goes.* On the group's lines: at their end where they
-  end there, because a mark is what a line ends on; otherwise on the track
-  beside the platform. It is a station mark like any other — the same image at
-  the same size, turned across its lines, as wide as the lines that stop
-  there — so a group reads as a station, not a new kind of thing.
+- *Where a group's mark goes.* On the track beside the group's platform stops —
+  where riders board — never at the far end of the line. A line now runs along
+  its platform to the platform's real end (see "The station's real shape"), so
+  the end of the line is no longer the place a rider stands; the mark goes on
+  the track at the stops, and only when the stops are nowhere near the drawn
+  track does it fall back to the lines' ends, so it never stands in the air.
+  It is a station mark like any other — the same image at the same size,
+  turned across its lines, as wide as the lines that stop there — so a group
+  reads as a station, not a new kind of thing.
 - *When it comes.* A group's mark waits until it clears the station's own mark
   by the same rule as a station's tick (`tickFrom`), so a group a few metres
   from the station never doubles it, and a group that never clears gets no
@@ -1118,6 +1122,39 @@ knows nothing about a station, a platform or a line
 Only Union Station has more than one group in RTD's feed today. The build
 reports every station it marks at more than one group, so a change in RTD's
 data shows in the build's output instead of going unnoticed.
+
+**The station's real shape.** A station is a place with a building, platforms
+and a roof, and at the zooms where it is bigger than a mark the map draws
+those, from OpenStreetMap, at build time (`scripts/lib/structures.mjs`, with
+`test/structures.test.mjs`). Nothing about a station is written down: the
+build asks OSM for the box around the station's own platform stops and picks
+the shapes by tag and by where those stops are, so a station RTD adds, moves
+or loses draws itself.
+
+- *A platform* is a `railway=platform` area holding or touching one of the
+  station's platform stops. A platform tagged `public_transport=no` is not
+  one (Track 3 at Union Station, out of service).
+- *A canopy* is a `building=roof`, `man_made=canopy` or `amenity=shelter`
+  area over a platform, and *the station building* is a
+  `building=train_station` area touching one. A block that happens to be
+  called "... Union Station" — an apartment tower, an office — carries none of
+  these tags and is never drawn: the match is on tags and stops, never names.
+- *Lines run the platform's length.* Where a line ends at a station whose
+  platforms OSM draws, it now runs along the platform it stops at to the
+  platform's real end, instead of stopping at RTD's single point
+  (`extendLineToPlatforms`). At Union Station that fills the train hall with
+  A, B, G and N and the light-rail platforms with C, E and W. A station with
+  no platform in OSM is left exactly where RTD's data puts it.
+- *The station's point moves to its building.* A station whose OSM has a
+  station building takes the platform group nearest that building as its own
+  point (`geo.stations`), so its mark, its ring and its one name stand at the
+  station's building and hall, not at whichever platform RTD's point fell on.
+  Union Station's name is on the train hall and the historic building; the
+  light-rail platforms carry a group mark joined to it by the transfer line.
+- *Drawn quiet.* The building is filled in the land's colour and ringed in the
+  station ink; the platforms are a step off the land; the canopy is the palest
+  wash on the map, over them. Platforms and canopies arrive at zoom 14.2,
+  where they are more than a smudge; the building from 13, with the terminals.
 
 ### Shared track
 
@@ -1451,15 +1488,27 @@ dead-end stub under 60 m goes.
 *Terminals* (`streets.mjs`, `terminals`; `footprints.mjs`): where three or
 more streets end within 120 m of one of RTD's facilities, buses lay over
 there, and the lanes they drive inside are not streets a rider uses. The
-building its bus gates stand in — the OpenStreetMap building holding the
-most of its stops within 110 m — is the terminal's shape: streets lying
-wholly inside it go, streets within 30 m of it carry no arrows, and, away
-from a rail station (which is already the place), that footprint is drawn
-filled in the land's colour and ringed in street ink (`bus-terminal`), the
-calm mark the disk used to be, in the shape of the place. A terminal with no
-building — a park-and-ride lot, a forecourt — draws no mark at all, since an
+terminal's shape is the one OpenStreetMap gives for where its bus gates
+stand (`terminalShapeOf`), in this order: its `amenity=bus_station` hall
+(above or below ground); else the `public_transport=platform` + `bus=yes`
+platforms at its gates; else the station building holding them; else the
+building holding the most of its stops within 110 m. A parking structure is
+never the terminal — a garage is where riders leave the car, not where the
+bus boards, and Nine Mile's garage is beside its bays, not on them. Streets
+lying wholly inside the shape go, streets within 30 m of it carry no arrows,
+and, away from a rail station (which is already the place), the shape is
+drawn filled in the land's colour and ringed in street ink (`bus-terminal`),
+the calm mark the disk used to be, in the shape of the place.
+
+A hall below ground is drawn as one: a paler wash with a dashed ink edge
+(`bus-terminal-under`), so Union Station's concourse and Civic Center's hall
+read as places beneath the plaza rather than buildings on it, and the Key has
+a row for it. The roof over a hall or a set of bays (`building=roof`,
+`man_made=canopy`) is drawn as a canopy, the same pale wash over a station's
+platforms, since that is what a rider sees from the street. A terminal with
+no shape at all — a park-and-ride lot, a forecourt — draws no mark, since an
 invented shape is a lie about a place that has none; its stops and its
-Park-n-Ride sign say where it is. Civic Center is the case that asked for it.
+Park-n-Ride sign say where it is.
 
 Still to do: the I-25 interchange by 38th and Fox no longer closes a
 triangle, but its ramps are still a busy cluster of short crossing pieces,
@@ -3379,6 +3428,20 @@ marks that overlap, a letter missing) are the next thing to add there.
   or a line, and the rule covers any station RTD splits this way, not the one
   place it happens today. It replaces the known limit where Union Station's
   four commuter lines ended with no mark, 273 m from the station's point.
+- 2026-11-08: A rail station draws its real shape from OpenStreetMap at build
+  time: its platforms, the canopy over them and its station building, matched
+  by tag and by the station's own platform stops, never by name (see "The
+  station's real shape"). Lines run along the platform they stop at to the
+  platform's real end, and a station with a station building takes the
+  platform group nearest it as its point, so Union Station's one name and
+  ring stand on the train hall and the historic building, not at the
+  light-rail tip RTD's single point falls on. A terminal is its bus hall
+  (drawn below ground when it is: pale wash, dashed edge), else its bus
+  platforms, else its station building — never its parking garage, which was
+  Nine Mile's wrong shape. The hub's name is now placed before rail's
+  keep-out as well as the buses', because at a station the lines end there:
+  every point beside the mark is on a track, and a haloed name on its own
+  station's tracks reads where no name at all does not.
 
 ## Sources
 

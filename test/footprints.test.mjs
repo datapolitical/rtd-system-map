@@ -54,6 +54,18 @@ test('two buildings holding the same gates: the tighter fit wins', () => {
   assert.equal(footprintOf([big, small], [0, 0], gates).id, '6');
 });
 
+test('a parking structure is never the terminal', () => {
+  const garage = way('7', rect([-0.0004, -0.0004], 90, 70), { building: 'parking', amenity: 'parking', name: 'Nine Mile Station' });
+  const gates = [
+    [0.0003, 0.0003],
+    [0.0004, 0.0003],
+  ];
+  assert.equal(footprintOf([garage], [0, 0], gates), null, 'a garage holding the gates');
+  // The bus platforms at the gates are a terminal, even beside the garage.
+  const bay = way('8', rect([0.0001, 0.0001], 40, 40), { public_transport: 'platform', bus: 'yes' });
+  assert.equal(footprintOf([garage, bay], [0, 0], gates).id, '8');
+});
+
 test('parseOsm keeps closed building ways and drops open ones', () => {
   const xml = `<osm>
   <node id="1" lat="39.7410" lon="-104.9868"/>

@@ -79,6 +79,9 @@ const arrowFade = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0, ARROWS_F
 // stand in (the build finds it: scripts/lib/footprints.mjs), from the zoom the
 // old disk appeared at.
 const TERMINAL_FROM = 13;
+// A station's platforms and canopy are detail: they earn their place once the
+// station is bigger than its mark.
+const STRUCTURE_FROM = 14.2;
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -120,7 +123,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'structures', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -314,6 +317,45 @@ export function transitLines(lines) {
       },
       paint: { 'icon-opacity': arrowFade },
     },
+    // A rail station's shapes, from OpenStreetMap at build time
+    // (scripts/lib/structures.mjs; DESIGN.md, "Stations"): its station building
+    // filled like the land, its platforms in concrete, the canopy over them
+    // as the lightest wash — so a station reads as a place with a hall, bays
+    // and a roof, not as a point. Only at the zooms where they are bigger than
+    // a mark.
+    {
+      id: 'station-building',
+      type: 'fill',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'building'],
+      minzoom: TERMINAL_FROM,
+      paint: {
+        'fill-color': P.land,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
+      },
+    },
+    {
+      id: 'station-platform',
+      type: 'fill',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'platform'],
+      minzoom: STRUCTURE_FROM,
+      paint: {
+        'fill-color': P.platform.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], STRUCTURE_FROM, 0, STRUCTURE_FROM + 0.6, 1],
+      },
+    },
+    {
+      id: 'station-canopy',
+      type: 'fill',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'canopy'],
+      minzoom: STRUCTURE_FROM,
+      paint: {
+        'fill-color': P.canopy.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], STRUCTURE_FROM, 0, STRUCTURE_FROM + 0.6, 1],
+      },
+    },
     // A bus terminal where routes lay over is the building its bus gates
     // stand in, drawn as the place it is (DESIGN.md, "Bus routes",
     // "Terminals"; the build finds the building in scripts/lib/footprints.mjs):
@@ -325,9 +367,24 @@ export function transitLines(lines) {
       type: 'fill',
       source: 'terminals',
       minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 0],
       paint: {
         'fill-color': P.land,
         'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
+      },
+    },
+    // A hall below ground: the same shape seen through the street above it,
+    // a paler fill with a dashed edge, so a rider can tell it is beneath the
+    // plaza and not a building on it.
+    {
+      id: 'bus-terminal-under',
+      type: 'fill',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 1],
+      paint: {
+        'fill-color': P.under.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.8],
       },
     },
     {
@@ -335,10 +392,38 @@ export function transitLines(lines) {
       type: 'line',
       source: 'terminals',
       minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 0],
       layout: { 'line-join': 'round' },
       paint: {
         'line-color': P.freq.c10,
         'line-width': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 1.2, 16, 2.2, 18, 3],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
+      },
+    },
+    {
+      id: 'bus-terminal-under-edge',
+      type: 'line',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 1],
+      layout: { 'line-join': 'round' },
+      paint: {
+        'line-color': P.under.edge,
+        'line-width': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 1, 16, 1.8, 18, 2.4],
+        'line-dasharray': [2, 1.6],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.85],
+      },
+    },
+    {
+      id: 'station-building-edge',
+      type: 'line',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'building'],
+      minzoom: TERMINAL_FROM,
+      layout: { 'line-join': 'round' },
+      paint: {
+        'line-color': P.ink,
+        'line-width': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 1.2, 16, 2, 18, 2.6],
         'line-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
       },
     },
@@ -605,18 +690,21 @@ export function transitMarks(lines) {
     },
     // Rail and the frequent buses take up their own room here (basemap.js),
     // so everything placed after them, which is every name on the map, stays
-    // off them. Above these: only what names a line and so sits on it. The
-    // hub's name is placed between the two (see below).
-    ...lineKeepOut().filter((l) => l.id !== 'keep-out-rail'),
+    // off them. Above these: only what names a line and so sits on it — and
+    // the hub's name, the one exception (see below).
+    ...lineKeepOut(),
     // The hub (Union Station: where the most lines meet, and more end than
     // get a sign) is the one name the metro zooms must have, and the one with
     // the least room beside it: seven lines leave it in four directions, and
-    // frequent buses fill the rest. So at every zoom its name is placed
-    // before every other station's and before the frequent
-    // buses claim their room: it stays off rail, may cross a bus line, and
-    // sits as near its ring as any other name sits to its mark. It used to
-    // go up to six ems out, a quarter of a phone's width, where it read as
-    // some other place's.
+    // frequent buses fill the rest. So its name is placed before every other
+    // station's and before the frequent buses claim their room: it stays off
+    // the buses and may cross a bus line, and it sits as near its ring as any
+    // other name sits to its mark. It is the one name placed before the rail
+    // keep-out too, because at the station the lines end: they run along the
+    // platform to its end, and the mark and its name stand where they do, so
+    // there is no point beside the mark that is not on rail. A name with a
+    // halo on its own station's tracks reads; a station with no name at all
+    // does not.
     {
       id: 'station-labels-hub',
       type: 'symbol',
@@ -633,7 +721,6 @@ export function transitMarks(lines) {
       },
       paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
     },
-    ...lineKeepOut().filter((l) => l.id === 'keep-out-rail'),
     // Rail letters ride along their lines, placed before the bus numbers
     // below. The build says where (scripts/lib/sharedtrack.mjs): lines that
     // share track take turns, so each is named, and a letter sits between

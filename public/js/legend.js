@@ -258,6 +258,28 @@ export function buildLegend(meta, lines) {
             'Bus terminal: the building its gates stand in',
           ]
         : null,
+      counts.terminals_under
+        ? [
+            areaImage(
+              { fill: layers.get('bus-terminal-under'), edge: layers.get('bus-terminal-under-edge') },
+              lines,
+              at(Math.max(settled(layers.get('bus-terminal-under')), settled(layers.get('bus-terminal-under-edge')))),
+              'A pale hall with a dashed edge',
+            ),
+            'Bus station below the street',
+          ]
+        : null,
+      counts.structures
+        ? [
+            areaImage(
+              { fill: layers.get('station-platform'), edge: layers.get('station-canopy') },
+              lines,
+              at(Math.max(settled(layers.get('station-platform')), settled(layers.get('station-canopy')))),
+              'Platforms under a pale roof',
+            ),
+            'Rail station: its platforms, and the roof over them',
+          ]
+        : null,
       oneWay(layers.get('street-oneway'), layers.get('street')),
       counts.stops ? [circleImage(layers.get('stops'), at(settled(layers.get('stops'))), 'Small dot'), 'Bus stop, when zoomed in close'] : null,
       counts.flexride

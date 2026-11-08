@@ -546,8 +546,9 @@ export { CLASS_RANK, segmentDistance };
 // drawn, they are a tangle of short diagonals and triangles. So the place is
 // tidied as one: a street lying wholly inside the terminal's building goes,
 // and no street on or around the building carries one-way arrows. The
-// building is `footprints` (scripts/lib/footprints.mjs), one closed ring of
-// [lon, lat] per place index; a terminal the build found no building for
+// building is `footprints` (scripts/lib/footprints.mjs), the closed rings of
+// [lon, lat] per place index (a bus station's hall is one; its bus platforms
+// may be several); a terminal the build found no shape for
 // keeps the older rule, a street lying wholly within TERMINAL_R of it, since
 // a park-n-ride's lot has no edge to tidy to. `streets` is changed in place;
 // `places` are [lon, lat] points. Returns the indexes of the places that are
@@ -597,8 +598,8 @@ export function terminals(streets, places, { precision = 5, footprints = new Map
   const lines = streets.map((f) => f.geometry.coordinates.map(project));
   const found = terminalPlaces(streets, places, { precision });
   if (!found.length) return [];
-  // The buildings, projected, and the terminals with none.
-  const shapes = [...footprints].filter(([qi]) => found.some((t) => t.qi === qi)).map(([, ring]) => ring.map(project));
+  // The shapes, projected, and the terminals with none.
+  const shapes = [...footprints].filter(([qi]) => found.some((t) => t.qi === qi)).flatMap(([, rings]) => rings.map((ring) => ring.map(project)));
   const plain = found.filter(({ qi }) => !footprints.has(qi));
   const near = (p, r) => plain.some(({ c }) => dist(p, c) <= r);
   const inShape = (p) => shapes.some((ring) => inside(p, ring));
