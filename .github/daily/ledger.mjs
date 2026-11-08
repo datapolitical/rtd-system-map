@@ -4,8 +4,11 @@
 //
 //   node .github/daily/ledger.mjs <job.json> [model]
 //
-// job.json is pick.mjs's output plus the outcome the workflow collected:
-//   {job, issue, lens, date, model, verdict?, filed?}
+// job.json is pick.mjs's output plus finish.mjs's outcome:
+//   {job, issue, lens, date, model, reason, finished, output, tries,
+//    filed, evaluation}
+// `rounds` counts evaluation requests, so a run that stopped short does not
+// move an issue to its next round.
 // It reads the current ledger from origin/daily-ledger (or seeds one),
 // applies this run, and pushes the branch (create if absent).
 import fs from 'node:fs';
@@ -29,10 +32,13 @@ try {
 }
 ledger.runs ||= [];
 ledger.rounds ||= {};
-const entry = { date: job.date || new Date().toISOString().slice(0, 10), job: job.job, model: model || null, ts: new Date().toISOString() };
+const entry = {
+  date: job.date || new Date().toISOString().slice(0, 10), job: job.job, model: model || null, ts: new Date().toISOString(),
+  reason: job.reason || null, finished: job.finished ?? null, output: job.output ?? null, tries: job.tries ?? null,
+};
 if (job.issue) {
   entry.issue = job.issue;
-  ledger.rounds[String(job.issue)] = (ledger.rounds[String(job.issue)] || 0) + 1;
+  if ((job.evaluation || []).includes(job.issue)) ledger.rounds[String(job.issue)] = (ledger.rounds[String(job.issue)] || 0) + 1;
   if (job.branch) {
     ledger.my_branches ||= [];
     if (!ledger.my_branches.includes(job.branch)) ledger.my_branches.push(job.branch);

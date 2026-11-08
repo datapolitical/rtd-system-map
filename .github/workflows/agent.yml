@@ -1,12 +1,18 @@
 # Unattended work loop: the GitHub worker
 #
-# Runs every four hours on GitHub Actions (free Go models; the paid flash
-# model is the last resort). One job per run, picked by
-# .github/daily/pick.mjs, done by the opencode CLI on the Go provider,
-# then the run's ledger entry, the Agent log comment and the captures go
-# up. Map changes stay on branches; docs, tests and CI may go to main
-# fast-forward. The evaluator on the home machine is the only thing that
-# talks to Chris; this workflow never alerts him directly.
+# Wakes every four hours on GitHub Actions and works only when there is a
+# reason to: instructions waiting on an issue, a person's answer on a
+# `needs Chris` issue, or a review pass once the map on main has changed
+# (.github/daily/pick.mjs). With no reason it stops in seconds, before
+# installing anything or calling a model. One job per run, done by the
+# opencode CLI on DeepSeek V4.1 Flash. When the model ends its turn
+# before the job is done (no daily-summary.txt), it is told to carry on
+# in the same session, up to five times. Then .github/daily/finish.mjs
+# reads what the run really did from GitHub, sets the issue's labels so
+# nothing comes back to the worker by itself, and the ledger and the
+# Agent log comment go up. Map changes stay on branches; docs, tests and
+# CI may go to main fast-forward. The evaluator on the home machine is
+# the only thing that talks to Chris; this workflow never alerts him.
 #
 # Setup: the repository secret OPENCODE_GO_API_KEY (the Go subscription
 # key). Pushes made with GITHUB_TOKEN do not start other workflows, so
@@ -19,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       issue:
-        description: 'Issue number to work on (optional)'
+        description: 'Issue number to work on (optional; runs even with nothing waiting)'
         required: false
         type: string
 
@@ -39,6 +45,8 @@ jobs:
     # has no build for Ubuntu 26.04, which ubuntu-latest now is.
     runs-on: ubuntu-24.04
     timeout-minutes: 300
+    env:
+      MODEL: deepseek-v4.1-flash
     steps:
       - uses: actions/checkout@v7
         with:
@@ -47,27 +55,36 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run build
-      - run: pip install pillow
-      - name: Install opencode (pinned)
-        run: |
-          curl -fsSL https://opencode.ai/install | bash -s -- --version 1.19.5
-          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
-      - name: Pick today's job
+      - name: Pick the job, or none
         id: pick
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_INPUT: ${{ inputs.issue }}
         run: |
+          # The worker's own scripts, copied out of the checkout so the later
+          # steps still find them after the agent switches branches.
+          cp -r .github/daily "$RUNNER_TEMP/daily"
           if [ -n "$ISSUE_INPUT" ]; then
             node .github/daily/pick.mjs --issue "$ISSUE_INPUT" > job.json
           else
             node .github/daily/pick.mjs > job.json
           fi
           cat job.json
-          echo "JOB=$(cat job.json | python3 -c 'import json,sys; print(json.load(open("job.json"))["job"])')" >> "$GITHUB_OUTPUT"
+          echo "JOB=$(python3 -c 'import json; print(json.load(open("job.json"))["job"])')" >> "$GITHUB_OUTPUT"
+          python3 -c 'import json; j=json.load(open("job.json")); print("**" + j["job"] + "**: " + j.get("summary","") + " (" + j.get("reason","") + ")")' >> "$GITHUB_STEP_SUMMARY"
+      - if: steps.pick.outputs.JOB != 'none'
+        run: npm ci
+      - if: steps.pick.outputs.JOB != 'none'
+        run: npx playwright install --with-deps chromium
+      - if: steps.pick.outputs.JOB != 'none'
+        run: npm run build
+      - if: steps.pick.outputs.JOB != 'none'
+        run: pip install pillow
+      - name: Install opencode (pinned)
+        if: steps.pick.outputs.JOB != 'none'
+        run: |
+          curl -fsSL https://opencode.ai/install | bash -s -- --version 1.19.5
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
       - name: Serve the site
         if: steps.pick.outputs.JOB != 'none'
         run: |
@@ -86,8 +103,11 @@ jobs:
           OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
           CHECK_URL: http://127.0.0.1:8797
         run: |
+          # What the run starts from, so finish.mjs can tell what it did.
+          git ls-remote --heads origin > "$RUNNER_TEMP/refs-before.txt"
+          echo "START=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
           # Brief = the ground rules (CLAUDE.md is in the repo) plus the
-          # job brief. Free models first; DeepSeek V4.1 Flash last.
+          # job brief.
           JOB=$(python3 -c "import json; print(json.load(open('job.json'))['job'])")
           if [ "$JOB" = "find" ]; then
             LENS=$(python3 -c "import json; print(json.load(open('job.json')).get('lens','rail'))")
@@ -101,29 +121,44 @@ jobs:
           { echo "You are working on datapolitical/rtd-system-map. Read CLAUDE.md in the worktree root and DESIGN.md before changing anything."; echo; echo "$BRIEF"; echo; echo "## Today's assignment"; echo "$ASSIGN"; echo "Date: $(date -u +%F). Run folder: $PWD/run."; } > "$PROMPT_FILE"
           mkdir -p run
           # Credit every commit, comment and issue to the model that made it
-          # (.github/daily/madeby). Copied out of the checkout so it survives
-          # the agent switching branches.
-          cp -r .github/daily/madeby "$RUNNER_TEMP/madeby"
-          source "$RUNNER_TEMP/madeby/madeby.sh"
-          MODEL=""
-          for m in crouton-alpha-free beam-free deepseek-v4.1-flash; do
-            echo "Trying $m"
-            made_by "$m"
-            if timeout 14400 opencode run -m "opencode-go/$m" < "$PROMPT_FILE" > "run/agent-$m.log" 2>&1; then
-              MODEL="$m"; break
+          # (.github/daily/madeby).
+          source "$RUNNER_TEMP/daily/madeby/madeby.sh"
+          made_by "$MODEL"
+          # The job is done when the agent has written daily-summary.txt
+          # (both briefs end with it). A model that ends its turn before
+          # then is told to carry on in the same session.
+          DONE="$GITHUB_WORKSPACE/daily-summary.txt"
+          rm -f "$DONE"
+          NUDGE="$RUNNER_TEMP/nudge.txt"
+          echo "You ended your turn before the job was finished, and nobody will answer you. Carry on from where you stopped and do the work now. End your turn only when the job is finished and daily-summary.txt is written in the worktree root, or when you are truly blocked (say why in daily-summary.txt)." > "$NUDGE"
+          END=$(( $(date +%s) + 4 * 3600 ))
+          FINISHED=no; MODEL_ERROR=no; TRIES=0
+          for try in 1 2 3 4 5 6; do
+            LEFT=$(( END - $(date +%s) ))
+            if [ "$LEFT" -lt 300 ]; then echo "out of time"; break; fi
+            TRIES=$try; T0=$(date +%s); RC=0
+            if [ "$try" = 1 ]; then
+              timeout "$LEFT" opencode run -m "opencode-go/$MODEL" < "$PROMPT_FILE" >> run/agent.log 2>&1 || RC=$?
+            else
+              echo "--- try $try: told to carry on" >> run/agent.log
+              timeout "$LEFT" opencode run --continue -m "opencode-go/$MODEL" < "$NUDGE" >> run/agent.log 2>&1 || RC=$?
             fi
-            echo "$m failed; next"
+            SECS=$(( $(date +%s) - T0 ))
+            echo "try $try: exit $RC after ${SECS}s" | tee -a run/tries.txt
+            if [ -s "$DONE" ]; then FINISHED=yes; break; fi
+            # An error straight away (the service down, the key refused) will
+            # not get better by asking again; the next run tries again.
+            if [ "$RC" -ne 0 ] && [ "$SECS" -lt 120 ]; then MODEL_ERROR=yes; break; fi
           done
-          if [ -z "$MODEL" ]; then echo "all models failed"; exit 1; fi
-          echo "MODEL=$MODEL" >> "$GITHUB_OUTPUT"
-          cp "run/agent-$MODEL.log" run/agent.log 2>/dev/null || true
-          echo "model used: $MODEL" >> "$GITHUB_STEP_SUMMARY"
+          [ -s "$DONE" ] && cp "$DONE" run/daily-summary.txt
+          { echo "FINISHED=$FINISHED"; echo "MODEL_ERROR=$MODEL_ERROR"; echo "TRIES=$TRIES"; } >> "$GITHUB_OUTPUT"
+          echo "$MODEL: $TRIES tries, finished: $FINISHED, model error: $MODEL_ERROR" >> "$GITHUB_STEP_SUMMARY"
       - name: Stop the site
         if: always()
         run: |
           if [ -f pages-dev.pid ]; then kill "$(cat pages-dev.pid)" 2>/dev/null || true; fi
       - name: Upload captures
-        if: always()
+        if: always() && steps.pick.outputs.JOB != 'none'
         uses: actions/upload-artifact@v7
         with:
           name: agent-${{ github.run_id }}
@@ -132,31 +167,48 @@ jobs:
             qa/report/
             run/
           if-no-files-found: warn
+      - name: See what the run did and set the labels
+        if: always() && steps.pick.outputs.JOB != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_FILE: job.json
+          REFS_BEFORE: ${{ runner.temp }}/refs-before.txt
+          RUN_START: ${{ steps.agent.outputs.START }}
+          FINISHED: ${{ steps.agent.outputs.FINISHED }}
+          MODEL_ERROR: ${{ steps.agent.outputs.MODEL_ERROR }}
+          TRIES: ${{ steps.agent.outputs.TRIES }}
+          SUMMARY_FILE: run/daily-summary.txt
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node "$RUNNER_TEMP/daily/finish.mjs"
       - name: Write the ledger
         if: always() && steps.pick.outputs.JOB != 'none'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<'PY'
-          import json
+          import json, os
           j = json.load(open('job.json'))
-          j['model'] = '${{ steps.agent.outputs.MODEL }}' or 'none'
-          json.dump(j, open('job-ledger.json','w'))
+          if os.path.exists('outcome.json'):
+              o = json.load(open('outcome.json'))
+              for k in ('finished', 'output', 'tries', 'filed', 'evaluation'):
+                  j[k] = o.get(k)
+          json.dump(j, open('job-ledger.json', 'w'))
           PY
-          node .github/daily/ledger.mjs job-ledger.json "${{ steps.agent.outputs.MODEL }}"
+          node "$RUNNER_TEMP/daily/ledger.mjs" job-ledger.json "$MODEL"
       - name: Post the Agent log comment
         if: always() && steps.pick.outputs.JOB != 'none'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          JOB=$(python3 -c 'import json; print(json.load(open("job.json")).get("summary","run"))')
-          MODEL=${{ steps.agent.outputs.MODEL }}
-          SHA=$(git rev-parse HEAD 2>/dev/null || echo none)
-          BODY="Agent log: $JOB — model $MODEL, commit $SHA, run https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID . Captures in the run artifact."
+          if [ -f outcome.json ]; then
+            BODY=$(python3 -c 'import json; print(json.load(open("outcome.json"))["line"])')
+          else
+            BODY="Agent log: $(python3 -c 'import json; print(json.load(open("job.json")).get("summary","run"))') — the run broke before it could say what it did. [Run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+          fi
           # Find or create the single log issue.
           NUM=$(gh issue list --label "found daily" --limit 100 --json number,title --jq '.[] | select(.title=="Agent log") | .number' | head -1)
           if [ -z "$NUM" ]; then
-            URL=$(gh issue create --title "Agent log" --label "found daily" --milestone "V3 roadmap" --body "One line per run: job, model, what changed, what was handed to evaluation.")
+            URL=$(gh issue create --title "Agent log" --label "found daily" --milestone "V3 roadmap" --body "One line per run: job, model, why it ran, what it did.")
             NUM=$(basename "$URL")
           fi
           gh issue comment "$NUM" --body "$BODY"

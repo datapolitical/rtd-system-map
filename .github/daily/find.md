@@ -76,10 +76,12 @@ built data (`public/data/`), never from memory.
 
 ## Finish
 
-Write `daily-summary.txt` in the worktree root (the workflow uploads it;
-do not commit it): at most three short plain lines (issues filed with
-numbers and titles, or "nothing new under <lens>"). The ledger is
-written back by the workflow, not by you in this part.
+Write `daily-summary.txt` in the worktree root, last (the workflow
+uploads it; do not commit it): at most three short plain lines (issues
+filed with numbers and titles, or "nothing new under <lens>"). The
+workflow takes this file to mean you are done; until it exists you will
+be told to carry on. The ledger is written back by the workflow, not by
+you in this part.
 
 ## Credit
 

@@ -2228,16 +2228,32 @@ The map is worked on continuously in two halves that talk only through
 GitHub issue labels and comments, so either side can stop or restart
 without the other noticing.
 
-- The worker runs on GitHub Actions (`.github/workflows/agent.yml`,
-  every four hours and on demand): one issue or one review pass per run,
-  done by an AI agent, with map changes on branches and docs, tests and
-  CI allowed to main fast-forward. Its briefs are `.github/daily/find.md`
-  and `.github/daily/fix.md`; it records what it did in `ledger.json` on
-  the orphan branch `daily-ledger` and one line per run on the "Agent log"
-  issue. When a run finishes a map change it posts an evaluation request
+- The worker runs on GitHub Actions (`.github/workflows/agent.yml`). It
+  wakes every four hours, or on demand for one issue, and works only when
+  there is a reason to (`.github/daily/pick.mjs`): instructions waiting
+  (an issue labelled `agent instructions`, which is also how an open
+  issue is queued for it), a human's answer on a `needs Chris` issue, or,
+  at most once a day, a review pass after the map's code on main has
+  changed. With no reason it stops before installing anything or calling
+  a model. One issue or one review pass per run, done by DeepSeek V4.1
+  Flash through the opencode CLI, with map changes on branches and docs,
+  tests and CI allowed to main fast-forward. Its briefs are
+  `.github/daily/find.md` and `.github/daily/fix.md`, and a job is done
+  when the agent writes `daily-summary.txt`; a model that ends its turn
+  before then is told to carry on in the same session, up to five times.
+  When a run finishes a map change it posts an evaluation request
   (branch, commit, round, what was asked, what changed, and where to look,
-  with views that open the map at the zooms where the change shows) and
-  labels the issue `ready for evaluation`.
+  with views that open the map at the zooms where the change shows).
+- After each run the workflow, not the model, reads what the run did
+  from GitHub (branches pushed, issues filed, comments, evaluation
+  requests; `.github/daily/finish.mjs`) and sets the labels: an issue
+  with an evaluation request goes to `ready for evaluation` with
+  `agent instructions` off; one where the agent stopped without asking
+  goes to `needs Chris` with a comment saying why. So nothing comes back
+  to the worker by itself, and a stuck job waits for a person instead of
+  running again every four hours. It records the run in `ledger.json` on
+  the orphan branch `daily-ledger` and one line on the "Agent log" issue:
+  why it ran, what it did, or "No output" when nothing changed.
 - The evaluator runs on the home machine and is the only thing that talks
   to a human. It checks the preview, puts phone captures beside a
   satellite overlay (`qa/sat/render.py`), and returns `pass` (a phone
@@ -2254,8 +2270,8 @@ without the other noticing.
   author to the model, and its `gh` wrapper ends every comment, issue and
   pull request with "Made by: ..." and labels the issue `made by: free
   model`, `made by: DeepSeek` or `made by: Claude`. The worker sets it for
-  each model it tries, the home lanes the same, and the evaluator always
-  runs as Claude.
+  its model, the home lanes the same, and the evaluator always runs as
+  Claude.
 
 The satellite overlay (`qa/sat/render.py`) draws Esri satellite tiles
 with OpenStreetMap shapes and the map's own stops, rail lines,
@@ -3139,6 +3155,14 @@ work against the real structure before asking for evaluation.
 - 2026-11-08: Work is credited to who made it (free model, DeepSeek or
   Claude) in the commit author, a "Made by" line on every comment, and a
   `made by:` label on the issue, so it is clear which models did which work.
+- 2026-11-08: The worker runs DeepSeek V4.1 Flash only, and only when there
+  is a reason to: instructions waiting, a human's answer, or a review once
+  the map on main has changed. Its first four runs, on the free models,
+  produced nothing: the models ended their turns early and the workflow
+  took that as success. Now a job is done only when the agent writes
+  `daily-summary.txt` (until then it is told to carry on), and the
+  workflow sets the labels after each run from what really happened on
+  GitHub, so a finished or stuck issue is never picked again by itself.
 
 ## Sources
 
