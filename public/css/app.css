@@ -416,8 +416,16 @@ body {
   box-shadow: none;
 }
 
-/* "Whole network": the words, beside four arrows pointing out to the corners.
-   Hidden while the whole network is on screen. */
+/* "Whole network": the words, beside four arrows pointing out to the corners,
+   on the bottom row to the left of Locate me. The words fold away after five
+   seconds, leaving the arrows. Hidden while the whole network is on screen. */
+.maplibregl-ctrl-bottom-right .ctrl-network-group {
+  position: absolute;
+  right: calc(12px + 44px + 10px + env(safe-area-inset-right));
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  margin: 0;
+}
+
 .maplibregl-ctrl[hidden] {
   display: none;
 }
@@ -435,6 +443,31 @@ body {
 
 .ctrl-network span {
   padding-top: 2px; /* Overpass sits high in its line */
+  max-width: 120px;
+  overflow: hidden;
+  transition: max-width 0.4s ease, opacity 0.3s ease;
+}
+
+.ctrl-network,
+.ctrl-network-group {
+  transition: padding 0.4s ease, gap 0.4s ease;
+}
+
+.compact button.ctrl-network {
+  gap: 0;
+  padding: 0 12px;
+}
+
+.compact .ctrl-network span {
+  max-width: 0;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctrl-network,
+  .ctrl-network span {
+    transition: none;
+  }
 }
 
 .ctrl-network svg {
