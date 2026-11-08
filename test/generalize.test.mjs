@@ -81,6 +81,19 @@ test('a thin loop round a one-way pair is kept, not cut short', () => {
   assert.equal(report.length, 0);
 });
 
+test('a loop round a terminal hall is the way in, so it is cut even when the street is its own', () => {
+  // A circuit round a block, kept: a rider can read it.
+  const block = [[0, 0], [0, 600], [-300, 600], [-300, 900], [300, 900], [300, 600], [0, 600], [0, 0]];
+  assert.equal(cutLaps(block).length, 1);
+  // The station hall fills the block: the bus goes round it to get in, and
+  // only the way in is drawn.
+  const hall = [[-320, 580], [320, 580], [320, 920], [-320, 920]];
+  const note = [];
+  const parts = cutLaps(block, Infinity, [], (...a) => note.push(a[0]), [hall]);
+  assert.deepEqual(note, ['end']);
+  assert.equal(parts.length, 2);
+});
+
 test('cutLaps leaves a plain line alone, and a line back the way it came', () => {
   const plain = line([0, 0], [1000, 0]);
   assert.deepEqual(cutLaps(plain), [plain]);

@@ -90,11 +90,12 @@ const MIN_PIECE = STEP;
  * `report` (optional array) receives one entry per lap changed:
  * { route, kind: 'turn' | 'end', length, at: [lon, lat] }.
  */
-export function generalize(features, { precision = 5, report = null, places = [] } = {}) {
+export function generalize(features, { precision = 5, report = null, places = [], halls = [] } = {}) {
   const first = features.find((f) => partsOf(f.geometry).some((p) => p.length));
   if (!first) return features;
   const { project, unproject } = projection(partsOf(first.geometry).find((p) => p.length)[0], precision);
   const stops = places.map(project);
+  const hallsHere = halls.map((ring) => ring.map(project));
 
   const byRoute = new Map();
   features.forEach((f, fi) => {
@@ -104,29 +105,47 @@ export function generalize(features, { precision = 5, report = null, places = []
 
   const out = features.map((f) => ({ ...f }));
   for (const [route, list] of byRoute) {
-    // Every part of the route, projected and densified.
-    let parts = [];
+    // Every part of the route, projected and densified, then stitched into
+    // whole lines across the route's own stretches: a lap round a block can
+    // be split between two stretches of one route, and is only seen whole
+    // once they are joined. Each point keeps the feature it came from, so a
+    // line can be put back where it started.
+    const segs = [];
     for (const fi of list) {
-      for (const points of stitch(partsOf(features[fi].geometry).filter((part) => part.length >= 2).map((part) => part.map(project)))) {
-        parts.push({ fi, points: densify(points, STEP) });
-      }
+      for (const part of partsOf(features[fi].geometry).filter((part) => part.length >= 2)) segs.push({ fi, points: densify(part.map(project), STEP) });
     }
+    const owner = new Map();
+    for (const s of segs) for (const point of s.points) owner.set(point, s.fi);
+    let parts = stitch(segs.map((s) => s.points)).map((points) => ({ fi: owner.get(points[0]) ?? list[0], points }));
     const total = parts.reduce((s, p) => s + length(p.points), 0);
     // 1. Carriageways onto one line, so a lap's two sides on a divided road
     // meet where it turns.
     mergeCarriageways(parts);
     // 2. Laps.
     parts = parts.flatMap((p) =>
-      laps(p.points, total, stops, (kind, lap) => report?.push({ route, kind, length: Math.round(length(lap)), at: unproject(lap[0]), line: lap.map(unproject) })).map((points) => ({ fi: p.fi, points })),
+      laps(p.points, total, stops, (kind, lap) => report?.push({ route, kind, length: Math.round(length(lap)), at: unproject(lap[0]), line: lap.map(unproject) }), hallsHere).map((points) => ({ fi: p.fi, points })),
     );
     // 3. Loose ends.
     trimHooks(parts);
-    // Back to features: each feature keeps its own parts.
+    // Back to features: a line that runs through two stretches is cut back
+    // into the feature each of its points came from.
     for (const fi of list) {
-      const lines = parts
-        .filter((p) => p.fi === fi && p.points.length >= 2 && length(p.points) >= MIN_PIECE)
-        .map((p) => dedupe(simplify(p.points, 1).map(unproject)))
-        .filter((c) => c.length >= 2);
+      const lines = [];
+      for (const p of parts) {
+        if (p.points.length < 2) continue;
+        let start = 0;
+        let was = owner.get(p.points[0]) ?? fi;
+        for (let k = 1; k <= p.points.length; k += 1) {
+          const here = k < p.points.length ? owner.get(p.points[k]) ?? was : null;
+          if (k < p.points.length && here === was) continue;
+          if (was === fi && k - start >= 2 && length(p.points.slice(start, k)) >= MIN_PIECE) {
+            const line = dedupe(simplify(p.points.slice(start, k), 1).map(unproject));
+            if (line.length >= 2) lines.push(line);
+          }
+          start = k;
+          was = here;
+        }
+      }
       const was = features[fi].geometry;
       out[fi] = {
         ...features[fi],
@@ -172,7 +191,7 @@ export function stitch(lines) {
 // cutLaps until no lap is left: a ramp circle taken out can leave the ramp
 // to it and back as a spur, itself a lap.
 const PASSES = 4;
-function laps(points, routeLength, places, note) {
+function laps(points, routeLength, places, note, halls) {
   const out = [];
   let line = points;
   for (let pass = 0; pass < PASSES; pass++) {
@@ -180,7 +199,7 @@ function laps(points, routeLength, places, note) {
     const [kept, ...ends] = cutLaps(line, routeLength, places, (...a) => {
       changed = true;
       note(...a);
-    });
+    }, halls);
     out.push(...ends);
     if (!kept || !changed) return kept ? [kept, ...out] : out;
     line = densify(kept, STEP);
@@ -190,7 +209,7 @@ function laps(points, routeLength, places, note) {
 
 // A line with its laps taken out: returns the pieces it becomes (the line
 // itself, and a short end for each terminal lap).
-export function cutLaps(points, routeLength = Infinity, places = [], note = () => {}) {
+export function cutLaps(points, routeLength = Infinity, places = [], note = () => {}, halls = []) {
   const n = points.length;
   if (n < 3) return [points];
   const cum = [0];
@@ -238,6 +257,12 @@ export function cutLaps(points, routeLength = Infinity, places = [], note = () =
     // line comes back along is the end of the line, and stays.
     const reach = dist(lap[far], lap[0]);
     const thin = Math.abs(area(lap)) < LAP_FAT * (cum[found] - cum[i]) ** 2;
+    // A lap that goes round a terminal's hall is the way buses get in and out
+    // of it, not a route a rider can ride: the block it makes is the
+    // approach, and the map draws only as far as the terminal (DESIGN.md,
+    // "Bus routes", "Terminals"). It goes even where one side of it runs a
+    // street of its own, because that street is not the route's.
+    const aroundHall = halls.some((ring) => insideRing(centroidOf(ring), lap) || ring.some((p) => insideRing(p, lap)));
     // How the line leaves against how it came: null where it can't be told
     // (the lap is at an end of the line).
     const turnCos = () => {
@@ -248,7 +273,7 @@ export function cutLaps(points, routeLength = Infinity, places = [], note = () =
       return (a[0] * b[0] + a[1] * b[1]) / (Math.hypot(...a) * Math.hypot(...b) || 1);
     };
     const spur = () => (turnCos() ?? -1) > SPUR_COS;
-    if (thin && (reach >= SPUR_REACH || !spur())) {
+    if (thin && !aroundHall && (reach >= SPUR_REACH || !spur())) {
       kept.push(points[i + 1]);
       i++;
       continue;
@@ -261,7 +286,7 @@ export function cutLaps(points, routeLength = Infinity, places = [], note = () =
     // (Under TIP_TINY it can't be one: going out LAP_MIN and back along one
     // line reaches further. It is the lens where a road's two carriageways
     // meet, and goes.)
-    if (reach < CIRCLE && reach >= TIP_TINY && (turnCos() ?? 1) <= SPUR_COS) {
+    if (reach < CIRCLE && reach >= TIP_TINY && (turnCos() ?? 1) <= SPUR_COS && !aroundHall) {
       kept.push(points[i + 1]);
       i++;
       continue;
@@ -283,7 +308,7 @@ export function cutLaps(points, routeLength = Infinity, places = [], note = () =
       // A loop round more than a block or two of streets of its own is a
       // circuit a rider can read (its arrows say which way), and stays,
       // unless it is there to turn at a station or transit center.
-      if (dropped(lap, out) > (serves ? LAP_DROP_SERVES : LAP_DROP)) {
+      if (!aroundHall && dropped(lap, out) > (serves ? LAP_DROP_SERVES : LAP_DROP)) {
         kept.push(points[i + 1]);
         i++;
         continue;
@@ -423,6 +448,23 @@ function dropped(lap, end) {
     if (near > PAIR_FAR) off += dist(lap[k - 1], lap[k]);
   }
   return off;
+}
+
+// Is the point inside the ring (even-odd, the ring closed from its last point
+// back to its first)?
+function insideRing(p, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function centroidOf(ring) {
+  const [x, y] = ring.reduce((s, p) => [s[0] + p[0], s[1] + p[1]], [0, 0]);
+  return [x / ring.length, y / ring.length];
 }
 
 // Signed area of a closed ring of points.

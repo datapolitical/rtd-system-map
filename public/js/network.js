@@ -330,7 +330,7 @@ export function transitLines(lines) {
       filter: ['==', ['get', 'kind'], 'building'],
       minzoom: TERMINAL_FROM,
       paint: {
-        'fill-color': P.land,
+        'fill-color': P.building,
         'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
       },
     },
@@ -359,9 +359,8 @@ export function transitLines(lines) {
     // A bus terminal where routes lay over is the building its bus gates
     // stand in, drawn as the place it is (DESIGN.md, "Bus routes",
     // "Terminals"; the build finds the building in scripts/lib/footprints.mjs):
-    // filled with the land's colour, so the building the basemap draws
-    // underneath reads as the station and not as a second outline of the same
-    // block, and ringed in street ink, the calm mark the disk used to be.
+    // a faint neutral fill and no outline, so it reads as a building and not
+    // as a bus route round the block.
     {
       id: 'bus-terminal',
       type: 'fill',
@@ -369,13 +368,13 @@ export function transitLines(lines) {
       minzoom: TERMINAL_FROM,
       filter: ['==', ['get', 'underground'], 0],
       paint: {
-        'fill-color': P.land,
+        'fill-color': P.building,
         'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
       },
     },
     // A hall below ground: the same shape seen through the street above it,
-    // a paler fill with a dashed edge, so a rider can tell it is beneath the
-    // plaza and not a building on it.
+    // a paler wash with no edge, so a rider can tell it is beneath the plaza
+    // and not a building on it.
     {
       id: 'bus-terminal-under',
       type: 'fill',
@@ -387,51 +386,6 @@ export function transitLines(lines) {
         'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.8],
       },
     },
-    {
-      id: 'bus-terminal-edge',
-      type: 'line',
-      source: 'terminals',
-      minzoom: TERMINAL_FROM,
-      filter: ['==', ['get', 'underground'], 0],
-      layout: { 'line-join': 'round' },
-      paint: {
-        'line-color': P.freq.c10,
-        'line-width': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 1.2, 16, 2.2, 18, 3],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
-      },
-    },
-    {
-      id: 'bus-terminal-under-edge',
-      type: 'line',
-      source: 'terminals',
-      minzoom: TERMINAL_FROM,
-      filter: ['==', ['get', 'underground'], 1],
-      layout: { 'line-join': 'round' },
-      paint: {
-        'line-color': P.under.edge,
-        'line-width': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 1, 16, 1.8, 18, 2.4],
-        'line-dasharray': [2, 1.6],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.85],
-      },
-    },
-    {
-      id: 'station-building-edge',
-      type: 'line',
-      source: 'structures',
-      filter: ['==', ['get', 'kind'], 'building'],
-      minzoom: TERMINAL_FROM,
-      layout: { 'line-join': 'round' },
-      // The same calm ink as the above-ground terminal's edge, at the same
-      // width: the station building, concourse and hall read as one family
-      // rather than the building alone as the map's brightest mark
-      // (DESIGN.md, "Stations").
-      paint: {
-        'line-color': P.freq.c10,
-        'line-width': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 1.2, 16, 2.2, 18, 3],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
-      },
-    },
-
     // The open bus route, drawn over its faded neighbours.
     ...selectionLines(),
 
@@ -538,11 +492,27 @@ export function transitMarks(lines) {
       type: 'circle',
       source: 'stops',
       minzoom: STOPS_ZOOM,
+      filter: ['!=', ['get', 'terminal'], 1],
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 2.4, 18, 5],
         'circle-color': P.stop.fill,
         'circle-stroke-color': P.stop.edge,
         'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 15, 1, 18, 1.6],
+        'circle-opacity': fade(inList('lines')),
+        'circle-stroke-opacity': fade(inList('lines')),
+      },
+    },
+    {
+      id: 'stops-gate',
+      type: 'circle',
+      source: 'stops',
+      minzoom: 17,
+      filter: ['==', ['get', 'gate'], 1],
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 17, 2.4, 18, 5],
+        'circle-color': P.stop.fill,
+        'circle-stroke-color': P.stop.edge,
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 17, 1, 18, 1.6],
         'circle-opacity': fade(inList('lines')),
         'circle-stroke-opacity': fade(inList('lines')),
       },

@@ -24,6 +24,13 @@ export const OSM_RADIUS = 0.0025;
 // stop across the road is not a gate).
 export const BUILDING_R = 220;
 export const GATE_R = 160;
+// A gate stop this far outside the hall OSM draws is still the hall's gate:
+// Civic Center's canopy outline stops a few metres short of its outer gates.
+export const GATE_NEAR = 30;
+// A hall grown to take in gates it missed may not grow past this multiple of
+// its own area: beyond that the outline is not a hall with a notch, it is the
+// wrong shape, and the gates stay street stops.
+export const HALL_GROWTH = 3;
 // A building smaller than this is a shelter or a kiosk, not a terminal.
 export const MIN_AREA = 80;
 // A bus platform can be a narrow strip, but below this it is a kerb.
@@ -92,6 +99,27 @@ const isUnderground = (tags) => Number(tags.layer) < 0 || tags.location === 'und
 // sit in the lane between two platforms).
 export const PLATFORM_GATE_R = 30;
 
+function convexHull(points) {
+  const pts = [...new Set(points.map((p) => p[0] + ',' + p[1]))].map((s) => s.split(',').map(Number));
+  if (pts.length <= 3) return pts;
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  upper.pop();
+  lower.pop();
+  return lower.concat(upper);
+}
+
 /**
  * The shape a terminal is, from the areas around it: its bus hall if OSM has
  * one, else the bus platforms its gates stand on, else the station building
@@ -147,10 +175,17 @@ export function footprintOf(buildings, point, gates) {
 }
 
 /** The areas in an OSM map box around `point`, or an error the caller can decide about. */
+const areaCache = new Map();
 export async function buildingsAround(point, { radius = OSM_RADIUS, fetchText = defaultFetch } = {}) {
   const [lon, lat] = point;
   const box = [lon - radius, lat - radius, lon + radius, lat + radius].map((v) => v.toFixed(5)).join(',');
-  return parseOsm(await fetchText(`${OSM_MAP}?bbox=${box}`));
+  // Only the real reader's answers are kept: a test's own reader may answer
+  // anything for the same box.
+  const cacheable = fetchText === defaultFetch;
+  if (cacheable && areaCache.has(box)) return areaCache.get(box);
+  const areas = parseOsm(await fetchText(`${OSM_MAP}?bbox=${box}`));
+  if (cacheable) areaCache.set(box, areas);
+  return areas;
 }
 
 async function defaultFetch(url) {
@@ -191,14 +226,20 @@ const isRoof = (tags) => tags.building === 'roof' || tags['man_made'] === 'canop
  * Returns `{ terminals, canopies }`: a Map from facility index to `{ rings,
  * feature }`, and the roofs over those shapes, to draw as canopies.
  */
-export async function terminalFootprints({ facilities, indexes, stops, previous = [], busOnly = new Set(), fetchText, log = console.log }) {
+export async function terminalFootprints({ facilities, indexes, stops, previous = [], busOnly = new Set(), markStops = true, fetchText = defaultFetch, log = console.log }) {
   const before = new Map(previous.map((f) => [String(f.properties.id), f]));
   const terminals = new Map();
   const canopies = [];
   for (const i of indexes) {
     const facility = facilities[i];
     const point = facility.geometry.coordinates;
-    const gates = stops.map((f) => f.geometry.coordinates).filter((c) => metres(c, point) <= GATE_R);
+    // The stops around the place pick its shape; its gates are the stops that
+    // name a gate and stand in it or on its edge. A stop inside a terminal
+    // that names no gate (a track, a street stop, a second record of the same
+    // boarding point) is the terminal, not a gate: the page draws gates.
+    const nearby = stops.filter((f) => metres(f.geometry.coordinates, point) <= GATE_R);
+    const gates = nearby.map((f) => f.geometry.coordinates);
+    const named = stops.filter((f) => /gate/i.test(f.properties?.name ?? ''));
     const id = String(facility.properties.id);
     let areas = null;
     try {
@@ -213,17 +254,43 @@ export async function terminalFootprints({ facilities, indexes, stops, previous 
     const shape = terminalShapeOf(areas, point, gates);
     if (!shape) continue;
     if (busOnly.has(i) && !['bus_station', 'platform'].includes(shape.kind)) continue;
-    const rings = shape.rings.map((r) => shapeOf({ ring: r }, point));
+    let rings = shape.rings;
+    const inShape = (c) => rings.some((r) => inRing(c, r) || ringGap(c, r) <= 1);
+    let gateStops = named.filter((f) => rings.some((r) => inRing(f.geometry.coordinates, r) || ringGap(f.geometry.coordinates, r) <= GATE_NEAR));
+    if (!gateStops.length) gateStops = nearby.filter((f) => inShape(f.geometry.coordinates));
+    // A hall whose outline leaves some of its gates outside (a notch cut from
+    // its corner, a canopy drawn short) is grown to the hull of itself and
+    // those gates, so every gate stands inside the concourse it boards from.
+    // A hull is only a correction to the hall's own edge: one that would
+    // spread the hall over the block is not the hall, and is not drawn.
+    // The hall is drawn as OpenStreetMap has it. It is not grown to reach a
+    // gate its outline leaves outside: a hull over the hall and the stops
+    // round it is not the building, and reads as a line across the block
+    // (DESIGN.md, "Terminals"). A gate outside the hall is a street stop.
+
+    const rows = rings.map((r) => shapeOf({ ring: r }, point));
+    const gatesIn = gateStops.filter((f) => rings.some((r) => inRing(f.geometry.coordinates, r) || ringGap(f.geometry.coordinates, r) <= 1));
+    if (markStops) {
+      for (const g of stops) {
+        if (!g.properties) g.properties = {};
+        if (!rings.some((r) => inRing(g.geometry.coordinates, r) || ringGap(g.geometry.coordinates, r) <= 1)) continue;
+        // Inside a terminal's shape only its gates are drawn: a track, a
+        // street stop or a second record of a boarding point that falls
+        // inside the shape is not something to board at there.
+        g.properties.terminal = 1;
+        if (/gate/i.test(g.properties.name ?? '')) g.properties.gate = 1;
+      }
+    }
     terminals.set(i, {
-      rings: shape.rings,
+      rings,
       feature: {
         type: 'Feature',
-        geometry: rings.length === 1 ? { type: 'Polygon', coordinates: rings } : { type: 'MultiPolygon', coordinates: rings.map((r) => [r]) },
+        geometry: rows.length === 1 ? { type: 'Polygon', coordinates: rows } : { type: 'MultiPolygon', coordinates: rows.map((r) => [r]) },
         properties: {
           id,
           name: facility.properties.name,
           class: facility.properties.class,
-          gates: gates.filter((g) => shape.rings.some((r) => inRing(g, r))).length,
+          gates: gatesIn.length,
           kind: shape.kind,
           underground: shape.underground ? 1 : 0,
         },

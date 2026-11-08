@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { area, footprintOf, inRing, parseOsm } from '../scripts/lib/footprints.mjs';
+import { area, footprintOf, inRing, parseOsm, terminalFootprints } from '../scripts/lib/footprints.mjs';
 
 // A rectangle in lon/lat about a corner, `w` and `h` in metres (near the
 // equator, where a degree is 111.32 km).
@@ -83,4 +83,61 @@ test('parseOsm keeps closed building ways and drops open ones', () => {
   assert.equal(ways[0].id, '10');
   assert.equal(ways[0].tags.name, 'Station');
   assert.deepEqual(ways[0].ring[0], [-104.9868, 39.741]);
+});
+
+// An OSM document from closed ways given as corners with tags.
+function osmXml(ways) {
+  const nodes = new Map();
+  const ref = (p) => {
+    const key = `${p[0].toFixed(7)},${p[1].toFixed(7)}`;
+    if (!nodes.has(key)) nodes.set(key, nodes.size + 1);
+    return nodes.get(key);
+  };
+  let id = 100;
+  const body = ways
+    .map(({ ring, tags }) => {
+      const refs = [...ring, ring[0]].map((p) => `<nd ref="${ref(p)}"/>`).join('');
+      const t = Object.entries(tags).map(([k, v]) => `<tag k="${k}" v="${v}"/>`).join('');
+      return `<way id="${id++}">${refs}${t}</way>`;
+    })
+    .join('');
+  const ns = [...nodes].map(([key, n]) => {
+    const [lon, lat] = key.split(',').map(Number);
+    return `<node id="${n}" lat="${lat}" lon="${lon}"/>`;
+  }).join('');
+  return `<osm version="0.6">${ns}${body}</osm>`;
+}
+
+test('a terminal holds its gates, leaves a stop outside its hall a street stop, and marks a track as no gate', async () => {
+  const hall = rect([-105.0, 39.74], 100, 60);
+  const xml = osmXml([{ ring: hall, tags: { building: 'yes', amenity: 'bus_station' } }]);
+  const mid = [-105.0 + 50 * DEG, 39.74 + 30 * DEG];
+  const stop = (name, c) => ({ type: 'Feature', properties: { name }, geometry: { type: 'Point', coordinates: c } });
+  const gateIn = stop('Test Station Gate 1', [-105.0 + 20 * DEG, 39.74 + 30 * DEG]);
+  const track = stop('Test Station Track 7', [-105.0 + 40 * DEG, 39.74 + 30 * DEG]);
+  const gateOut = stop('Test Station Gate 2', [-105.0 + 124 * DEG, 39.74 + 30 * DEG]);
+  const facility = {
+    type: 'Feature',
+    properties: { id: '7', name: 'Test Station', class: 'BUS' },
+    geometry: { type: 'Point', coordinates: mid },
+  };
+  const shapes = await terminalFootprints({
+    facilities: [facility],
+    indexes: [0],
+    stops: [gateIn, track, gateOut],
+    fetchText: async () => xml,
+    log: () => {},
+  });
+  const t = shapes.terminals.get(0);
+  assert.ok(t, 'a terminal');
+  assert.equal(t.feature.properties.gates, 1);
+  assert.ok(t.rings.some((r) => inRing(gateIn.geometry.coordinates, r) || r.some(([x, y]) => Math.hypot(x - gateIn.geometry.coordinates[0], y - gateIn.geometry.coordinates[1]) < 0.00002)), 'a gate in the hall is in it');
+  assert.equal(gateIn.properties.gate, 1);
+  // The hall is drawn as OpenStreetMap has it: a stop outside it is on the
+  // street, not a gate, and the hall is not grown over the block to reach it.
+  assert.ok(!t.rings.some((r) => inRing(gateOut.geometry.coordinates, r)), 'a stop outside the hall stays outside');
+  assert.ok(!gateOut.properties.gate, 'a stop outside the hall is not a gate');
+  assert.ok(!gateOut.properties.terminal, 'a stop outside the hall is not in the terminal');
+  assert.equal(track.properties.terminal, 1);
+  assert.ok(!track.properties.gate, 'a track stop is not a gate');
 });

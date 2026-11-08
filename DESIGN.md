@@ -3529,6 +3529,30 @@ work against the real structure before asking for evaluation.
   restart without the other noticing; the satellite overlay
   (`qa/sat/render.py`) is how builders check their own work first.
 
+- 2026-11-08: Round four, Union Station and Civic Center. A train runs the
+  whole platform it stops at, so a line ends at the platform's far end from
+  the side it came in on, and the lines of a terminal end together in one row
+  with the station's mark drawn across it, not fanned out at whichever end
+  RTD's own route ends happen to fall on (see "Stations").
+- 2026-11-08: A terminal is drawn as the hall OpenStreetMap has, as a faint
+  fill with no edge, so a building never reads as a line round its block. The
+  hall is not grown into a hull over the gates its outline leaves outside: a
+  stop outside the hall is a street stop, and a gate is a stop that stands
+  inside the hall (a concourse shows its gate dots from z17; at z16 it is a
+  shape with nothing in it, and a track or a street stop inside a concourse is
+  never drawn as a gate) (see "Terminals").
+- 2026-11-08: No line is drawn through a terminal's hall. Streets and bus
+  routes are cut where they meet its edge, so every line that boards there
+  ends at the edge its buses go in, and a line that crossed a concourse on a
+  diagonal now stops at it (see "Terminals").
+- 2026-11-08: A bus that boards in a concourse is drawn only as far as the
+  hall. Where its line comes to the hall, leaves it to go round a block and
+  comes back (the way in on one street and out on another, to and from the
+  ramp), the stretch between is the approach, not a route a rider can ride,
+  and is taken out; only a route that stops inside the hall is touched, and a
+  through route keeps every street it really runs along (see "Bus routes",
+  "Terminals").
+
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in

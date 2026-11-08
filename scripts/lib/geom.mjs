@@ -103,6 +103,71 @@ export function simplify(points, tolerance) {
 export const dedupe = (coords) => coords.filter((c, i) => i === 0 || c[0] !== coords[i - 1][0] || c[1] !== coords[i - 1][1]);
 export const partsOf = (g) => (g.type === 'LineString' ? [g.coordinates] : g.coordinates);
 
+// Is the point inside the closed ring (even-odd, the ring closed from its last
+// point back to its first)?
+export function insideRing(p, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// Where segment ab crosses an edge, as a fraction of ab, or null.
+function crossing(a, b, c, d) {
+  const rx = b[0] - a[0];
+  const ry = b[1] - a[1];
+  const sx = d[0] - c[0];
+  const sy = d[1] - c[1];
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-18) return null;
+  const t = ((c[0] - a[0]) * sy - (c[1] - a[1]) * sx) / den;
+  const u = ((c[0] - a[0]) * ry - (c[1] - a[1]) * rx) / den;
+  return t > 1e-9 && t < 1 - 1e-9 && u >= -1e-9 && u <= 1 + 1e-9 ? t : null;
+}
+
+/**
+ * A line with the parts inside any ring (a terminal's hall, in lon/lat) taken
+ * out: where it enters, it ends; where it leaves, it starts again. A bus route
+ * is not drawn through a station it boards in (DESIGN.md, "Bus routes",
+ * "Terminals"). Returns the pieces outside, in order.
+ */
+export function clipOutRings(points, rings) {
+  const pieces = [];
+  let run = [];
+  const outside = (p) => !rings.some((ring) => insideRing(p, ring));
+  if (outside(points[0])) run.push(points[0]);
+  for (let i = 1; i < points.length; i++) {
+    const [a, b] = [points[i - 1], points[i]];
+    const cuts = new Set([0, 1]);
+    for (const ring of rings) {
+      for (let k = 0; k < ring.length; k++) {
+        const t = crossing(a, b, ring[k], ring[(k + 1) % ring.length]);
+        if (t !== null) cuts.add(t);
+      }
+    }
+    const ts = [...cuts].sort((x, y) => x - y);
+    for (let k = 1; k < ts.length; k++) {
+      const [t0, t1] = [ts[k - 1], ts[k]];
+      if (t1 - t0 < 1e-9) continue;
+      const mid = [a[0] + (b[0] - a[0]) * ((t0 + t1) / 2), a[1] + (b[1] - a[1]) * ((t0 + t1) / 2)];
+      const q0 = [a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0];
+      const q1 = [a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1];
+      if (outside(mid)) {
+        if (!run.length) run.push(q0);
+        run.push(q1);
+      } else if (run.length) {
+        pieces.push(run);
+        run = [];
+      }
+    }
+  }
+  if (run.length >= 2) pieces.push(run);
+  return pieces.filter((p) => p.length >= 2);
+}
+
 // A local projection to meters around `origin` ([lon, lat]), and back, with
 // `precision` decimals of a degree.
 export function projection(origin, precision = 5) {
@@ -114,3 +179,4 @@ export function projection(origin, precision = 5) {
     unproject: ([x, y]) => [Math.round((x / kx + origin[0]) * factor) / factor, Math.round((y / ky + origin[1]) * factor) / factor],
   };
 }
+

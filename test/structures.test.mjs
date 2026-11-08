@@ -82,6 +82,18 @@ test('a platform set to no public transport is not a platform', () => {
   assert.equal(shapes.canopies.length, 0);
 });
 
+test('a line runs to the platform end away from where it comes from', () => {
+  const rings = [PLATFORM];
+  // End at the north end, the line coming up from the south: it runs on to
+  // the north end (the far end from the approach).
+  const north = platformEndFor([-105.0, 39.7502], rings, { from: [-105.0, 39.7490] });
+  assert.ok(north && north[1] > 39.7510, `north end, got ${north}`);
+  // End at the north end, the line coming down from the north: it runs back
+  // along the platform to its south end, where the trains stop.
+  const south = platformEndFor([-105.0, 39.7512], rings, { from: [-105.0, 39.7530] });
+  assert.ok(south && south[1] < 39.7505, `south end, got ${south}`);
+});
+
 test('a line runs along its platform to the platform end nearest it', () => {
   const rings = [PLATFORM];
   // A stop at the south end of the platform: the line should run north.

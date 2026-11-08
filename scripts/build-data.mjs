@@ -11,7 +11,7 @@ import { coreBounds } from './lib/core.mjs';
 import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { busNames } from './lib/busnames.mjs';
-import { terminalFootprints } from './lib/footprints.mjs';
+import { BUILDING_R, ringGap, terminalFootprints } from './lib/footprints.mjs';
 import { extendLineToPlatforms, stationStructures } from './lib/structures.mjs';
 import { heading, stopLines } from './lib/stops.mjs';
 import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
@@ -21,6 +21,7 @@ import { groupPlatforms, meters, platformMarks } from './lib/platforms.mjs';
 import { busStretches } from './lib/stretches.mjs';
 import { busStreets, terminalPlaces, terminals } from './lib/streets.mjs';
 import { generalize } from './lib/generalize.mjs';
+import { closestOnSegment, clipOutRings, insideRing } from './lib/geom.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
@@ -53,6 +54,9 @@ const SIMPLIFY = 0.00001;
 const PRECISION = 5;
 // A station is moved onto its lines' track when it's at most this far away.
 const SNAP_METERS = 200;
+// Line ends this close together are one row of platforms, and the station's
+// bar goes across them (Union Station's four commuter lines).
+const ROW_METERS = 60;
 // Phones open on the box holding this share of weekday service, east to west
 // and north to south (scripts/lib/core.mjs).
 const CORE_SHARE = 0.6;
@@ -230,6 +234,25 @@ async function main() {
     `  rail station shapes: ${shapesAt.byStation.size} stations (${[...shapesAt.byStation.values()].filter((s) => s.building).length} with a station building, ${[...shapesAt.byStation.values()].filter((s) => s.canopies.length).length} with a canopy)${shapesAt.failed ? `, ${shapesAt.failed} not looked up` : ''}`,
   );
 
+  // The bus halls beside the rail stations, read before the routes are drawn:
+  // a lap that runs round one is the way buses get in and out of the station,
+  // not a route a rider can ride (DESIGN.md, "Bus routes", "Terminals";
+  // scripts/lib/generalize.mjs). Read here, before the streets and terminals
+  // are drawn, so the generalizer has the shape it needs; the areas are kept
+  // for the terminal block below.
+  const placeOf = geo.facilities.map((f) => f.geometry.coordinates);
+  const atRailStation = (c) => geo.stations.some((s) => Math.hypot((s.geometry.coordinates[0] - c[0]) * 85000, (s.geometry.coordinates[1] - c[1]) * 110540) < 100);
+  const busStationIndexes = geo.facilities.map((f, i) => (['BUS', 'STN'].includes(f.properties.class) ? i : -1)).filter((i) => i >= 0);
+  const terminalsBefore = JSON.parse(await readFile(path.join(OUT, 'terminals.geojson'), 'utf8').catch(() => '{"features":[]}')).features;
+  const hallsAt = await terminalFootprints({
+    facilities: geo.facilities,
+    indexes: busStationIndexes,
+    stops: geo.stops,
+    previous: terminalsBefore,
+    busOnly: new Set(busStationIndexes.filter((i) => atRailStation(placeOf[i]))),
+    markStops: false,
+  });
+  const halls = [...hallsAt.terminals.values()].flatMap((s) => s.rings);
   // Bus routes in stretches, each with the frequency of the trips that run
   // along it, so a leg only a few trips take isn't drawn as frequent.
   const buses = geo.routes.filter((f) => f.properties.mode === 'bus');
@@ -243,7 +266,7 @@ async function main() {
   // carriageways simplified from each route's own line (DESIGN.md, "Bus
   // routes", "Readable geometry"; scripts/lib/generalize.mjs).
   const laps = [];
-  geo.routes = [...generalize(split.features, { precision: PRECISION, report: laps, places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates) }), ...rails];
+  geo.routes = [...generalize(split.features, { precision: PRECISION, report: laps, places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates), halls }), ...rails];
   console.log(`  bus laps generalized: ${laps.filter((l) => l.kind === 'turn').length} turns, ${laps.filter((l) => l.kind === 'end').length} short ends`);
   const splitRoutes = split.report.filter((r) => r.stretches > 1);
   console.log(`  bus routes in stretches: ${splitRoutes.length} of ${split.report.length} split, ${split.features.length} stretches`);
@@ -326,6 +349,57 @@ async function main() {
     const home = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), groups[0], SNAP_METERS);
     if (home) f.geometry = { type: 'Point', coordinates: home };
   }
+  // A station where several lines end draws its bar across the row they end
+  // in. Each line runs to the end of its own platform; at a terminal the
+  // platforms stand side by side, so the lines end in one row there, and the
+  // mark belongs on it — not at the platforms' middle, nor at the end RTD's
+  // single point falls on. Union Station's four commuter lines end together
+  // at the train hall's southwest end.
+  {
+    const endsAt = new Map();
+    for (const f of rail) {
+      const ends = service.ends[f.properties.route];
+      if (!ends) continue;
+      const parts = partsOf(f.geometry);
+      for (const i of ends) {
+        const ref = shapesAt.byStation.get(i)?.centre ?? geo.stations[i].geometry.coordinates;
+        let near = null;
+        for (const part of parts) {
+          for (const p of [part[0], part.at(-1)]) {
+            const d = meters(p, ref);
+            if (d <= BUILDING_R && (!near || d < near.d)) near = { p, d };
+          }
+        }
+        if (!near) continue;
+        if (!endsAt.has(i)) endsAt.set(i, []);
+        endsAt.get(i).push({ p: near.p, d: near.d });
+      }
+    }
+    for (const [i, ends] of endsAt) {
+      if (ends.length < 2) continue;
+      // The largest group of ends within a row's width is the row.
+      const rows = [];
+      for (const t of ends) {
+        const row = rows.find((r) => r.some((q) => meters(q.p, t.p) <= ROW_METERS));
+        if (row) row.push(t);
+        else rows.push([t]);
+      }
+      rows.sort((a, b) => b.length - a.length || Math.min(...a.map((t) => t.d)) - Math.min(...b.map((t) => t.d)));
+      if (rows[0].length < 2) continue;
+      const at = [0, 1].map((c) => rows[0].reduce((s, t) => s + t.p[c], 0) / rows[0].length);
+      const f = geo.stations[i];
+      const lines = new Set(f.properties.lines.split(' '));
+      const on = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), at, SNAP_METERS);
+      if (on && meters(on, at) <= ROW_METERS) f.geometry = { type: 'Point', coordinates: on };
+    }
+  }
+  // A bus route that ends at a terminal's hall is drawn only as far as the
+  // hall: the last stretch that hugs the station (the way round the block to
+  // the ramp down into it) is the approach, not a route a rider can ride
+  // (DESIGN.md, "Bus routes", "Terminals"). Where the route leaves the
+  // hall's reach it is cut and run straight to the hall's edge. The streets
+  // are drawn from the routes below, so the loop's streets go with it; a
+  // through street keeps the routes that really run along it.
   // Wider screens open on the routes drawn at full strength from far out,
   // rail and buses every 30 minutes or better, not on the long reach of a few
   // commuter routes.
@@ -400,25 +474,28 @@ async function main() {
   // The streets themselves, each drawn once, by the combined frequency of
   // every route along it (DESIGN.md, "Bus routes"; scripts/lib/streets.mjs).
   geo.streets = busStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION });
+  let shapesForTerminals;
   // Bus stations drawn as their own buildings: the place where streets end
   // (DESIGN.md, "Bus routes", "Terminals"), then the shape its bus gates
   // stand in from OpenStreetMap (scripts/lib/footprints.mjs) — its bus hall,
   // above or below ground, or its bus platforms — then the streets tidied
   // around that shape rather than around a made-up disk.
   {
-    const places = geo.facilities.map((f) => f.geometry.coordinates);
+    const places = placeOf;
     const found = terminalPlaces(geo.streets, places, { precision: PRECISION });
-    const nearStation = (c) => geo.stations.some((s) => Math.hypot((s.geometry.coordinates[0] - c[0]) * 85000, (s.geometry.coordinates[1] - c[1]) * 110540) < 100);
     // At a rail station only a bus hall or bus platforms may be drawn: the
     // rail station is already the place, and the block beside it is not.
-    const busOnly = new Set(found.map((t) => t.qi).filter((i) => nearStation(places[i])));
-    const previous = JSON.parse(await readFile(path.join(OUT, 'terminals.geojson'), 'utf8').catch(() => '{"features":[]}')).features;
-    const shapes = await terminalFootprints({ facilities: geo.facilities, indexes: found.map((t) => t.qi), stops: geo.stops, previous, busOnly });
+    const busOnly = new Set(found.map((t) => t.qi).filter((i) => atRailStation(places[i])));
+    const shapes = (shapesForTerminals = await terminalFootprints({ facilities: geo.facilities, indexes: found.map((t) => t.qi), stops: geo.stops, previous: terminalsBefore, busOnly }));
     geo.terminals = [...shapes.terminals.values()].map((s) => s.feature);
-    terminals(geo.streets, places, { precision: PRECISION, footprints: new Map([...shapes.terminals].map(([i, s]) => [i, s.rings])) });
     console.log(`  bus terminals: ${found.length} (${found.map((t) => geo.facilities[t.qi].properties.name).join(', ')})`);
     console.log(`  drawn as their shape: ${geo.terminals.map((f) => `${f.properties.name} (${f.properties.kind}${f.properties.underground ? ', below ground' : ''}, ${f.properties.gates} gates)`).join(', ') || 'none'}`);
     geo.structures = [...shapesAt.features, ...shapes.canopies];
+
+    // No line is drawn through a terminal's hall (DESIGN.md, "Bus routes",
+    // "Terminals"): a bus that boards in the concourse goes down a ramp, so
+    // the street and route lines end where they meet the hall, and what was
+    // drawn across it is gone. Every line ends at the edge its buses go in.
   }
   const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
   const classes = Object.fromEntries(STREET_CLASSES.map((c) => [c.id, { streets: geo.streets.filter((f) => f.properties.cls === c.id).length, km: Math.round(streetKm(c.id) * 10) / 10 }]));
@@ -427,6 +504,47 @@ async function main() {
   const drawnLines = new Set(geo.routes.map((f) => f.properties.route));
   const lineAt = (code) => (drawnLines.has(code) ? code : drawnLines.has(byCode.get(code)) ? byCode.get(code) : null);
   for (const { properties: p } of geo.stops) Object.assign(p, { lines: stopLines(p.routes, lineAt), heading: heading(p.dir) });
+
+  // A bus that boards in a terminal's concourse is drawn only as far as the
+  // hall: the way round the block to the ramp is the approach, not a route a
+  // rider can ride (see shortenAtHall). The streets and street names are
+  // drawn from the routes as cut, so the loop round the block is not drawn.
+  {
+    const served = new Set();
+    for (const s of geo.stops) {
+      if (!s.properties.terminal) continue;
+      for (const line of String(s.properties.lines ?? '').split(' ')) if (line) served.add(line);
+    }
+    geo.routes = shortenAtHall(geo.routes, halls, served);
+    const busRoutes = geo.routes.filter((f) => f.properties.mode === 'bus');
+    geo.busnames = busNames(busRoutes, { precision: PRECISION });
+    geo.streets = busStreets(busRoutes, split.loads, { precision: PRECISION });
+    terminals(geo.streets, placeOf, { precision: PRECISION, footprints: new Map([...shapesForTerminals.terminals].map(([i, s]) => [i, s.rings])) });
+  }
+  // The rings as they are drawn (a hall snapped to the map's precision), so
+  // the line that is cut is cut where the fill ends.
+  const hallRings = geo.terminals.flatMap((f) =>
+    (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).map((rings) => rings[0]),
+  );
+    // No line is drawn through a hall: a line that ends at the concourse
+    // point itself is cut back to the edge, where its buses go in.
+    const clear = (p) => p.filter((q) => !hallRings.some((r) => insideRing(q, r)));
+    const outside = (features) =>
+      features.flatMap((f) => {
+        const parts = partsOf(f.geometry)
+          .flatMap((p) => clipOutRings(p, hallRings).map(clear))
+          .filter((p) => p.length >= 2);
+        return parts.map((p) => ({ ...f, properties: { ...f.properties }, geometry: { type: 'LineString', coordinates: p } }));
+      });
+    geo.streets = outside(geo.streets);
+    geo.routes = geo.routes.flatMap((f) => {
+      if (f.properties.mode !== 'bus') return [f];
+      const parts = partsOf(f.geometry)
+        .flatMap((p) => clipOutRings(p, hallRings).map(clear))
+        .filter((p) => p.length >= 2);
+      if (!parts.length) return [];
+      return [{ ...f, geometry: parts.length === 1 ? { type: 'LineString', coordinates: parts[0] } : { type: 'MultiLineString', coordinates: parts } }];
+    });
   // FlexRide zones link to their page where GTFS has one.
   const urlOf = new Map(gtfsRoutes.flatMap((r) => [r.route_id, r.route_short_name].filter(Boolean).map((c) => [c, r.route_url || null])));
   for (const { properties: p } of geo.flexride) p.url = p.url || urlOf.get(p.route) || null;
@@ -599,3 +717,48 @@ main().catch((err) => {
 });
 
 const partsOf = (g) => (g.type === 'LineString' ? [g.coordinates] : g.coordinates);
+
+// A bus that boards in a terminal's concourse is drawn only as far as the
+// hall: where its line comes to the hall, goes away round the block and comes
+// back (the way in on one street and out on another, to and from the ramp),
+// the stretch between is the approach, and goes (DESIGN.md, "Bus routes",
+// "Terminals"). Each side is run on to the hall's edge, so the line ends at
+// the concourse; a street the bus really runs along, or one it only passes,
+// is untouched. Only routes that stop inside the hall are shortened.
+function shortenAtHall(routes, halls, served, { close = 120, longest = 1500 } = {}) {
+  if (!halls.length || !served.size) return routes;
+  const metres = (a, b) => Math.hypot((a[0] - b[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180), (a[1] - b[1]) * 110540);
+  const middle = (ring) => [ring.reduce((s, p) => s + p[0], 0) / ring.length, ring.reduce((s, p) => s + p[1], 0) / ring.length];
+  const centres = halls.map(middle);
+  return routes.map((f) => {
+    if (f.properties.mode !== 'bus' || !served.has(f.properties.route)) return f;
+    const out = [];
+    for (const part of partsOf(f.geometry)) {
+      let line = part.slice();
+      let at = 0;
+      while (at < line.length - 2) {
+        let run = 0;
+        let cut = null;
+        for (let j = at + 2; j < line.length; j += 1) {
+          run += metres(line[j - 1], line[j]);
+          if (run > longest) break;
+          if (metres(line[at], line[j]) > close) continue;
+          if (run < 100) continue;
+          const loop = line.slice(at, j + 1);
+          if (centres.some((c) => insideRing(c, loop))) { cut = j; break; }
+        }
+        if (!cut) { at += 1; continue; }
+        // The stretch from where the line comes to the hall to where it
+        // leaves again, round the block and through the hall: the way in,
+        // not the route. Both sides end at the hall's edge.
+        out.push(line.slice(0, at + 1), line.slice(cut));
+        line = [];
+        break;
+      }
+      if (line.length) out.push(line);
+    }
+    const kept = out.filter((p) => p.length >= 2);
+    if (!kept.length) return f;
+    return { ...f, geometry: kept.length === 1 ? { type: 'LineString', coordinates: kept[0] } : { type: 'MultiLineString', coordinates: kept } };
+  });
+}

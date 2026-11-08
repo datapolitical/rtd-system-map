@@ -254,17 +254,17 @@ export function buildLegend(meta, lines) {
       counts.facilities ? [symbolImage('transit-center', lines, 'Bus sign', evaluate(layers.get('facilities').layout['icon-size'], at(settled(layers.get('facilities'))))), 'Transit center'] : null,
       counts.terminals
         ? [
-            areaImage({ fill: layers.get('bus-terminal'), edge: layers.get('bus-terminal-edge') }, lines, at(settled(layers.get('bus-terminal'))), 'An outlined building'),
+            areaImage({ fill: layers.get('bus-terminal') }, lines, at(settled(layers.get('bus-terminal'))), 'A faint building fill'),
             'Bus terminal: the building its gates stand in',
           ]
         : null,
       counts.terminals_under
         ? [
             areaImage(
-              { fill: layers.get('bus-terminal-under'), edge: layers.get('bus-terminal-under-edge') },
+              { fill: layers.get('bus-terminal-under') },
               lines,
-              at(Math.max(settled(layers.get('bus-terminal-under')), settled(layers.get('bus-terminal-under-edge')))),
-              'A pale hall with a dashed edge',
+              at(settled(layers.get('bus-terminal-under'))),
+              'A pale hall, no edge',
             ),
             'Bus station below the street',
           ]
