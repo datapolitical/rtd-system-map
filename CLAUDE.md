@@ -18,7 +18,7 @@ RTD's data at build time so RTD's changes flow through with no code change
 
 ## What's left to do: GitHub Issues
 
-Open work lives in this repo's Issues, not in chat or `status.json`. Each open
+Open work lives in this repo's Issues, not in chat. Each open
 milestone is one stage of work, and Chris's status page draws its "How close
 we are" section from them (closed issues show as done).
 
@@ -34,3 +34,52 @@ we are" section from them (closed issues show as done).
   `Estimate: N min of agent time` to the body when you can guess one.
 - The repo is public. Keep issues about the map: no usage or budget numbers,
   no personal details.
+
+## How to work here
+
+- The bar is a map that is both useful and beautiful. Visual work isn't done
+  until it is both. Put visual criteria in every builder brief and every
+  review.
+- Several sessions share a checkout and switch its branch without warning.
+  Do feature work in its own worktree (`git worktree add`), and check
+  `git branch --show-current` in the same command as `git commit`.
+- Run one heavy agent (dev server plus headless browser) at a time, and stop
+  each dev server when its agent finishes. With a Playwright device profile,
+  pass `browserName: 'chromium'`: profiles such as iPhone 14 default to
+  WebKit, whose GPU process can use many gigabytes. Keep captures in
+  `qa/.scratch/` (ignored by git), not /tmp.
+- Agent time is budgeted. Before starting a build or review agent, follow the
+  budget rule Chris gave you (it stays off this public repo). If you don't
+  have it, ask.
+
+## Status page
+
+`node status/server.mjs [port]` (default 8795) serves a page that reads this
+repo's milestones and issues through `gh`. Issues labeled `in progress` show
+under "In progress", and issues labeled `needs Chris` under "Waiting on you",
+each with the first line of its newest comment. For every checkout of the
+repo on that machine it also lists the Claude Code sessions and subagents
+working there (read from their transcripts in `~/.claude/projects`), agents'
+progress files, the newest captures in `qa/.scratch/`, and recent commits.
+
+When you read Claude plan usage, add a reading to `status/usage.json`, which
+git ignores: `{"plan": "Pro", "snapshots": [{"t": "<ISO time>", "w":
+[{"label": "Weekly · all models", "pct": 86, "resets": "<ISO time>"}],
+"note": "optional"}]}`. The page charts the readings. They never go in a
+commit.
+
+Any agent can also keep a progress file at `.agents/<short-name>.json`
+in the root of its worktree (ignored by git) and rewrites it whenever its
+step changes:
+
+```json
+{"name": "frequency-r4", "issue": 6, "branch": "bus-frequency",
+ "state": "working", "step": "Civic Center: drawing the terminal's footprint",
+ "updated": "2026-11-11T18:02:00Z",
+ "log": ["Newest first, one line each"],
+ "captures": ["qa/.scratch/r4/civic-16.png"]}
+```
+
+`state` is `working`, `waiting` or `done`. A `working` file not updated for
+15 minutes shows as quiet, and files older than a day drop off. Captures must
+be PNGs under `qa/.scratch/`.
