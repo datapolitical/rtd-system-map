@@ -3166,6 +3166,14 @@ work against the real structure before asking for evaluation.
   `daily-summary.txt` (until then it is told to carry on), and the
   workflow sets the labels after each run from what really happened on
   GitHub, so a finished or stuck issue is never picked again by itself.
+- 2026-11-08: Edge letters no longer wait for the map to go idle. A slow
+  renderer can draw frame after frame without ever reporting idle (#31), so a
+  letter is placed after a short debounce from `moveend`, when the routes
+  source reports loaded, and again on later frames until the drawing settles.
+  A pass writes only when the letters change, so the events cannot make them
+  flicker. The check's rest gets its third round back (the issue's "three
+  rounds"), because a slow renderer can still need one more frame to draw
+  letters that are already in the source.
 
 ## Sources
 
