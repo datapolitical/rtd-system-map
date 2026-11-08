@@ -3048,6 +3048,10 @@ marks that overlap, a letter missing) are the next thing to add there.
   lines hold a new tier for about 10 minutes before changing at the edges of
   the day. Alert marks only for alerts in effect now with a serious effect,
   one mark per event, after a week's review of the feed.
+- 2026-11-08: This file is also published as the repository's wiki, one page
+  per "## " section with a grouped contents page, regenerated on every change
+  on main (`scripts/wiki.mjs`, `.github/workflows/wiki.yml`). This file stays
+  the only source; the wiki is never edited by hand.
 
 ## Sources
 
