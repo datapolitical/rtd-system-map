@@ -118,9 +118,26 @@
     m.triggerRepaint();
     arm();
   });
+  // The map's own rest: the next idle, which is what the page waits for
+  // before it places a letter for each line with none (edgeletters.js), or
+  // `max` ms of no idle at all.
+  qa.idle = (max = 5000) => new Promise((res) => {
+    const m = map();
+    const t = setTimeout(() => { m.off('idle', onIdle); res(false); }, max);
+    const onIdle = () => { clearTimeout(t); res(true); };
+    m.once('idle', onIdle);
+    m.triggerRepaint();
+  });
+  // A move, then the map at rest: its own idle (every tile and source
+  // parsed, everything drawn) before the quiet spell. A quiet spell alone
+  // read the view while the page was still working: after a zoom change it
+  // adds layers and sources, whose worker work draws no frame, and the
+  // edge letters are placed on idle, so a view fetched 700 ms after the
+  // last frame had no letters yet for the lines that needed one (#31).
   qa.jump = async (v, quiet) => {
     map().jumpTo({ center: [v.lon, v.lat], zoom: v.zoom, bearing: 0, pitch: 0 });
     await new Promise((r) => setTimeout(r, 150));
+    await qa.idle();
     return qa.settle(quiet);
   };
 
