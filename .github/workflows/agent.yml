@@ -100,9 +100,15 @@ jobs:
           PROMPT_FILE="$RUNNER_TEMP/brief.txt"
           { echo "You are working on datapolitical/rtd-system-map. Read CLAUDE.md in the worktree root and DESIGN.md before changing anything."; echo; echo "$BRIEF"; echo; echo "## Today's assignment"; echo "$ASSIGN"; echo "Date: $(date -u +%F). Run folder: $PWD/run."; } > "$PROMPT_FILE"
           mkdir -p run
+          # Credit every commit, comment and issue to the model that made it
+          # (.github/daily/madeby). Copied out of the checkout so it survives
+          # the agent switching branches.
+          cp -r .github/daily/madeby "$RUNNER_TEMP/madeby"
+          source "$RUNNER_TEMP/madeby/madeby.sh"
           MODEL=""
           for m in crouton-alpha-free beam-free deepseek-v4.1-flash; do
             echo "Trying $m"
+            made_by "$m"
             if timeout 14400 opencode run -m "opencode-go/$m" < "$PROMPT_FILE" > "run/agent-$m.log" 2>&1; then
               MODEL="$m"; break
             fi

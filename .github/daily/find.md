@@ -80,3 +80,10 @@ Write `daily-summary.txt` in the worktree root (the workflow uploads it;
 do not commit it): at most three short plain lines (issues filed with
 numbers and titles, or "nothing new under <lens>"). The ledger is
 written back by the workflow, not by you in this part.
+
+## Credit
+
+- Your commits, comments and issues are credited to your model
+  automatically: the git author is set and `gh` adds a "Made by" line and
+  label. Do not set `git config user.name` or `user.email`, and do not pass
+  `--author`.

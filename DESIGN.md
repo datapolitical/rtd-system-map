@@ -2249,6 +2249,13 @@ without the other noticing.
   human, so every comment it posts ends with the hidden mark
   `<!-- agent -->`, and the worker skips marked comments when it looks
   for the human's.
+- All work says who made it: a free model, DeepSeek, or Claude.
+  `.github/daily/madeby/madeby.sh` (`made_by <model>`) sets the git
+  author to the model, and its `gh` wrapper ends every comment, issue and
+  pull request with "Made by: ..." and labels the issue `made by: free
+  model`, `made by: DeepSeek` or `made by: Claude`. The worker sets it for
+  each model it tries, the home lanes the same, and the evaluator always
+  runs as Claude.
 
 The satellite overlay (`qa/sat/render.py`) draws Esri satellite tiles
 with OpenStreetMap shapes and the map's own stops, rail lines,
@@ -3129,6 +3136,9 @@ work against the real structure before asking for evaluation.
   so its comments carry the hidden mark `<!-- agent -->`. Without it the
   worker read the evaluator's own pass note as the human's go-ahead and
   would have started the issue again.
+- 2026-11-08: Work is credited to who made it (free model, DeepSeek or
+  Claude) in the commit author, a "Made by" line on every comment, and a
+  `made by:` label on the issue, so it is clear which models did which work.
 
 ## Sources
 
