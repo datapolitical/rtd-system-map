@@ -95,9 +95,8 @@ function circleImage(layer, at, alt) {
 }
 
 // An area as the map fills it, on the land: a fill layer's pattern or color
-// at its opacity, and an edge layer's dashed line. `soft` fades the fill in
-// across the swatch, as the district's wash fades in at its edge.
-function areaImage({ fill, edge, soft = false }, lines, at, alt) {
+// at its opacity, and an edge layer's dashed line.
+function areaImage({ fill, edge }, lines, at, alt) {
   const [w, h] = [30, 16];
   const ctx = canvas(w, h);
   ctx.fillStyle = P.land;
@@ -112,12 +111,6 @@ function areaImage({ fill, edge, soft = false }, lines, at, alt) {
     const paint = ctx.createPattern(tile, 'repeat');
     paint.setTransform(new DOMMatrix().scale(1 / RATIO));
     ctx.fillStyle = paint;
-  } else if (soft) {
-    const color = evaluate(fill.paint['fill-color'], at);
-    const g = ctx.createLinearGradient(0, 0, w, 0);
-    g.addColorStop(0.3, `${color}00`);
-    g.addColorStop(0.7, color);
-    ctx.fillStyle = g;
   } else {
     ctx.fillStyle = evaluate(fill.paint['fill-color'], at);
   }
@@ -247,7 +240,6 @@ export function buildLegend(meta, lines) {
             return [areaImage({ fill, edge }, lines, at(z), 'Hatched area with a dashed edge'), 'FlexRide: book a ride in this area'];
           })()
         : null,
-      counts.boundary ? [areaImage({ fill: layers.get('district-wash'), soft: true }, lines, at(zoom), 'Gray wash'), "Outside RTD's district"] : null,
     ];
     document.getElementById('legend-symbols').innerHTML = rows.filter(Boolean).map(([i, t]) => row(i, t)).join('');
 

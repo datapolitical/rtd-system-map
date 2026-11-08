@@ -916,8 +916,8 @@ change gets a decision-log line that says what the views showed.
 5. Less frequent bus routes, lighter and thinner by tier
 6. FlexRide zones, as a light hatch with a dashed edge
 7. Lines not running at the time shown, as faint hairlines
-8. Basemap: streets, water, parks, labels
-9. Outside RTD's district, a soft gray wash with a feathered edge
+8. Basemap: streets, water, parks, labels, the same inside RTD's district
+   and out, to the edge of the pannable rectangle
 
 ### Basemap
 
@@ -1217,7 +1217,7 @@ Each bus tier fades in over about a zoom level rather than popping on.
 
 | Zoom | Shows | Also in Live |
 |---|---|---|
-| Below 9 (the overview: a phone's "Whole network") | District wash and relief. Rail, with each line's letter at both ends and nothing else on it. Frequent buses as lines, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
+| Below 9 (the overview: a phone's "Whole network") | Relief. Rail, with each line's letter at both ends and nothing else on it. Frequent buses as lines, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
 | 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Hourly and less from 10.5. Stations are small ticks (or dots, where lines part) to 10.25, one per cluster; capsules from 11. The hub's ring from 9.75 to 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 9.75, closed stations |
 | 11.5–13 | Names keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. No bus numbers (see "Numbers"). | |
 | 13–14.5 | Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
@@ -1376,8 +1376,9 @@ draws it at its zoom (see "The key"). Nothing in the key is a second drawing.
   reads as the T Line.
 - **FlexRide:** a light diagonal hatch with a dashed edge, never green (green
   reads as a park).
-- **Outside the district:** a gray wash that fades over about 1 km at the
-  edge, instead of a hard-edged mask.
+- **Outside the district:** nothing. The basemap runs on unchanged to the
+  edge of the map's pannable rectangle; the network itself shows where RTD
+  goes.
 
 ### Visual tokens
 
@@ -1394,7 +1395,7 @@ draws it at its zoom (see "The key"). Nothing in the key is a second drawing.
 
 Basemap tints (light theme; `PALETTES` in `public/js/palette.js`): land
 `#F4F5F6`, water `#BCD5E4`, parks `#E0EADB`, roads white with a `#DFE4E8`
-casing, main street names `#4F5B67`, outside the district a `#E3E7EA` wash.
+casing, main street names `#4F5B67`.
 
 **Type:** Overpass, a descendant of Highway Gothic, the US road-sign face.
 Weights 400, 600 and 800, tabular numerals. Scale: 13, 15, 17, 22, 28 px.
@@ -1698,7 +1699,7 @@ and the time the lines show ("Weekdays, 9am to 3pm"; later "Sunday, 9am to
 - **On the map:** Rail station; the hub ("Union Station, where the most
   lines meet", its name from the data) while its ring is drawn; "Closed: no
   trains this week"; Park-n-Ride; Transit center; Bus stop, when zoomed in
-  close; "FlexRide: book a ride in this area"; "Outside RTD's district".
+  close; "FlexRide: book a ride in this area".
 - **Live**, only while Live is on: a train (the first rail line's arrow) and
   a bus, each "zoom in to see them" below the zoom their layer starts at,
   and the dot on the Live pill in words: fresh (pulsing, positions up to
@@ -1712,7 +1713,7 @@ layer asks for), shown at the size its layer draws it at the map's zoom now
 (the layer's `icon-size`, worked out for that zoom by `public/js/evaluate.js`
 from the layer definition itself, so no size is typed twice). A closed
 station and a bus stop are drawn from their circle layer's paint, FlexRide
-from its fill's hatch and its edge's dash, the district from its wash, and
+from its fill's hatch and its edge's dash, and
 each bus tier's swatch is its bus layer's own width, color, dash and cap at
 zoom 13. The station row follows the zoom: below 9, "Rail stations: zoom in
 to see them"; from 9 to 11 the tick or dot for a one-line station and for
@@ -2852,6 +2853,12 @@ marks that overlap, a letter missing) are the next thing to add there.
   scoring: read-only, its own Chromium captures, blind to the builder's
   report. Chris asked whether a special-purpose reviewer should audit the
   work.
+
+- 2026-11-08: No wash outside RTD's district: the basemap is the same
+  everywhere inside the map's rectangular pan bounds. The wash hid towns,
+  roads and terrain past the boundary and gave the map a ragged edge; Chris:
+  "there's no reason to limit it to the RTD service area and it looks weird."
+  The page no longer loads the boundary layer.
 
 ## Sources
 

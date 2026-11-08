@@ -17,7 +17,11 @@ const hubOf = async () => {
   const count = (f) => (f.properties.lines || '').split(' ').length;
   return stations.features.filter((f) => f.properties.served).reduce((a, b) => (count(b) > count(a) ? b : a)).geometry.coordinates;
 };
-const noisy = (m) => m.type === 'error' || m.type === 'warning';
+// Chromium's software GL logs its own performance notes ("GL Driver Message
+// ... GPU stall due to ReadPixels") when anything reads pixels back; they
+// come from the test's renderer, not the site.
+const driver = (m) => /GL Driver Message/.test(m.text);
+const noisy = (m) => (m.type === 'error' || m.type === 'warning') && !driver(m);
 const styleErrors = (style) => validateStyleMin(style).map((e) => e.message);
 
 test('no console errors or warnings, failed requests or style errors at 9 to 14', async ({ mapPage }, testInfo) => {

@@ -18,7 +18,6 @@ const light = {
 
   // Ground
   land: '#f4f5f6',
-  wash: '#e3e7ea', // outside RTD's district
   water: '#bcd5e4',
   park: '#e0eadb',
   wood: '#e6ece2',
@@ -84,7 +83,6 @@ const dark = {
   scheme: 'dark',
 
   land: '#161b21',
-  wash: '#0d1114',
   water: '#1c3345',
   park: '#1d2b22',
   wood: '#1a261f',
