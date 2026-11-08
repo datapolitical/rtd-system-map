@@ -481,6 +481,30 @@ Times are Denver's, whatever time zone the device is set to. Representative
 dates come from the feed's calendar (see Rule 1). Live and a picked time use
 the real calendar for that date, exceptions included.
 
+**How this compares with RTD's and DRCOG's measures.** The map's measure is
+for riders: how often one line comes at one time of day. It is not RTD's
+service standard, and the README says so where RTD's staff will look first.
+
+- RTD's *Transit Service Policies & Standards* (revised July 22, 2016, the
+  latest version found, see Sources) sets minimum frequencies by service type
+  and time of day, "by corridor (multiple routes sharing a segment)" (Table
+  1). Its weekday midday is 9am to 3pm, the same window as ours; its peaks
+  are 6 to 9am and 3 to 6pm (our "Rush hours only" test uses 3 to 8pm). Rail
+  and BRT: every 15 min weekdays 6am to 6pm, every 30 weekday evenings and
+  Saturday, every 60 on Sunday and late at night. Local buses: every 30 at
+  peaks; every 30 or 60 at midday, by ridership; every 60 evenings and
+  weekends. It defines no "frequent" label. Section 2.3.4 says RTD schedules
+  on the clock (every 60, 30, 15, 10, 7.5 or 5 min), so our tier breaks at
+  15, 30 and 60 sit on RTD's own scheduled frequencies.
+- DRCOG's Metro Vision plan calls a stop high-frequency when it has 96 or
+  more departures on a typical weekday (an average of every 15 min across
+  the day), counted at the stop.
+
+Where the map differs: it measures each route alone (combined frequency on
+shared streets is open, see "Corridors by combined frequency are not
+built"), and it shows one window, so all-day standards and the map can
+disagree about the same route.
+
 | Tier | In the window | How it's drawn |
 |---|---|---|
 | Frequent | every 15 min or better | bold, full ink |
@@ -3009,6 +3033,10 @@ marks that overlap, a letter missing) are the next thing to add there.
   unsettled "Alert noise" question.
 - 2026-11-07: No haptics. Safari has no vibration API, and the switch trick
   that produced one is a hack that newer iOS reportedly closed.
+- 2026-11-08: The README and "Frequency and schedules" say how the map's
+  frequency measure differs from RTD's 2016 service standards and DRCOG's
+  high-frequency stops, for RTD staff reading the code. The measure itself
+  is unchanged.
 
 ## Sources
 
@@ -3023,6 +3051,10 @@ marks that overlap, a letter missing) are the next thing to add there.
   [PDF](https://repository.essex.ac.uk/17237/1/1-s2.0-S1071581916300751-main.pdf)
 - Hochmair, Vienna route-choice experiment.
   [Summary](https://nextcity.org/urbanist-news/frequency-and-real-time-info-help-transit-riders-most)
+- RTD (2016). Transit Service Policies & Standards, revised July 22, 2016.
+  [PDF](https://cdn.rtd-denver.com/image/upload/v1707247621/service-standards-7-2016_rg0fun.pdf)
+- DRCOG (2022). Denver Region Data Brief: the COVID-19 pandemic's effect on
+  high-frequency transit. [PDF](https://drcog.org/sites/default/files/acc/RPD-FL-DATABRIEFFREQUENCY-EN-ACC-24-06-14-V1.pdf)
 - Walker, J., frequent network maps.
   [Coverage](https://www.geekwire.com/2012/seattle-redesigns-public-transit-maps-emphasis-frequency/)
 - Wessel, N., why trip planners aren't enough.
