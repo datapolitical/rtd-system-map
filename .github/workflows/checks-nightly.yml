@@ -3,9 +3,10 @@
 # issue labelled "found by checks" with its findings and a link to the run.
 # When a spec passes again, its issue is commented on and closed. The checks
 # read the site's own data (CHECK_URL), so there is no build or server here.
-# visual.spec.mjs skips on Linux until Linux baselines are committed, and
-# @deep stays out for now (DESIGN.md, "Design review rubric"; this file's
-# sibling checks-preview.yml runs the same set on every branch preview).
+# visual.spec.mjs compares against the -linux.png baselines in the tree, which
+# were captured on this runner; @deep stays out for now (DESIGN.md, "Design
+# review rubric"; this file's sibling checks-preview.yml runs the same set on
+# every branch preview).
 name: Checks (nightly)
 
 on:
@@ -38,19 +39,10 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run the fast checks against the live site
-        if: github.ref_name == 'main'
         env:
           CHECK_URL: https://rtd-system-map.pages.dev
           CHECK_JSON: qa/report/results.json
         run: npm run check
-      # TEMPORARY (issue #31 diagnosis): a branch dispatch runs the letters
-      # and visual checks instead of the whole set. Removed once the failure is
-      # understood.
-      - name: Diagnose the letters check (temporary)
-        if: github.ref_name != 'main'
-        env:
-          CHECK_URL: https://rtd-system-map.pages.dev
-        run: npx playwright test -c qa/playwright.config.mjs letters visual --reporter=list
       - name: Upload the report and captures
         if: always()
         uses: actions/upload-artifact@v7

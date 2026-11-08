@@ -30,6 +30,14 @@ colors from the style's own expressions), `detect.mjs` judges, `views.mjs`
 makes seeded views and tiles. Nothing there names a line, station, color or
 place. They are not unit tests: `npm test` stays pure Node.
 
+A spec reads a view through `mapPage.jump`, which moves the map and then
+waits for the map's rest: an `idle` (every source parsed, everything drawn),
+then the letters the page places once it is, up to three rounds, stopping
+when a round adds none. Read on a fixed quiet spell instead, a slow renderer
+is read mid-work: on GitHub's runner the map drew a dozen frames after a
+teleport without ever going idle, so letters arrived after the view was read
+(#31).
+
 ## Running
 
 1. `npm run build` once, so `public/data/` exists.

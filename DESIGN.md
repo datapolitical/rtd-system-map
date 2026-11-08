@@ -3012,10 +3012,12 @@ marks that overlap, a letter missing) are the next thing to add there.
   baseline writes one from its run, says so in the job summary and passes
   (a red run that only said "no baseline yet" opened #32), and a Checks
   (baselines) workflow re-captures and commits them on request. A view is
-  read at the map's own idle, not after a quiet spell: the page places the
-  edge letters on idle, so a view read 700 ms after the last frame could
-  miss them and report a line with no letter on a map that was about to
-  draw one (#31).
+  read at the map's own rest, not after a quiet spell: the page places the
+  edge letters on idle, and after a teleport MapLibre can draw a dozen
+  frames on a slow renderer without ever going idle, so the check forces a
+  frame and waits for the letters to stop arriving (a quiet spell, or one
+  idle, read the view mid-work and reported a line with no letter on a map
+  that was about to draw one, #31).
 
 - 2026-11-08: A design review rubric ("Design review rubric"): ten rows,
   each one of this document's principles, scored 0 to 3 from fixed phone
