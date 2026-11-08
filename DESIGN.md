@@ -1261,10 +1261,13 @@ reader could see "0 0L 83 +" and not know what it was telling them.
   apart; and on the dark map a frequent pill and an every-30 pill were both
   near white, so the fill said nothing.
 
-The rule from here: the map starts bare, and a number is added back only
-for a question a reader has at that zoom that nothing else on the map
-answers, placed clear of every line, with the screenshot that shows the
-need. Where routes share a street the build still reads the street as one
+Route numbers belong on the map; they were pulled only because none of
+the three attempts was good enough (Chris, 2026-11-08: "I want route numbers
+on there, I just we hadn't figured out how to do it, so it didn't make sense
+to put them on until we had a good solution"). Any new scheme must avoid
+each failure above: every route named, not whichever fit; never over a
+crossing line; a one-way pair named as one street; and fills that still
+differ in dark mode. Where routes share a street the build still reads the street as one
 (`scripts/lib/busnames.mjs`: routes within 35 m and 25 degrees of each other
 are one run, named strongest tier first, a route's per-tier stretches joined
 end to end, neighbouring stretches with the same names merged), so a shared
@@ -1300,9 +1303,9 @@ together, then the third:
    one-way stretches (the build already measures departures each way), none
    on two-way streets, so an arrow means "one way" and a remaining loop
    reads as a circuit.
-3. *Route numbers where routes part or turn.* Numbers stay off the map
-   (below) except where a junction's branches can't be told apart
-   otherwise, clear of every line, with the screenshot showing the need.
+3. *Route numbers*, which belong on the map (see "Numbers" below): named
+   where routes part or turn first, so a junction's branches can be told
+   apart, then along every street.
 4. *Tap to trace a route*: the open route's whole path with its arrows, the
    rest faded. Cheap; helps only after a tap.
 5. Per-route color or pattern: rejected, as before (color is rail, dashes
@@ -2984,6 +2987,11 @@ marks that overlap, a letter missing) are the next thing to add there.
   geometry"): generalize interchanges, ramps, divided roads and terminal
   loops, and arrows only on one-way stretches; route numbers at partings
   after that. Chris approved the ranking: "Yes, make that your plan".
+- 2026-11-08: Route numbers belong on the map; they were off only for want
+  of a good scheme. Chris: "I want route numbers on there, I just we hadn't
+  figured out how to do it, so it didn't make sense to put them on until we
+  had a good solution." "Numbers" now states the goal and what a scheme must
+  avoid, in place of "the map starts bare".
 
 ## Sources
 
