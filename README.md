@@ -66,4 +66,16 @@ DESIGN.md says the data is public and keyless, but it does not record
 licence terms for any of these sources. Check each provider's terms before
 reusing the data.
 
-Not affiliated with RTD. Data from RTD's public map and GTFS feeds.
+## Licence
+
+The code is under the [Apache License 2.0](LICENSE), copyright 2026 Chris
+Nicholson (see [NOTICE](NOTICE)). The licence covers this repository's code
+and docs. It does not cover RTD's data, which the build downloads and never
+commits, or RTD's name and marks, which belong to RTD. The QA baseline
+screenshots in `qa/checks/` show RTD's data on OpenFreeMap's basemap
+(© OpenMapTiles, © OpenStreetMap contributors).
+
+This project is unofficial and not affiliated with RTD.
+
+Changes you send are taken under the same licence (section 5 of the Apache
+License).

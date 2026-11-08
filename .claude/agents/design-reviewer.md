@@ -26,16 +26,16 @@ them.
    labeling rules come from", "Hierarchy", "Dark mode", "Quality floor",
    and "Design review rubric", which is your scoring scale and pass rule.
 2. scorecards.md: the previous card for this area. You score against it.
-3. The reference poster in /Users/chris/code/rtd-references/
+3. The reference poster in ../rtd-references/, next to this repo
    (poster-overview.png, poster-downtown-inset.png, poster-central-east.png;
    poster-full.png at 300 dpi if you need to crop). It is the hand-drawn
    Metro Denver Transit Map: the bar for "Gorgeous" and "Drawn on purpose".
-   Never copy it into the repo.
+   It is RTD's, kept outside the repo on purpose: never copy it in.
 
 ## How to look
 
-Take your own captures, headless, with Playwright from
-/Users/chris/.nvm/versions/node/v22.16.0/lib/node_modules/playwright:
+Take your own captures, headless, with the global Playwright
+install (`$(npm root -g)/playwright`):
 Chromium only (`chromium.launch` with args `--use-gl=angle
 --use-angle=swiftshader --enable-unsafe-swiftshader`), never WebKit or
 Firefox: WebKit took 8 GB and crashed this 16 GB Mac. Use
@@ -45,8 +45,7 @@ map as `window.__map` by routing `**/js/main.js` and inserting
 `localStorage.live = 'off'` unless the change is about Live. Wait for
 `map.loaded()` and a 3 s settle before each capture. One browser at a time;
 close it when done. Put captures and scripts in
-/Users/chris/code/rtd-system-map/qa/.scratch/review-YYYY-MM-DD-<topic>/
-(gitignored), never in /tmp.
+qa/.scratch/review-YYYY-MM-DD-<topic>/ in this repo (gitignored), never in /tmp.
 
 The fixed views (DESIGN.md "Design review rubric"), both themes, the
 version under review and, if available, the previous one: metro 10.5 over
