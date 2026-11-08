@@ -55,12 +55,20 @@ we are" section from them (closed issues show as done).
 ## Status page
 
 `node status/server.mjs [port]` (default 8795) serves a page that reads this
-repo's milestones and issues through `gh`, and lists the agents, captures and
-commits of every checkout of the repo on that machine. Issues labeled
-`in progress` show under "In progress", and issues labeled `needs Chris`
-under "Waiting on you", each with the first line of its newest comment.
+repo's milestones and issues through `gh`. Issues labeled `in progress` show
+under "In progress", and issues labeled `needs Chris` under "Waiting on you",
+each with the first line of its newest comment. For every checkout of the
+repo on that machine it also lists the Claude Code sessions and subagents
+working there (read from their transcripts in `~/.claude/projects`), agents'
+progress files, the newest captures in `qa/.scratch/`, and recent commits.
 
-While an agent works, it keeps a progress file at `.agents/<short-name>.json`
+When you read Claude plan usage, add a reading to `status/usage.json`, which
+git ignores: `{"plan": "Pro", "snapshots": [{"t": "<ISO time>", "w":
+[{"label": "Weekly · all models", "pct": 86, "resets": "<ISO time>"}],
+"note": "optional"}]}`. The page charts the readings. They never go in a
+commit.
+
+Any agent can also keep a progress file at `.agents/<short-name>.json`
 in the root of its worktree (ignored by git) and rewrites it whenever its
 step changes:
 

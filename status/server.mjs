@@ -1,7 +1,7 @@
 // Work status page for this repo. A viewer: the plan, what's in progress and
-// what's waiting come from the repo's GitHub milestones and issues; local
-// agent work comes from the progress files agents keep in .agents/ (see
-// CLAUDE.md, "Status page"). No dependencies; needs git and a signed-in gh.
+// what's waiting come from the repo's GitHub milestones and issues; local work
+// comes from Claude Code's transcripts and from the progress files agents keep
+// in .agents/ (see CLAUDE.md, "Status page"). No dependencies; needs git and a signed-in gh.
 //   node status/server.mjs [port]      (PORT, WAIT_LABEL and GH also work)
 import http from 'node:http';
 import fs from 'node:fs';
@@ -15,6 +15,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WAIT = process.env.WAIT_LABEL || 'needs Chris';
 // Read once: other sessions may switch this checkout to a branch without it.
 const PAGE = fs.readFileSync(path.join(ROOT, 'status/index.html'));
+// Claude plan usage readings, kept on this machine only (ignored by git).
+const USAGE = process.env.USAGE_FILE || path.join(ROOT, 'status/usage.json');
 const THUMBS = path.join(os.tmpdir(), 'repo-status-thumbs');
 const SIPS = fs.existsSync('/usr/bin/sips');
 const GH = process.env.GH || ['/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh'].find((p) => fs.existsSync(p)) || 'gh';
@@ -68,6 +70,86 @@ function captures() {
   };
   return scratchDirs().flatMap((d) => walk(d, [], 0)).map((p) => ({ p, m: safe(() => fs.statSync(p).mtimeMs, 0) }))
     .sort((a, b) => b.m - a.m).slice(0, 24).map(({ p, m }) => ({ p, name: p.split('/qa/.scratch/')[1], m }));
+}
+
+// Claude Code sessions and subagents working in any checkout of this repo,
+// read from Claude's own transcripts: ~/.claude/projects/*/<session>.jsonl and
+// <session>/subagents/agent-*.jsonl. A transcript counts when its working
+// directory (each line's cwd) is inside one of the repo's checkouts.
+const CLAUDE = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+function readTail(p, size, max = 4e6) {
+  const n = Math.min(size, max), buf = Buffer.alloc(n), fd = fs.openSync(p, 'r');
+  try { fs.readSync(fd, buf, 0, n, size - n); } finally { fs.closeSync(fd); }
+  return buf.toString('utf8');
+}
+const parsed = new Map();
+function parseTranscript(p, st, dirs) {
+  const key = `${st.mtimeMs}:${st.size}`;
+  if (parsed.get(p)?.key === key) return parsed.get(p).v;
+  const events = [], tools = {}, calls = new Map();
+  let title = '', done = false, model = '', effort = '', type = '', first = '', last = null, mine = false, branch = '', cwd = '';
+  for (const line of safe(() => readTail(p, st.size), '').split('\n')) {
+    const j = line.startsWith('{') && safe(() => JSON.parse(line));
+    if (!j) continue;
+    if (j.cwd && dirs.some((d) => j.cwd === d || j.cwd.startsWith(d + '/'))) { mine = true; cwd = j.cwd; branch = j.gitBranch || branch; }
+    if (!j.message) continue;
+    first ||= j.timestamp;
+    const c = j.message.content;
+    if (j.type === 'user' && !title) {
+      const t = (typeof c === 'string' ? c : c?.find?.((x) => x.type === 'text')?.text || '').trim();
+      if (t && !/^(<|\[|Base directory for this skill|Caveat:)/.test(t)) title = t.split('\n')[0];
+    }
+    if (j.type !== 'assistant' || !Array.isArray(c)) continue;
+    model = j.message.model || model; effort = j.effort || effort; type = j.attributionAgent || type;
+    const u = j.message.usage;
+    if (u && j.requestId) { calls.set(j.requestId, u); last = u; }
+    for (const x of c) {
+      if (x.type === 'text' && x.text.trim()) events.push({ t: j.timestamp, kind: 'note', s: x.text.trim() });
+      if (x.type === 'tool_use') {
+        if (x.name === 'SubagentHandback') done = true;
+        tools[x.name] = (tools[x.name] || 0) + 1;
+        const i = x.input || {};
+        events.push({ t: j.timestamp, kind: 'tool', s: `${x.name}: ${i.description || i.file_path || i.pattern || (i.command || '').slice(0, 120)}` });
+      }
+    }
+  }
+  let v = null;
+  if (mine && events.length) {
+    let out = 0, think = 0, fresh = 0, cached = 0, units = 0;
+    // Cost-weighted tokens in the ratios of the model's prices (input 1, cache write
+    // 1.25, cache read 0.1, output 5); the page turns them into a share of the
+    // weekly limit with the ratio kept in the usage file.
+    for (const u of calls.values()) units += (u.input_tokens || 0) + 1.25 * (u.cache_creation_input_tokens || 0) + 0.1 * (u.cache_read_input_tokens || 0) + 5 * (u.output_tokens || 0);
+    for (const u of calls.values()) { out += u.output_tokens || 0; think += u.output_tokens_details?.thinking_tokens || 0; fresh += (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0); cached += u.cache_read_input_tokens || 0; }
+    v = { units: Math.round(units), transcriptMB: Math.round(st.size / 1e5) / 10, title: title.slice(0, 160), done, model, effort, type, branch, cwd, started: first, calls: calls.size, out, think, fresh, cached,
+      context: last ? (last.input_tokens || 0) + (last.cache_read_input_tokens || 0) + (last.cache_creation_input_tokens || 0) : 0,
+      tools: Object.entries(tools).sort((a, b) => b[1] - a[1]), steps: events.length, events: events.slice(-14).reverse() };
+  }
+  parsed.set(p, { key, v });
+  return v;
+}
+const memo = { at: 0, v: [] };
+function sessions() {
+  if (Date.now() - memo.at < 10000) return memo.v;
+  const wts = worktrees(), dirs = wts.map((w) => w.dir), out = [], root = path.join(CLAUDE, 'projects');
+  for (const proj of safe(() => fs.readdirSync(root), [])) {
+    const base = path.join(root, proj);
+    const files = safe(() => fs.readdirSync(base), []).flatMap((f) => f.endsWith('.jsonl') ? [[path.join(base, f), false]]
+      : safe(() => fs.readdirSync(path.join(base, f, 'subagents')), []).filter((s) => s.endsWith('.jsonl')).map((s) => [path.join(base, f, 'subagents', s), true]));
+    for (const [p, sub] of files) {
+      const st = safe(() => fs.statSync(p));
+      if (!st || Date.now() - st.mtimeMs > 6 * 3600e3) continue;
+      const v = parseTranscript(p, st, dirs);
+      if (!v) continue;
+      // A subagent's .meta.json names it and says whether it finished.
+      const meta = sub ? safe(() => JSON.parse(fs.readFileSync(p.replace(/\.jsonl$/, '.meta.json'), 'utf8')), {}) : {};
+      out.push({ ...v, title: meta.description || v.title, type: meta.agentType || v.type, done: meta.finished || v.done,
+        branch: wts.find((w) => v.cwd === w.dir || v.cwd.startsWith(w.dir + '/'))?.branch || v.branch,
+        kind: sub ? 'subagent' : 'session', state: meta.finished || v.done ? 'finished' : Date.now() - st.mtimeMs > 10 * 60e3 ? 'quiet' : 'working', updated: st.mtime });
+    }
+  }
+  memo.at = Date.now(); memo.v = out.sort((a, b) => new Date(b.updated) - new Date(a.updated));
+  return memo.v;
 }
 
 const commits = () => worktrees().map((w) => ({
@@ -125,7 +207,7 @@ http.createServer((req, res) => {
     if (Date.now() - gh.at > 60000) refresh();
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     const { busy, ...g } = gh;
-    return res.end(JSON.stringify({ now: new Date(), repo: OWNER ? `${OWNER}/${NAME}` : '', waitLabel: WAIT, ...g, agents: agents(), captures: captures(), commits: commits() }));
+    return res.end(JSON.stringify({ now: new Date(), repo: OWNER ? `${OWNER}/${NAME}` : '', waitLabel: WAIT, ...g, usage: safe(() => JSON.parse(fs.readFileSync(USAGE, 'utf8')), null), sessions: sessions(), agents: agents(), captures: captures(), commits: commits() }));
   }
   if (u.pathname === '/img' || u.pathname === '/thumb') {
     const p = path.resolve(u.searchParams.get('p') || '');
