@@ -947,6 +947,107 @@ network…" line at once; transit lines draw as soon as they arrive, even
 before every basemap tile is in. The attribution is a small "i" button on
 phones, not a full-width bar.
 
+## Installed on a phone
+
+The site is a web page and stays one. On a phone it should be
+indistinguishable from an app from the second launch onward, and everything
+here is reachable from a URL: no app store, no native build, no Mac.
+
+### Added to the Home Screen
+
+From iOS 26, every site added to the Home Screen opens as a web app, with
+Safari's chrome gone and no manifest required. The site ships a manifest
+anyway, because it decides the icon and the name instead of leaving them to
+the browser, and because Android and older iPhones still need one.
+
+- `display: standalone`, `start_url` the map, and `background_color` the
+  map's own background, so the launch shows one color instead of white and
+  then gray.
+- An `apple-touch-icon` beside the manifest's icons, because it is how iOS
+  picks an icon rather than photographing the page.
+- `theme-color` for each color scheme, and a translucent status bar, so the
+  map runs under it. The controls already sit inside `env(safe-area-inset-*)`.
+
+Installing is worth asking for, because only an installed web app keeps its
+data. Safari deletes a site's service worker, caches, and databases after
+seven days of browser use without a visit to the site. A Home Screen web app
+is not part of Safari: it counts its own days, and they reset whenever it is
+opened. The offline map under "Quality floor" is dependable only once
+installed.
+
+iOS gives a page no way to offer the install. So the page never asks on a
+first visit; on a later visit it offers once, in one line, and never again
+once dismissed.
+
+### Nothing that reads as a browser
+
+Each of these is a tell that the thing in your hand is a web page, and each
+one goes:
+
+- No rubber-band bounce and no pull-to-refresh: `overscroll-behavior: none`
+  (iOS 16).
+- No gray flash on every tap: `-webkit-tap-highlight-color: transparent`.
+- No long-press callout or selection on the controls, while panel text stays
+  selectable, because stop numbers and addresses get copied.
+- No wait for a second tap: `touch-action: manipulation` on buttons.
+- No page zoom when the search field takes focus: inputs are at least 16px.
+- Heights in `dvh` rather than `vh` (iOS 15.4), so nothing shifts as the
+  browser's toolbars collapse.
+
+Page zoom itself stays. `user-scalable=no` would remove the last tell and
+break WCAG AA with it.
+
+### Back closes what's open
+
+The back gesture is the test of whether this reads as an app. If opening a
+station and swiping back leaves the site, it is a web page; if it closes the
+station, it is an app. An installed web app has no toolbar but keeps the
+gesture, so this matters most where the chrome is gone.
+
+Every opened thing pushes a history entry, and `popstate` closes it. What
+gets pushed is the state "Shareable links" already defines (`#route=15`,
+`#station=…`, `#here=…`), so a shared link and the back gesture are one
+mechanism instead of two. The page owns the whole hash, the map view
+included, which means giving up MapLibre's own `hash` option; it only ever
+replaced history entries, so panning never filled the back stack and never
+will.
+
+### It follows the thumb
+
+The sheet tracks the finger, keeps its velocity when released, snaps to peek,
+half, or full, and resists past the ends. A sheet that jumps between heights
+is the loudest tell left once the ones above are gone. Content changing
+inside the sheet (a station, then one of its routes) uses a view transition
+where there is one (iOS 18), and nothing animates for a reader who prefers
+reduced motion.
+
+### While you're holding it
+
+- **The screen stays awake while Live is on,** and only then, and only while
+  the tab is visible, alongside the live updates that already pause when it
+  isn't. A rider watching the next train should not have the screen dim at
+  them. Screen Wake Lock works in Home Screen web apps from iOS 18.4.
+- **Which way you're facing.** Where the device reports a heading, the locate
+  dot gets a cone for it, so coming up out of a station tells you which way
+  you're pointed — the "sense of place" in the objective, at street level. It
+  is an enhancement and never a dependency: heading asks for a permission of
+  its own, iOS support is partial, and the sensors vary.
+- **The keyboard never covers the sheet.** The sheet is held above it using
+  the visual viewport, not the layout viewport.
+
+### What a web app cannot do here
+
+Worth stating so that no plan rests on it: no widget, no Live Activity, no
+Siri, no background location, and no work in the background at all, since
+Background Sync has never shipped in Safari. The Home Screen icon has no
+long-press actions, because manifest shortcuts are not supported on iOS. And
+there is no haptic feedback: Safari has no vibration API, and the switch
+trick that produced one is a hack that newer iOS reportedly closed.
+
+Push notifications are the exception: they do work, for installed web apps,
+from iOS 16.4, with badging and without an Apple Developer membership. They
+are deferred, not ruled out. See "Open questions".
+
 ## Voice
 
 - Name things the way riders do: "Every 10 min", "Rush hours only", "No
@@ -983,6 +1084,9 @@ phones, not a full-width bar.
   map data, and the schedule, so the full map, other times, and scheduled
   departures work with no signal (underground at Union Station, say). Live
   says it's offline. Basemap tiles already seen are kept up to a size cap.
+  This is dependable only once the site is on the Home Screen, where
+  Safari's seven-day deletion of a site's storage does not apply (see
+  "Installed on a phone").
 - **Accessibility:** WCAG AA contrast for text, visible keyboard focus, every
   action reachable by keyboard, motion reduced when the user prefers it, and
   nothing identified by color alone.
@@ -1206,6 +1310,15 @@ RTD GTFS ──────────────────────┼�
 - **Remembering Live:** returning visitors get Live as they left it. If that
   surprises people in testing (opening at night to a mostly faint map), open
   on the full map and remember only where they were.
+- **Push notifications (deferred):** RTD's alerts could be pushed to
+  installed web apps (iOS 16.4 and later), with a badge count, and with no
+  Apple Developer membership. Deferred until after task testing, because it
+  is the one feature that needs what "Architecture" says the site does not
+  have: stored per-user subscriptions, something that sends, and a privacy
+  policy. It also rests on "Alert noise", which is unsettled, and push is
+  the least forgiving place to get that wrong. If it is adopted, scope it to
+  the lines someone has chosen rather than the whole network, and revise
+  "Architecture" in the same change.
 - **Points of interest for V3:** which database, where it lives, how it's
   updated, and whether it can be published.
 - **Name and domain.**
@@ -1319,6 +1432,34 @@ RTD GTFS ──────────────────────┼�
   headsign without the line's name) rather than the station's full name, so
   every sign fits on a phone ("Jeffco", not "Jefferson CO
   Government-Golden"). Phones open on the stations and the signs together.
+
+- 2026-11-07: No native iOS app. A native build needs a Mac, 99 USD a year,
+  and App Review for every change, and it trades away the shareable links the
+  secondary audience needs. WebKit already draws the whole network in 1.6 to
+  2.3 seconds at phone size, so the engine is not the problem: what is missing
+  on a phone is the interaction layer and Live, not the packaging.
+- 2026-11-07: On a phone the site is an installed web app (see "Installed on a
+  phone"): manifest, icons, theme color, and the service worker from "Quality
+  floor". Installed rather than bookmarked, because Safari deletes a site's
+  storage after seven days without a visit while a Home Screen web app's
+  storage survives, and that is what makes the offline map dependable.
+- 2026-11-07: The browser's tells are removed (bounce, pull-to-refresh, tap
+  flash, long-press callout, double-tap delay, zoom on focus), but page zoom
+  stays, because `user-scalable=no` would take WCAG AA with it.
+- 2026-11-07: Back and the edge swipe close what's open, pushing the same hash
+  state that "Shareable links" defines, so a shared link and the back gesture
+  are one mechanism. The page takes the hash over from MapLibre, which only
+  ever replaced history entries and so never filled the back stack.
+- 2026-11-07: The screen stays awake while Live is on and the tab is visible;
+  the locate dot gets a heading cone where the device reports one, as an
+  enhancement; the visual viewport holds the sheet above the keyboard.
+- 2026-11-07: Push notifications deferred until after task testing. They work
+  on installed web apps from iOS 16.4 without an Apple Developer membership,
+  but they need stored per-user subscriptions, a sender, and a privacy policy,
+  none of which the architecture has, and they rest on the unsettled "Alert
+  noise" question.
+- 2026-11-07: No haptics. Safari has no vibration API, and the switch trick
+  that produced one is a hack that newer iOS reportedly closed.
 
 ## Sources
 

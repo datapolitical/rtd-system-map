@@ -1,0 +1,250 @@
+Task 3 drills — each one damages a source, then builds in ../rtd-drill.
+
+## truncated-zip
+
+The GTFS zip arrives cut short (60% of its bytes).
+
+```
+cd ../rtd-drill && DRILL=truncated-zip node --import "$QA/drills/mock-fetch.mjs" scripts/build-data.mjs
+```
+
+exit code: 1
+public/data changed: no (e163c645ee99 -> e163c645ee99)
+
+```
+[drill] truncated-zip
+Reading RTD's map and downloading GTFS…
+
+Build failed; public/data was left as it was.
+Error: invalid zip data
+    at unzipSync (file:///home/chris/code/rtd-system-map/node_modules/fflate/esm/index.mjs:2675:13)
+    at loadGtfs (file:///home/chris/code/rtd-drill/scripts/lib/gtfs.mjs:20:18)
+    at async Promise.all (index 1)
+    at async main (file:///home/chris/code/rtd-drill/scripts/build-data.mjs:95:26)
+```
+
+## stop-times-missing
+
+The GTFS zip has no stop_times.txt.
+
+```
+cd ../rtd-drill && DRILL=stop-times-missing node --import "$QA/drills/mock-fetch.mjs" scripts/build-data.mjs
+```
+
+exit code: 1
+public/data changed: no (e163c645ee99 -> e163c645ee99)
+
+```
+[drill] stop-times-missing
+Reading RTD's map and downloading GTFS…
+
+Build failed; public/data was left as it was.
+Error: GTFS feed has no stop_times.txt
+    at loadGtfs (file:///home/chris/code/rtd-drill/scripts/lib/gtfs.mjs:24:28)
+    at async Promise.all (index 1)
+    at async main (file:///home/chris/code/rtd-drill/scripts/build-data.mjs:95:26)
+```
+
+## shapes-missing
+
+The GTFS zip has no shapes.txt.
+
+```
+cd ../rtd-drill && DRILL=shapes-missing node --import "$QA/drills/mock-fetch.mjs" scripts/build-data.mjs
+```
+
+exit code: 0
+public/data changed: YES (e163c645ee99 -> c0c62f4b93b5)
+
+```
+[drill] shapes-missing
+Reading RTD's map and downloading GTFS…
+  web map: System Map v2026 (941d6614b0cf4ece851cad9960e295e7), 11 layers
+Downloading layers…
+  stations: 77 from LightrailStations
+  facilities: 104 from Facilities where ((CLASS <> 'STN') AND (CLASS <> 'DWT')) OR (CLASS = 'BUS' OR PID = 14 OR PID = 23 OR PID = 31 OR PID = 38 OR PID = 39 OR PID = 53 OR PID = 57 OR PID = 62 OR PID = 64 OR PID = 88 OR PID = 89 OR PID = 95 OR PID = 118 OR PID = 184 OR PID = 220 OR PID = 221 OR PID = 222 OR PID = 226 OR PID = 228 OR PID = 229 OR PID = 250 OR PID = 256)
+  stops: 7555 from BusStops_Active
+  flexride: 13 from FlexRide
+  routes: 131 from BusRoutes
+  boundary: 1 from RTDBoundary where (BND <> 'IN')
+Measuring frequency…
+  typical weekday: 2026-11-02 (MT, WK)
+  typical saturday: 2026-11-07 (SA)
+  typical sunday: 2026-11-08 (SU)
+  rail drawn from GTFS shapes: none
+
+Wrote public/data in 5.4 s
+  77 stations, 104 facilities, 7555 stops, 13 flexride, 117 routes, 1 boundary, 9 rail, 67 stations_served
+  tiers: frequent 28, every30 38, hourly 37, peak 9, infrequent 5
+  13 FlexRide outlines in the route layer left to the FlexRide zones
+  stations with no trains this week: 16th Street / California Station, Colfax at Auraria Station, 16th Street / Stout Station, Theatre District / Convention Center, 18th St / California Station, 25th St / Welton Station, 27th St / Welton Station, 30th / Downing Station, 18th St / Stout Station, 20th St / Welton Station
+  not drawn, one-way trains on other lines' track: D
+  GTFS routes not on RTD's map: 225D, 225T, ATA
+```
+
+## rail-color-blank
+
+routes.txt has an empty route_color for every rail line.
+
+```
+cd ../rtd-drill && DRILL=rail-color-blank node --import "$QA/drills/mock-fetch.mjs" scripts/build-data.mjs
+```
+
+exit code: 1
+public/data changed: no (c0c62f4b93b5 -> c0c62f4b93b5)
+
+```
+Reading RTD's map and downloading GTFS…
+  web map: System Map v2026 (941d6614b0cf4ece851cad9960e295e7), 11 layers
+Downloading layers…
+  stations: 77 from LightrailStations
+  facilities: 104 from Facilities where ((CLASS <> 'STN') AND (CLASS <> 'DWT')) OR (CLASS = 'BUS' OR PID = 14 OR PID = 23 OR PID = 31 OR PID = 38 OR PID = 39 OR PID = 53 OR PID = 57 OR PID = 62 OR PID = 64 OR PID = 88 OR PID = 89 OR PID = 95 OR PID = 118 OR PID = 184 OR PID = 220 OR PID = 221 OR PID = 222 OR PID = 226 OR PID = 228 OR PID = 229 OR PID = 250 OR PID = 256)
+  flexride: 13 from FlexRide
+  boundary: 1 from RTDBoundary where (BND <> 'IN')
+  stops: 7555 from BusStops_Active
+  routes: 131 from BusRoutes
+Measuring frequency…
+  typical weekday: 2026-11-02 (MT, WK)
+  typical saturday: 2026-11-07 (SA)
+  typical sunday: 2026-11-08 (SU)
+  rail drawn from GTFS shapes: A, B, C, D, E, G, N, R, T, W
+
+Build checks failed; public/data was left as it was:
+  - Rail line A has no color in GTFS
+  - Rail line B has no color in GTFS
+  - Rail line C has no color in GTFS
+  - Rail line E has no color in GTFS
+  - Rail line G has no color in GTFS
+  - Rail line N has no color in GTFS
+  - Rail line R has no color in GTFS
+  - Rail line T has no color in GTFS
+  - Rail line W has no color in GTFS
+```
+
+## half-routes-removed
+
+routes.txt keeps every other route.
+
+```
+cd ../rtd-drill && DRILL=half-routes-removed node --import "$QA/drills/mock-fetch.mjs" scripts/build-data.mjs
+```
+
+exit code: 1
+public/data changed: no (c0c62f4b93b5 -> c0c62f4b93b5)
+
+```
+[drill] half-routes-removed
+Reading RTD's map and downloading GTFS…
+  web map: System Map v2026 (941d6614b0cf4ece851cad9960e295e7), 11 layers
+Downloading layers…
+  stations: 77 from LightrailStations
+  flexride: 13 from FlexRide
+  facilities: 104 from Facilities where ((CLASS <> 'STN') AND (CLASS <> 'DWT')) OR (CLASS = 'BUS' OR PID = 14 OR PID = 23 OR PID = 31 OR PID = 38 OR PID = 39 OR PID = 53 OR PID = 57 OR PID = 62 OR PID = 64 OR PID = 88 OR PID = 89 OR PID = 95 OR PID = 118 OR PID = 184 OR PID = 220 OR PID = 221 OR PID = 222 OR PID = 226 OR PID = 228 OR PID = 229 OR PID = 250 OR PID = 256)
+  boundary: 1 from RTDBoundary where (BND <> 'IN')
+  stops: 7555 from BusStops_Active
+  routes: 131 from BusRoutes
+Measuring frequency…
+  typical weekday: 2026-11-02 (MT, WK)
+  typical saturday: 2026-11-07 (SA)
+  typical sunday: 2026-11-08 (SU)
+  rail drawn from GTFS shapes: B, C, E, W
+
+Build checks failed; public/data was left as it was:
+  - rail dropped from 9 to 4
+  - stations_served dropped from 67 to 40
+  - Only 52% of map routes match GTFS (unmatched: 0B, 1, 100, 104L, 112, 120, 120X, 130, 135, 14, 15, 15L, 169, 17, 20, 205, 208, 22, 23, 28, 3, 31, 323, 326, 35, 37, 3L, 40, 42, 44, 46, 483, 51, 520, 59, 65, 7, 73, 8, 88, 9, 93L, A, AL, BOLT, CV, D, EV, FMR, G, GS, LD, N, PD, R, SKIP, T)
+```
+
+## arcgis-500
+
+The stations layer answers every query with HTTP 500.
+
+```
+cd ../rtd-drill && DRILL=arcgis-500 node --import "$QA/drills/mock-fetch.mjs" scripts/build-data.mjs
+```
+
+exit code: 1
+public/data changed: no (c0c62f4b93b5 -> c0c62f4b93b5)
+
+```
+[drill] arcgis-500
+Reading RTD's map and downloading GTFS…
+  web map: System Map v2026 (941d6614b0cf4ece851cad9960e295e7), 11 layers
+Downloading layers…
+  facilities: 104 from Facilities where ((CLASS <> 'STN') AND (CLASS <> 'DWT')) OR (CLASS = 'BUS' OR PID = 14 OR PID = 23 OR PID = 31 OR PID = 38 OR PID = 39 OR PID = 53 OR PID = 57 OR PID = 62 OR PID = 64 OR PID = 88 OR PID = 89 OR PID = 95 OR PID = 118 OR PID = 184 OR PID = 220 OR PID = 221 OR PID = 222 OR PID = 226 OR PID = 228 OR PID = 229 OR PID = 250 OR PID = 256)
+  flexride: 13 from FlexRide
+  boundary: 1 from RTDBoundary where (BND <> 'IN')
+  stops: 7555 from BusStops_Active
+  routes: 131 from BusRoutes
+
+Build failed; public/data was left as it was.
+Error: 500 Internal Server Error for https://services5.arcgis.com/1fZoXlzLW6FCIUcE/arcgis/rest/services/RTD_GIS_Current_Runboard/FeatureServer/1/query?where=1%3D1&f=json&returnCountOnly=true
+    at fetchWithRetry (file:///home/chris/code/rtd-drill/scripts/lib/http.mjs:9:19)
+    at async getJson (file:///home/chris/code/rtd-drill/scripts/lib/http.mjs:19:23)
+    at async downloadLayer (file:///home/chris/code/rtd-drill/scripts/lib/arcgis.mjs:71:21)
+    at async file:///home/chris/code/rtd-drill/scripts/build-data.mjs:103:24
+    at async Promise.all (index 1)
+    at async main (file:///home/chris/code/rtd-drill/scripts/build-data.mjs:101:3)
+```
+
+## arcgis-zero-features
+
+The stations layer reports a count of 0 and returns no features.
+
+```
+cd ../rtd-drill && DRILL=arcgis-zero-features node --import "$QA/drills/mock-fetch.mjs" scripts/build-data.mjs
+```
+
+exit code: 1
+public/data changed: no (c0c62f4b93b5 -> c0c62f4b93b5)
+
+```
+[drill] arcgis-zero-features
+Reading RTD's map and downloading GTFS…
+  web map: System Map v2026 (941d6614b0cf4ece851cad9960e295e7), 11 layers
+Downloading layers…
+  stations: 0 from LightrailStations
+  facilities: 104 from Facilities where ((CLASS <> 'STN') AND (CLASS <> 'DWT')) OR (CLASS = 'BUS' OR PID = 14 OR PID = 23 OR PID = 31 OR PID = 38 OR PID = 39 OR PID = 53 OR PID = 57 OR PID = 62 OR PID = 64 OR PID = 88 OR PID = 89 OR PID = 95 OR PID = 118 OR PID = 184 OR PID = 220 OR PID = 221 OR PID = 222 OR PID = 226 OR PID = 228 OR PID = 229 OR PID = 250 OR PID = 256)
+  flexride: 13 from FlexRide
+  stops: 7555 from BusStops_Active
+  routes: 131 from BusRoutes
+  boundary: 1 from RTDBoundary where (BND <> 'IN')
+Measuring frequency…
+  typical weekday: 2026-11-02 (MT, WK)
+  typical saturday: 2026-11-07 (SA)
+  typical sunday: 2026-11-08 (SU)
+  rail drawn from GTFS shapes: A, B, C, D, E, G, N, R, T, W
+
+Build checks failed; public/data was left as it was:
+  - No stations downloaded
+  - stations dropped from 77 to 0
+  - No stations_served downloaded
+  - stations_served dropped from 67 to 0
+```
+
+## arcgis-error-200
+
+The stations layer reports an error inside a 200 response.
+
+```
+cd ../rtd-drill && DRILL=arcgis-error-200 node --import "$QA/drills/mock-fetch.mjs" scripts/build-data.mjs
+```
+
+exit code: 1
+public/data changed: no (c0c62f4b93b5 -> c0c62f4b93b5)
+
+```
+[drill] arcgis-error-200
+Reading RTD's map and downloading GTFS…
+  web map: System Map v2026 (941d6614b0cf4ece851cad9960e295e7), 11 layers
+Downloading layers…
+
+Build failed; public/data was left as it was.
+Error: https://services5.arcgis.com/1fZoXlzLW6FCIUcE/arcgis/rest/services/RTD_GIS_Current_Runboard/FeatureServer/1/query?where=1%3D1&f=json&returnCountOnly=true: Layer is temporarily unavailable
+    at getJson (file:///home/chris/code/rtd-drill/scripts/lib/http.mjs:21:26)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async downloadLayer (file:///home/chris/code/rtd-drill/scripts/lib/arcgis.mjs:71:21)
+    at async file:///home/chris/code/rtd-drill/scripts/build-data.mjs:103:24
+    at async Promise.all (index 1)
+    at async main (file:///home/chris/code/rtd-drill/scripts/build-data.mjs:101:3)
+```
