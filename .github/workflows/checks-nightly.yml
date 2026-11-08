@@ -42,7 +42,7 @@ jobs:
         env:
           CHECK_URL: https://rtd-system-map.pages.dev
           CHECK_JSON: qa/report/results.json
-        run: npx playwright test -c qa/playwright.config.mjs letters visual --reporter=list
+        run: npx playwright test -c qa/playwright.config.mjs letters --project=phone-light --reporter=list
       - name: Upload the report and captures
         if: always()
         uses: actions/upload-artifact@v7

@@ -167,9 +167,19 @@
     }
     return qa.letterKey();
   };
+  // A move, then the map at rest. The move is eased, not a teleport: a
+  // teleport leaves MapLibre with nothing to animate and no frame scheduled
+  // after the last tile arrives, so it can draw a dozen frames without ever
+  // reporting idle (measured on GitHub's runner), and the page places the
+  // edge letters on idle. An eased move is also the only kind of move a
+  // rider can make.
   qa.jump = async (v, quiet) => {
-    map().jumpTo({ center: [v.lon, v.lat], zoom: v.zoom, bearing: 0, pitch: 0 });
-    await new Promise((r) => setTimeout(r, 150));
+    const m = map();
+    await new Promise((res) => {
+      const t = setTimeout(res, 4000);
+      m.once('moveend', () => { clearTimeout(t); res(); });
+      m.easeTo({ center: [v.lon, v.lat], zoom: v.zoom, bearing: 0, pitch: 0, duration: 300, essential: true });
+    });
     return qa.rest(quiet);
   };
 
