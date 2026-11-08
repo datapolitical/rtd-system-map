@@ -1276,6 +1276,40 @@ writes is not loaded by the page. The drawn streets come from
 count only stops both routes serve was dropped in favour of the rider's
 rate, which asks only whether the buses interleave.
 
+**Readable geometry (planned 2026-11-08, next).** Chris's phone
+screenshots of the frequency streets (the I-25/I-70 ramps by 38th and Fox,
+Civic Center at 16, the Federal and Colfax interchange by Rude Park):
+"when you have multiple routes that all cross over each other or a route
+that does something weird, like I wanna be able to read this and
+understand intuitively what's going on, and I can't. I can't tell which bus
+goes which direction, where it's making turns." The knots are RTD's shapes
+drawn as driven: closed loops (a 1.1 km circuit shared by the 1, 10, 16 and
+20 by Federal; 300 m ramp circles; the 3L, EV and PD each drawing a 1.9 km
+loop at Civic Center that ends 108 m from where it began), highway ramps,
+and both halves of divided roads. Ranked options, the first two to be done
+together, then the third:
+
+1. *Generalize the geometry as a transit map does.* An interchange is a
+   point where the bus turns; ramps, cloverleaf loops and the second
+   carriageway collapse onto the road; a turn is one clean curve; a
+   terminal or layover loop becomes the place it serves (the station mark,
+   or a short end), not a lap of the block. Derived from the shapes
+   themselves (loop length against its chord, parallel carriageways),
+   never a list of places.
+2. *Arrows only where buses run one way.* Small chevrons inside the line on
+   one-way stretches (the build already measures departures each way), none
+   on two-way streets, so an arrow means "one way" and a remaining loop
+   reads as a circuit.
+3. *Route numbers where routes part or turn.* Numbers stay off the map
+   (below) except where a junction's branches can't be told apart
+   otherwise, clear of every line, with the screenshot showing the need.
+4. *Tap to trace a route*: the open route's whole path with its arrows, the
+   rest faded. Cheap; helps only after a tap.
+5. Per-route color or pattern: rejected, as before (color is rail, dashes
+   are part-time, over a hundred routes).
+6. Separate lines at hard junctions only: rejected, it is the trunk idea
+   where the map is densest.
+
 ### By zoom level
 
 Each bus tier fades in over about a zoom level rather than popping on.
@@ -2946,6 +2980,10 @@ marks that overlap, a letter missing) are the next thing to add there.
   close in, since they carry more buses than a 15-minute line carries
   trains (open whether to cap them). Part-time routes keep their own dashed
   and dotted lines and add no width.
+- 2026-11-08: Readable bus geometry is next (Bus routes, "Readable
+  geometry"): generalize interchanges, ramps, divided roads and terminal
+  loops, and arrows only on one-way stretches; route numbers at partings
+  after that. Chris approved the ranking: "Yes, make that your plan".
 
 ## Sources
 
