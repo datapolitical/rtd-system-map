@@ -27,6 +27,15 @@ const output = (url) => {
   if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `url=${url}\n`);
 };
 
+// This commit's Cloudflare check run, preferring a finished one. Read afresh
+// each time it is asked for: Cloudflare replaces its check run when a build
+// ends (a new id, already completed), so one held by id stays "in progress"
+// for ever and the wait below would run out against a build that was done.
+const pagesRun = () => {
+  const all = api(`repos/${repo}/commits/${sha}/check-runs?per_page=100`).check_runs.filter((r) => r.name === 'Cloudflare Pages');
+  return all.find((r) => r.status === 'completed') || all[0];
+};
+
 // How long Cloudflare may take to notice the push and start a build.
 const START_BY = Date.now() + 8 * 60_000;
 // How long a started build may take.
@@ -34,8 +43,7 @@ const BUILD_BY = Date.now() + 25 * 60_000;
 let run;
 while (Date.now() < START_BY) {
   try {
-    const runs = api(`repos/${repo}/commits/${sha}/check-runs?per_page=100`).check_runs.filter((r) => r.name === 'Cloudflare Pages');
-    run = runs.find((r) => r.status === 'completed') || runs[0];
+    run = pagesRun();
     if (run) break;
     console.log('Cloudflare Pages has not started a build for this push');
   } catch (e) {
@@ -51,7 +59,7 @@ if (!run) {
   for (let i = 0; i < 6; i++) {
     try {
       if ((await fetch(`${alias}/js/main.js`)).ok) {
-        console.log(`::notice::Cloudflare Pages did not build this push (no site change); using the branch's existing preview`);
+        console.log('::notice::Cloudflare Pages did not build this push (no site change); using the branch\'s existing preview');
         console.log(`preview: ${alias}`);
         output(alias);
         process.exit(0);
@@ -67,7 +75,11 @@ if (!run) {
 while (run.status !== 'completed' && Date.now() < BUILD_BY) {
   console.log(`Cloudflare Pages: ${run.status}`);
   await sleep(15_000);
-  run = api(`repos/${repo}/commits/${sha}/check-runs?per_page=100`).check_runs.find((r) => r.id === run.id) || run;
+  try {
+    run = pagesRun() || run;
+  } catch (e) {
+    console.log(`waiting: ${String(e.message).split('\n')[0]}`);
+  }
 }
 if (run.status !== 'completed') {
   console.error('Cloudflare Pages did not finish within 25 minutes');
