@@ -6,21 +6,29 @@
 //  and the hub's name shows at every zoom.
 //
 // The view is centred on the station where the most lines meet, found in the
-// built data: a test input, not a fact written into the code. Marks come from
-// the map's own layers, names from MapLibre's placed text boxes. "Nearer than
-// the longer one's length" means centre distance under the longer side of
-// either mark. Not asserted (known open item): at 11 two capsules 300 m apart
-// touch.
-import { test, expect, readData } from './fixtures.mjs';
+// site's own data (fixtures.siteData, so a run against production reads
+// production's data): a test input, not a fact written into the code. Marks
+// come from the map's own layers, names from MapLibre's placed text boxes.
+// "Nearer than the longer one's length" means centre distance under the
+// longer side of either mark. Not asserted (known open item): at 11 two
+// capsules 300 m apart touch.
+import { test, expect, siteData } from './fixtures.mjs';
 
 const MARKS = ['stations-dot', 'stations', 'stations-hub'];
 const MAX_NAME_PX = 25;
 
-const served = readData('stations.geojson').features.filter((f) => f.properties.served);
 const count = (f) => f.properties.lines.split(' ').length;
-const hub = served.reduce((a, b) => (count(b) > count(a) || (count(b) === count(a) && (b.properties.links || 0) > (a.properties.links || 0)) ? b : a));
-const [lon, lat] = hub.geometry.coordinates;
-const hubName = hub.properties.label;
+let views = null;
+/** The hub's centre and name, from the server under test. */
+const hubOf = async () => {
+  if (!views) {
+    const stations = await siteData('stations.geojson');
+    const served = stations.features.filter((f) => f.properties.served);
+    const hub = served.reduce((a, b) => (count(b) > count(a) || (count(b) === count(a) && (b.properties.links || 0) > (a.properties.links || 0)) ? b : a));
+    views = { lon: hub.geometry.coordinates[0], lat: hub.geometry.coordinates[1], hubName: hub.properties.label };
+  }
+  return views;
+};
 
 async function measure(page) {
   return page.evaluate((MARKS) => {
@@ -84,6 +92,7 @@ async function measure(page) {
 
 for (const zoom of [10, 10.5, 11, 12, 13, 14]) {
   test(`station marks and names at ${zoom}`, async ({ mapPage }, testInfo) => {
+    const { lon, lat, hubName } = await hubOf();
     await mapPage.goto({ zoom, lat, lon });
     await mapPage.capture(`downtown-${zoom}`);
     const r = await measure(mapPage.page);
