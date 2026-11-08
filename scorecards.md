@@ -5,6 +5,36 @@ are in DESIGN.md, "Design review rubric". Scores: 0 broken, 1 careless,
 2 good, 3 poster quality. A change is better than the last version only if
 no row goes down and at least one goes up.
 
+## 2026-11-08: bus streets by combined frequency, against main
+
+Scored by the independent design reviewer (`.claude/agents/design-reviewer.md`),
+before it read any other card. Branch `bus-frequency`; Chromium iPhone 14
+captures, Live off, both themes: fixed views, the hub at 12.5 to 16, Civic
+Center, Broadway/Lincoln, 15th/17th, a quarter-zoom sweep 12 to 16, the Key
+at 14. The orchestrator checked the Union Station and 15th Street crops
+and agrees.
+
+| Row | main | frequency | Evidence |
+|---|---|---|---|
+| Useful | 1 | 2 | At 12.5 the 15th/17th trunk, Broadway and Colfax read at once as where buses come often; which route goes where still needs a tap. |
+| Hierarchy | 2 | 2 | Rail still leads by hue; in dark the downtown grid is the widest mass beside rail but doesn't outrank it. |
+| Association | 2 | 2 | Nothing new labeled; "Union Station" still sits across a bus line at 16. |
+| Drawn on purpose | 2 | 1 | The Union Station loop is a round-capped dead end plus a loose stub; widths notch mid-block on 15th/California; Colfax jogs and breaks at Broadway/Lincoln. |
+| Calm | 2 | 2 | One line per street keeps downtown from being a wall; cored trunks read as outlined roads at 15 to 16, more in dark. |
+| Legible | 3 | 2 | The core, the only "many routes" mark, is 2.2:1 on the ink (2.0:1 dark), under 3:1. |
+| Accurate | 3 | 2 | 6.1 of 4,386 km drawn more than 40 m off: JUMP loses 1.5 km in Lafayette, the 31 1.36 km near Federal/112th, the FF 284 m moved onto an I-25 ramp. |
+| Across zooms | 2 | 1 | Smooth widening, but the Key has no strand or core row and its three heaviest widths are about 1 px apart. |
+| Phone | 2 | 2 | Unchanged. |
+| Gorgeous | 2 | 1 | 12.5 is the best downtown has looked; 14.5 to 16 at both terminals is unfinished next to the poster. |
+| **Total** | **21** | **17** | |
+
+Verdict: fails, and not better than main (five rows down). Worst faults:
+careless joins, ends and loops close in; width and core flickering block to
+block; "many routes" unexplained in the Key and the busiest streets losing
+their names (15th, 17th, Chestnut Place). Against the poster: better at
+saying a street's combined frequency; worse at closed terminal loops,
+joins, and keeping corridor names.
+
 ## 2026-11-08: bus bundling, prototype round two, against main
 
 Question: where does each bus go downtown? Views: downtown over the hub at
