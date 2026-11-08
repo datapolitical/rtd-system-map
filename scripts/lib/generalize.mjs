@@ -64,6 +64,8 @@ export const PLACE_NEAR = 250;
 // by where the line goes on: over SPUR_BACK before and after it, not back
 // the way it came (within 120 degrees of turning round).
 export const SPUR_REACH = 100;
+// A lap reaching less than this is too small to be an out-and-back.
+export const TIP_TINY = 20;
 const SPUR_BACK = 60;
 const SPUR_COS = Math.cos((120 * Math.PI) / 180);
 // A lap at least this share of its route's whole line is the route.
@@ -73,6 +75,11 @@ const LAP_ROUTE_SHARE = 0.5;
 export const PAIR_NEAR = 40;
 export const PAIR_FAR = 60;
 export const PAIR_RUN = 100;
+// Travel beyond across-and-back that makes this line's own way back a
+// carriageway (a circle of any size travels less).
+const TIP_SLACK = 20;
+// Lines on both sides of each other by more than this have crossed.
+const CROSS_CLEAR = 3;
 const PAIR_COS = Math.cos((25 * Math.PI) / 180);
 // Pieces shorter than this after generalizing are dropped.
 const MIN_PIECE = STEP;
@@ -231,14 +238,30 @@ export function cutLaps(points, routeLength = Infinity, places = [], note = () =
     // line comes back along is the end of the line, and stays.
     const reach = dist(lap[far], lap[0]);
     const thin = Math.abs(area(lap)) < LAP_FAT * (cum[found] - cum[i]) ** 2;
-    const spur = () => {
+    // How the line leaves against how it came: null where it can't be told
+    // (the lap is at an end of the line).
+    const turnCos = () => {
       const k = Math.ceil(SPUR_BACK / STEP);
-      if (i - k < 0 || found + k >= n) return false;
+      if (i - k < 0 || found + k >= n) return null;
       const a = [points[i][0] - points[i - k][0], points[i][1] - points[i - k][1]];
       const b = [points[found + k][0] - points[found][0], points[found + k][1] - points[found][1]];
-      return (a[0] * b[0] + a[1] * b[1]) / (Math.hypot(...a) * Math.hypot(...b) || 1) > SPUR_COS;
+      return (a[0] * b[0] + a[1] * b[1]) / (Math.hypot(...a) * Math.hypot(...b) || 1);
     };
+    const spur = () => (turnCos() ?? -1) > SPUR_COS;
     if (thin && (reach >= SPUR_REACH || !spur())) {
+      kept.push(points[i + 1]);
+      i++;
+      continue;
+    }
+    // A small lap the line comes back out of the way it went in is the tip
+    // of an out-and-back along one street (both ways of a two-way street,
+    // merged above), not a turn at a crossing: taken out, it would shorten
+    // the street it ends, again on every pass, and leave driven road
+    // undrawn. It stays; the street is drawn once over both ways.
+    // (Under TIP_TINY it can't be one: going out LAP_MIN and back along one
+    // line reaches further. It is the lens where a road's two carriageways
+    // meet, and goes.)
+    if (reach < CIRCLE && reach >= TIP_TINY && (turnCos() ?? 1) <= SPUR_COS) {
       kept.push(points[i + 1]);
       i++;
       continue;
@@ -333,26 +356,49 @@ export function mergeCarriageways(parts) {
       const d = dirAt(pts, i);
       let best = null;
       for (const { a, b, item } of grid.near(pt, PAIR_FAR)) {
-        if (item.pi === self && Math.abs(parts[item.pi].cum[item.i] - p.cum[i]) < PAIR_FAR * 3) continue;
         const v = [b[0] - a[0], b[1] - a[1]];
         const len = Math.hypot(...v) || 1;
-        if (Math.abs((d[0] * v[0] + d[1] * v[1]) / len) < PAIR_COS) continue;
+        const dot = (d[0] * v[0] + d[1] * v[1]) / len;
+        if (Math.abs(dot) < PAIR_COS) continue;
         const q = closestOnSegment(pt, a, b);
         const dd = dist(pt, q);
+        // This line further along: its other carriageway where it has come
+        // back the other way (the tip of an out-and-back, both ways of a
+        // road whose median ends) and travelled more than across and back,
+        // so a circle or a bend isn't taken for one.
+        if (item.pi === self) {
+          const along = Math.abs(parts[item.pi].cum[item.i] - p.cum[i]);
+          if (along < PAIR_FAR * 3 && !(dot < 0 && along >= 2 * dd + TIP_SLACK)) continue;
+        }
         // The same line (a part drawn twice) needs no moving.
         if (dd < 1) continue;
-        if (!best || dd < best.d) best = { d: dd, q };
+        if (!best || dd < best.d) best = { d: dd, q, side: Math.sign(d[0] * (q[1] - pt[1]) - d[1] * (q[0] - pt[0])) };
       }
       return best;
     });
-    // Beside it for PAIR_RUN or more, or not at all.
+    // Beside it for PAIR_RUN or more, on one side of it, or not at all.
+    // Two lines that cross at a shallow angle (ramps of an interchange
+    // making an X) are beside each other on one side, then the other: each
+    // side is judged alone, so they cross as two roads.
+    let side = 0;
+    for (const f of found) {
+      if (!f) side = 0;
+      else if (f.d > CROSS_CLEAR) side = f.side;
+      if (f) f.run = side;
+    }
+    for (let k = found.length - 1, next = 0; k >= 0; k--) {
+      const f = found[k];
+      if (!f) next = 0;
+      else if (f.run) next = f.run;
+      else f.run = next;
+    }
     for (let i = 0; i < found.length; ) {
       if (!found[i]) {
         i++;
         continue;
       }
       let j = i;
-      while (j < found.length && found[j]) j++;
+      while (j < found.length && found[j] && found[j].run === found[i].run) j++;
       if (p.cum[j - 1] - p.cum[i] < PAIR_RUN) for (let k = i; k < j; k++) found[k] = null;
       i = j;
     }

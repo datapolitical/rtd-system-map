@@ -244,24 +244,26 @@ export function addSymbol(map, id, lines) {
     return add(ctx);
   }
 
-  // One-way chevrons (network.js, 'street-oneway'), pointing along the
-  // line: 'chevron-in' sits inside a street wide enough to hold it, in the
-  // palette's arrow tint; 'chevron-<class>' rides a thinner street, a little
-  // wider than it, in the street's own color, like an arrowhead.
-  const chevron = id.match(/^chevron-(in|c\d+)$/);
-  if (chevron) {
+  // The one-way chevron (network.js, 'street-oneway'), pointing along the
+  // line: one glyph on every street, a light chevron cased in the darkest
+  // street ink, so it reads inside a wide line and over a hairline alike.
+  if (id === 'chevron') {
     const [w, h] = [CHEVRON[0], CHEVRON[1]];
     const ctx = canvas(w, h);
-    const pad = 2;
-    ctx.beginPath();
-    ctx.moveTo(pad, pad);
-    ctx.lineTo(w - pad, h / 2);
-    ctx.lineTo(pad, h - pad);
-    ctx.lineWidth = 2.4;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = chevron[1] === 'in' ? P.arrow : P.freq[chevron[1]];
-    ctx.stroke();
+    const pad = 3;
+    const stroke = (color, width) => {
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(w - pad, h / 2);
+      ctx.lineTo(pad, h - pad);
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    };
+    stroke(P.freq.c3, 4.6);
+    stroke(P.arrow, 2.2);
     return add(ctx);
   }
 

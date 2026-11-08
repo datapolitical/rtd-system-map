@@ -56,6 +56,11 @@ const ONE_WAY = 0.15;
 const ONE_WAY_MIN = 150;
 // A run's loose end joins another run's end this close (a junction).
 const JOIN = ALONG + STEP;
+// ...if it lies ahead of the end, within this of its bearing (measured over
+// JOIN_BACK of its line), or closer than JOIN_ANY.
+const JOIN_COS = Math.cos((60 * Math.PI) / 180);
+const JOIN_BACK = 20;
+const JOIN_ANY = 8;
 // Tiers that run through the window and so count toward the street.
 const ALL_DAY = new Set(['frequent', 'every30', 'hourly', 'infrequent']);
 const HOURS = (MIDDAY[1] - MIDDAY[0]) / 3600;
@@ -168,6 +173,7 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
     t.oneway = steady(t, dirs, ONE_WAY_MIN);
     t.routes = t.points.map((p, i) => [t.route, ...t.beside[i].keys()].sort(byNumber));
     t.n = t.points.map((p, i) => (t.allDay[i] ? 1 : 0) + [...t.beside[i].values()].filter((f) => f.track.allDay[f.k]).length);
+    t.pt = t.points.map((p, i) => t.routes[i].length - t.n[i]);
     t.cls = smoothClasses(t, t.bph.map(classOf));
   }
 
@@ -199,6 +205,7 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
         points: idx.map((j) => t.mean[j]),
         routes: t.routes[a],
         n: t.n[a],
+        pt: t.pt[a],
         cls: t.cls[a],
         oneway: t.oneway[a],
         bph: median(Array.from({ length: b - a }, (_, j) => t.bph[a + j])),
@@ -225,7 +232,7 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
     }
   }
 
-  return runs
+  const out = runs
     .map((run) => {
       // A one-way street is drawn the way its buses go, so its arrows point
       // that way.
@@ -238,14 +245,17 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
           mode: 'bus',
           routes: run.routes.join(' '),
           n: run.n,
+          // Part-time routes alongside (their own strands, dashed).
+          ...(run.pt ? { pt: run.pt } : {}),
           bph: Math.round(run.bph * 10) / 10,
           hw: run.bph > 0 ? Math.max(1, Math.round(60 / run.bph)) : null,
           cls: run.cls,
-          ...(run.oneway ? { oneway: 1 } : {}),
+          ...(run.oneway ? { oneway: 1, len: Math.round(length(run.points)) } : {}),
         },
       };
     })
     .filter((f) => f.geometry.coordinates.length >= 2);
+  return wyes(out, { precision });
 }
 
 // Each route's line once, as tracks of points with the route's departures
@@ -430,12 +440,25 @@ function joinEnds(runs) {
   }
   const at = (e) => (e.side ? e.run.points.at(-1) : e.run.points[0]);
   const set = (e, p) => (e.side ? (e.run.points[e.run.points.length - 1] = p) : (e.run.points[0] = p));
+  // An end goes on only ahead of itself: a point off to its side is another
+  // road it crosses or passes (the ramps of an interchange), and joining it
+  // would draw a tick or close a triangle there.
+  const ahead = (e, q) => {
+    const pts = e.side ? [...e.run.points].reverse() : e.run.points;
+    const p = pts[0];
+    if (dist(p, q) <= JOIN_ANY) return true;
+    let k = 1;
+    while (k < pts.length - 1 && dist(pts[k], p) < JOIN_BACK) k++;
+    const v = [p[0] - pts[k][0], p[1] - pts[k][1]];
+    const w = [q[0] - p[0], q[1] - p[1]];
+    return (v[0] * w[0] + v[1] * w[1]) / ((Math.hypot(...v) * Math.hypot(...w)) || 1) >= JOIN_COS;
+  };
   const pairs = [];
   for (let i = 0; i < ends.length; i++) {
     for (let j = i + 1; j < ends.length; j++) {
       if (ends[i].run === ends[j].run) continue;
       const d = dist(at(ends[i]), at(ends[j]));
-      if (d <= JOIN) pairs.push({ d, a: ends[i], b: ends[j] });
+      if (d <= JOIN && ahead(ends[i], at(ends[j])) && ahead(ends[j], at(ends[i]))) pairs.push({ d, a: ends[i], b: ends[j] });
     }
   }
   pairs.sort((x, y) => x.d - y.d);
@@ -471,6 +494,7 @@ function joinEnds(runs) {
       if (seg.item === e.run) continue;
       const q = closestOnSegment(p, seg.a, seg.b);
       const d = dist(p, q);
+      if (!ahead(e, q)) continue;
       const rank = shares(seg.item) ? 0 : 1;
       if (!best || rank < best.rank || (rank === best.rank && d < best.d)) best = { d, q, rank };
     }
@@ -514,3 +538,160 @@ const median = (list) => {
 };
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 export { CLASS_RANK, segmentDistance };
+
+// Terminals (DESIGN.md, "Bus routes", "Terminals"). Where several streets
+// end at one of RTD's facilities (TERMINAL_ENDS dead ends within
+// TERMINAL_NEAR of it), the buses are laying over in a bus station, and the
+// lanes and loops they drive inside it are not streets a rider can use:
+// drawn, they are a tangle of short diagonals and triangles. So the place is
+// drawn as one: streets lying wholly within TERMINAL_R of it go, no street
+// within TERMINAL_CALM of it carries one-way arrows, and the facility is
+// marked `terminal` (the page draws one calm mark there). `streets` is
+// changed in place and returned; `places` are [lon, lat] points. Returns
+// the indexes of the places that are terminals.
+export const TERMINAL_NEAR = 120;
+export const TERMINAL_ENDS = 3;
+export const TERMINAL_R = 70;
+export const TERMINAL_CALM = 130;
+export function terminals(streets, places, { precision = 5 } = {}) {
+  if (!streets.length || !places.length) return [];
+  const { project } = projection(places[0], precision);
+  const lines = streets.map((f) => f.geometry.coordinates.map(project));
+  const grid = new Grid(TERMINAL_NEAR);
+  lines.forEach((l, li) => {
+    for (let i = 1; i < l.length; i++) grid.add(l[i - 1], l[i], li);
+  });
+  // A street's end that touches no other street.
+  const deadEnds = [];
+  lines.forEach((l, li) => {
+    for (const p of [l[0], l.at(-1)]) {
+      if (!grid.near(p, 2).some((seg) => seg.item !== li)) deadEnds.push(p);
+    }
+  });
+  const ends = new Grid(TERMINAL_NEAR);
+  for (const p of deadEnds) ends.add(p, p, p);
+  const found = [];
+  places.forEach((q, qi) => {
+    const c = project(q);
+    if (ends.near(c, TERMINAL_NEAR).length >= TERMINAL_ENDS) found.push({ qi, c });
+  });
+  if (!found.length) return [];
+  const near = (p, r) => found.some(({ c }) => dist(p, c) <= r);
+  const keep = [];
+  lines.forEach((l, li) => {
+    if (l.every((p) => near(p, TERMINAL_R))) return;
+    const f = streets[li];
+    if (f.properties.oneway && near(alongBy(l, length(l) / 2), TERMINAL_CALM)) {
+      delete f.properties.oneway;
+      delete f.properties.len;
+    }
+    keep.push(f);
+  });
+  streets.splice(0, streets.length, ...keep);
+  return found.map((t) => t.qi);
+}
+
+// The point `d` along a line.
+function alongBy(l, d) {
+  for (let i = 1; i < l.length; i++) {
+    const s = dist(l[i - 1], l[i]);
+    if (d <= s) return [l[i - 1][0] + ((l[i][0] - l[i - 1][0]) * d) / (s || 1), l[i - 1][1] + ((l[i][1] - l[i - 1][1]) * d) / (s || 1)];
+    d -= s;
+  }
+  return l.at(-1);
+}
+
+// Wyes (DESIGN.md, "Bus routes", "Readable geometry"). Where a short
+// street forks off another and both reach the same crossing street a little
+// way apart (two ramps from one road up to a crossing road, one each way),
+// the three close a small triangle: a knot at map scale. A fork under
+// WYE_LEN, leaving the other street at under 75 degrees, whose far end is
+// within WYE_GAP of where the other street, within WYE_LEN of the fork,
+// meets that same crossing street, goes: its routes are listed on the
+// street it forked from, which carries them to the crossing street. The
+// fork becomes one line meeting the crossing street at one point. Only a
+// fork whose every route came along the street it leaves (TOUCH is the
+// build's own slack where runs meet, half of JOIN). Changes
+// `streets` in place.
+export const WYE_LEN = 150;
+export const WYE_GAP = 100;
+const WYE_COS = Math.cos((75 * Math.PI) / 180);
+const WYE_STRAIGHT = Math.cos((30 * Math.PI) / 180);
+const TOUCH = 25;
+export const STUB = 60;
+export function wyes(streets, { precision = 5 } = {}) {
+  if (streets.length < 3) return streets;
+  const { project } = projection(streets[0].geometry.coordinates[0], precision);
+  const lines = streets.map((f) => densify(f.geometry.coordinates.map(project)));
+  const grid = new Grid(JOIN);
+  lines.forEach((l, li) => {
+    for (let i = 1; i < l.length; i++) grid.add(l[i - 1], l[i], li);
+  });
+  const touching = (p, not) => new Set(grid.near(p, TOUCH).map((s) => s.item).filter((li) => !not.includes(li)));
+  const gone = new Set();
+  lines.forEach((l, a) => {
+    if (length(l) >= WYE_LEN) return;
+    for (const start of [true, false]) {
+      if (gone.has(a)) return;
+      const pts = start ? l : [...l].reverse();
+      const [J, foot] = [pts[0], pts.at(-1)];
+      let k = 1;
+      while (k < pts.length - 1 && dist(pts[k], J) < JOIN_BACK) k++;
+      const dir = [pts[k][0] - J[0], pts[k][1] - J[1]];
+      // The street the fork ends on, which it meets at an angle: one it
+      // runs straight on into is the rest of its own road, not a crossing.
+      let m = pts.length - 2;
+      while (m > 0 && dist(pts[m], foot) < JOIN_BACK) m--;
+      const arrive = [foot[0] - pts[m][0], foot[1] - pts[m][1]];
+      const crossing = new Set(
+        grid
+          .near(foot, TOUCH)
+          .filter((seg) => seg.item !== a)
+          .filter((seg) => {
+            const v = [seg.b[0] - seg.a[0], seg.b[1] - seg.a[1]];
+            return Math.abs(v[0] * arrive[0] + v[1] * arrive[1]) / (Math.hypot(...v) * Math.hypot(...arrive) || 1) < WYE_STRAIGHT;
+          })
+          .map((seg) => seg.item),
+      );
+      if (!crossing.size) continue;
+      const mine = streets[a].properties.routes.split(' ');
+      for (const b of touching(J, [a])) {
+        if (gone.has(b) || crossing.has(b)) continue;
+        // A fork of that street: every route on it came along it.
+        const theirs = new Set(streets[b].properties.routes.split(' '));
+        if (!mine.every((r) => theirs.has(r))) continue;
+        const B = lines[b];
+        let at = 0;
+        for (let i = 1; i < B.length; i++) if (dist(B[i], J) < dist(B[at], J)) at = i;
+        for (const step of [1, -1]) {
+          const ahead = B[Math.max(0, Math.min(B.length - 1, at + step * 2))];
+          const v = [ahead[0] - J[0], ahead[1] - J[1]];
+          if ((v[0] * dir[0] + v[1] * dir[1]) / (Math.hypot(...v) * Math.hypot(...dir) || 1) < WYE_COS) continue;
+          let walked = 0;
+          let met = false;
+          for (let i = at; i >= 0 && i < B.length && walked <= WYE_LEN && !met; i += step) {
+            if (i !== at) walked += dist(B[i], B[i - step]);
+            if (dist(B[i], foot) <= WYE_GAP && [...touching(B[i], [a, b])].some((c) => crossing.has(c))) met = true;
+          }
+          if (!met) continue;
+          const [fa, fb] = [streets[a].properties, streets[b].properties];
+          fb.routes = [...new Set([...fb.routes.split(' '), ...fa.routes.split(' ')])].sort(byNumber).join(' ');
+          gone.add(a);
+          break;
+        }
+        if (gone.has(a)) break;
+      }
+    }
+  });
+  // A stub: a street shorter than STUB that touches another at one end and
+  // nothing at the other says nothing a reader can use, and reads as a
+  // broken line.
+  lines.forEach((l, a) => {
+    if (gone.has(a) || length(l) >= STUB) return;
+    const ends = [l[0], l.at(-1)].map((p) => grid.near(p, 3).some((seg) => seg.item !== a && !gone.has(seg.item)));
+    if (ends[0] !== ends[1]) gone.add(a);
+  });
+  const kept = streets.filter((f, i) => !gone.has(i));
+  streets.splice(0, streets.length, ...kept);
+  return streets;
+}

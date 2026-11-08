@@ -85,3 +85,24 @@ test('part-time routes are listed but add no buses', () => {
   assert.equal(out[0].properties.n, 1);
   assert.ok(out[0].properties.bph < 2.5, `${out[0].properties.bph} an hour`);
 });
+
+test('a short fork that meets the crossing street beside its trunk is drawn as one meeting point', async () => {
+  const { wyes } = await import('../scripts/lib/streets.mjs');
+  const M = 1 / 111320;
+  const f = (routes, pts, cls = 'c15') => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: pts.map(([x, y]) => [x * M, y * M]) }, properties: { mode: 'bus', routes, n: routes.split(' ').length, cls } });
+  // A diagonal ramp up to a crossing street (y = 60), and a 60 m fork off
+  // it to the same street 40 m away: a small triangle.
+  const streets = [
+    f('1 10 30', [[-120, -120], [-19, 4], [5, 46]]),
+    f('30', [[-19, 4], [-34, 60]]),
+    f('1 10 23', [[-34, 60], [600, 60]]),
+    f('23 30', [[-300, 60], [-34, 60]]),
+  ];
+  wyes(streets, { precision: 7 });
+  assert.equal(streets.length, 3, 'the fork goes');
+  assert.ok(streets[0].properties.routes.split(' ').includes('30'), 'its route is listed on its trunk');
+  // A long street on into another isn't a fork, and stays.
+  const through = [f('1', [[0, 0], [0, 100]]), f('1 2', [[0, 100], [0, 400]]), f('2', [[-200, 100], [0, 100]])];
+  wyes(through, { precision: 7 });
+  assert.equal(through.length, 3);
+});

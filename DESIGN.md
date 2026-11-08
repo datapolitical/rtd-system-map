@@ -1203,6 +1203,10 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   visibly separate lines"). No land shows between strands. A seam is drawn
   only where each strand would be at least 2.6 px wide at that zoom, so a
   four-route every-10 street gets its seams at 17, a two-route one at 14.
+  Every route on the street has a strand, part-time ones too (`pt`, after
+  the all-day ones), and a seam that bounds a part-time strand is dashed.
+  Until the strands have room, a part-time route rides beside the street
+  from 14, a dashed hairline just off its edge.
   Streets with more than six routes don't get strands (Chris: "something
   special on the places where there's just like too many lines to have a
   divider"): a core line a third of the width, in the strand color, runs
@@ -1326,7 +1330,12 @@ unchanged):
 - *Carriageways*: where a route runs beside itself, parallel within 60 m
   for 100 m or more (both halves of a divided road, a highway's two
   carriageways or ramps), both are drawn on the middle line, fully within
-  40 m. A one-way pair a block apart (about 100 m) stays two streets.
+  40 m. A one-way pair a block apart (about 100 m) stays two streets. Each
+  side of a line is judged alone, so two ramps that cross at a shallow
+  angle (an X at an interchange) stay two roads and cross. A line's own
+  way back counts as its other carriageway once it has travelled more than
+  across and back (20 m over twice the gap), so the tip of an out-and-back,
+  or the lens where a median ends, is one line too; a circle never is.
 - *Laps*: where a route comes back to within 30 m of itself after 60 m to
   2 km, a lap reaching less than 220 m from where it began (a ramp circle,
   a turn round a block) becomes the point the bus turns at. A bigger one (a
@@ -1336,23 +1345,52 @@ unchanged):
   one-way pair, out and back on one street) is two streets and stays, and
   so does a loop that would leave more than 700 m of its own streets
   undrawn (1.5 km if it turns at a station): a circuit its arrows explain.
-  A short thin lap off a line that goes on is a spur, and goes.
+  A short thin lap off a line that goes on is a spur, and goes. A small lap
+  the line comes back out of the way it went in (turning more than 120
+  degrees) is the tip of an out-and-back along one street, not a turn at a
+  crossing, and stays: taken out, it shortened the street once per pass
+  and left driven road undrawn (135 m of the 16 on Colfax by Knox, 170 m of
+  the 17 by Colorado Mills Parkway in round two). Under 20 m it can't be one,
+  and goes. Tests hold both shapes.
 - *Loose ends*: a piece that starts a little past where another piece of its
   route ends and runs on through it is trimmed to start there, so the two
   are one line with no stub.
 
 *One-way arrows*: the build marks a street `oneway` where departures one
 way are no more than 15% of the other's, steady for 150 m or more, and
-draws it the way its buses go (`streets.mjs`). The page draws small
-chevrons inside the line from zoom 14 (`street-oneway` in `network.js`),
-every 150 px, in the palette's arrow tint (a shade off the line, in both
-themes) where the line is wide enough to hold one, or in the street's own
-color as an arrowhead on a thinner line. Two-way streets have no arrows.
-The Key has a row for them.
+draws it the way its buses go (`streets.mjs`). The page draws chevrons from
+zoom 14 (`street-oneway` in `network.js`), about 300 px apart: one glyph at
+one size on every street, a light chevron in the arrow tint cased in the
+darkest street ink, so it reads inside a wide line and over a hairline
+alike and two arrows never differ (round two's chevron-in-the-line and
+arrowhead-on-a-hairline came in pairs of two sizes on 15th). None on a
+one-way piece under 250 m, where it would sit at a junction. Two-way
+streets have no arrows. The Key has a row for them.
 
-Still to do: a few highway interchanges where several express routes part on
-separate ramps (I-25 by 38th and Fox) still draw a small triangle where
-the streets' combined lines meet; the Union Station express routes still
+*Joins and wyes* (`streets.mjs`): a loose end joins another only ahead of
+itself (within 60 degrees of its bearing, or within 8 m), so the ramps of
+an interchange cross instead of being tied with a tick or a triangle. A
+short fork (under 150 m, leaving its street at under 75 degrees, every
+route on it having come along that street) whose foot is within 100 m of
+where that street meets the same crossing street closes a small triangle
+(the Federal and Colfax wye): it goes, its routes are listed on the street
+it forked from, and the fork meets the crossing street at one point. A
+dead-end stub under 60 m goes.
+
+*Terminals* (`streets.mjs`, `terminals`): where three or more streets end
+within 120 m of one of RTD's facilities, buses lay over there, and the
+lanes they drive inside are not streets a rider uses. Streets lying wholly
+within 70 m of it go, streets within 130 m carry no arrows, and, away from
+a rail station (which is already the place), the facility is drawn as one
+calm disk about 90 m across over the streets (`bus-terminal`), land-filled
+with a ring in the street ink. Civic Center is the case that asked for it.
+
+Still to do: the I-25 interchange by 38th and Fox no longer closes a
+triangle, but its ramps are still a busy cluster of short crossing pieces,
+not main's clean X; a two-route street of low-frequency all-day routes
+(the 17 with the GS) is too narrow for strands at any zoom, so it still
+shows one line; a small lens where a median ends can still draw a dark
+diamond at 16 and up; the Union Station express routes still
 draw the block they use in and out (both directions on different streets,
 which is accurate, but reads as a loop); the 3L, EV and PD Civic Center
 loop runs up Broadway and down Lincoln, a one-way pair, so it stays two
@@ -3042,6 +3080,11 @@ marks that overlap, a letter missing) are the next thing to add there.
   line, ramp circles to a turn point, terminal loops to a short end at the
   station they serve) and marks one-way streets, which the page draws with
   chevrons inside the line from zoom 14 (Bus routes, "Readable geometry").
+- 2026-11-08: Readable geometry, round three: no lap collapse that leaves
+  driven road undrawn (out-and-back tips stay), crossing ramps stay two
+  roads, ends join only ahead of themselves, small wyes become one meeting
+  point, bus terminals are one disk with no arrows, one arrow glyph every
+  300 px, and part-time routes get dashed strands (Bus routes).
 
 ## Sources
 

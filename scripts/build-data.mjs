@@ -16,7 +16,7 @@ import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtr
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
 import { busStretches } from './lib/stretches.mjs';
-import { busStreets } from './lib/streets.mjs';
+import { busStreets, terminals } from './lib/streets.mjs';
 import { generalize } from './lib/generalize.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
@@ -342,6 +342,14 @@ async function main() {
   // The streets themselves, each drawn once, by the combined frequency of
   // every route along it (DESIGN.md, "Bus routes"; scripts/lib/streets.mjs).
   geo.streets = busStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION });
+  // Bus stations drawn as one place: the lanes inside them go, and the
+  // facility is marked (DESIGN.md, "Bus routes", "Terminals").
+  {
+    const marks = terminals(geo.streets, geo.facilities.map((f) => f.geometry.coordinates), { precision: PRECISION });
+    const nearStation = (c) => geo.stations.some((s) => Math.hypot((s.geometry.coordinates[0] - c[0]) * 85000, (s.geometry.coordinates[1] - c[1]) * 110540) < 100);
+    for (const i of marks) if (!nearStation(geo.facilities[i].geometry.coordinates)) geo.facilities[i].properties.terminal = 1;
+    console.log(`  bus terminals: ${marks.length} (${marks.map((i) => geo.facilities[i].properties.name).join(', ')})`);
+  }
   const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
   const classes = Object.fromEntries(STREET_CLASSES.map((c) => [c.id, { streets: geo.streets.filter((f) => f.properties.cls === c.id).length, km: Math.round(streetKm(c.id) * 10) / 10 }]));
   // Stops name the lines the map draws, families as their map route (FF1 is

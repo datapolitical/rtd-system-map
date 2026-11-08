@@ -12,7 +12,7 @@ import { FONT, lineKeepOut } from './basemap.js';
 import { lightenTo, shade, textOn } from './color.js';
 import { DARK_RAIL_MIN, P, PALETTES } from './palette.js';
 import { CLASS_RANK, DETAIL_FROM, PART_TIME, byZoom, classMatch, classWidth, classWidthAt, classWidthTimes, tierMatch, tierWidth } from './shared.js';
-import { CAPSULE_FROM, CAPSULE_TO, CHEVRON, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
+import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
 import { fade, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
 import { edgeLetterLayer } from './edgeletters.js';
 
@@ -48,28 +48,31 @@ const STRANDS_FROM = 13.5;
 const STRANDS_MAX = 6;
 // A strand narrower than this (the street's width over its routes) can't
 // hold a seam: the seams wait for the zoom where the strands have room.
+// Every route on the street has a strand, part-time ones too (`pt`, beside
+// the all-day ones), and a seam that bounds a part-time strand is dashed.
 const STRAND_MIN = 2.6;
+const strands = ['+', ['get', 'n'], ['coalesce', ['get', 'pt'], 0]];
 const strandWidth = ['interpolate', ['linear'], ['zoom'], STRANDS_FROM, 0.6, 16, 1];
-const strandRoom = (zoom) => ['>=', ['/', classMatch((c) => classWidthAt(c.id, zoom)), ['get', 'n']], STRAND_MIN];
+const strandRoom = (zoom) => ['>=', ['/', classMatch((c) => classWidthAt(c.id, zoom)), strands], STRAND_MIN];
 const strandZooms = Array.from({ length: Math.round((18 - STRANDS_FROM) / 0.5) + 1 }, (_, i) => STRANDS_FROM + i / 2);
 const strandFade = ['step', ['zoom'], 0, ...strandZooms.flatMap((z) => [z, ['case', strandRoom(z), fade(onStreet), 0]])];
 const coreFade = ['interpolate', ['linear'], ['zoom'], STRANDS_FROM, 0, STRANDS_FROM + 1, fade(onStreet)];
 // One-way streets (the build's `oneway`, drawn the way the buses go) carry
-// small chevrons from ARROWS_FROM, ARROW_SPACING px apart; two-way streets
-// none, so an arrow means "one way" (DESIGN.md, "Bus routes"). Where the
-// street is at least ARROW_INSIDE px wide the chevron sits inside it, about
-// ARROW_SHARE of its width, in the arrow tint; on a thinner street it is
-// ARROW_MIN px across, in the street's own color, like an arrowhead.
+// chevrons from ARROWS_FROM, about ARROW_SPACING px apart; two-way streets
+// none, so an arrow means "one way" (DESIGN.md, "Bus routes"). One glyph,
+// one size on every street (a light chevron cased in the darkest ink, which
+// reads inside a wide line and over a hairline alike), so two arrows never
+// differ; none on a one-way piece shorter than ARROW_MIN_LEN meters, where
+// an arrow would sit at a junction rather than along a street.
 const ARROWS_FROM = 14;
-const ARROW_SPACING = 150;
-const ARROW_INSIDE = 7;
-const ARROW_SHARE = 0.72;
-const ARROW_MIN = 9;
-const arrowZooms = Array.from({ length: Math.round((18 - ARROWS_FROM) / 0.5) + 1 }, (_, i) => ARROWS_FROM + i / 2);
-const arrowInside = (cls, zoom) => classWidthAt(cls, zoom) >= ARROW_INSIDE;
-const arrowImage = ['step', ['zoom'], classMatch((c) => (arrowInside(c.id, ARROWS_FROM) ? 'chevron-in' : `chevron-${c.id}`)), ...arrowZooms.slice(1).flatMap((z) => [z, classMatch((c) => (arrowInside(c.id, z) ? 'chevron-in' : `chevron-${c.id}`))])];
-const arrowSize = ['interpolate', ['linear'], ['zoom'], ...arrowZooms.flatMap((z) => [z, classMatch((c) => (arrowInside(c.id, z) ? classWidthAt(c.id, z) * ARROW_SHARE : ARROW_MIN) / CHEVRON[1])])];
+const ARROW_SPACING = 300;
+const ARROW_MIN_LEN = 250;
+const arrowSize = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0.62, 16, 0.78];
 const arrowFade = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0, ARROWS_FROM + 0.5, fade(onStreet)];
+// A bus station where routes lay over (the build's facility `terminal`) is
+// drawn as one place: a disk the size of its lanes, over the streets.
+const TERMINAL_M = 45;
+const metersAt = (z) => (TERMINAL_M * 512 * 2 ** z) / 40075016.686 / Math.cos((39.74 * Math.PI) / 180);
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -237,27 +240,49 @@ export function transitLines(lines) {
       },
       paint: { 'line-color': classMatch((c) => c.color), 'line-width': classWidth(), 'line-opacity': streetFade },
     },
-    ...Array.from({ length: STRANDS_MAX - 1 }, (_, i) => i + 1).map((k) => ({
-      id: `street-strand-${k}`,
+    ...[false, true].flatMap((dashed) =>
+      Array.from({ length: STRANDS_MAX - 1 }, (_, i) => i + 1).map((k) => ({
+        id: `street-strand-${dashed ? 'pt-' : ''}${k}`,
+        type: 'line',
+        source: 'streets',
+        minzoom: STRANDS_FROM,
+        // Seam k lies between strand k and k + 1; past the all-day strands
+        // it bounds a part-time one.
+        filter: ['all', ['>', strands, k], ['<=', strands, STRANDS_MAX], [dashed ? '>=' : '<', k, ['get', 'n']]],
+        layout: { 'line-cap': 'butt', 'line-join': 'round' },
+        paint: {
+          'line-color': P.strand,
+          'line-width': strandWidth,
+          // The k-th seam of n equal strands, measured from the line's middle.
+          'line-offset': classWidthTimes(['-', ['/', k, strands], 0.5]),
+          'line-opacity': strandFade,
+          ...(dashed ? { 'line-dasharray': [3, 2] } : {}),
+        },
+      })),
+    ),
+    // A part-time route on a street too narrow for strands rides beside
+    // it, a dashed hairline just off its edge, until the strands have room.
+    {
+      id: 'street-part-time-beside',
       type: 'line',
       source: 'streets',
-      minzoom: STRANDS_FROM,
-      filter: ['all', ['>', ['get', 'n'], k], ['<=', ['get', 'n'], STRANDS_MAX]],
+      minzoom: ARROWS_FROM,
+      filter: ['all', ['>', ['coalesce', ['get', 'pt'], 0], 0], ['<=', strands, STRANDS_MAX]],
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': P.strand,
         'line-width': strandWidth,
-        // The k-th seam of n equal strands, measured from the line's middle.
-        'line-offset': classWidthTimes(['-', ['/', k, ['get', 'n']], 0.5]),
-        'line-opacity': strandFade,
+        'line-offset': ['interpolate', ['linear'], ['zoom'], ...strandZooms.filter((z) => z >= ARROWS_FROM).flatMap((z) => [z, classMatch((c) => classWidthAt(c.id, z) / 2 + 1.8)])],
+        'line-dasharray': [3, 2],
+        'line-opacity': ['step', ['zoom'], 0, ...strandZooms.filter((z) => z >= ARROWS_FROM).flatMap((z) => [z, ['case', strandRoom(z), 0, fade(onStreet)]])],
       },
-    })),
+    },
     {
       id: 'street-core',
       type: 'line',
       source: 'streets',
       minzoom: STRANDS_FROM,
-      filter: ['>', ['get', 'n'], STRANDS_MAX],
+      filter: ['>', strands, STRANDS_MAX],
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: { 'line-color': P.strand, 'line-width': classWidthTimes(0.34), 'line-opacity': coreFade },
     },
@@ -267,11 +292,11 @@ export function transitLines(lines) {
       type: 'symbol',
       source: 'streets',
       minzoom: ARROWS_FROM,
-      filter: ['==', ['get', 'oneway'], 1],
+      filter: ['all', ['==', ['get', 'oneway'], 1], ['>=', ['coalesce', ['get', 'len'], 0], ARROW_MIN_LEN]],
       layout: {
         'symbol-placement': 'line',
         'symbol-spacing': ARROW_SPACING,
-        'icon-image': arrowImage,
+        'icon-image': 'chevron',
         'icon-size': arrowSize,
         'icon-rotation-alignment': 'map',
         'icon-keep-upright': false,
@@ -280,6 +305,21 @@ export function transitLines(lines) {
         'icon-padding': 0,
       },
       paint: { 'icon-opacity': arrowFade },
+    },
+    {
+      id: 'bus-terminal',
+      type: 'circle',
+      source: 'facilities',
+      minzoom: 13,
+      filter: ['==', ['get', 'terminal'], 1],
+      paint: {
+        'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 13, metersAt(13), 16, metersAt(16), 18, metersAt(16)],
+        'circle-color': P.land,
+        'circle-stroke-color': P.freq.c10,
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 13, 1.5, 16, 3],
+        'circle-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.5, 1],
+        'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.5, 1],
+      },
     },
 
     // The open bus route, drawn over its faded neighbours.

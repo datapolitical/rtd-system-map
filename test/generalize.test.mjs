@@ -112,3 +112,71 @@ test('mergeCarriageways leaves a lone line where it is', () => {
   mergeCarriageways(parts);
   assert.deepEqual(parts[0].points, before);
 });
+
+// How far a line's points are from the drawn parts, at worst over any run of
+// `run` meters: the length of the longest stretch left undrawn.
+const undrawn = (raw, parts, near = 15) => {
+  const segDist = (p, a, b) => {
+    const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+  };
+  let [worst, run] = [0, 0];
+  for (let i = 0; i < raw.length; i++) {
+    const far = parts.every((q) => q.slice(1).every((b, k) => segDist(raw[i], q[k], b) > near));
+    run = far && i ? run + Math.hypot(raw[i][0] - raw[i - 1][0], raw[i][1] - raw[i - 1][1]) : 0;
+    worst = Math.max(worst, run);
+  }
+  return worst;
+};
+const allParts = (out) => out.flatMap(partsOf);
+// One route drawn in pieces, as RTD's layer has it: one feature, many parts.
+const pieced = (route, pieces) => ({ type: 'Feature', geometry: { type: 'MultiLineString', coordinates: pieces.map(lonlat) }, properties: { route, mode: 'bus', bph: 4 } });
+
+test('route 16 on Colfax by Knox: both ways of a two-way street, then a turn, lose no road', () => {
+  // RTD's 16 at Colfax and Knox, in meters (2026-11 shapes): east along
+  // Colfax to Knox, round the corner and back west along Colfax's other side
+  // to where the pieces meet, and from Knox south. Round two cut 135 m of
+  // Colfax here, eating the out-and-back's tip a lap at a time.
+  const pieces = [
+    path([-400, 2], [-79, 2], [39, 6]),
+    path([39, 6], [47, 1], [223, -1]),
+    path([223, -1], [226, -94], [228, -119], [230, -400]),
+    path([223, -1], [223, 11], [46, 9], [39, 6]),
+  ];
+  const out = generalize([pieced('16', pieces)], { precision: 7 });
+  const drawn = allParts(out);
+  for (const raw of pieces) assert.ok(undrawn(path(...raw), drawn) <= 20, `no stretch of the 16 left undrawn (${undrawn(path(...raw), drawn).toFixed(0)} m)`);
+});
+
+test('route 17 on Colorado Mills Parkway: where the carriageways meet, no road lost and no lens', () => {
+  // RTD's 17 where a divided road's median ends, in meters (2026-11
+  // shapes): two carriageways from the west meet at (16, -3) and run on
+  // east as one. Round two cut 170 m here.
+  const pieces = [
+    path([16, -3], [300, 45], [600, 95]),
+    path([16, -3], [3, 1], [-146, -22], [-224, -39], [-282, -59]),
+    path([-285, -83], [-256, -69], [-213, -54], [-144, -39], [6, -12], [16, -3]),
+  ];
+  const out = generalize([pieced('17', pieces)], { precision: 7 });
+  const drawn = allParts(out);
+  for (const raw of pieces) assert.ok(undrawn(raw, drawn, 20) <= 20, `no stretch of the 17 left undrawn (${undrawn(raw, drawn, 20).toFixed(0)} m)`);
+  // One line where it is one road: across it, near the tip, the drawn
+  // carriageways lie on one another (no lens).
+  for (const x of [-100, -40, 0]) {
+    const ys = drawn.flatMap((q) => q.slice(1).flatMap((b, k) => ((q[k][0] - x) * (b[0] - x) <= 0 && q[k][0] !== b[0] ? [q[k][1] + ((x - q[k][0]) * (b[1] - q[k][1])) / (b[0] - q[k][0])] : [])));
+    assert.ok(ys.length && Math.max(...ys) - Math.min(...ys) < 6, `one line at x = ${x} (${ys.map((y) => y.toFixed(1))})`);
+  }
+});
+
+test('ramps that cross at a shallow angle stay two roads', () => {
+  // One route's two ramps making an X at 20 degrees: within 60 m of each
+  // other for 300 m, but on one side, then the other.
+  const a = line([-500, -90], [500, 90]);
+  const b = line([-500, 90], [500, -90]);
+  const out = generalize([feature('X', a), feature('X', b)], { precision: 7 });
+  const [pa, pb] = out.map(partsOf);
+  // Each keeps its own line: far ends unmoved, and they still cross.
+  assert.ok(Math.abs(pa[0][0][1] + 90) < 2 && Math.abs(pb[0][0][1] - 90) < 2);
+  assert.ok(Math.abs(maxY(pa) - 90) < 2 && Math.abs(minY(pb) + 90) < 2);
+});
