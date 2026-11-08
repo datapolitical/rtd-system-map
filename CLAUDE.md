@@ -18,7 +18,7 @@ RTD's data at build time so RTD's changes flow through with no code change
 
 ## What's left to do: GitHub Issues
 
-Open work lives in this repo's Issues, not in chat or `status.json`. Each open
+Open work lives in this repo's Issues, not in chat. Each open
 milestone is one stage of work, and Chris's status page draws its "How close
 we are" section from them (closed issues show as done).
 
@@ -51,3 +51,27 @@ we are" section from them (closed issues show as done).
 - Agent time is budgeted. Before starting a build or review agent, follow the
   budget rule Chris gave you (it stays off this public repo). If you don't
   have it, ask.
+
+## Status page
+
+`node status/server.mjs [port]` (default 8795) serves a page that reads this
+repo's milestones and issues through `gh`, and lists the agents, captures and
+commits of every checkout of the repo on that machine. Issues labeled
+`in progress` show under "In progress", and issues labeled `needs Chris`
+under "Waiting on you", each with the first line of its newest comment.
+
+While an agent works, it keeps a progress file at `.agents/<short-name>.json`
+in the root of its worktree (ignored by git) and rewrites it whenever its
+step changes:
+
+```json
+{"name": "frequency-r4", "issue": 6, "branch": "bus-frequency",
+ "state": "working", "step": "Civic Center: drawing the terminal's footprint",
+ "updated": "2026-11-11T18:02:00Z",
+ "log": ["Newest first, one line each"],
+ "captures": ["qa/.scratch/r4/civic-16.png"]}
+```
+
+`state` is `working`, `waiting` or `done`. A `working` file not updated for
+15 minutes shows as quiet, and files older than a day drop off. Captures must
+be PNGs under `qa/.scratch/`.

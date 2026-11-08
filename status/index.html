@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Work status</title>
+<style>
+:root{--bg:#f4f5f6;--card:#fff;--ink:#1d3044;--mute:#6b7785;--line:#e3e6ea;--ok:#1a7f4b;--warn:#a86400;--done:#5a6b7d;--bad:#c03b3b}
+@media (prefers-color-scheme:dark){:root{--bg:#161b21;--card:#1f262e;--ink:#e6ecf3;--mute:#93a0ae;--line:#2b343d;--ok:#5fd39a;--warn:#f0b35a;--done:#a1bdf9;--bad:#f07a7a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 2px}h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:22px 0 8px}
+.sub{color:var(--mute);font-size:13px}.err{color:var(--bad)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:8px 0}
+.card b{display:block}.card .dd{margin-top:3px}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid currentColor;margin-right:6px}
+.working{color:var(--ok)}.quiet,.waiting{color:var(--warn)}.done{color:var(--done)}
+.ev{font-size:13.5px;display:flex;gap:8px;margin:2px 0;color:var(--mute)}.ev span{overflow-wrap:anywhere}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.grid.small{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));margin-top:8px}
+.grid a{display:block;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;color:inherit;text-decoration:none}
+.grid img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:var(--line)}
+.grid span{display:block;font-size:11px;padding:4px 6px;color:var(--mute);overflow-wrap:anywhere}
+.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin:8px 0 4px;display:flex}.bar i{display:block;height:100%}
+.bar .d{background:var(--ok)}.bar .g{background:var(--warn)}
+.st{display:flex;gap:10px;align-items:flex-start;font-size:14px;margin:7px 0}.st .k{flex:none;width:18px;height:18px;border-radius:50%;border:2px solid var(--line);margin-top:1px;display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--card)}
+.st.done .k{background:var(--ok);border-color:var(--ok)}.st.doing .k{border-color:var(--warn);background:radial-gradient(var(--warn) 40%,transparent 45%)}
+.st.done .x{color:var(--mute)}.st .dd{display:block;font-size:12.5px;color:var(--mute)}
+details summary{cursor:pointer;color:var(--mute);font-size:13px;margin-top:6px}
+a.il{color:inherit;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px}
+.c{font-size:13.5px;display:flex;gap:8px}.c code{color:var(--mute)}.c .w{color:var(--mute);margin-left:auto;white-space:nowrap}
+</style></head><body><main>
+<h1 id="h1">Work status</h1><div class="sub" id="upd">Loading…</div>
+<h2>In progress</h2><div id="now"></div>
+<h2>Waiting on you</h2><div id="wait"></div>
+<h2>Agents on this machine</h2><div id="agents"></div>
+<h2>How close we are</h2><div id="plan"></div>
+<h2>Latest captures</h2><div class="grid" id="caps"></div>
+<h2>Commits</h2><div id="commits"></div>
+</main><script>
+const $=id=>document.getElementById(id);
+const fmt=m=>m<60?m+' min':m<600?(Math.round(m/30)/2)+' h':Math.round(m/60)+' h';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ago=t=>{const s=(Date.now()-new Date(t))/1e3;return s<60?'just now':s<3600?Math.round(s/60)+' min ago':s<172800?Math.round(s/3600)+' h ago':Math.round(s/86400)+' days ago'};
+const time=t=>new Date(t).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+const link=(url,t)=>url?`<a class="il" href="${esc(url)}" target="_blank" rel="noopener">${esc(t)}</a>`:esc(t);
+const issues=(list,none)=>list.length?list.map(i=>`<div class="card"><b>${link(i.url,i.t)}</b>${i.d?`<div class="dd">${esc(i.d)}</div>`:''}<div class="sub">${ago(i.at)}</div></div>`).join(''):`<div class="card sub">${none}</div>`;
+const thumbs=(list,cls)=>list.map(c=>`<a href="img?p=${encodeURIComponent(c.p)}" target="_blank"><img loading="lazy" src="thumb?p=${encodeURIComponent(c.p)}&m=${c.m||0}" alt="">${c.name?`<span>${esc(c.name)} · ${ago(c.m)}</span>`:''}</a>`).join('');
+async function load(){
+  try{
+  const d=await (await fetch('api',{cache:'no-store'})).json();
+  if(d.repo){$('h1').textContent=d.repo+': work status';document.title=d.repo.split('/')[1]+' status'}
+  $('upd').innerHTML=`Updated ${time(d.now)} · refreshes every 15 s`+(d.error?` · <span class="err">Can't read GitHub: ${esc(d.error)}</span>`:'');
+  $('now').innerHTML=issues(d.current,'No issue is labeled “in progress”.');
+  $('wait').innerHTML=issues(d.waiting,`Nothing labeled “${esc(d.waitLabel)}”.`);
+  const repoUrl=d.repo?'https://github.com/'+d.repo:'';
+  $('agents').innerHTML=d.agents.length?d.agents.map(a=>`<div class="card"><span class="pill ${a.state}">${esc(a.state)}</span><span class="sub">${esc(a.name)} · ${esc(a.branch)} · ${ago(a.updated)}</span>${a.issue?` <span class="sub">· ${link(repoUrl&&repoUrl+'/issues/'+a.issue,'#'+a.issue)}</span>`:''}<div style="margin-top:6px;font-weight:600">${esc(a.step)}</div>${a.log.length?`<details ${a.state==='working'?'open':''}><summary>Latest steps</summary>${a.log.map(l=>`<div class="ev"><span>${esc(l)}</span></div>`).join('')}</details>`:''}${a.captures.length?`<div class="grid small">${thumbs(a.captures.map(p=>({p})))}</div>`:''}</div>`).join(''):'<div class="card sub">No agent progress files from the last day.</div>';
+  $('plan').innerHTML=d.plan.map(g=>{const w=s=>s.w||1;const tot=g.steps.reduce((a,s)=>a+w(s),0),dn=g.steps.filter(s=>s.s==='done').reduce((a,s)=>a+w(s),0),dg=g.steps.filter(s=>s.s==='doing').reduce((a,s)=>a+w(s),0),left=g.steps.filter(s=>s.s!=='done').reduce((a,s)=>a+(s.eta||0),0);return `<div class="card"><b>${link(g.url,g.title)}</b><div class="bar"><i class="d" style="width:${100*dn/tot}%"></i><i class="g" style="width:${100*dg/tot}%"></i></div>${left?`<div style="margin:2px 0 4px;font-size:14px">Best guess: <b style="display:inline">about ${fmt(left)} of agent work left</b></div>`:''}<div class="sub">${dn} of ${tot} done${dg?`, ${dg} in progress`:''}${g.note?' · '+esc(g.note):''}</div>${g.steps.map(s=>`<div class="st ${s.s}"><span class="k">${s.s==='done'?'✓':''}</span><span class="x">${link(s.url,s.t)}${s.d||s.eta&&s.s!=='done'?`<span class="dd">${s.eta&&s.s!=='done'?'≈ '+fmt(s.eta)+(s.d?' · ':''):''}${esc(s.d||'')}</span>`:''}</span></div>`).join('')}</div>`}).join('')||'<div class="card sub">No open milestones.</div>';
+  $('caps').innerHTML=thumbs(d.captures)||'<div class="sub">None yet.</div>';
+  $('commits').innerHTML=d.commits.map(r=>`<div class="card"><b style="display:inline">${esc(r.name)}</b>${r.dirty?` <span class="sub">· ${r.dirty} uncommitted change${r.dirty>1?'s':''}</span>`:''}${r.log.map(([h,w,s])=>`<div class="c"><code>${esc(h)}</code><span>${esc(s)}</span><span class="w">${esc(w)}</span></div>`).join('')}</div>`).join('');
+  }catch(e){$('upd').textContent='Could not reach the status server: '+e.message}
+}
+load();setInterval(load,15000);
+</script></body></html>

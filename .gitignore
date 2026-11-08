@@ -16,3 +16,5 @@ qa/report/
 qa/.scratch/
 # The sweep's report and captures (qa/sweep/sweep.mjs).
 qa/sweep/out/
+# Agent progress files for the status page (CLAUDE.md, "Status page").
+.agents/
