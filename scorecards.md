@@ -5,6 +5,31 @@ are in DESIGN.md, "Design review rubric". Scores: 0 broken, 1 careless,
 2 good, 3 poster quality. A change is better than the last version only if
 no row goes down and at least one goes up.
 
+## 2026-11-08: readable bus geometry (7f3e635), against the frequency card
+
+Independent design reviewer; captures in the main checkout's
+`qa/.scratch/review-2026-11-08-geometry/`, both themes, plus Chris's six
+phone findings, all confirmed.
+
+| Row | prev | now | Evidence |
+|---|---|---|---|
+| Useful | 2 | 1 | At the Federal wye, the I-25 ramp triangle and Civic Center a rider still can't tell where a bus turns; arrows help only on plain one-way streets. |
+| Hierarchy | 2 | 2 | Unchanged. |
+| Association | 2 | 2 | Paired arrows of two sizes on 15th from overlapping runs. |
+| Drawn on purpose | 1 | 1 | Knots at interchanges; main draws the I-25 ramps as a clean X. |
+| Calm | 2 | 1 | Civic Center at 16: diagonals, a triangle, dashes, ten arrows; arrows every 150 px speckle downtown at 15. |
+| Legible | 2 | 2 | Arrows 6.6:1 light, 5.3:1 dark; core still 2.2:1. |
+| Accurate | 2 | 1 | Collapsed laps cut all-day service: 135 m of the 16 on Colfax by Knox, 170 m of the 17 on Colorado Mills Parkway. |
+| Across zooms | 1 | 1 | One-way drawn two ways: chevron in wide lines, corner mark on thin. |
+| Phone | 2 | 2 | Unchanged. |
+| Gorgeous | 1 | 1 | Junctions unfinished; main's ramps and Federal look better. |
+| **Total** | **17** | **14** | main 21 |
+
+Verdict: fails, not better. Worst: interchanges drawn as knots (I-25 by
+38th/Fox, Federal wye); collapsed laps leaving gaps and teardrops on through
+streets (Knox, Colorado Mills); Civic Center still unreadable. Better than
+the poster only in saying where buses run one way.
+
 ## 2026-11-08: bus streets by combined frequency, against main
 
 Scored by the independent design reviewer (`.claude/agents/design-reviewer.md`),
