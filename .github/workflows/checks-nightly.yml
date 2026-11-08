@@ -38,10 +38,18 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run the fast checks against the live site
+        if: github.ref_name == 'main'
         env:
           CHECK_URL: https://rtd-system-map.pages.dev
           CHECK_JSON: qa/report/results.json
         run: npm run check
+      # TEMPORARY (issue #31 diagnosis): a branch dispatch runs the diagnostic
+      # spec instead of the checks. Removed once the failure is understood.
+      - name: Diagnose the letters check (temporary)
+        if: github.ref_name != 'main'
+        env:
+          CHECK_URL: https://rtd-system-map.pages.dev
+        run: npx playwright test -c qa/playwright.config.mjs letters-diag --project=phone-light --reporter=list
       - name: Upload the report and captures
         if: always()
         uses: actions/upload-artifact@v7
@@ -52,7 +60,7 @@ jobs:
             qa/checks/out/
           if-no-files-found: warn
       - name: Open, comment on or close the issue for each spec
-        if: always()
+        if: always() && github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node qa/checks/github.mjs issues --site "https://rtd-system-map.pages.dev" --close
