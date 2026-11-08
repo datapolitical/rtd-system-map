@@ -421,9 +421,13 @@ export function transitLines(lines) {
       filter: ['==', ['get', 'kind'], 'building'],
       minzoom: TERMINAL_FROM,
       layout: { 'line-join': 'round' },
+      // The same calm ink as the above-ground terminal's edge, at the same
+      // width: the station building, concourse and hall read as one family
+      // rather than the building alone as the map's brightest mark
+      // (DESIGN.md, "Stations").
       paint: {
-        'line-color': P.ink,
-        'line-width': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 1.2, 16, 2, 18, 2.6],
+        'line-color': P.freq.c10,
+        'line-width': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 1.2, 16, 2.2, 18, 3],
         'line-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
       },
     },

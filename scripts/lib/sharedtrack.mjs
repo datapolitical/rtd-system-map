@@ -72,7 +72,15 @@ const LETTER_MIN_PX = 60;
 // On shared track a line's second letter is not placed this near (at the
 // middle of the zoom) its first: in a knot of short stretches that was a
 // second B beside the first, and another line's first letter left out.
+// Two of one line are never nearer than this many METRES either, wherever
+// the fork they bunch at is: a branch letter comes out just past its fork,
+// so where several lines leave in the same couple of hundred metres (a
+// station's platforms), the branches bunched at one place and the near pair
+// read as two (2026-11-08, issue #19): at Union Station's train hall, two
+// B's 180 m apart with A, G and N between. 200 m is the whole approach a
+// rider sees the branch from, and far out the screen rule above is wider.
 const LETTER_SAME_PX = 110;
+const LETTER_SAME_METERS = 200;
 const LETTER_SLACK_PX = 60;
 // Two letters closer than this many pixels can touch; so can a letter and a
 // station's mark this close.
@@ -563,9 +571,14 @@ function lettersAlong(tracks, marks, metersPerPixel) {
       const forkAtEnd = members.some((run) => (run.flipped ? run.before : run.after));
       const first = forkAtStart ? edge : Math.min(spacing / 2, reach / 2);
       const last = reach - (forkAtEnd ? edge : Math.min(spacing / 2, reach / 2));
-      // At least one place for each line on the stretch, if they fit.
+      // At least one place for each line on the stretch, if they fit. Past
+      // the last full spacing, a place is only added for a full spacing of
+      // track: round counted a stretch a part of a spacing longer as two
+      // places, and a line alone on a short stretch (Union Station's
+      // tails are a platform short) was named twice, a second letter beside
+      // its first with the others between (2026-11-08, issue #19).
       const fit = last < first ? 1 : Math.floor((last - first) / clear) + 1;
-      const count = last < first ? 1 : Math.max(Math.round((last - first) / spacing) + 1, Math.min(members.length, fit));
+      const count = last < first ? 1 : Math.max(Math.floor((last - first) / spacing) + 1, Math.min(members.length, fit));
       const places =
         last < first
           ? [forkAtStart === forkAtEnd ? reach / 2 : forkAtStart ? first : last]
@@ -579,8 +592,11 @@ function lettersAlong(tracks, marks, metersPerPixel) {
         if (members.every((run) => named.has(run.line.route))) named.clear();
         // A line with a letter of its own this near, on this stretch or the
         // next (a knot of short stretches), is named here already: a second
-        // would crowd out another line's first.
-        const waiting = members.filter((run) => !named.has(run.line.route) && away(placed.get(run.line.route), here(run)) >= px(LETTER_SAME_PX));
+        // would crowd out another line's first. The metres floor holds for
+        // the forks that bunch at the same place whatever the zoom set
+        // (LETTER_SAME_METERS); the screen rule holds where two of one line
+        // the same distance apart read as two at the far zooms.
+        const waiting = members.filter((run) => !named.has(run.line.route) && away(placed.get(run.line.route), here(run)) >= Math.max(LETTER_SAME_METERS, px(LETTER_SAME_PX)));
         if (!waiting.length) continue;
         const turn = waiting.reduce((a, b) => (away(placed.get(b.line.route), here(b)) > away(placed.get(a.line.route), here(a)) ? b : a));
         named.add(turn.line.route);
