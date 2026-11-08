@@ -502,23 +502,23 @@ function joinEnds(runs) {
   }
 }
 
-// Buses per hour as a rider waits for them: departure `times` (seconds) in
-// the window, in any order, give the gaps between them; the expected wait of
-// someone arriving at random is half the sum of the squared gaps over the
-// sum of the gaps, so that doubled is the headway they feel, and the rate is
-// an hour over it. Evenly spaced buses give their plain rate; a pair that
-// leaves together counts about as one. Under two departures: the plain rate.
+// A shared street's frequency as a rider waits for it: departure `times`
+// (seconds) in the window, in any order, give the gaps between them, and the
+// street is as frequent as the gap that nine in ten gaps are at or under.
+// Evenly spaced buses give their plain headway; two every-30 routes that
+// leave a minute apart stay every 30, because nine in ten waits are that
+// long gap, and only buses that interleave add up to a faster street. Gaps
+// are counted without their length, so one bunch of four buses is one bunch,
+// not four buses' worth of speed. Under two departures: the plain rate.
 export function rate(times) {
   if (times.length < 2) return times.length / HOURS;
   const s = [...times].sort((a, b) => a - b);
-  let [sum, sq] = [0, 0];
-  for (let i = 1; i < s.length; i++) {
-    const g = s[i] - s[i - 1];
-    sum += g;
-    sq += g * g;
-  }
-  if (!sum) return s.length / HOURS;
-  return 3600 / (sq / sum);
+  const gaps = [];
+  for (let i = 1; i < s.length; i++) if (s[i] > s[i - 1]) gaps.push(s[i] - s[i - 1]);
+  if (!gaps.length) return 3600;
+  gaps.sort((a, b) => a - b);
+  const wait = gaps[Math.ceil(0.9 * gaps.length) - 1];
+  return 3600 / wait;
 }
 
 // The nearest point on the lines in `grid` within OWN of `p`, else `p`.
@@ -544,16 +544,30 @@ export { CLASS_RANK, segmentDistance };
 // TERMINAL_NEAR of it), the buses are laying over in a bus station, and the
 // lanes and loops they drive inside it are not streets a rider can use:
 // drawn, they are a tangle of short diagonals and triangles. So the place is
-// drawn as one: streets lying wholly within TERMINAL_R of it go, no street
-// within TERMINAL_CALM of it carries one-way arrows, and the facility is
-// marked `terminal` (the page draws one calm mark there). `streets` is
-// changed in place and returned; `places` are [lon, lat] points. Returns
-// the indexes of the places that are terminals.
+// tidied as one: a street lying wholly inside the terminal's building goes,
+// and no street on or around the building carries one-way arrows. The
+// building is `footprints` (scripts/lib/footprints.mjs), one closed ring of
+// [lon, lat] per place index; a terminal the build found no building for
+// keeps the older rule, a street lying wholly within TERMINAL_R of it, since
+// a park-n-ride's lot has no edge to tidy to. `streets` is changed in place;
+// `places` are [lon, lat] points. Returns the indexes of the places that are
+// terminals.
 export const TERMINAL_NEAR = 120;
 export const TERMINAL_ENDS = 3;
 export const TERMINAL_R = 70;
 export const TERMINAL_CALM = 130;
-export function terminals(streets, places, { precision = 5 } = {}) {
+// Arrows stay off the building itself and a little around it: nothing on a
+// station should point at anything.
+export const TERMINAL_EDGE = 30;
+
+/**
+ * The places that are bus terminals: those with TERMINAL_ENDS dead ends (a
+ * street end touching no other street) within TERMINAL_NEAR of them, as
+ * `{ qi, c }` — the place's index and the place projected to metres. The
+ * build asks for this before it looks up the buildings, so the streets can be
+ * tidied around the shape rather than around the point.
+ */
+export function terminalPlaces(streets, places, { precision = 5 } = {}) {
   if (!streets.length || !places.length) return [];
   const { project } = projection(places[0], precision);
   const lines = streets.map((f) => f.geometry.coordinates.map(project));
@@ -561,7 +575,6 @@ export function terminals(streets, places, { precision = 5 } = {}) {
   lines.forEach((l, li) => {
     for (let i = 1; i < l.length; i++) grid.add(l[i - 1], l[i], li);
   });
-  // A street's end that touches no other street.
   const deadEnds = [];
   lines.forEach((l, li) => {
     for (const p of [l[0], l.at(-1)]) {
@@ -575,13 +588,27 @@ export function terminals(streets, places, { precision = 5 } = {}) {
     const c = project(q);
     if (ends.near(c, TERMINAL_NEAR).length >= TERMINAL_ENDS) found.push({ qi, c });
   });
+  return found;
+}
+
+export function terminals(streets, places, { precision = 5, footprints = new Map() } = {}) {
+  if (!streets.length || !places.length) return [];
+  const { project } = projection(places[0], precision);
+  const lines = streets.map((f) => f.geometry.coordinates.map(project));
+  const found = terminalPlaces(streets, places, { precision });
   if (!found.length) return [];
-  const near = (p, r) => found.some(({ c }) => dist(p, c) <= r);
+  // The buildings, projected, and the terminals with none.
+  const shapes = [...footprints].filter(([qi]) => found.some((t) => t.qi === qi)).map(([, ring]) => ring.map(project));
+  const plain = found.filter(({ qi }) => !footprints.has(qi));
+  const near = (p, r) => plain.some(({ c }) => dist(p, c) <= r);
+  const inShape = (p) => shapes.some((ring) => inside(p, ring));
+  const nearShape = (p, r) => shapes.some((ring) => inside(p, ring) || ringDistance(p, ring) <= r);
   const keep = [];
   lines.forEach((l, li) => {
-    if (l.every((p) => near(p, TERMINAL_R))) return;
+    if (l.every((p) => near(p, TERMINAL_R) || inShape(p))) return;
     const f = streets[li];
-    if (f.properties.oneway && near(alongBy(l, length(l) / 2), TERMINAL_CALM)) {
+    const mid = alongBy(l, length(l) / 2);
+    if (f.properties.oneway && (near(mid, TERMINAL_CALM) || nearShape(mid, TERMINAL_EDGE))) {
       delete f.properties.oneway;
       delete f.properties.len;
     }
@@ -589,6 +616,24 @@ export function terminals(streets, places, { precision = 5 } = {}) {
   });
   streets.splice(0, streets.length, ...keep);
   return found.map((t) => t.qi);
+}
+
+// Is `p` inside the closed ring (even-odd crossing count)?
+function inside(p, ring) {
+  let hit = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+
+// How far `p` is from the ring's nearest edge.
+function ringDistance(p, ring) {
+  let best = Infinity;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) best = Math.min(best, segmentDistance(p, ring[j], ring[i]));
+  return best;
 }
 
 // The point `d` along a line.

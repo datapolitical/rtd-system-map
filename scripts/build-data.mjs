@@ -11,12 +11,13 @@ import { coreBounds } from './lib/core.mjs';
 import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { busNames } from './lib/busnames.mjs';
+import { terminalFootprints } from './lib/footprints.mjs';
 import { heading, stopLines } from './lib/stops.mjs';
 import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
 import { busStretches } from './lib/stretches.mjs';
-import { busStreets, terminals } from './lib/streets.mjs';
+import { busStreets, terminalPlaces, terminals } from './lib/streets.mjs';
 import { generalize } from './lib/generalize.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
@@ -342,13 +343,21 @@ async function main() {
   // The streets themselves, each drawn once, by the combined frequency of
   // every route along it (DESIGN.md, "Bus routes"; scripts/lib/streets.mjs).
   geo.streets = busStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION });
-  // Bus stations drawn as one place: the lanes inside them go, and the
-  // facility is marked (DESIGN.md, "Bus routes", "Terminals").
+  // Bus stations drawn as their own buildings: the place where streets end
+  // (DESIGN.md, "Bus routes", "Terminals"), then the building its bus gates
+  // stand in from OpenStreetMap (scripts/lib/footprints.mjs), then the streets
+  // tidied around that shape rather than around a made-up disk.
   {
-    const marks = terminals(geo.streets, geo.facilities.map((f) => f.geometry.coordinates), { precision: PRECISION });
+    const places = geo.facilities.map((f) => f.geometry.coordinates);
+    const found = terminalPlaces(geo.streets, places, { precision: PRECISION });
     const nearStation = (c) => geo.stations.some((s) => Math.hypot((s.geometry.coordinates[0] - c[0]) * 85000, (s.geometry.coordinates[1] - c[1]) * 110540) < 100);
-    for (const i of marks) if (!nearStation(geo.facilities[i].geometry.coordinates)) geo.facilities[i].properties.terminal = 1;
-    console.log(`  bus terminals: ${marks.length} (${marks.map((i) => geo.facilities[i].properties.name).join(', ')})`);
+    const drawn = found.map((t) => t.qi).filter((i) => !nearStation(places[i]));
+    const previous = JSON.parse(await readFile(path.join(OUT, 'terminals.geojson'), 'utf8').catch(() => '{"features":[]}')).features;
+    const shapes = await terminalFootprints({ facilities: geo.facilities, indexes: drawn, stops: geo.stops, previous });
+    geo.terminals = [...shapes.values()].map((s) => s.feature);
+    terminals(geo.streets, places, { precision: PRECISION, footprints: new Map([...shapes].map(([i, s]) => [i, s.ring])) });
+    console.log(`  bus terminals: ${found.length} (${found.map((t) => geo.facilities[t.qi].properties.name).join(', ')})`);
+    console.log(`  drawn as their building: ${geo.terminals.map((f) => `${f.properties.name} (${f.properties.gates} gates)`).join(', ') || 'none'}`);
   }
   const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
   const classes = Object.fromEntries(STREET_CLASSES.map((c) => [c.id, { streets: geo.streets.filter((f) => f.properties.cls === c.id).length, km: Math.round(streetKm(c.id) * 10) / 10 }]));
@@ -430,6 +439,7 @@ async function main() {
   }
   counts.busnames = geo.busnames.length;
   counts.streets = geo.streets.length;
+  counts.terminals = geo.terminals.length;
 
   // Write to a fresh folder, then swap it in, so a crash mid-write can't leave
   // half a dataset behind.

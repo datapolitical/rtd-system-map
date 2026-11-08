@@ -33,18 +33,23 @@ test('rate is the rider\'s: evenly spaced buses give their plain rate, a bunched
 });
 
 test('two routes on one street are one line with both buses counted', () => {
-  // Every 15 and every 20 minutes interleave; two every-15 timetables that
-  // leave together count about as one (the rider's rate).
+  // Every 15 and every 20 minutes, both leaving on the hour: the street has a
+  // hole of 15 minutes in it, so it reads as every 15 (the rider's wait), and
+  // the class says so.
   const out = streets([route('1', [[0, 0], [5, 0]], 15), route('2', [[0, 0], [5, 0]], 20, 'every30')]);
   assert.equal(out.length, 1);
   const p = out[0].properties;
   assert.equal(p.routes, '1 2');
   assert.equal(p.n, 2);
-  assert.ok(p.bph > 5 && p.bph <= 7, `combined ${p.bph} an hour (4 and 3 apart)`);
+  assert.ok(p.bph > 3.5 && p.bph <= 4.5, `combined ${p.bph} an hour (4 and 3 apart, bunched on the hour)`);
   assert.equal(p.cls, classOf(p.bph));
   assert.ok(km(out[0]) > 4.9 && km(out[0]) < 5.1);
   const together = streets([route('1', [[0, 0], [5, 0]], 15), route('2', [[0, 0], [5, 0]], 15)]);
   assert.ok(together[0].properties.bph < 4.5, `bunched pair reads ${together[0].properties.bph}, about one route`);
+  // Two every-30 routes that leave a minute apart stay every 30: the wait is
+  // the long gap, so the street does not read as every 15.
+  const bunched30 = streets([route('1', [[0, 0], [5, 0]], 30), route('2', [[0, 0], [5, 0]], 30, 'every30')]);
+  assert.ok(bunched30[0].properties.bph <= 2.2, `two every-30s leaving together read ${bunched30[0].properties.bph} an hour`);
 });
 
 test('a one-way pair a block apart stays two streets, touching at an end or not', () => {

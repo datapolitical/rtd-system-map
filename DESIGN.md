@@ -1163,17 +1163,21 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   overlaps and nothing darkens.
 - A street's buses per hour are the rider's rate, not a sum: the weekday
   9am–3pm departures of every all-day route on it, merged each way along
-  the street, the busier way counting (a one-way street has one). The wait
-  a rider arriving at random expects is half the sum of the squared gaps
-  over the sum of the gaps; doubled, that is the headway they feel, and the
-  rate is an hour over it (`rate`). Two every-30 routes that leave a minute
-  apart stay "every 30"; two that interleave are "every 15". This is the
-  interleaving idea of the earlier corridor prototype (`feat/v2-finish`,
+  the street, the busier way counting (a one-way street has one). The gaps
+  between the merged departures are the waits a rider can get, and the
+  street is as fast as the gap that nine in ten gaps are at or under — the
+  90th percentile, an hour over it (`rate`). So the wait the map promises
+  is a wait it keeps: evenly spaced buses give their plain headway, two
+  every-30 routes that leave a minute apart stay "every 30" (nine waits in
+  ten are the long gap), two that interleave are "every 15", and a bunch of
+  four buses is one bunch, not four times the speed. Summing routes, and
+  the interleaving rule of the corridor prototype (`feat/v2-finish`,
   `corridors.mjs`: routes add up only where the longest wait is at most 1.5
-  times the combined median gap) made continuous: no threshold, and a
-  partly bunched pair counts for something between one route and two. Raw
-  counts were rejected because they would make a bunched pair of hourly
-  routes look like a 30-minute street, which is a lie to the rider waiting.
+  times the combined median gap), were rejected because both credit a
+  street with buses a rider cannot catch. The cost is honest: the top class
+  is now rare, because a downtown street with 25 buses an hour over nine
+  routes whose timetables leave holes of more than three minutes reads
+  "every 4 to 5", which is what a rider there waits nine times in ten.
 - Part-time routes (rush hours, a few trips) are listed on the street but
   add nothing to its rate, and keep their own dashed and dotted lines.
 - Six classes, each a width and a key row (`public/js/frequency.js`,
@@ -1206,7 +1210,12 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   Every route on the street has a strand, part-time ones too (`pt`, after
   the all-day ones), and a seam that bounds a part-time strand is dashed.
   Until the strands have room, a part-time route rides beside the street
-  from 14, a dashed hairline just off its edge.
+  from 14, a dashed hairline a shade off the ink with 2.2 px of land between
+  it and the street's edge (so it reads as a second line beside the first,
+  not as the first line's edge); the gap is measured from the street's edge
+  at that zoom and grows with the strand, so the two never touch. Chris, on
+  round three: "the dashed part-time strand rides the edge of the solid line
+  instead of sitting beside it."
   Streets with more than six routes don't get strands (Chris: "something
   special on the places where there's just like too many lines to have a
   divider"): a core line a third of the width, in the strand color, runs
@@ -1377,13 +1386,18 @@ where that street meets the same crossing street closes a small triangle
 it forked from, and the fork meets the crossing street at one point. A
 dead-end stub under 60 m goes.
 
-*Terminals* (`streets.mjs`, `terminals`): where three or more streets end
-within 120 m of one of RTD's facilities, buses lay over there, and the
-lanes they drive inside are not streets a rider uses. Streets lying wholly
-within 70 m of it go, streets within 130 m carry no arrows, and, away from
-a rail station (which is already the place), the facility is drawn as one
-calm disk about 90 m across over the streets (`bus-terminal`), land-filled
-with a ring in the street ink. Civic Center is the case that asked for it.
+*Terminals* (`streets.mjs`, `terminals`; `footprints.mjs`): where three or
+more streets end within 120 m of one of RTD's facilities, buses lay over
+there, and the lanes they drive inside are not streets a rider uses. The
+building its bus gates stand in — the OpenStreetMap building holding the
+most of its stops within 110 m — is the terminal's shape: streets lying
+wholly inside it go, streets within 30 m of it carry no arrows, and, away
+from a rail station (which is already the place), that footprint is drawn
+filled in the land's colour and ringed in street ink (`bus-terminal`), the
+calm mark the disk used to be, in the shape of the place. A terminal with no
+building — a park-and-ride lot, a forecourt — draws no mark at all, since an
+invented shape is a lie about a place that has none; its stops and its
+Park-n-Ride sign say where it is. Civic Center is the case that asked for it.
 
 Still to do: the I-25 interchange by 38th and Fox no longer closes a
 triangle, but its ramps are still a busy cluster of short crossing pieces,
@@ -3085,6 +3099,27 @@ marks that overlap, a letter missing) are the next thing to add there.
   roads, ends join only ahead of themselves, small wyes become one meeting
   point, bus terminals are one disk with no arrows, one arrow glyph every
   300 px, and part-time routes get dashed strands (Bus routes).
+- 2026-11-08: Round four, terminals: a terminal is the building its bus
+  gates stand in, taken from OpenStreetMap at build time
+  (`scripts/lib/footprints.mjs`: the building holding the most of the
+  terminal's stops within 110 m), filled in the land's colour and ringed in
+  street ink, with the stops left on it where they are; the street net
+  removes the lanes inside that shape and leaves the streets outside it
+  alone. The disk is gone: it was the right size and the wrong shape, and
+  it painted over the block it sat on. A terminal with no building — a
+  park-and-ride lot, a station forecourt — draws nothing at all, since an
+  invented shape is a lie about a place that has no building; its stops and
+  its Park-n-Ride sign say where it is. Chris, after the round-three phone
+  check: "drop the Civic Center disk... draw a bus terminal in the shape of
+  the real building, its footprint taken from OpenStreetMap".
+- 2026-11-08: Round four, frequency: a shared street's rate is the gap that
+  nine gaps in ten are at or under, not the evenness-adjusted average of
+  round three. Chris: "count a shared street's frequency by the gaps between
+  buses (the wait 9 in 10 are at or under), not buses per hour: two routes
+  every 30 minutes that leave a minute apart are every 30, not every 15."
+  The average let a bunch of nine downtown routes buy the top class on
+  timetables whose holes are four minutes; the map now says what a rider
+  waits nine times in ten, and the top class is rare.
 
 ## Sources
 

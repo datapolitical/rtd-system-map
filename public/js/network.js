@@ -53,6 +53,12 @@ const STRANDS_MAX = 6;
 const STRAND_MIN = 2.6;
 const strands = ['+', ['get', 'n'], ['coalesce', ['get', 'pt'], 0]];
 const strandWidth = ['interpolate', ['linear'], ['zoom'], STRANDS_FROM, 0.6, 16, 1];
+// A strand's width in pixels at a zoom, as the map interpolates it (the
+// hairline beside a narrow street needs a gap measured from its edge).
+const strandAt = (z) => 0.6 + (Math.min(16, Math.max(STRANDS_FROM, z)) - STRANDS_FROM) * (0.4 / (16 - STRANDS_FROM));
+// The land between a narrow street's edge and a part-time hairline beside
+// it: wide enough to read as a gap at phone scale, no wider.
+const BESIDE_GAP = 2.2;
 const strandRoom = (zoom) => ['>=', ['/', classMatch((c) => classWidthAt(c.id, zoom)), strands], STRAND_MIN];
 const strandZooms = Array.from({ length: Math.round((18 - STRANDS_FROM) / 0.5) + 1 }, (_, i) => STRANDS_FROM + i / 2);
 const strandFade = ['step', ['zoom'], 0, ...strandZooms.flatMap((z) => [z, ['case', strandRoom(z), fade(onStreet), 0]])];
@@ -69,10 +75,10 @@ const ARROW_SPACING = 300;
 const ARROW_MIN_LEN = 250;
 const arrowSize = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0.62, 16, 0.78];
 const arrowFade = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0, ARROWS_FROM + 0.5, fade(onStreet)];
-// A bus station where routes lay over (the build's facility `terminal`) is
-// drawn as one place: a disk the size of its lanes, over the streets.
-const TERMINAL_M = 45;
-const metersAt = (z) => (TERMINAL_M * 512 * 2 ** z) / 40075016.686 / Math.cos((39.74 * Math.PI) / 180);
+// A bus terminal where routes lay over is drawn as the building its bus gates
+// stand in (the build finds it: scripts/lib/footprints.mjs), from the zoom the
+// old disk appeared at.
+const TERMINAL_FROM = 13;
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -114,7 +120,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'facilities', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'facilities', 'terminals', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -261,7 +267,9 @@ export function transitLines(lines) {
       })),
     ),
     // A part-time route on a street too narrow for strands rides beside
-    // it, a dashed hairline just off its edge, until the strands have room.
+    // it: a dashed hairline clear of the solid line, with a gap of land
+    // between them so it reads as a second line rather than the first
+    // line's edge, until the strands have room.
     {
       id: 'street-part-time-beside',
       type: 'line',
@@ -272,7 +280,7 @@ export function transitLines(lines) {
       paint: {
         'line-color': P.strand,
         'line-width': strandWidth,
-        'line-offset': ['interpolate', ['linear'], ['zoom'], ...strandZooms.filter((z) => z >= ARROWS_FROM).flatMap((z) => [z, classMatch((c) => classWidthAt(c.id, z) / 2 + 1.8)])],
+        'line-offset': ['interpolate', ['linear'], ['zoom'], ...strandZooms.filter((z) => z >= ARROWS_FROM).flatMap((z) => [z, classMatch((c) => classWidthAt(c.id, z) / 2 + strandAt(z) / 2 + BESIDE_GAP)])],
         'line-dasharray': [3, 2],
         'line-opacity': ['step', ['zoom'], 0, ...strandZooms.filter((z) => z >= ARROWS_FROM).flatMap((z) => [z, ['case', strandRoom(z), 0, fade(onStreet)]])],
       },
@@ -306,19 +314,32 @@ export function transitLines(lines) {
       },
       paint: { 'icon-opacity': arrowFade },
     },
+    // A bus terminal where routes lay over is the building its bus gates
+    // stand in, drawn as the place it is (DESIGN.md, "Bus routes",
+    // "Terminals"; the build finds the building in scripts/lib/footprints.mjs):
+    // filled with the land's colour, so the building the basemap draws
+    // underneath reads as the station and not as a second outline of the same
+    // block, and ringed in street ink, the calm mark the disk used to be.
     {
       id: 'bus-terminal',
-      type: 'circle',
-      source: 'facilities',
-      minzoom: 13,
-      filter: ['==', ['get', 'terminal'], 1],
+      type: 'fill',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
       paint: {
-        'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 13, metersAt(13), 16, metersAt(16), 18, metersAt(16)],
-        'circle-color': P.land,
-        'circle-stroke-color': P.freq.c10,
-        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 13, 1.5, 16, 3],
-        'circle-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.5, 1],
-        'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.5, 1],
+        'fill-color': P.land,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
+      },
+    },
+    {
+      id: 'bus-terminal-edge',
+      type: 'line',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
+      layout: { 'line-join': 'round' },
+      paint: {
+        'line-color': P.freq.c10,
+        'line-width': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 1.2, 16, 2.2, 18, 3],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
       },
     },
 
