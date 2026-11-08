@@ -30,6 +30,14 @@ colors from the style's own expressions), `detect.mjs` judges, `views.mjs`
 makes seeded views and tiles. Nothing there names a line, station, color or
 place. They are not unit tests: `npm test` stays pure Node.
 
+A spec reads a view through `mapPage.jump`, which moves the map and then
+waits for the map's rest: an `idle` (every source parsed, everything drawn),
+then the letters the page places once it is, up to three rounds, stopping
+when a round adds none. Read on a fixed quiet spell instead, a slow renderer
+is read mid-work: on GitHub's runner the map drew a dozen frames after a
+teleport without ever going idle, so letters arrived after the view was read
+(#31).
+
 ## Running
 
 1. `npm run build` once, so `public/data/` exists.
@@ -58,9 +66,10 @@ software-GL flags and its GPU process ran a 16 GB Mac out of memory.
 
 ## On GitHub
 
-Two workflows run the fast set there (`.github/workflows/checks-nightly.yml`
-and `checks-preview.yml`); both are green runs on the site, not tests of the
-check code itself. `CHECK_JSON` makes Playwright write
+Three workflows run the fast set there: `checks-nightly.yml` (main, nightly),
+`checks-preview.yml` (every branch) and `checks-baselines.yml` (on request,
+to capture the visual baselines). They are green runs on the site, not tests
+of the check code itself. `CHECK_JSON` makes Playwright write
 `qa/report/results.json`, which `github.mjs` reads.
 
 - **Checks (nightly)** runs at 01:20 Denver time and on `workflow_dispatch`,
@@ -78,6 +87,10 @@ check code itself. `CHECK_JSON` makes Playwright write
   A push that changes only files outside the site (the workflows, `qa/`,
   docs) gets no Cloudflare build: the run says so and checks the branch's
   earlier preview if it has one, or skips with a green status.
+- **Checks (baselines)** runs on `workflow_dispatch` from main: it captures
+  `visual.spec.mjs`'s views on the same runner the nightly uses, uploads what
+  it took, and commits the `-linux.png` images that changed to main. A run
+  that finds nothing new is green and says so.
 
 Reading a run from the command line:
 
@@ -93,11 +106,9 @@ holds the HTML report (`index.html`, open it locally), every capture, the
 per-test JSON the issues are written from, and on branch runs the contact
 sheet. Artifacts are kept for 90 days.
 
-The visual comparisons skip on Linux until someone commits `-linux.png`
-baselines (the committed ones are the Mac's), and the `@deep` specs are out
-of both workflows for now. Whether each spec behaves on GitHub's software GL
-is settled by the runs: any spec that cannot be made reliable there is left
-out of the set and named here.
+The `@deep` specs are out of both workflows for now. Whether each spec behaves
+on GitHub's software GL is settled by the runs: any spec that cannot be made
+reliable there is left out of the set and named here.
 
 ## Visual baselines
 
@@ -105,8 +116,18 @@ out of the set and named here.
 `visual.spec.mjs-snapshots/` (one per view, theme and platform). A failure
 there means the map looks different, not that it is wrong: open the report,
 look at the expected, actual and diff images, and if the change was meant,
-refresh them with `npm run check:baselines` (against the dev server, on the
-same machine) and commit the new images with the change.
+refresh the baselines and commit the new images with the change:
+
+- On GitHub, where the nightly compares: Actions → "Checks (baselines)" →
+  Run workflow from main. It captures on GitHub's runner and commits the
+  `-linux.png` files to main itself.
+- On your machine: `npm run check:baselines` against the dev server, then
+  commit the `-darwin.png` files it writes.
+
+A platform with no baseline yet is not a failure: the check writes the image
+from that run, says so in the job summary and the report, and passes. The
+image is in the run's artifact, so a new platform's baselines can be taken
+from there too.
 
 ## The sweep
 

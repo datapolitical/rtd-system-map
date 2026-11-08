@@ -3,9 +3,10 @@
 # issue labelled "found by checks" with its findings and a link to the run.
 # When a spec passes again, its issue is commented on and closed. The checks
 # read the site's own data (CHECK_URL), so there is no build or server here.
-# visual.spec.mjs skips on Linux until Linux baselines are committed, and
-# @deep stays out for now (DESIGN.md, "Design review rubric"; this file's
-# sibling checks-preview.yml runs the same set on every branch preview).
+# visual.spec.mjs compares against the -linux.png baselines in the tree, which
+# were captured on this runner; @deep stays out for now (DESIGN.md, "Design
+# review rubric"; this file's sibling checks-preview.yml runs the same set on
+# every branch preview).
 name: Checks (nightly)
 
 on:
@@ -52,7 +53,7 @@ jobs:
             qa/checks/out/
           if-no-files-found: warn
       - name: Open, comment on or close the issue for each spec
-        if: always()
+        if: always() && github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node qa/checks/github.mjs issues --site "https://rtd-system-map.pages.dev" --close

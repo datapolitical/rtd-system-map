@@ -102,26 +102,75 @@
     return { zoom: m.getZoom(), lat: c.lat, lon: c.lng, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, area: qa.area() };
   };
 
-  // Rest: no frame drawn for `quiet` ms and every tile loaded.
-  qa.settle = (quiet = 700, max = 45000) => new Promise((res) => {
+  // Rest: no frame drawn for `quiet` ms and every tile loaded, or `max` ms
+  // with frames still coming. The cap matters: a renderer slow enough to
+  // draw a frame every half second never leaves a `quiet` gap, and a wait
+  // that only ends on a gap never ends at all (a run of twenty views sat in
+  // here for fifty minutes). Every tile is loaded by then, which is what the
+  // gap was really for.
+  qa.settle = (quiet = 700, max = 12000) => new Promise((res) => {
     const m = map(), t0 = performance.now();
     let timer;
+    const done = () => {
+      clearTimeout(timer);
+      m.off('render', arm);
+      res(performance.now() - t0);
+    };
     const arm = () => {
+      if (performance.now() - t0 >= max) return done();
       clearTimeout(timer);
       timer = setTimeout(() => {
         if (!m.loaded() && performance.now() - t0 < max) return arm();
-        m.off('render', arm);
-        res(performance.now() - t0);
+        done();
       }, quiet);
     };
     m.on('render', arm);
     m.triggerRepaint();
     arm();
   });
+  // The map's own rest: the next idle, which is what the page waits for
+  // before it places a letter for each line with none (edgeletters.js), or
+  // `max` ms of no idle at all. A frame is forced because MapLibre only
+  // fires idle from inside a frame, and after a teleport it can go quiet
+  // without drawing one.
+  qa.idle = (max = 1500) => new Promise((res) => {
+    const m = map();
+    const t = setTimeout(() => { m.off('idle', onIdle); res(false); }, max);
+    const onIdle = () => { clearTimeout(t); res(true); };
+    m.once('idle', onIdle);
+    m.triggerRepaint();
+  });
+  // The routes with a letter drawn, sorted, as one string.
+  qa.letterKey = () => {
+    const m = map();
+    const layers = ['rail-bullets', 'rail-edge-letters'].filter((id) => m.getLayer(id));
+    return [...new Set(m.queryRenderedFeatures({ layers }).map((f) => f.properties.route))].sort().join(',');
+  };
+  // Does the page still have a letter to place? Its own account, which is
+  // empty once every line on screen has one drawn where it can be read.
+  qa.pending = async () => {
+    const mod = await import('/js/edgeletters.js');
+    return mod.placeEdgeLetters(map()).length > 0;
+  };
+  // A move, then the map at rest: its own idle, and the letters the page
+  // places once it is. The map can take a frame or two to place them, so
+  // while the page says it still has one to place, force a frame and let it
+  // draw, up to `rounds` times. A quiet spell alone read the view while the
+  // page was still working and reported lines with no letter on a map that
+  // was about to draw one (#31).
+  qa.rest = async (quiet = 700, rounds = 2) => {
+    await qa.settle(quiet);
+    for (let i = 0; i < rounds; i++) {
+      if (!(await qa.pending())) break;
+      await qa.idle();
+      await qa.settle(400, 4000);
+    }
+    return qa.letterKey();
+  };
+  // A move, then the map at rest.
   qa.jump = async (v, quiet) => {
     map().jumpTo({ center: [v.lon, v.lat], zoom: v.zoom, bearing: 0, pitch: 0 });
-    await new Promise((r) => setTimeout(r, 150));
-    return qa.settle(quiet);
+    return qa.rest(quiet);
   };
 
   // Every symbol and circle layer hidden, so the lines can be read from
