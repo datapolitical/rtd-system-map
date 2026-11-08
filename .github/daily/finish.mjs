@@ -14,7 +14,9 @@
 //
 // The agent's own comments and issues are the ones that end with the
 // "Made by:" line (.github/daily/madeby); the checks it starts post as the
-// same bot without it, so they are not counted as its work.
+// same bot without it, so they are not counted as its work. Its pushes are
+// the branches GitHub Actions pushed during the run (the repo's activity
+// list), not every branch that moved: mini pushes too.
 //
 // Labels, for a fix job, so a finished or stuck issue never comes back to
 // the worker by itself:
@@ -54,7 +56,18 @@ const heads = (text) => new Map(text.split('\n').filter(Boolean).map((l) => {
 }));
 const before = heads(fs.existsSync(env.REFS_BEFORE || '') ? fs.readFileSync(env.REFS_BEFORE, 'utf8') : '');
 const after = heads(execFileSync('git', ['ls-remote', '--heads', 'origin'], { encoding: 'utf8' }));
-const pushed = [...after].filter(([b, sha]) => b !== 'daily-ledger' && before.get(b) !== sha).map(([branch, sha]) => ({ branch, sha }));
+// A branch can move during the run because someone else pushed it (mini
+// pushes as Chris's account), so count only branches GitHub Actions pushed
+// since the run began. If the activity list can't be read, fall back to
+// every branch that moved.
+let byActions = null;
+try {
+  const activity = JSON.parse(ghRaw(['api', `repos/${repo}/activity?time_period=day&per_page=100`]));
+  byActions = new Set(activity.filter((a) => a.actor?.login === 'github-actions[bot]' && start && a.timestamp >= start).map((a) => a.ref.replace('refs/heads/', '')));
+} catch (e) {
+  console.error(`could not read the push activity, counting every branch that moved: ${e.message.split('\n')[0]}`);
+}
+const pushed = [...after].filter(([b, sha]) => b !== 'daily-ledger' && before.get(b) !== sha && (!byActions || byActions.has(b))).map(([branch, sha]) => ({ branch, sha }));
 
 // Comments and issues the agent made since it started.
 const mine = (x) => x.user?.login === 'github-actions[bot]' && x.created_at >= start && /\nMade by: /.test(x.body || '');

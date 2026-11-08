@@ -2246,8 +2246,8 @@ without the other noticing.
   (branch, commit, round, what was asked, what changed, and where to look,
   with views that open the map at the zooms where the change shows).
 - After each run the workflow, not the model, reads what the run did
-  from GitHub (branches pushed, issues filed, comments, evaluation
-  requests; `.github/daily/finish.mjs`) and sets the labels: an issue
+  from GitHub (branches GitHub Actions pushed during the run, issues
+  filed, comments, evaluation requests; `.github/daily/finish.mjs`) and sets the labels: an issue
   with an evaluation request goes to `ready for evaluation` with
   `agent instructions` off; one where the agent stopped without asking
   goes to `needs Chris` with a comment saying why (a run started by hand,
