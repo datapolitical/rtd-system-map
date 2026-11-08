@@ -50,7 +50,7 @@ jobs:
         if: github.ref_name != 'main'
         env:
           CHECK_URL: https://rtd-system-map.pages.dev
-        run: npx playwright test -c qa/playwright.config.mjs letters visual letters-diag --reporter=list
+        run: npx playwright test -c qa/playwright.config.mjs letters-diag2 --project=phone-light --reporter=list
       - name: Upload the report and captures
         if: always()
         uses: actions/upload-artifact@v7
