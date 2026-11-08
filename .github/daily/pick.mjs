@@ -92,9 +92,11 @@ if (first) {
   process.exit(0);
 }
 function branchOf(i) {
-  const cs = comments(i.number);
-  const m = [...cs].reverse().find((c) => /Working on branch `([^`]+)`/.test(c.body || ''));
-  return m ? m[1].match(/Working on branch `([^`]+)`/)[1] : null;
+  for (const c of [...comments(i.number)].reverse()) {
+    const m = (c.body || '').match(/Working on branch `([^`]+)`/);
+    if (m) return m[1];
+  }
+  return null;
 }
 function kindOf(i) {
   const labels = (i.labels || []).map((l) => l.name);
