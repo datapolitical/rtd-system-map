@@ -2402,8 +2402,8 @@ marks that overlap, a letter missing) are the next thing to add there.
    at :23, no page of its own). Live since 2026-11-06: the first production
    build succeeded and the site answers at rtd-system-map.pages.dev; the
    Worker is deployed with its `DEPLOY_HOOK` secret and cron. Not yet done:
-   the deployment-failure email (Cloudflare dashboard, Notifications), making
-   the repository public, offline caching, a domain.
+   the deployment-failure email (Cloudflare dashboard, Notifications),
+   offline caching, a domain.
 
 ## Open questions
 
@@ -2414,11 +2414,12 @@ marks that overlap, a letter missing) are the next thing to add there.
   and how evenly two routes must be spaced to count (two routes every 30
   minutes that leave a minute apart are not "every 15" to a rider), are
   unsettled.
-- **Span:** should "Frequent" also require all-day service? A strict test
-  (4 or more departures in every hour from 6am to 8pm) leaves only 4 routes:
-  FreeRide, 15, 31, and SKIP. Even 15-minute rail fails it at the edges of
-  the day. A span rule needs a looser window, or span could be shown
-  separately.
+- **Span (decided 2026-11-08):** "Frequent" does not also require all-day
+  service. A strict test (4 or more departures in every hour from 6am to 8pm)
+  leaves only 4 routes: FreeRide, 15, 31, and SKIP, and even 15-minute rail
+  fails it at the edges of the day. Lines keep the frequency of the window
+  the Key names ("Weekdays, 9am to 3pm"), and span shows by switching times
+  (milestone 8: Saturday, Sunday, evening), not as a stricter tier.
 - **Rail frequency (decided, weights open):** weekday midday, A, C, E, G, R,
   T, and W run every 15 minutes; N every 30; and B hourly. (The feed's D
   trips are positioning trains and aren't drawn; see "Trains that aren't a
@@ -2430,14 +2431,19 @@ marks that overlap, a letter missing) are the next thing to add there.
   station as served until the build after it starts. Good enough while builds
   run whenever RTD changes something; revisit if closures are announced in
   the feed well ahead.
-- **Live window:** frequency over the next 90 minutes, and "not running" when
-  nothing leaves within the next hour. Check both at the edges of the day
-  (5am, midnight), where a line can flip between tiers each minute; it may
-  need to hold its tier for a few minutes before changing.
-- **Alert noise:** RTD posts many alerts. Draw marks only for alerts whose
-  effect is no service, detour, reduced service, significant delays, or a
-  moved stop, and list the rest in panels. Review a week of the feed before
-  settling.
+- **Live window (decided 2026-11-08):** frequency over the next 90 minutes,
+  and "not running" when nothing leaves within the next hour. At the edges of
+  the day (5am, midnight), where a line can flip between tiers each minute, a
+  line changes tier only once the new tier has held for about 10 minutes.
+  When a line's first trip of the day is within the hour, its panel says when
+  it starts ("First train 5:12") rather than only its tier.
+- **Alert noise (decided 2026-11-08, pending a week of the feed):** RTD
+  posts many alerts. Draw marks only for alerts in effect now whose effect is
+  no service, detour, reduced service, significant delays, or a moved stop;
+  alerts that start later, and the rest, are listed in panels. The several
+  alerts RTD posts for one event (often one per stop) draw as one mark.
+  Review a week of the feed before building: if most alerts carry a vague
+  effect, this filter would draw almost nothing.
 - **Vehicles at region zoom:** about 600 buses at once would cover the map,
   which is why buses start at neighborhood zoom. Whether trains should show
   from the opening zoom is settled on screen.
@@ -3037,6 +3043,11 @@ marks that overlap, a letter missing) are the next thing to add there.
   frequency measure differs from RTD's 2016 service standards and DRCOG's
   high-frequency stops, for RTD staff reading the code. The measure itself
   is unchanged.
+- 2026-11-08: Three open questions settled (see "Open questions"). Frequent
+  does not require all-day service; span shows by switching times. Live
+  lines hold a new tier for about 10 minutes before changing at the edges of
+  the day. Alert marks only for alerts in effect now with a serious effect,
+  one mark per event, after a week's review of the feed.
 
 ## Sources
 
