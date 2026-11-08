@@ -102,16 +102,26 @@
     return { zoom: m.getZoom(), lat: c.lat, lon: c.lng, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, area: qa.area() };
   };
 
-  // Rest: no frame drawn for `quiet` ms and every tile loaded.
-  qa.settle = (quiet = 700, max = 45000) => new Promise((res) => {
+  // Rest: no frame drawn for `quiet` ms and every tile loaded, or `max` ms
+  // with frames still coming. The cap matters: a renderer slow enough to
+  // draw a frame every half second never leaves a `quiet` gap, and a wait
+  // that only ends on a gap never ends at all (a run of twenty views sat in
+  // here for fifty minutes). Every tile is loaded by then, which is what the
+  // gap was really for.
+  qa.settle = (quiet = 700, max = 12000) => new Promise((res) => {
     const m = map(), t0 = performance.now();
     let timer;
+    const done = () => {
+      clearTimeout(timer);
+      m.off('render', arm);
+      res(performance.now() - t0);
+    };
     const arm = () => {
+      if (performance.now() - t0 >= max) return done();
       clearTimeout(timer);
       timer = setTimeout(() => {
         if (!m.loaded() && performance.now() - t0 < max) return arm();
-        m.off('render', arm);
-        res(performance.now() - t0);
+        done();
       }, quiet);
     };
     m.on('render', arm);
@@ -148,12 +158,12 @@
   // draw, up to `rounds` times. A quiet spell alone read the view while the
   // page was still working and reported lines with no letter on a map that
   // was about to draw one (#31).
-  qa.rest = async (quiet = 700, rounds = 3) => {
+  qa.rest = async (quiet = 700, rounds = 2) => {
     await qa.settle(quiet);
     for (let i = 0; i < rounds; i++) {
       if (!(await qa.pending())) break;
       await qa.idle();
-      await qa.settle(400, 8000);
+      await qa.settle(400, 4000);
     }
     return qa.letterKey();
   };
