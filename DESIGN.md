@@ -1962,6 +1962,23 @@ quality; it would hold up printed beside the best hand-drawn transit maps.
 | Phone | Phones first; Layout | Nothing a rider needs is under the cards or buttons; works in one hand. |
 | Gorgeous | It looks designed | Would Chris screenshot it to show someone? Side by side with the Denver poster, does it hold its own? |
 
+**The five criteria.** Roberts (2014) scores schematic maps on five
+criteria, and found that how much people like a map has no correlation with
+how well they use it. The card scores these too, 0 to 3 on the same fixed
+views, and reports their total (out of 15) beside the ten rows rather than
+folding it into them:
+
+- **Simplicity:** line paths straight and calm, not zigzag.
+- **Coherence:** the overall shape and organization of the network read
+  clearly.
+- **Balance:** no crowded areas next to empty ones.
+- **Harmony:** the map is appealing to look at.
+- **Topographicity:** faithful enough to geography to orient by.
+
+Usefulness is the Useful row and the Validation tasks; looks are these five.
+A version that is useful but ugly, or lovely but wrong, cannot pass on the
+strength of the other.
+
 **The test.** A version passes when Accurate and Legible score 3, no row
 is below 2, and Gorgeous is at least 2 (aimed at 3). A pass is not a
 finish: the lowest row is named as the next work.
@@ -3002,6 +3019,11 @@ marks that overlap, a letter missing) are the next thing to add there.
   scoring: read-only, its own Chromium captures, blind to the builder's
   report. Chris asked whether a special-purpose reviewer should audit the
   work.
+- 2026-11-08: The rubric also scores Roberts' five criteria (simplicity,
+  coherence, balance, harmony, topographicity), 0 to 3 each and reported as
+  their own total, because liking a map and using it well are uncorrelated
+  (Roberts, 2014); score usefulness and looks separately. The reviewer agent
+  and the cards in `scorecards.md` follow.
 
 - 2026-11-08: No wash outside RTD's district: the basemap is the same
   everywhere inside the map's rectangular pan bounds. The wash hid towns,
@@ -3060,6 +3082,8 @@ marks that overlap, a letter missing) are the next thing to add there.
   [Working paper](https://wagner.nyu.edu/files/faculty/publications/Mind_the_Map_Guo_Zhan_2010.pdf)
 - Grison, Leprévost & Morgagni (2022). Do you believe in transit schematic
   maps? [Listing](https://timetableworld.com/?p=29315)
+- Roberts, M. J. (2014). What's your theory of effective schematic map
+  design? [PDF](https://repository.essex.ac.uk/11368/1/Roberts-Theoretical.pdf)
 - Roberts & Rose (2016). Map-induced journey-planning biases for a simple
   network. [PDF](https://repository.essex.ac.uk/17832/1/Roberts_Rose_TRA_2017.pdf);
   Roberts, Gray & Lesnik (2017), preference versus performance.

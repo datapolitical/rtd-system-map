@@ -3,7 +3,10 @@
 Design review cards, newest first. The rubric, the views and the pass rule
 are in DESIGN.md, "Design review rubric". Scores: 0 broken, 1 careless,
 2 good, 3 poster quality. A change is better than the last version only if
-no row goes down and at least one goes up.
+no row goes down and at least one goes up. Each card also scores Roberts'
+five criteria (simplicity, coherence, balance, harmony, topographicity) as a
+looks total out of 15 beside the ten rows' usefulness; neither stands in for
+the other.
 
 ## 2026-11-08: bus bundling, prototype round two, against main
 

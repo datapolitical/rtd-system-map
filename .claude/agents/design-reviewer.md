@@ -24,7 +24,8 @@ them.
 
 1. The repo's DESIGN.md: "Objective", "Map design" (all of it), "Where the
    labeling rules come from", "Hierarchy", "Dark mode", "Quality floor",
-   and "Design review rubric", which is your scoring scale and pass rule.
+   and "Design review rubric", which is your scoring scale and pass rule;
+   score its ten rows and its five criteria separately.
 2. scorecards.md: the previous card for this area. You score against it.
 3. The reference poster in ../rtd-references/, next to this repo
    (poster-overview.png, poster-downtown-inset.png, poster-central-east.png;
@@ -64,9 +65,11 @@ measure it.
 
 ## What you return (your final message)
 
-- The card: the rubric's ten rows, previous score, this score, and for
-  every row one sentence of evidence naming the capture file that shows it.
-  Score every row; "n/a" is not allowed.
+- The card: the rubric's ten rows and its five criteria, previous score,
+  this score, and for every row one sentence of evidence naming the capture
+  file that shows it. Score every row; "n/a" is not allowed. Score the five
+  separately, as a looks total out of 15; do not fold them into the ten
+  rows.
 - Pass or fail by the rubric's test, and better or not by its rule (no row
   down, at least one up). Name any row that went down.
 - The three most important faults, worst first, each with where (zoom,
