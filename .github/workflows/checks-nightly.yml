@@ -25,7 +25,9 @@ concurrency:
 
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.55.1 has no build for Ubuntu 26.04, which
+    # ubuntu-latest now is.
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v7
@@ -42,7 +44,7 @@ jobs:
         run: npm run check
       - name: Upload the report and captures
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: checks-nightly-${{ github.run_id }}
           path: |
