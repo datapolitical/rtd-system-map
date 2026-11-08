@@ -68,4 +68,5 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NO_PREVIEW: ${{ steps.preview.outcome == 'success' && steps.preview.outputs.url == '' }}
         run: node qa/checks/github.mjs status

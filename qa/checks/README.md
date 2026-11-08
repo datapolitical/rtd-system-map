@@ -75,6 +75,9 @@ check code itself. `CHECK_JSON` makes Playwright write
   `design-review.png` (with the individual captures and `views.json`) in the
   artifact. Its one-line result is the commit status `checks/preview`; a
   failing spec opens or comments on the same per-spec issue the nightly uses.
+  A push that changes only files outside the site (the workflows, `qa/`,
+  docs) gets no Cloudflare build: the run says so and checks the branch's
+  earlier preview if it has one, or skips with a green status.
 
 Reading a run from the command line:
 

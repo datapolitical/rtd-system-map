@@ -169,14 +169,17 @@ function statusMode() {
   } catch (e) {
     console.log(e.message);
   }
+  const skip = process.env.NO_PREVIEW === 'true';
   const failed = specs.filter((s) => s.failed.length);
   const names = failed.map((s) => name(s.file).replace(/\.spec\.mjs$/, ''));
-  const description = !specs.length
-    ? 'The checks did not run: no report (no preview, or the run stopped first)'
-    : failed.length
-      ? `${specs.length - failed.length} of ${specs.length} specs passed; failed: ${names.join(', ')}`.slice(0, 140)
-      : `All ${specs.length} specs passed`;
-  const state = failed.length || !specs.length ? 'failure' : 'success';
+  const description = skip
+    ? 'No preview: this push does not change the site'
+    : !specs.length
+      ? 'The checks did not run: no report (no preview, or the run stopped first)'
+      : failed.length
+        ? `${specs.length - failed.length} of ${specs.length} specs passed; failed: ${names.join(', ')}`.slice(0, 140)
+        : `All ${specs.length} specs passed`;
+  const state = skip ? 'success' : failed.length || !specs.length ? 'failure' : 'success';
   console.log(`${state}: ${description}`);
   const body = ['api', '-X', 'POST', `repos/${repo}/statuses/${sha}`, '-f', `state=${state}`, '-f', 'context=checks/preview', '-f', `description=${description}`, '-f', `target_url=${runUrl}`];
   gh(...body);
