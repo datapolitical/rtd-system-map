@@ -150,7 +150,8 @@ jobs:
           # Find or create the single log issue.
           NUM=$(gh issue list --label "found daily" --limit 100 --json number,title --jq '.[] | select(.title=="Agent log") | .number' | head -1)
           if [ -z "$NUM" ]; then
-            NUM=$(gh issue create --title "Agent log" --label "found daily" --milestone "V3 roadmap" --body "One line per run: job, model, what changed, what was handed to evaluation." --json number --jq .number)
+            URL=$(gh issue create --title "Agent log" --label "found daily" --milestone "V3 roadmap" --body "One line per run: job, model, what changed, what was handed to evaluation.")
+            NUM=$(basename "$URL")
           fi
           gh issue comment "$NUM" --body "$BODY"
           echo "$BODY" >> "$GITHUB_STEP_SUMMARY"
