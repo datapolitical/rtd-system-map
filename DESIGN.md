@@ -1267,7 +1267,9 @@ on there, I just we hadn't figured out how to do it, so it didn't make sense
 to put them on until we had a good solution"). Any new scheme must avoid
 each failure above: every route named, not whichever fit; never over a
 crossing line; a one-way pair named as one street; and fills that still
-differ in dark mode. Where routes share a street the build still reads the street as one
+differ in dark mode. Until a scheme does all of that, and passes the
+design review in captures of the busiest streets, the map ships without
+numbers. Where routes share a street the build still reads the street as one
 (`scripts/lib/busnames.mjs`: routes within 35 m and 25 degrees of each other
 are one run, named strongest tier first, a route's per-tier stretches joined
 end to end, neighbouring stretches with the same names merged), so a shared
@@ -1305,7 +1307,8 @@ together, then the third:
    reads as a circuit.
 3. *Route numbers*, which belong on the map (see "Numbers" below): named
    where routes part or turn first, so a junction's branches can be told
-   apart, then along every street.
+   apart, then along every street. Shipped only once a scheme meets the
+   bar under "Numbers"; until then the map stays without them.
 4. *Tap to trace a route*: the open route's whole path with its arrows, the
    rest faded. Cheap; helps only after a tap.
 5. Per-route color or pattern: rejected, as before (color is rail, dashes
