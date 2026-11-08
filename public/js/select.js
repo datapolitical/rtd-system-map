@@ -21,7 +21,7 @@ import { setHighlight, setEnds } from './highlight.js';
 import { TIERS, TIER_RANK, bullet, dayFreq, date, esc, freq, goesText, isPhone, joinDot, middayPhrase, time, weekendOnly } from './shared.js';
 
 const ROUTE_LAYERS = ['bus', 'bus-part-time', 'bus-limited', 'rail', 'rail-part-time'];
-const STATION_LAYERS = ['stations', 'stations-dot', 'stations-unserved'];
+const STATION_LAYERS = ['stations', 'stations-dot', 'stations-unserved', 'platform', 'platform-dot'];
 const TAG_LAYERS = ['rail-bullets', 'rail-edge-letters', 'line-signs'];
 const POINTER_LAYERS = [...ROUTE_LAYERS, ...STATION_LAYERS, 'facilities', 'stops', ...TAG_LAYERS, 'flexride-fill', 'vehicles-rail', 'vehicles-bus'];
 

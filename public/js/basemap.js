@@ -208,7 +208,11 @@ const shieldKeepOut = () =>
     .map((l, i) => ({ ...l, id: `keep-out-bus-shields-${i + 1}`, minzoom: BUS_FROM[i + 1], maxzoom: THIN_CLEAR_FROM }));
 
 // Stations and stops hold back the basemap's names too, and so do the lighter
-// bus lines. Not the stations' own names: those sit beside their mark.
+// bus lines. Not the stations' own names: those sit beside their mark. A
+// station's extra platform marks (network.js, 'platform') are capsule-shaped
+// the same way, and take up room like the station's own mark: as long as the
+// lines it spans, and as wide as a line.
+const stationBox = byZoom(RAIL_WIDTH.map((w) => ['+', w + 4 + 2 * KEEP_OUT, ['*', w + RAIL_GAP, ['-', ['coalesce', ['get', 'span'], 1], 1]]]));
 const markKeepOut = () => [
   ...busKeepOut().slice(1),
   clear('keep-out-stops', 'stops', {
@@ -217,10 +221,12 @@ const markKeepOut = () => [
   }),
   clear('keep-out-stations', 'stations', {
     minzoom: OVERVIEW_UNTIL,
-    layout: {
-      // A capsule as long as the lines it spans, and as wide as a line.
-      'icon-size': byZoom(RAIL_WIDTH.map((w) => ['+', w + 4 + 2 * KEEP_OUT, ['*', w + RAIL_GAP, ['-', ['coalesce', ['get', 'span'], 1], 1]]])),
-    },
+    layout: { 'icon-size': stationBox },
+  }),
+  clear('keep-out-platforms', 'platforms', {
+    minzoom: OVERVIEW_UNTIL,
+    filter: ['==', ['get', 'kind'], 'mark'],
+    layout: { 'icon-size': stationBox },
   }),
 ];
 

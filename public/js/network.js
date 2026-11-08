@@ -76,7 +76,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'stations', 'facilities', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'stations', 'platforms', 'facilities', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -242,6 +242,64 @@ export function transitLines(lines) {
 export function transitMarks(lines) {
   const halo = { 'text-halo-color': P.land, 'text-halo-width': 1.8, 'text-halo-blur': 0.4 };
   return [
+    // A station whose lines stop in places too far apart for one mark to stand
+    // for them gets a station mark at each platform group, joined to the
+    // station's own mark by a thin line, so every line ends at a mark and the
+    // groups read as one place (DESIGN.md, "Stations"). The build finds the
+    // groups in GTFS and places them on the drawn track (platforms.geojson);
+    // a group's mark waits for the zoom where it is clear of the station's own
+    // (`tickFrom`, as a station too near a stronger one does), then it is a
+    // station mark, drawn with the same images at the same sizes.
+    {
+      id: 'platform-joins',
+      type: 'line',
+      source: 'platforms',
+      filter: ['==', ['get', 'kind'], 'join'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': P.station.edge,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1, 16, 1.4],
+        'line-opacity': farOpacity(() => 0.55, { until: ZOOMS.at(-1) }),
+      },
+    },
+    {
+      id: 'platform-dot',
+      type: 'symbol',
+      source: 'platforms',
+      filter: ['==', ['get', 'kind'], 'mark'],
+      minzoom: OVERVIEW_UNTIL,
+      maxzoom: CAPSULE_TO,
+      layout: {
+        'icon-image': ['concat', 'dot-', ['coalesce', ['get', 'tick'], ['get', 'span']]],
+        'icon-size': stationSize,
+        'icon-rotate': ['coalesce', ['get', 'tickBearing'], ['get', 'bearing']],
+        'icon-rotation-alignment': 'map',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+      paint: {
+        'icon-opacity': farOpacity((z) => (z < OVERVIEW_UNTIL + 0.4 ? (z - OVERVIEW_UNTIL) / 0.4 : z <= CAPSULE_FROM ? 1 : Math.max(0, (CAPSULE_TO - z) / (CAPSULE_TO - CAPSULE_FROM)))),
+      },
+    },
+    {
+      id: 'platform',
+      type: 'symbol',
+      source: 'platforms',
+      filter: ['==', ['get', 'kind'], 'mark'],
+      minzoom: CAPSULE_FROM,
+      layout: {
+        'icon-image': ['step', ['zoom'], ['concat', 'station-', ['coalesce', ['get', 'tick'], ['get', 'span']]], CAPSULE_TO, ['concat', 'station-', ['get', 'span']]],
+        'icon-size': stationSize,
+        'icon-rotate': ['step', ['zoom'], ['coalesce', ['get', 'tickBearing'], ['get', 'bearing']], CAPSULE_TO, ['get', 'bearing']],
+        'icon-rotation-alignment': 'map',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+      // A group's mark arrives at its own `tickFrom`, which can be any zoom the
+      // capsule is drawn at, so the fades are stepped to the last zoom the
+      // marks grow to (16), not to the capsule's first (11).
+      paint: { 'icon-opacity': farOpacity((z) => Math.min(1, Math.max(0, (z - CAPSULE_FROM) / (CAPSULE_TO - CAPSULE_FROM))), { until: ZOOMS.at(-1) }) },
+    },
     {
       id: 'stops',
       type: 'circle',

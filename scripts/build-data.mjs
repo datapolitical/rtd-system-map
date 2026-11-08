@@ -15,6 +15,7 @@ import { heading, stopLines } from './lib/stops.mjs';
 import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
+import { platformMarks } from './lib/platforms.mjs';
 import { busStretches } from './lib/stretches.mjs';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
@@ -328,6 +329,22 @@ async function main() {
   stationMarks(geo.stations, pieces).forEach((m, i) => {
     Object.assign(geo.stations[i].properties, { tick: m.tick, tickBearing: m.tickBearing, tickFrom: m.from, meet: m.meet });
   });
+  // Where a station's lines stop in places too far apart for one mark to
+  // stand for them (DESIGN.md, "Stations"): a station mark at each platform
+  // group, joined to the station's own mark by a thin line. The groups come
+  // from the GTFS child stops and the lines that call at them, so a station
+  // whose platforms are one place gets nothing extra, and one that gains or
+  // loses a platform group does so with no change here.
+  geo.platforms = platformMarks(
+    geo.stations,
+    service.stations.map((s) => s.platforms),
+    pieces,
+  );
+  const apart = [...new Set(geo.platforms.filter((f) => f.properties.kind === 'mark').map((f) => f.properties.id))];
+  if (apart.length) {
+    const labels = new Map(geo.stations.map((f) => [f.properties.id, f.properties.label]));
+    console.log(`  stations marked at more than one platform group: ${apart.map((id) => labels.get(id)).join(', ')}`);
+  }
 
   // Names along the streets buses share, one run per street.
   geo.busnames = busNames(geo.routes.filter((f) => f.properties.mode === 'bus'), { precision: PRECISION });
