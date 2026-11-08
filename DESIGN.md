@@ -1794,6 +1794,57 @@ phones, not a full-width bar.
   data is unavailable. If ArcGIS is down, the site uses the last built
   snapshot.
 
+## Design review rubric
+
+Every change to what the map draws is scored on this card before it is
+called done, and the card goes with it (Chris, 2026-11-08: "it has to be
+useful and look gorgeous"; "you should have clear design evaluation
+principles by now"). The rows are this document's own principles, so a
+score is a claim about a section above, not taste.
+
+**The views.** Scored from phone captures (390 x 844), light and dark,
+before and after, at the same fixed views every time: the metro at 10.5
+over downtown, the west side at 10.7, the south at 10.2, downtown at 12.5
+and 14.5 over the hub, and whatever the change is about (a corridor, a
+terminal). `qa/checks` takes them headless. A row is scored on the worst
+view, not the best.
+
+**The scores.** 0: broken or wrong. 1: works, but looks careless or
+accidental. 2: good; nothing a rider would notice as wrong. 3: poster
+quality; it would hold up printed beside the best hand-drawn transit maps.
+
+| Row | Principle (section) | Asks |
+|---|---|---|
+| Useful | Objective; Validation tasks | Can a rider answer the question this change is for from the view alone, without a tap? Name the question. |
+| Hierarchy | Hierarchy | Squint: rail first, then frequent buses, then stations, then the rest. Does anything new outrank what should be stronger? |
+| Association | Name what can be read as named; Imhof | Is every label and mark tied at a glance to one thing? Anything ambiguous is dropped, not nudged. |
+| Drawn on purpose | It looks designed; Shared track | Even packs, concentric corners, clean branches, flush ends. No stubs, knots, jogs, beads, wobble. |
+| Calm | Imhof's density rule; Hierarchy 8 | Room to breathe: nothing crowded, nothing repeated nearby, no wall of lines or words. |
+| Legible | Quality floor; Dark mode | Text 4.5:1 and essential lines 3:1 on what they sit on; both themes equally good. |
+| Accurate | It looks designed (within reason) | Nothing on the wrong street, past a station, or saying something false. |
+| Across zooms | By zoom level; The key | Changes between zooms are calm, not a jump; the same thing looks the same everywhere, and as the Key draws it. |
+| Phone | Phones first; Layout | Nothing a rider needs is under the cards or buttons; works in one hand. |
+| Gorgeous | It looks designed | Would Chris screenshot it to show someone? Side by side with the Denver poster, does it hold its own? |
+
+**The test.** A version passes when Accurate and Legible score 3, no row
+is below 2, and Gorgeous is at least 2 (aimed at 3). A pass is not a
+finish: the lowest row is named as the next work.
+
+**Better than the last version.** A change is better only if no row goes
+down and at least one goes up. The total (out of 30) is reported but never
+traded: a gain in Useful does not buy a loss in Calm. A change that lowers
+a row ships only if Chris accepts that trade, and the decision log says
+so. Every card is kept, dated, in `scorecards.md`, so each version is
+scored against the one before it.
+
+**Who scores.** Not whoever did the work. The orchestrator scores from the
+captures; for anything large (a new kind of mark, a roadmap step) a second
+reviewer who did not build it scores independently, and the two cards are
+shown side by side. Each score cites the capture that earns it. The measured
+checks (`npm run check`, the sweep) back the rows they can (Drawn on
+purpose, Association, Legible, Phone), and a failing check caps its row at
+1. Chris's verdict on the screenshots overrides the card.
+
 ## Validation
 
 Before calling a version done, five people who don't know the system each try
@@ -2783,6 +2834,14 @@ marks that overlap, a letter missing) are the next thing to add there.
   14 profile defaults to WebKit, so they had been running there, where the
   software-GL flags do nothing. WebKit's GPU process reached 8.4 GB in 90
   seconds, and the 16 GB Mac ran out of memory and restarted.
+
+- 2026-11-08: A design review rubric ("Design review rubric"): ten rows,
+  each one of this document's principles, scored 0 to 3 from fixed phone
+  views in both themes, before and after; Accurate and Legible must be 3,
+  nothing below 2, a change is better only if no row drops and one rises,
+  and the scorer is never whoever did the work. Chris asked
+  for it after the bus bundling prototype was called a success for being
+  countable when it did not yet look good.
 
 ## Sources
 
