@@ -56,6 +56,46 @@ detectors then read that server's own data. The browsers are Playwright's
 config forces it, because the iPhone profile's default, WebKit, ignores the
 software-GL flags and its GPU process ran a 16 GB Mac out of memory.
 
+## On GitHub
+
+Two workflows run the fast set there (`.github/workflows/checks-nightly.yml`
+and `checks-preview.yml`); both are green runs on the site, not tests of the
+check code itself. `CHECK_JSON` makes Playwright write
+`qa/report/results.json`, which `github.mjs` reads.
+
+- **Checks (nightly)** runs at 01:20 Denver time and on `workflow_dispatch`,
+  against https://rtd-system-map.pages.dev. Each failing spec opens an issue
+  labelled `found by checks` (or comments on the open one) with its failing
+  tests, the findings its detectors attached and a link to the run; when the
+  spec passes again the issue is commented on and closed. The HTML report and
+  `qa/checks/out/` are the run's artifact.
+- **Checks (branch preview)** runs on every push to a branch but main. It
+  waits for that commit's `Cloudflare Pages` check run, checks the branch's
+  preview URL, and puts the design review's fixed views, both themes, on
+  `design-review.png` (with the individual captures and `views.json`) in the
+  artifact. Its one-line result is the commit status `checks/preview`; a
+  failing spec opens or comments on the same per-spec issue the nightly uses.
+
+Reading a run from the command line:
+
+```
+gh run list --workflow checks-nightly.yml --limit 5
+gh run view <id> --log-failed
+gh run download <id> -D <dir>          # qa/report/, qa/checks/out/, qa/review/
+gh run watch <id>
+```
+
+Or open the repository's Actions tab and download the run's artifact: it
+holds the HTML report (`index.html`, open it locally), every capture, the
+per-test JSON the issues are written from, and on branch runs the contact
+sheet. Artifacts are kept for 90 days.
+
+The visual comparisons skip on Linux until someone commits `-linux.png`
+baselines (the committed ones are the Mac's), and the `@deep` specs are out
+of both workflows for now. Whether each spec behaves on GitHub's software GL
+is settled by the runs: any spec that cannot be made reliable there is left
+out of the set and named here.
+
 ## Visual baselines
 
 `visual.spec.mjs` compares against images in

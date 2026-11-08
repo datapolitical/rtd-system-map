@@ -3,8 +3,8 @@
 # dry-run bundle of the two Workers deployed by hand (the Live relay and the
 # hourly refresh), so a broken import fails here rather than at deploy. The
 # site itself, data build included, is built by Cloudflare Pages on each push.
-# The headless browser checks (npm run check) need a running site and stay
-# local.
+# The headless browser checks run in checks-nightly.yml against the live site
+# and checks-preview.yml against each branch's preview.
 name: Tests
 
 on:

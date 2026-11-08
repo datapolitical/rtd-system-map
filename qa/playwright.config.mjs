@@ -2,6 +2,7 @@
 // Run with `npm run check`. The dev server (npm run dev, port 8788) is reused
 // if it is already running; `live.spec.mjs` also needs the relay (npm run
 // dev:live, port 8789).
+import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
 const baseURL = (process.env.CHECK_URL || 'http://127.0.0.1:8788').replace(/\/$/, '');
@@ -18,7 +19,14 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1, // each check drives one heavy map
   timeout: 120_000,
-  reporter: [['list'], ['html', { outputFolder: 'report', open: 'never' }]],
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'report', open: 'never' }],
+    // On GitHub, where the workflow needs machine-readable results to open
+    // and close issues (qa/checks/README.md). Resolved here because the JSON
+    // reporter reads a relative outputFile from the config's directory.
+    ...(process.env.CHECK_JSON ? [['json', { outputFile: path.resolve(process.env.CHECK_JSON) }]] : []),
+  ],
   use: {
     baseURL,
     trace: 'retain-on-failure',

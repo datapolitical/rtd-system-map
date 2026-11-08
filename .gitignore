@@ -12,6 +12,8 @@ qa/node_modules/
 # Captures from the headless checks (qa/checks/README.md).
 qa/checks/out/
 qa/report/
+# The design review's contact sheet, captured by the branch checks.
+qa/review/
 # Agent scratch and captures.
 qa/.scratch/
 # The sweep's report and captures (qa/sweep/sweep.mjs).
