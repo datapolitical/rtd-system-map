@@ -2222,6 +2222,34 @@ build's own modules. The specs are the record of what each step measured;
 the detectors that look for faults nobody has named yet (a line that breaks,
 marks that overlap, a letter missing) are the next thing to add there.
 
+## Unattended work
+
+The map is worked on continuously in two halves that talk only through
+GitHub issue labels and comments, so either side can stop or restart
+without the other noticing.
+
+- The worker runs on GitHub Actions (`.github/workflows/agent.yml`,
+  every four hours and on demand): one issue or one review pass per run,
+  done by an AI agent, with map changes on branches and docs, tests and
+  CI allowed to main fast-forward. Its briefs are `.github/daily/find.md`
+  and `.github/daily/fix.md`; it records what it did in `ledger.json` on
+  the orphan branch `daily-ledger` and one line per run on the "Agent log"
+  issue. When a run finishes a map change it posts an evaluation request
+  (branch, commit, round, what was asked, what changed, and where to look,
+  with views that open the map at the zooms where the change shows) and
+  labels the issue `ready for evaluation`.
+- The evaluator runs on the home machine and is the only thing that talks
+  to a human. It checks the preview, puts phone captures beside a
+  satellite overlay (`qa/sat/render.py`), and returns `pass` (a phone
+  check for a human), `revise` (instructions for the worker), or
+  `escalate` (a decision only a human can make). After round 3 without a
+  pass it escalates whatever the evaluation said.
+
+The satellite overlay (`qa/sat/render.py`) draws Esri satellite tiles
+with OpenStreetMap shapes and the map's own stops, rail lines,
+terminals, structures and stations on top, so a builder checks their own
+work against the real structure before asking for evaluation.
+
 ## Milestones
 
 1. **V1, the layout (done 2026-11-01):** the full data build, with sources
@@ -3086,6 +3114,12 @@ marks that overlap, a letter missing) are the next thing to add there.
   per "## " section with a grouped contents page, regenerated on every change
   on main (`scripts/wiki.mjs`, `.github/workflows/wiki.yml`). This file stays
   the only source; the wiki is never edited by hand.
+- 2026-11-08: Unattended work talks only through GitHub issue labels and
+  comments: a GitHub Actions worker (`.github/workflows/agent.yml`) does
+  the building, fixing and finding, and a home evaluator checks finished
+  work and writes the worker's next instructions. Either side can stop or
+  restart without the other noticing; the satellite overlay
+  (`qa/sat/render.py`) is how builders check their own work first.
 
 ## Sources
 
