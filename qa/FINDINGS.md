@@ -47,7 +47,7 @@ route 225 — Boulder / Lafayette via Baseline
 - Confidence: confirmed (axe on the desktop run in Chromium, Firefox and WebKit alike)
 - Where: public/css/app.css:209 (`color: var(--ink-3)`) with `--ink-3: #7e8b98` at public/css/app.css:26
 - Reproduce: `cd qa && BASE=http://localhost:8811 node scripts/browser.mjs` then read `qa/out/browser.json`, or `npx @axe-core/cli http://localhost:8811` (the script uses `@axe-core/playwright`)
-- Expected: DESIGN.md:986 "Accessibility: WCAG AA contrast for text". The note is 12px normal weight, so AA asks for 4.5:1.
+- Expected: DESIGN.md:1090 "Accessibility: WCAG AA contrast for text". The note is 12px normal weight, so AA asks for 4.5:1.
 - Actual: axe reports
 
 ```
@@ -67,8 +67,8 @@ route 225 — Boulder / Lafayette via Baseline
 - Confidence: confirmed, and corrected once: an earlier version of this finding said 15.9 s, which was measured against a static server that sent the JSON uncompressed. Cloudflare Pages compresses, so that number was mine, not the site's.
 - Where: public/index.html loads `vendor/maplibre-gl.mjs` and `vendor/maplibre-gl-worker.mjs`; the basemap glyphs are `vendor/glyphs/Overpass */0-255.pbf`
 - Reproduce: `cd qa && PORT=8811 npm run serve` in one shell (it now brotli-compresses like Pages), then `cd .. && BASE=http://localhost:8811 node qa/cache/timing.mjs`. The throttle is Lighthouse's mobile preset (150 ms RTT, 1,638.4 kbit/s down, 750 kbit/s up, 4× CPU); the clock runs from navigation until `#status` is hidden
-- Expected: DESIGN.md:966 "a usable map in under 2 seconds on a mid-range phone over 4G"
-- Actual: median **4,866 ms** over three runs (6,006 / 4,501 / 4,866). That beats the 6.7 s DESIGN.md:1127 records for V2 step 1, and misses the 2 s floor by 2.4×. What is left is not the data: 581 KB in 11 files, of which `vendor/maplibre-gl.mjs` is 234 KB and takes 1,637 ms, the two Overpass glyph pages are 161 KB and take 1,673 ms and 1,032 ms, and the worker is 119 KB. The transit GeoJSON is 2.4 MB raw but only 241 KB brotli, and most of it is fetched by the worker after the first draw.
+- Expected: DESIGN.md:1067 "a usable map in under 2 seconds on a mid-range phone over 4G"
+- Actual: median **4,866 ms** over three runs (6,006 / 4,501 / 4,866). That beats the 6.7 s DESIGN.md:1231 records for V2 step 1, and misses the 2 s floor by 2.4×. What is left is not the data: 581 KB in 11 files, of which `vendor/maplibre-gl.mjs` is 234 KB and takes 1,637 ms, the two Overpass glyph pages are 161 KB and take 1,673 ms and 1,032 ms, and the worker is 119 KB. The transit GeoJSON is 2.4 MB raw but only 241 KB brotli, and most of it is fetched by the worker after the first draw.
 - Note: the same three runs against the uncompressed server took 15,717 / 15,946 / 16,080 ms. That gap is the whole reason F-004 was wrong the first time, and it is worth knowing when reading any load-time claim about this site: it is 10× the bytes on the wire.
 
 ### F-005: With no WebGL2 the page says "Loading the network…" forever instead of saying the map cannot draw
@@ -78,7 +78,7 @@ route 225 — Boulder / Lafayette via Baseline
 - Confidence: confirmed (3 runs, all three sizes, headless Firefox; headed Firefox and WebKit draw fine)
 - Where: public/js/main.js:77 (`new maplibregl.Map(...)` inside `async function main()`), with `#status` cleared only at public/js/main.js:124
 - Reproduce: `cd qa && BASE=http://localhost:8811 node scripts/browser.mjs` without `HEADED=1` — headless Firefox on this host has no WebGL2, so the page never gets a context. With `HEADED=1` under Xvfb, Firefox and WebKit both draw normally, so this is the no-context path only.
-- Expected: DESIGN.md:989 "Resilience: if the live feed fails, the map still works and says live data is unavailable" — the pattern is that the page tells the rider what is wrong rather than spinning.
+- Expected: DESIGN.md:1093 "Resilience: if the live feed fails, the map still works and says live data is unavailable" — the pattern is that the page tells the rider what is wrong rather than spinning.
 - Actual: the map constructor throws, `main()` rejects, and `#status` is never touched again:
 
 ```
@@ -114,7 +114,7 @@ after 45 s: document.getElementById('status').hidden === false, textContent "Loa
 - Severity: medium
 - Area: spec
 - Confidence: confirmed
-- Where: DESIGN.md:731-736 (the rule) and Milestones step 2.2 (DESIGN.md:1134, "bus corridors with combined frequency"); no code implements it — `scripts/build-data.mjs` has no corridor step, and the only "corridor" in the tree is the rail side-ordering in `scripts/lib/sharedtrack.mjs:102-135`
+- Where: DESIGN.md:731-736 (the rule) and Milestones step 2.2 (DESIGN.md:1238, "bus corridors with combined frequency"); no code implements it — `scripts/build-data.mjs` has no corridor step, and the only "corridor" in the tree is the rail side-ordering in `scripts/lib/sharedtrack.mjs:102-135`
 - Reproduce: `grep -rn "combined\|corridor" scripts/build-data.mjs scripts/lib/gtfs.mjs scripts/lib/stations.mjs` (no output) and `grep -c combined public/data/routes.geojson` (`0`)
 - Expected: "Where several routes share a street and its stops, riders can take whichever comes first. The build finds these shared stretches from GTFS stop sequences and draws the corridor once, weighted by the combined frequency of the routes on it (two routes every 30 minutes, evenly spaced, are a frequent corridor). Only stops both routes serve count, so a limited-stop route adds to the corridor only at its stops."
 - Actual: each route is drawn on its own, at its own tier; nothing computes shared stretches of bus stop sequences and nothing carries a combined frequency. `routes.geojson` has no `combined` field and both files' route properties are per-route only (`route`, `name`, `tier`, `wk`, `sa`, `su`, `wk_trips`, …). So a street served by two every-30 routes reads as two every-30 lines rather than one every-15 corridor — the exact question the site exists to answer at a shared stop.

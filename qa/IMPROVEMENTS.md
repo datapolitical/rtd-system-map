@@ -6,7 +6,7 @@ this phase is — V2, the visual design, in five steps.
 
 ## Where the project actually is
 
-Reading `DESIGN.md:1111-1157` against the tree:
+Reading `DESIGN.md:1215-1261` against the tree:
 
 | V2 step | State |
 |---|---|
@@ -77,7 +77,7 @@ scripts/` finds only the rail side-ordering in `sharedtrack.mjs`, and
 `routes.geojson` contains no combined frequency. The spec's rule is written and
 unimplemented (`DESIGN.md:731-736`).
 
-**The open question is the real work.** `DESIGN.md:1175-1178` already flags it:
+**The open question is the real work.** `DESIGN.md:1279-1282` already flags it:
 how evenly must two routes be spaced before their frequencies add? Two every-30
 routes leaving a minute apart are not "every 15" to a rider. My proposal, which
 I would test against real data before drawing anything:
@@ -174,7 +174,7 @@ kind of test this project's own tests already favour.
 - **Service worker, offline, deploy.** Milestone 6. Worth noting the offline
   promise will lean on the same payload work as item 6.
 - **A framework, a bundler, or a TypeScript migration.** The page ships ES
-  modules by design (`DESIGN.md:1101`) and the whole build is ~1,600 lines. This
+  modules by design (`DESIGN.md:1205`) and the whole build is ~1,600 lines. This
   is not the phase where that changes.
 - **New data files for the panels.** Step 5 should decide the panel contract;
   inventing a `stations.json` now would be guessing at what the sheet needs.
