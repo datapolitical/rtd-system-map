@@ -123,7 +123,7 @@
   // `max` ms of no idle at all. A frame is forced because MapLibre only
   // fires idle from inside a frame, and after a teleport it can go quiet
   // without drawing one.
-  qa.idle = (max = 3000) => new Promise((res) => {
+  qa.idle = (max = 1500) => new Promise((res) => {
     const m = map();
     const t = setTimeout(() => { m.off('idle', onIdle); res(false); }, max);
     const onIdle = () => { clearTimeout(t); res(true); };
@@ -136,23 +136,26 @@
     const layers = ['rail-bullets', 'rail-edge-letters'].filter((id) => m.getLayer(id));
     return [...new Set(m.queryRenderedFeatures({ layers }).map((f) => f.properties.route))].sort().join(',');
   };
-  // A move, then the map at rest: its own idle (every tile and source
-  // parsed, everything drawn) and the letters it places once it is, which
-  // arrive a frame or two later on a slow renderer. Each round forces one
-  // frame and waits for the map to go quiet again; it stops when a round
-  // adds no letter, so a view is read once the map has stopped adding them.
-  // A quiet spell alone read the view while the page was still working and
-  // reported lines with no letter on a map that was about to draw one (#31).
+  // Does the page still have a letter to place? Its own account, which is
+  // empty once every line on screen has one drawn where it can be read.
+  qa.pending = async () => {
+    const mod = await import('/js/edgeletters.js');
+    return mod.placeEdgeLetters(map()).length > 0;
+  };
+  // A move, then the map at rest: its own idle, and the letters the page
+  // places once it is. The map can take a frame or two to place them, so
+  // while the page says it still has one to place, force a frame and let it
+  // draw, up to `rounds` times. A quiet spell alone read the view while the
+  // page was still working and reported lines with no letter on a map that
+  // was about to draw one (#31).
   qa.rest = async (quiet = 700, rounds = 3) => {
-    let seen = null;
+    await qa.settle(quiet);
     for (let i = 0; i < rounds; i++) {
+      if (!(await qa.pending())) break;
       await qa.idle();
-      await qa.settle(quiet);
-      const now = qa.letterKey();
-      if (now === seen) return now;
-      seen = now;
+      await qa.settle(400, 8000);
     }
-    return seen;
+    return qa.letterKey();
   };
   qa.jump = async (v, quiet) => {
     map().jumpTo({ center: [v.lon, v.lat], zoom: v.zoom, bearing: 0, pitch: 0 });
