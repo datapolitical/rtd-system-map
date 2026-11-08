@@ -2531,6 +2531,34 @@ build's own modules. The specs are the record of what each step measured;
 the detectors that look for faults nobody has named yet (a line that breaks,
 marks that overlap, a letter missing) are the next thing to add there.
 
+## Unattended work
+
+The map is worked on continuously in two halves that talk only through
+GitHub issue labels and comments, so either side can stop or restart
+without the other noticing.
+
+- The worker runs on GitHub Actions (`.github/workflows/agent.yml`,
+  every four hours and on demand): one issue or one review pass per run,
+  done by an AI agent, with map changes on branches and docs, tests and
+  CI allowed to main fast-forward. Its briefs are `.github/daily/find.md`
+  and `.github/daily/fix.md`; it records what it did in `ledger.json` on
+  the orphan branch `daily-ledger` and one line per run on the "Agent log"
+  issue. When a run finishes a map change it posts an evaluation request
+  (branch, commit, round, what was asked, what changed, and where to look,
+  with views that open the map at the zooms where the change shows) and
+  labels the issue `ready for evaluation`.
+- The evaluator runs on the home machine and is the only thing that talks
+  to a human. It checks the preview, puts phone captures beside a
+  satellite overlay (`qa/sat/render.py`), and returns `pass` (a phone
+  check for a human), `revise` (instructions for the worker), or
+  `escalate` (a decision only a human can make). After round 3 without a
+  pass it escalates whatever the evaluation said.
+
+The satellite overlay (`qa/sat/render.py`) draws Esri satellite tiles
+with OpenStreetMap shapes and the map's own stops, rail lines,
+terminals, structures and stations on top, so a builder checks their own
+work against the real structure before asking for evaluation.
+
 ## Milestones
 
 1. **V1, the layout (done 2026-11-01):** the full data build, with sources
@@ -2727,9 +2755,9 @@ marks that overlap, a letter missing) are the next thing to add there.
    `refresh/` (`check.mjs` with tests, `worker.mjs`, `wrangler.toml`, hourly
    at :23, no page of its own). Live since 2026-11-06: the first production
    build succeeded and the site answers at rtd-system-map.pages.dev; the
-   Worker is deployed with its `DEPLOY_HOOK` secret and cron. Not yet done:
-   the deployment-failure email (Cloudflare dashboard, Notifications),
-   offline caching, a domain.
+   Worker is deployed with its `DEPLOY_HOOK` secret and cron. The
+   deployment-failure email is on (Cloudflare Notifications, 2026-11-08).
+   Not yet done: offline caching, a domain.
 
 ## Open questions
 
@@ -3312,6 +3340,18 @@ marks that overlap, a letter missing) are the next thing to add there.
   14 profile defaults to WebKit, so they had been running there, where the
   software-GL flags do nothing. WebKit's GPU process reached 8.4 GB in 90
   seconds, and the 16 GB Mac ran out of memory and restarted.
+- 2026-11-08: The checks run on GitHub as a nightly and on every branch
+  preview, and the visual baselines are the runner's: six `-linux.png`
+  captures taken on GitHub's own runner are committed, a platform with no
+  baseline writes one from its run, says so in the job summary and passes
+  (a red run that only said "no baseline yet" opened #32), and a Checks
+  (baselines) workflow re-captures and commits them on request. A view is
+  read at the map's own rest, not after a quiet spell: the page places the
+  edge letters on idle, and after a teleport MapLibre can draw a dozen
+  frames on a slow renderer without ever going idle, so the check forces a
+  frame and waits for the letters to stop arriving (a quiet spell, or one
+  idle, read the view mid-work and reported a line with no letter on a map
+  that was about to draw one, #31).
 
 - 2026-11-08: A design review rubric ("Design review rubric"): ten rows,
   each one of this document's principles, scored 0 to 3 from fixed phone
@@ -3482,6 +3522,12 @@ marks that overlap, a letter missing) are the next thing to add there.
   a place is only added for a full spacing of extra track, which had rounded
   a half-over into a second letter on Union Station's platform-short tails
   (see "Rail bullets").
+- 2026-11-08: Unattended work talks only through GitHub issue labels and
+  comments: a GitHub Actions worker (`.github/workflows/agent.yml`) does
+  the building, fixing and finding, and a home evaluator checks finished
+  work and writes the worker's next instructions. Either side can stop or
+  restart without the other noticing; the satellite overlay
+  (`qa/sat/render.py`) is how builders check their own work first.
 
 ## Sources
 

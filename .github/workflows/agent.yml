@@ -1,0 +1,156 @@
+# Unattended work loop: the GitHub worker
+#
+# Runs every four hours on GitHub Actions (free Go models; the paid flash
+# model is the last resort). One job per run, picked by
+# .github/daily/pick.mjs, done by the opencode CLI on the Go provider,
+# then the run's ledger entry, the Agent log comment and the captures go
+# up. Map changes stay on branches; docs, tests and CI may go to main
+# fast-forward. The evaluator on the home machine is the only thing that
+# talks to Chris; this workflow never alerts him directly.
+#
+# Setup: the repository secret OPENCODE_GO_API_KEY (the Go subscription
+# key). Pushes made with GITHUB_TOKEN do not start other workflows, so
+# the agent starts the branch-preview checks itself.
+name: Agent
+
+on:
+  schedule:
+    - cron: '13 */4 * * *'
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: 'Issue number to work on (optional)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: agent
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    # Pinned for the same reason as the check workflows: Playwright 1.55.1
+    # has no build for Ubuntu 26.04, which ubuntu-latest now is.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: pip install pillow
+      - name: Install opencode (pinned)
+        run: |
+          curl -fsSL https://opencode.ai/install | bash -s -- --version 1.19.5
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+      - name: Pick today's job
+        id: pick
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_INPUT: ${{ inputs.issue }}
+        run: |
+          if [ -n "$ISSUE_INPUT" ]; then
+            node .github/daily/pick.mjs --issue "$ISSUE_INPUT" > job.json
+          else
+            node .github/daily/pick.mjs > job.json
+          fi
+          cat job.json
+          echo "JOB=$(cat job.json | python3 -c 'import json,sys; print(json.load(open("job.json"))["job"])')" >> "$GITHUB_OUTPUT"
+      - name: Serve the site
+        if: steps.pick.outputs.JOB != 'none'
+        run: |
+          npx wrangler pages dev public --port 8797 > pages-dev.log 2>&1 &
+          echo $! > pages-dev.pid
+          for i in $(seq 1 30); do
+            curl -fs http://127.0.0.1:8797/data/meta.json >/dev/null && break
+            sleep 2
+          done
+          curl -fs http://127.0.0.1:8797/data/meta.json >/dev/null && echo "site up" || (cat pages-dev.log; exit 1)
+      - name: Run the agent
+        if: steps.pick.outputs.JOB != 'none'
+        id: agent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
+          CHECK_URL: http://127.0.0.1:8797
+        run: |
+          # Brief = the ground rules (CLAUDE.md is in the repo) plus the
+          # job brief. Free models first; DeepSeek V4.1 Flash last.
+          JOB=$(python3 -c 'import json; print(json.load(open("job.json"))["job"])')
+          if [ "$JOB" = "find" ]; then
+            LENS=$(python3 -c 'import json; print(json.load(open("job.json")).get("lens","rail"))')
+            BRIEF=$(cat .github/daily/find.md)
+            ASSIGN="Lens: $LENS. Read it from .github/daily/lenses.json."
+          else
+            BRIEF=$(cat .github/daily/fix.md)
+            ASSIGN=$(python3 -c 'import json; j=json.load(open("job.json")); print(f"Issue: #{j.get(\"issue\")} branch={j.get(\"branch\") or \"new\"} kind={j.get(\"kind\")}")')
+          fi
+          PROMPT_FILE="$RUNNER_TEMP/brief.txt"
+          { echo "You are working on datapolitical/rtd-system-map. Read CLAUDE.md in the worktree root and DESIGN.md before changing anything."; echo; echo "$BRIEF"; echo; echo "## Today's assignment"; echo "$ASSIGN"; echo "Date: $(date -u +%F). Run folder: $PWD/run."; } > "$PROMPT_FILE"
+          mkdir -p run
+          MODEL=""
+          for m in crouton-alpha-free beam-free deepseek-v4.1-flash; do
+            echo "Trying $m"
+            if timeout 14400 opencode run -m "opencode-go/$m" < "$PROMPT_FILE" > "run/agent-$m.log" 2>&1; then
+              MODEL="$m"; break
+            fi
+            echo "$m failed; next"
+          done
+          if [ -z "$MODEL" ]; then echo "all models failed"; exit 1; fi
+          echo "MODEL=$MODEL" >> "$GITHUB_OUTPUT"
+          cp "run/agent-$MODEL.log" run/agent.log 2>/dev/null || true
+          echo "model used: $MODEL" >> "$GITHUB_STEP_SUMMARY"
+      - name: Stop the site
+        if: always()
+        run: |
+          if [ -f pages-dev.pid ]; then kill "$(cat pages-dev.pid)" 2>/dev/null || true; fi
+      - name: Upload captures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: agent-${{ github.run_id }}
+          path: |
+            qa/.scratch/
+            qa/report/
+            run/
+          if-no-files-found: warn
+      - name: Write the ledger
+        if: always() && steps.pick.outputs.JOB != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json
+          j = json.load(open('job.json'))
+          j['model'] = '${{ steps.agent.outputs.MODEL }}' or 'none'
+          json.dump(j, open('job-ledger.json','w'))
+          PY
+          node .github/daily/ledger.mjs job-ledger.json "${{ steps.agent.outputs.MODEL }}"
+      - name: Post the Agent log comment
+        if: always() && steps.pick.outputs.JOB != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          JOB=$(python3 -c 'import json; print(json.load(open("job.json")).get("summary","run"))')
+          MODEL=${{ steps.agent.outputs.MODEL }}
+          SHA=$(git rev-parse HEAD 2>/dev/null || echo none)
+          BODY="Agent log: $JOB — model $MODEL, commit $SHA, run https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID . Captures in the run artifact."
+          # Find or create the single log issue.
+          NUM=$(gh issue list --label "found daily" --limit 100 --json number,title --jq '.[] | select(.title=="Agent log") | .number' | head -1)
+          if [ -z "$NUM" ]; then
+            NUM=$(gh issue create --title "Agent log" --label "found daily" --milestone "V3 roadmap" --body "One line per run: job, model, what changed, what was handed to evaluation." --json number --jq .number)
+          fi
+          gh issue comment "$NUM" --body "$BODY"
+          echo "$BODY" >> "$GITHUB_STEP_SUMMARY"

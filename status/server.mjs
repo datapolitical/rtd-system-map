@@ -22,7 +22,8 @@ const SIPS = fs.existsSync('/usr/bin/sips');
 const GH = process.env.GH || ['/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh'].find((p) => fs.existsSync(p)) || 'gh';
 
 const safe = (f, d) => { try { return f(); } catch { return d; } };
-const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+// --no-optional-locks: never take index.lock, so a commit in another session can't collide with a refresh.
+const git = (dir, ...a) => execFileSync('git', ['--no-optional-locks', '-C', dir, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 const [OWNER, NAME] = safe(() => git(ROOT, 'remote', 'get-url', 'origin').match(/[:/]([^/:]+)\/([^/]+?)(?:\.git)?$/).slice(1), []);
 
 // Every checkout of this repo on this machine (the main one and its worktrees).
@@ -52,7 +53,7 @@ function agents() {
       out.push({
         name: a.name || f.slice(0, -5), issue: a.issue, branch: a.branch || w.branch, step: a.step || '', state, updated,
         log: (a.log || []).slice(0, 12),
-        captures: (a.captures || []).map((c) => path.resolve(w.dir, c)).filter((c) => isCapture(c, dirs)).slice(0, 8),
+        captures: (a.captures || []).map((c) => path.resolve(w.dir, c)).filter((c) => isCapture(c, dirs) && fs.existsSync(c)).slice(0, 8),
       });
     }
   }
@@ -63,7 +64,8 @@ function captures() {
   const walk = (dir, out, depth) => {
     for (const e of safe(() => fs.readdirSync(dir, { withFileTypes: true }), [])) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory() && depth < 4) walk(p, out, depth + 1);
+      // Skip Playwright trace folders: their resources/ hold internal frames, not captures.
+      if (e.isDirectory() && depth < 4 && !/^(trace|resources$)/.test(e.name)) walk(p, out, depth + 1);
       else if (e.name.endsWith('.png')) out.push(p);
     }
     return out;
@@ -128,6 +130,54 @@ function parseTranscript(p, st, dirs) {
   parsed.set(p, { key, v });
   return v;
 }
+// Hermes agents (models run through the Hermes agent CLI) working in a checkout
+// of this repo, read from Hermes's own database, ~/.hermes/state.db. Node 20 has
+// no SQLite of its own, so Python's standard library reads it. One card per
+// checkout: the newest session there, since a restarted agent replaces the old.
+const HERMES_DB = path.join(process.env.HERMES_HOME || path.join(os.homedir(), '.hermes'), 'state.db');
+const HERMES_PY = String.raw`
+import sqlite3, sys, json, time
+from datetime import datetime, timezone
+iso = lambda t: datetime.fromtimestamp(float(t), timezone.utc).isoformat() if t else None
+db = sqlite3.connect('file:' + sys.argv[1] + '?mode=ro', uri=True)
+dirs = json.loads(sys.argv[2]); seen = set(); out = []
+q = """select id, cwd, model, started_at, ended_at, last_activity_at, last_activity_description,
+       api_call_count, input_tokens, output_tokens, cache_read_tokens from sessions
+       where last_activity_at > ? order by started_at desc"""
+for sid, cwd, model, started, ended, upd, now, calls, fresh, written, cached in db.execute(q, (time.time() - 6 * 3600,)):
+    if not cwd or cwd in seen or not any(cwd == d or cwd.startswith(d + '/') for d in dirs): continue
+    seen.add(cwd)
+    first = db.execute("select content from messages where session_id=? and role='user' order by id limit 1", (sid,)).fetchone()
+    heads = [l[2:] for l in ((first or [''])[0] or '').split('\n') if l.startswith('# ') and 'Ground rules' not in l]
+    tools, events = {}, []
+    for tc, text, ts in db.execute("select tool_calls, content, timestamp from messages where session_id=? and role='assistant' order by id", (sid,)):
+        if text and text.strip(): events.append({'t': iso(ts), 'kind': 'note', 's': ' '.join(text.split())[:300]})
+        for k in (json.loads(tc) if tc else []):
+            f = k.get('function', {}); name = f.get('name', '?'); tools[name] = tools.get(name, 0) + 1
+            try: a = json.loads(f.get('arguments') or '{}')
+            except Exception: a = {}
+            arg = (a.get('command') or a.get('path') or a.get('question') or a.get('code') or '') if isinstance(a, dict) else ''
+            arg = str(arg).replace('cd ' + cwd + ' && ', '')
+            events.append({'t': iso(ts), 'kind': 'tool', 's': (name + ': ' + ' '.join(str(arg).split()))[:160]})
+    out.append({'id': sid, 'cwd': cwd, 'model': model, 'started': iso(started), 'ended': iso(ended), 'updated': iso(upd),
+                'now': now or '', 'title': (heads[0] if heads else '').replace('Your task: ', '', 1), 'calls': calls or 0,
+                'fresh': fresh or 0, 'out': written or 0, 'cached': cached or 0, 'steps': len(events),
+                'tools': sorted(tools.items(), key=lambda x: -x[1]), 'events': events[-14:][::-1]})
+print(json.dumps(out))
+`;
+const hmemo = { at: 0, v: [] };
+function hermes() {
+  if (Date.now() - hmemo.at < 10000) return hmemo.v;
+  hmemo.at = Date.now();
+  if (!fs.existsSync(HERMES_DB)) return (hmemo.v = []);
+  const wts = worktrees();
+  const rows = safe(() => JSON.parse(execFileSync('python3', ['-c', HERMES_PY, HERMES_DB, JSON.stringify(wts.map((w) => w.dir))],
+    { encoding: 'utf8', timeout: 8000, maxBuffer: 16e6, stdio: ['ignore', 'pipe', 'ignore'] })), []);
+  return (hmemo.v = rows.map((r) => ({ ...r,
+    branch: wts.find((w) => r.cwd === w.dir || r.cwd.startsWith(w.dir + '/'))?.branch || '',
+    state: r.ended ? 'finished' : Date.now() - new Date(r.updated) > 30 * 60e3 ? 'stopped' : Date.now() - new Date(r.updated) > 10 * 60e3 ? 'quiet' : 'working' })));
+}
+
 const memo = { at: 0, v: [] };
 function sessions() {
   if (Date.now() - memo.at < 10000) return memo.v;
@@ -152,7 +202,8 @@ function sessions() {
   return memo.v;
 }
 
-const commits = () => worktrees().map((w) => ({
+// Skip the page's own pinned copy (see CLAUDE.md, "Status page").
+const commits = () => worktrees().filter((w) => !(w.dir === ROOT && w.branch === '(detached)')).map((w) => ({
   name: w.branch || path.basename(w.dir),
   log: safe(() => git(w.dir, 'log', '-8', '--format=%h|%cr|%s').split('\n').map((l) => l.split('|')), []),
   dirty: safe(() => git(w.dir, 'status', '--short', '--', '.', ':!node_modules').split('\n').filter(Boolean).length, 0),
@@ -207,7 +258,7 @@ http.createServer((req, res) => {
     if (Date.now() - gh.at > 60000) refresh();
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     const { busy, ...g } = gh;
-    return res.end(JSON.stringify({ now: new Date(), repo: OWNER ? `${OWNER}/${NAME}` : '', waitLabel: WAIT, ...g, usage: safe(() => JSON.parse(fs.readFileSync(USAGE, 'utf8')), null), sessions: sessions(), agents: agents(), captures: captures(), commits: commits() }));
+    return res.end(JSON.stringify({ now: new Date(), repo: OWNER ? `${OWNER}/${NAME}` : '', waitLabel: WAIT, ...g, usage: safe(() => JSON.parse(fs.readFileSync(USAGE, 'utf8')), null), sessions: sessions(), hermes: hermes(), agents: agents(), captures: captures(), commits: commits() }));
   }
   if (u.pathname === '/img' || u.pathname === '/thumb') {
     const p = path.resolve(u.searchParams.get('p') || '');

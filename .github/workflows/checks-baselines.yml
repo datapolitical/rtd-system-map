@@ -1,0 +1,71 @@
+# Visual baselines, captured where the nightly runs them. visual.spec.mjs
+# compares six fixed phone views (three zooms in each theme) against a stored
+# image per platform; the committed ones are `-linux.png`, taken on GitHub's
+# runner, so the nightly's comparisons are pixel-for-pixel on the machine that
+# takes them. A platform
+# with no baseline writes one and passes (the check says so in the job
+# summary); this workflow turns those images into committed ones, and
+# refreshes them on purpose when a visual change was meant.
+#
+# Run it from main (Actions, "Checks (baselines)", Run workflow). It
+# captures against the live site, uploads what it took, and commits only the
+# PNGs that changed, so a run that finds nothing new is green and quiet.
+name: Checks (baselines)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: checks-baselines
+  cancel-in-progress: false
+
+jobs:
+  baselines:
+    # Pinned: Playwright 1.55.1 has no build for Ubuntu 26.04, which
+    # ubuntu-latest now is.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Capture the baselines from the live site
+        env:
+          CHECK_URL: https://rtd-system-map.pages.dev
+        run: npm run check:baselines
+      - name: Upload the captures and the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: checks-baselines-${{ github.run_id }}
+          path: |
+            qa/checks/visual.spec.mjs-snapshots/
+            qa/report/
+          if-no-files-found: warn
+      - name: Commit the changed baselines to main
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/checks/visual.spec.mjs-snapshots
+          if git diff --cached --quiet; then
+            echo "No baseline changed; main already has this platform's images." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "Baselines committed to main:"
+            git diff --cached --name-only
+          } >> "$GITHUB_STEP_SUMMARY"
+          git commit -q -m "Visual baselines: captured on the Linux runner"
+          git pull --rebase --autostash origin main
+          git push origin HEAD:main
