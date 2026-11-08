@@ -34,3 +34,20 @@ we are" section from them (closed issues show as done).
   `Estimate: N min of agent time` to the body when you can guess one.
 - The repo is public. Keep issues about the map: no usage or budget numbers,
   no personal details.
+
+## How to work here
+
+- The bar is a map that is both useful and beautiful. Visual work isn't done
+  until it is both. Put visual criteria in every builder brief and every
+  review.
+- Several sessions share a checkout and switch its branch without warning.
+  Do feature work in its own worktree (`git worktree add`), and check
+  `git branch --show-current` in the same command as `git commit`.
+- Run one heavy agent (dev server plus headless browser) at a time, and stop
+  each dev server when its agent finishes. With a Playwright device profile,
+  pass `browserName: 'chromium'`: profiles such as iPhone 14 default to
+  WebKit, whose GPU process can use many gigabytes. Keep captures in
+  `qa/.scratch/` (ignored by git), not /tmp.
+- Agent time is budgeted. Before starting a build or review agent, follow the
+  budget rule Chris gave you (it stays off this public repo). If you don't
+  have it, ask.
