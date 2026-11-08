@@ -39,11 +39,14 @@ const OUT = flag('--out') ?? path.join(ROOT, 'public', 'data', 'routes.geojson')
 const from = args[0] ?? path.join(ROOT, 'public', 'data', 'routes.geojson');
 const geo = JSON.parse(fs.readFileSync(from, 'utf8'));
 const buses = geo.features.filter((f) => f.properties.mode === 'bus');
-if (buses.some((f) => 'slot' in f.properties)) throw new Error(`${from} is bundled already; give the unbundled file`);
+if (buses.some((f) => 'slot' in f.properties || 'flat' in f.properties)) throw new Error(`${from} is bundled already; give the unbundled file`);
 
 const started = performance.now();
 const tiers = allTiers ? TIERS : BUNDLED_TIERS;
-const { features, places, crossings } = busBundles(buses, { tiers });
+// Transit centers and Park-n-Rides: where routes end, the bundler ends them
+// at the terminal's edge.
+const terminals = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'facilities.geojson'), 'utf8')).features.map((f) => f.geometry.coordinates);
+const { features, places, crossings } = busBundles(buses, { tiers, terminals });
 const ms = Math.round(performance.now() - started);
 const out = { ...geo, features: [...features, ...geo.features.filter((f) => f.properties.mode !== 'bus')] };
 const text = JSON.stringify(out);
@@ -143,6 +146,7 @@ console.log(JSON.stringify({
   bus_in: inBus,
   bus_out: features.length,
   bus_out_bundled: features.filter((f) => 'slot' in f.properties).length,
+  bus_out_flat: features.filter((f) => 'flat' in f.properties).length,
   bytes_in: fs.statSync(from).size,
   bytes_out: text.length,
   bundles: places.length,

@@ -81,7 +81,10 @@ import { sharedTrack } from './sharedtrack.mjs';
 export const SHARED = 35;
 export const ALIGN = 25;
 export const MIN_RUN = 100;
-export const OFF = 70;
+// A direction kept apart from the other where it is this far off: a
+// freeway's two carriageways are 40 to 70 m apart and main draws both; a bus
+// pulling wide through a stop bay is a few meters off.
+export const OFF = 40;
 export const LOOK = 600;
 export const EASE = 150;
 // Rail finishes an ease once the lines it left are APART meters away; buses
@@ -115,6 +118,22 @@ export const PIECE = 5;
 // whole by up to this many slots (half a lane at the zoom the slots open),
 // so a line that runs on holds its course when another joins or leaves.
 export const DRIFT = 1.5;
+// Runs of the same routes are one bundle only where they run side by side
+// this far (or half the shorter run): a one-way pair (Broadway and Lincoln)
+// touches at both ends and is two streets.
+export const ALONGSIDE = 50;
+// A loop at a route's end no longer than this (round a downtown block is
+// about 500 m; through the Union Station concourse and back about 600) is
+// left out, and the route ends where the loop begins, as the poster ends
+// its lines at the station (DESIGN.md, "Bus routes", terminals).
+export const LOOP = 800;
+// A route that ends within this far of a transit center or Park-n-Ride
+// (facilities.geojson, passed as `terminals`) ends at that circle's edge,
+// and its lap of the terminal inside is left out: the terminal is a place
+// the map marks, not a knot of every route's path through it (the poster
+// ends its lines at the station box). Civic Center's block is 110 by 180 m
+// about its point.
+export const TERMINAL = 150;
 export const BUNDLED_TIERS = ['frequent', 'every30'];
 const RULES = {
   sharedMeters: SHARED,
@@ -138,6 +157,9 @@ const RULES = {
   easeStep: EASE_STEP,
   easeEqual: true,
   letters: false,
+  alongsideMeters: ALONGSIDE,
+  loopMeters: LOOP,
+  terminalMeters: TERMINAL,
 };
 // How far from a stretch a piece's point can be and still take its tier
 // (pieces are moved onto their bundle's path, a few meters).
@@ -147,12 +169,14 @@ const TIER_STEP = 25;
 /**
  * `features` are bus stretch features (route, tier, stretch, ...). Returns
  * { features, places, crossings }: the routes' bundled stretches as pieces
- * with `slot`, each with its stretch's properties, and the stretches in
- * other tiers as they came; the bundles found (routes left to right, meters,
- * middle); and where two routes swap sides between bundles. `tiers` are
- * the tiers that bundle.
+ * with `slot`, each with its stretch's properties; the same stretches as
+ * they came, marked `flat` (the map draws those below the bundling zoom);
+ * and the stretches in other tiers as they came; the bundles found (routes
+ * left to right, meters, middle); and where two routes swap sides between
+ * bundles. `tiers` are the tiers that bundle; `terminals` are [lon, lat]
+ * points of transit centers and Park-n-Rides, where routes end.
  */
-export function busBundles(features, { tiers = BUNDLED_TIERS } = {}) {
+export function busBundles(features, { tiers = BUNDLED_TIERS, terminals = [] } = {}) {
   const bundled = features.filter((f) => tiers.includes(f.properties.tier));
   const rest = features.filter((f) => !tiers.includes(f.properties.tier));
   const byRoute = new Map();
@@ -162,13 +186,17 @@ export function busBundles(features, { tiers = BUNDLED_TIERS } = {}) {
     properties: { route },
     geometry: { type: 'MultiLineString', coordinates: list.flatMap((f) => partsOf(f.geometry)).filter((p) => p.length >= 2) },
   }));
-  const { pieces, places, crossings } = sharedTrack(whole, [], RULES);
+  const { pieces, places, crossings } = sharedTrack(whole, terminals, RULES);
   const out = [];
   for (const piece of pieces) {
     const stretches = byRoute.get(piece.properties.route);
     out.push(...byStretch(piece, stretches));
   }
-  return { features: [...out, ...rest], places, crossings };
+  // The stretches as they came, marked `flat`, for the map below the zoom
+  // the bundles open at: there it draws each street once, as main does, and
+  // a route's drawing is RTD's own path, not the bundle's.
+  const flat = bundled.map((f) => ({ ...f, properties: { ...f.properties, flat: 1 } }));
+  return { features: [...out, ...flat, ...rest], places, crossings };
 }
 
 // A piece cut where the stretch it lies on changes, each part with that

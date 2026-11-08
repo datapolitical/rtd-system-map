@@ -22,6 +22,8 @@ export function evaluate(expr, { zoom = 0, props = {}, state = {} } = {}) {
       return args[0];
     case 'get':
       return props[args[0]] ?? null;
+    case 'has':
+      return args[0] in props;
     case 'global-state':
       return state[args[0]] ?? null;
     case 'coalesce':

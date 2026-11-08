@@ -6,7 +6,7 @@
 // layer lists are functions, called again when the system theme changes.
 
 import { P } from './palette.js';
-import { DETAIL_FROM, TIERS, tierWidth } from './shared.js';
+import { DETAIL_FROM, FLAT, TIERS, tierWidth } from './shared.js';
 import { OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, ZOOMS } from './sizes.js';
 
 // Overpass, the interface's own face, drawn from glyphs the site makes itself
@@ -179,7 +179,8 @@ const busKeepOut = () =>
     const mine = ['in', ['get', 'tier'], ['literal', TIERS.filter((t) => (last ? t.from < from : t.from === from)).map((t) => t.id)]];
     return clear(`keep-out-bus-${i}`, 'routes', {
       ...(i ? { minzoom: Math.max(from, THIN_CLEAR_FROM) } : {}),
-      filter: ['all', ['==', ['get', 'mode'], 'bus'], last ? ['!', mine] : mine],
+      // The street once, on RTD's path: not the bundles' pieces (shared.js, FLAT).
+      filter: ['all', ['==', ['get', 'mode'], 'bus'], FLAT, last ? ['!', mine] : mine],
       layout: { ...alongLine, 'icon-size': tierWidth(1) },
     });
   });

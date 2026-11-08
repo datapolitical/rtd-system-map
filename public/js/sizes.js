@@ -30,17 +30,24 @@ export const HUB_EXTRA = 12;
 // drawn side by side (scripts/lib/busbundles.mjs): each piece is `slot`
 // slots from the street's path, a slot being a frequent bus's width times
 // BUS_PITCH, the same for every route in a bundle so thin routes don't
-// overlap thick ones. Further out than BUS_BUNDLE_FROM the widest downtown
-// bundle doesn't fit in a block, so the slots are closed and the routes
-// are drawn on one line, the strongest on top; from there they are open
-// (bundledByZoom, shared.js). BUS_BUNDLE_FROM is the zoom the bundler
-// (scripts/bundle-prototype.mjs) reports as the first where the widest
-// downtown bundle, middle of its first line to middle of its last, is no
-// wider than a downtown block, both measured on the data (2026-11-07: 12
-// routes, 48.5 px, against a 128 m block, 49 px, at 14.5).
+// overlap thick ones. Up to BUS_BUNDLE_FROM the map draws each street once,
+// on RTD's own paths, as main does (the stretches marked `flat`). From
+// there it draws the bundles' pieces, and the slots open from nothing at
+// BUS_BUNDLE_FROM to their full pitch at BUS_BUNDLE_OPEN, so a pack fans
+// out over half a zoom instead of one line becoming twelve in a step
+// (busOffset, bundledByZoom, shared.js; a paint property that reads the
+// feature and the zoom is worked out at the whole zooms and blended between
+// them, so each stage is a layer of its own with stops set to land right at
+// these zooms). At BUS_BUNDLE_OPEN the widest downtown bundle (12 routes,
+// 2026-11-08) is 59 px from first line to last; the two widest streets
+// are two blocks (98 px) apart there, so the packs clear each other. The
+// pitch leaves 0.4 of a width of land between neighbours at a route's full
+// width, and 0.65 at a pack member's (PACK_WIDTH, shared.js): 2.5 px at
+// 14.5. At 1.15 the gap was under a pixel and neighbours fused.
 export const FREQUENT_BUS_WIDTH = [1.2, 1.9, 3, 5.2];
-export const BUS_PITCH = 1.15;
-export const BUS_BUNDLE_FROM = 14.5;
+export const BUS_PITCH = 1.4;
+export const BUS_BUNDLE_FROM = 14;
+export const BUS_BUNDLE_OPEN = 14.5;
 // A frequent bus's width at `zoom`, as the map interpolates it (byZoom,
 // shared.js: exponential, base 1.4, between the ZOOMS stops).
 export const frequentWidth = (zoom) => {

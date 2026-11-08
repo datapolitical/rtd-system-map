@@ -11,7 +11,7 @@
 import { FONT, lineKeepOut } from './basemap.js';
 import { lightenTo, shade, textOn } from './color.js';
 import { DARK_RAIL_MIN, P, PALETTES } from './palette.js';
-import { DETAIL_FROM, PART_TIME, TIER_RANK, bundledByZoom, byZoom, tierMatch, tierWidth } from './shared.js';
+import { DETAIL_FROM, PACK_WIDTH, PART_TIME, TIER_RANK, bundledByZoom, byZoom, tierMatch, tierWidth } from './shared.js';
 import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
 import { fade, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
 import { edgeLetterLayer } from './edgeletters.js';
@@ -187,22 +187,27 @@ export function transitLines(lines) {
       paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn, 'line-dasharray': [0.1, 2.2] },
     },
     // The all-day routes. Routes every 30 minutes or better that share a
-    // street are bundled: each piece carries `slot`, and from
-    // BUS_BUNDLE_FROM is drawn that many slots to the side (bundledByZoom:
-    // 'bus-flat' up to there, 'bus' from there). The slower routes have no
-    // slot and stay on the street's own line, beneath, by the sort key.
+    // street are bundled: up to BUS_BUNDLE_FROM the map draws RTD's own
+    // paths (`flat`, 'bus-flat'), and from there the bundles' pieces, each
+    // `slot` slots to the side, the slots opening to BUS_BUNDLE_OPEN
+    // (bundledByZoom, shared.js). The slower routes have no slot and stay
+    // on the street's own line, beneath, by the sort key.
     ...bundledByZoom({
       id: 'bus',
       type: 'line',
       source: 'routes',
       filter: ['all', bus, ['!', partTime]],
       layout: {
-        'line-cap': 'round',
+        // Square, not round: a bundled route is many short pieces end to
+        // end, and a round cap on each left a bead wherever a tier changed
+        // or a piece ended; square caps overlap into the next piece and
+        // end flush where a route stops.
+        'line-cap': 'square',
         'line-join': 'round',
         'line-sort-key': tierMatch((t) => TIER_RANK[t.id]),
       },
       paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn },
-    }),
+    }, { openWidth: tierWidth(0, PACK_WIDTH) }),
 
     // The open bus route, drawn over its faded neighbours.
     ...selectionLines(),

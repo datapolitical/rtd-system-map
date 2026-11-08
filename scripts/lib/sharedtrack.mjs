@@ -145,6 +145,22 @@ export const RAIL = {
   // asks); with it, a line alone between two bundles moves from the one's
   // slot to the other's in one move over its whole length.
   pieceMeters: 0,
+  // Runs of the same lines are one place only where they run side by side
+  // for this long (or half the shorter run): a one-way pair's two streets
+  // meet at both ends but are two places. 0 joins runs that touch anywhere,
+  // as rail's couplets, drawn each on its own track, can.
+  alongsideMeters: 0,
+  // A loop a line makes at a terminal (round a block, through a bus
+  // concourse) no longer than this is left out of the drawing, and the
+  // line ends where the loop begins: the poster ends its lines at the
+  // station. 0 draws loops as they are, as rail's turnbacks are.
+  loopMeters: 0,
+  // A line that ends within this far of one of `stations` ends where it
+  // enters that circle, and what it drew inside (its lap of the terminal's
+  // block, its bay in the concourse) is left out: the terminal is drawn
+  // as a place, by its own mark, not as every route's path through it.
+  // 0 keeps lines whole to their ends.
+  terminalMeters: 0,
 };
 
 /**
@@ -164,10 +180,17 @@ export function sharedTrack(features, stations = [], options = {}) {
   const project = ([lon, lat]) => [(lon - origin[0]) * origin.kx, (lat - origin[1]) * origin.ky];
   const unproject = ([x, y]) => [round(x / origin.kx + origin[0]), round(y / origin.ky + origin[1])];
 
+  const marks = stations.map(project);
   const lines = features.map((f) => ({
     feature: f,
     route: f.properties.route,
-    parts: joinParts(ownTrack(partsOf(f.geometry).map((part) => densify(despike(part.map(project), rules), rules)), rules)),
+    // Parts drawn block by block are joined before the second direction is
+    // folded into the first (ownTrack), so a detour of several short blocks
+    // is one part long enough to keep, and joined again after, where the
+    // fold has left two parts meeting. Terminal loops and laps go before
+    // the fold, so a direction that only differed inside the terminal
+    // folds into the other.
+    parts: joinParts(ownTrack(withoutLoops(atTerminals(joinParts(unique(partsOf(f.geometry)).map((part) => densify(despike(part.map(project), rules), rules))), marks, rules, f.properties.route), rules), rules)),
   }));
   if (rules.flushMeters) flushEnds(lines, rules);
 
@@ -281,7 +304,8 @@ export function sharedTrack(features, stations = [], options = {}) {
   const places = [];
   for (const run of runs) {
     if (!run.set.includes(' ')) continue;
-    const touching = places.filter((pl) => pl.set === run.set && pl.runs.some((r) => near(r.points, run.points, rules)));
+    const together = rules.alongsideMeters ? alongside : near;
+    const touching = places.filter((pl) => pl.set === run.set && pl.runs.some((r) => together(r.points, run.points, rules)));
     const place = touching[0] ?? { set: run.set, runs: [] };
     if (!touching.length) places.push(place);
     for (const other of touching.slice(1)) {
@@ -444,14 +468,13 @@ export function sharedTrack(features, stations = [], options = {}) {
     packed(runs, onLine, rules);
     rounded(runs, rules);
   }
-  const marks = stations.map(project);
   for (const run of runs) run.slots = eased(run, apart, marks, rules);
   if (process.env.DEBUG_ROUTE) for (const run of runs.filter((r) => r.line.route === process.env.DEBUG_ROUTE)) console.error(JSON.stringify({ set: run.set, slot: run.slot, flipped: run.flipped, before: run.before?.set, after: run.after?.set, a: run.points[0].map(Math.round), b: run.points.at(-1).map(Math.round), slots: [run.slots[0], run.slots.at(-1)] }));
   const pieces = runs.flatMap((run) =>
     inPieces(run.points, run.slots, rules.easeStep, rules.pieceMeters).map(({ slot, points }) => ({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: simplifyCollinear(points).map(unproject) },
-      properties: { ...run.line.feature.properties, slot },
+      properties: { ...run.line.feature.properties, slot, ...(process.env.DEBUG_SETS ? { set: run.set } : {}) },
     })),
   );
 
@@ -677,7 +700,7 @@ function onCorridor(runs, rules) {
   for (const [place, c] of corridors) corridors.set(place, c.map((p) => [...p]));
   for (const run of runs) {
     if (!run.place) continue;
-    run.points = alongPath(run.points, corridors.get(run.place));
+    run.points = alongPath(run.points, corridors.get(run.place), rules);
     if (rules.filletMetersPerSlot) run.points = fillet(run.points, ((run.place.routes.length - 1) / 2 + 1) * rules.filletMetersPerSlot);
   }
   const head = (run) => (run.flipped ? run.points.length - 1 : 0);
@@ -788,18 +811,29 @@ function fillet(points, r) {
   return out;
 }
 
-// `points` redrawn along `path`: the stretch of `path` between where the
-// first and last of `points` fall on it, in the direction `points` run,
-// with any points that fall off either end of `path` kept as they are and
-// moved with the point beside them. Points of its own that all fall off
-// the path (a run beside a path, not along it) are returned as they are.
-function alongPath(points, path) {
+// `points` redrawn along `path`: each point that lies within sharedMeters of
+// the path goes to its foot on it, and the path's own vertices are put in
+// between neighbouring feet, so the points follow the path vertex for
+// vertex. A point further off keeps its own shape, moved across with the
+// nearest point that is on the path (blended between the two, where a
+// stretch off the path has one at each end), so a line never steps
+// sideways where it leaves the path: a loop one route makes at a terminal
+// that another runs straight past, or the few meters a run sticks out past
+// the path's end. Between two feet the path's vertices are only taken
+// where the path runs straight on between them (an arc no longer than the
+// step plus the reach either side); where the path goes away and comes
+// back between two neighbouring points (a detour of the path's own
+// route), the feet are joined directly. Points that all fall off the path
+// are returned as they are. The old form, which took the whole path
+// between the first foot and the last, drew a closed loop as one point
+// (both ends fall at the same arc) and a loop of the path's route onto
+// every other route of the place.
+function alongPath(points, path, rules) {
+  const reach = rules.sharedMeters;
   const arc = [0];
   for (let i = 1; i < path.length; i++) arc.push(arc[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
-  const total = arc.at(-1);
-  if (!total) return points;
-  // Where p falls along the path: its arc, the point there, and whether it
-  // is off an end (its foot on an end segment lies past the end).
+  if (!arc.at(-1)) return points;
+  // Where p falls on the path: its arc, the point there, and how far off.
   const fall = (p) => {
     let best = null;
     for (let i = 1; i < path.length; i++) {
@@ -810,30 +844,49 @@ function alongPath(points, path) {
       const t = Math.max(0, Math.min(1, raw));
       const q = [a[0] + t * dx, a[1] + t * dy];
       const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
-      if (!best || d < best.d) best = { d, s: arc[i - 1] + t * Math.sqrt(l), q, off: (i === 1 && raw < 0) || (i === path.length - 1 && raw > 1) };
+      const off = (i === 1 && raw < 0) || (i === path.length - 1 && raw > 1);
+      if (!best || d < best.d) best = { d, s: arc[i - 1] + t * Math.sqrt(l), q, i, off };
     }
     return best;
   };
   const falls = points.map(fall);
-  let first = falls.findIndex((f) => !f.off);
-  if (first < 0) return points;
-  let last = falls.length - 1;
-  while (falls[last].off) last--;
-  if (last === first) return points;
-  const [s0, s1] = [falls[first].s, falls[last].s];
-  const lo = Math.min(s0, s1);
-  const hi = Math.max(s0, s1);
-  const between = path.filter((_, i) => arc[i] > lo + 0.01 && arc[i] < hi - 0.01);
-  if (s1 < s0) between.reverse();
-  const shifted = (from, to, by) => points.slice(from, to).map((p) => [p[0] + by[0], p[1] + by[1]]);
-  const [q0, q1] = [falls[first].q, falls[last].q];
-  return [
-    ...shifted(0, first, [q0[0] - points[first][0], q0[1] - points[first][1]]),
-    q0,
-    ...between,
-    q1,
-    ...shifted(last + 1, points.length, [q1[0] - points[last][0], q1[1] - points[last][1]]),
-  ];
+  const on = falls.map((f) => !f.off && f.d <= reach);
+  if (!on.some(Boolean)) return points;
+  // Each off point's shift: that of the nearest on point, or blended
+  // between the on points either side of its stretch.
+  const shift = (i) => [falls[i].q[0] - points[i][0], falls[i].q[1] - points[i][1]];
+  const out = [];
+  for (let i = 0; i < points.length; i++) {
+    if (on[i]) {
+      if (i && on[i - 1]) {
+        const [s0, s1] = [falls[i - 1].s, falls[i].s];
+        const step = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+        if (Math.abs(s1 - s0) <= step + 2 * reach) {
+          const [lo, hi] = s0 <= s1 ? [s0, s1] : [s1, s0];
+          const between = [];
+          for (let k = 0; k < path.length; k++) if (arc[k] > lo + 0.01 && arc[k] < hi - 0.01) between.push(path[k]);
+          if (s1 < s0) between.reverse();
+          out.push(...between);
+        }
+      }
+      out.push(falls[i].q);
+      continue;
+    }
+    let before = i - 1;
+    while (before >= 0 && !on[before]) before--;
+    let after = i + 1;
+    while (after < points.length && !on[after]) after++;
+    let by;
+    if (before < 0) by = shift(after);
+    else if (after >= points.length) by = shift(before);
+    else {
+      const t = (i - before) / (after - before);
+      const [a, b] = [shift(before), shift(after)];
+      by = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    }
+    out.push([points[i][0] + by[0], points[i][1] + by[1]]);
+  }
+  return out;
 }
 
 // Track doesn't turn at a point, but RTD's paths do: they are drawn with a
@@ -1124,6 +1177,23 @@ function near(a, b, rules) {
   return false;
 }
 
+// Whether two runs run side by side: at least alongsideMeters of the shorter
+// (or half of it) lies within sharedMeters of the other. Two runs of a
+// one-way pair touch where the pair's streets meet, and aren't.
+function alongside(a, b, rules) {
+  const [s, l] = length(a) <= length(b) ? [a, b] : [b, a];
+  const need = Math.min(rules.alongsideMeters, length(s) / 2);
+  let got = 0;
+  for (let i = 1; i < s.length; i++) {
+    const mid = [(s[i][0] + s[i - 1][0]) / 2, (s[i][1] + s[i - 1][1]) / 2];
+    let d = Infinity;
+    for (let j = 1; j < l.length && d > rules.sharedMeters; j++) d = Math.min(d, segmentDistance(mid, l[j - 1], l[j]));
+    if (d <= rules.sharedMeters) got += Math.hypot(s[i][0] - s[i - 1][0], s[i][1] - s[i - 1][1]);
+    if (got >= need) return true;
+  }
+  return false;
+}
+
 // Shapes can double back for a few meters at a stop or a switch; offset lines
 // turn that into a spike. Drop any point where the path reverses over a short
 // step.
@@ -1200,11 +1270,130 @@ function ownTrack(parts, rules) {
       // stop bay or round a corner wide is a few meters off its other
       // direction for a block, and isn't drawn twice for it.
       const goes = length(stretch) >= rules.minRunMeters && Math.max(...away.slice(i, j)) >= rules.offMeters;
+      if (process.env.DEBUG_OWN && !goes && kept.length) console.error('DROP', Math.round(length(stretch)), 'm, up to', Math.round(Math.max(...away.slice(i, j))), 'm off, at', stretch[0].map(Math.round));
       if (!kept.length || goes) kept.push(stretch);
       i = j;
     }
   }
   return kept;
+}
+
+// Lines end at the edge of their terminal (rules.terminalMeters). Where a
+// line goes into the circle of that radius about a station point and all
+// its crossings of the circle are within a radius of each other (it comes
+// in and goes out by the same street or two beside each other, and goes
+// nowhere beyond), it is cut where it crosses, and what it drew inside (its
+// lap of the terminal's block, its bay in the concourse) is left out, so it
+// ends square on the circle. A line that crosses the circle on two sides
+// passes through, and is left alone.
+function atTerminals(parts, marks, rules, route = '') {
+  const r = rules.terminalMeters;
+  if (!r || !marks.length) return parts;
+  const dist = (p, m) => Math.hypot(p[0] - m[0], p[1] - m[1]);
+  // Where the segment a-b crosses the circle about m, by bisection (a step
+  // is 20 m; a meter is close enough).
+  const edge = (a, b, m) => {
+    let [lo, hi] = dist(a, m) <= r ? [b, a] : [a, b];
+    for (let k = 0; k < 12; k++) {
+      const mid = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2];
+      if (dist(mid, m) <= r) hi = mid;
+      else lo = mid;
+    }
+    return lo;
+  };
+  let out = parts;
+  for (const m of marks) {
+    const crossings = [];
+    let anyInside = false;
+    for (const part of out) {
+      for (let i = 0; i < part.length; i++) {
+        const is = dist(part[i], m) <= r;
+        anyInside ||= is;
+        if (i && is !== dist(part[i - 1], m) <= r) crossings.push(edge(part[i - 1], part[i], m));
+      }
+    }
+    if (!anyInside) continue;
+    const spread = Math.max(0, ...crossings.flatMap((a) => crossings.map((b) => dist(a, b))));
+    if (process.env.DEBUG_TERMINAL && dist(m, [0, 0]) < 1e9) console.error('TERMINAL', route, 'mark', m.map(Math.round), 'crossings', crossings.length, 'spread', Math.round(spread), crossings.map((c) => c.map(Math.round).join(',')).join(' '));
+    if (spread > r) continue;
+    const next = [];
+    for (const part of out) {
+      let piece = [];
+      const flush = () => {
+        if (piece.length >= 2) next.push(piece);
+        piece = [];
+      };
+      for (let i = 0; i < part.length; i++) {
+        const p = part[i];
+        const was = i && dist(part[i - 1], m) <= r;
+        const is = dist(p, m) <= r;
+        if (!is && !was) piece.push(p);
+        else if (!is && was) piece = [edge(part[i - 1], p, m), p];
+        else if (is && !was && i) {
+          piece.push(edge(part[i - 1], p, m));
+          flush();
+        }
+      }
+      flush();
+    }
+    out = next;
+  }
+  return out;
+}
+
+// Terminal loops left out (rules.loopMeters): a part that comes back to
+// within sharedMeters of its own end, with no more than loopMeters of path
+// between, is cut where the loop begins, at each end; and a closed part no
+// longer than loopMeters that another part of the line meets is dropped
+// (a turnaround drawn as a part of its own). A closed part nothing else
+// meets is a circulator, and kept. What a terminal loop drew was a knot of
+// every route ending there, each on its own lap of the block.
+function withoutLoops(parts, rules) {
+  const most = rules.loopMeters;
+  if (!most) return parts;
+  const near = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= rules.sharedMeters;
+  const closed = (part) => near(part[0], part.at(-1)) && length(part) <= most;
+  const out = [];
+  for (const part of parts) {
+    if (closed(part)) {
+      const met = parts.some((other) => other !== part && other.some((q) => near(q, part[0])));
+      if (!met) out.push(part);
+      continue;
+    }
+    let trimmed = part;
+    for (const atEnd of [true, false]) {
+      const pts = atEnd ? trimmed : [...trimmed].reverse();
+      const end = pts.at(-1);
+      // The earliest point within reach of the end, no more than `most`
+      // back along the path, and at least a step away from it.
+      let back = 0;
+      let cut = -1;
+      for (let i = pts.length - 2; i >= 0 && back <= most; i--) {
+        back += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+        if (back > rules.minRunMeters && near(pts[i], end)) cut = i;
+      }
+      if (cut >= 1) {
+        const kept = pts.slice(0, cut + 1);
+        trimmed = atEnd ? kept : kept.reverse();
+      }
+    }
+    out.push(trimmed);
+  }
+  return out;
+}
+
+// A part drawn twice (RTD's map draws a street a route takes both ways once
+// per direction, block by block) counts once: four ends meeting at a corner
+// would keep joinParts from joining the blocks.
+function unique(parts) {
+  const seen = new Set();
+  return parts.filter((part) => {
+    const key = JSON.stringify(part);
+    const back = JSON.stringify([...part].reverse());
+    if (seen.has(key) || seen.has(back)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // RTD's map draws some lines in many pieces; pieces that meet end to end

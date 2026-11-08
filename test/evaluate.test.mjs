@@ -68,3 +68,9 @@ test('the dot on the Live pill: three states, named, with the stale age from rea
   assert.match(states[1].text, new RegExp(`${STALE_S / 60} min`));
   assert.match(dotStates(300)[0].text, /5 min/);
 });
+
+test('has: whether the feature carries a property (the bundled layers gate on slot and flat)', () => {
+  assert.equal(evaluate(['has', 'slot'], { props: { slot: 0 } }), true);
+  assert.equal(evaluate(['!', ['has', 'slot']], { props: { tier: 'frequent' } }), true);
+  assert.equal(evaluate(['all', ['==', ['get', 'mode'], 'bus'], ['!', ['has', 'flat']]], { props: { mode: 'bus', flat: 1 } }), false);
+});

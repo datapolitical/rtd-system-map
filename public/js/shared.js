@@ -4,7 +4,7 @@
 
 import { textOn } from './color.js';
 import { P, PALETTES } from './palette.js';
-import { BUS_BUNDLE_FROM, BUS_PITCH, FREQUENT_BUS_WIDTH, ZOOMS, frequentWidth } from './sizes.js';
+import { BUS_BUNDLE_FROM, BUS_BUNDLE_OPEN, BUS_PITCH, FREQUENT_BUS_WIDTH, ZOOMS, frequentWidth } from './sizes.js';
 
 // Phones, and any short screen (a phone on its side): framing, key closed,
 // panel as a bottom sheet. The same query is in app.css.
@@ -55,8 +55,8 @@ export const DETAIL_FROM = 11;
 export { ZOOMS };
 export const byZoom = (values) => ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, values[i]])];
 export const tierMatch = (pick, key = 'tier') => ['match', ['get', key], ...TIERS.flatMap((t) => [t.id, pick(t)]), pick(TIERS.at(-1))];
-export const tierWidth = (extra = 0) =>
-  ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, tierMatch((t) => t.width[i] + extra)])];
+export const tierWidth = (extra = 0, scale = 1) =>
+  ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, tierMatch((t) => t.width[i] * scale + extra)])];
 
 // A number knocked out of its line, in its route's ink, darkened for the
 // lightest routes. `scheme` names a theme other than the one in use ('light'
@@ -174,26 +174,54 @@ export const mapDots = (text) => text.replaceAll(' \u00b7 ', ' \u2022 ');
 
 // Bus routes that share a street are drawn side by side (prototype,
 // scripts/lib/busbundles.mjs): each piece is `slot` slots from the street's
-// path; the slot's width, and the zoom the slots open at, are in sizes.js
-// beside the other sizes the build reads. `busOffset` is the open offset: a
-// frequent bus's width times BUS_PITCH per slot at every zoom. Below
-// BUS_BUNDLE_FROM the routes of a bundle, all on one path, are drawn with no
-// offset and are one line, the strongest on top (the bus layer sorts by
-// tier). The two can't be one expression: a paint property that reads both
-// the zoom and the feature is worked out at the whole zooms either side and
-// blended between them, so a gate at 14.5 would open from 14 to 15, with
-// the lines half over each other all the way. So `bundledByZoom` makes two
-// layers of one: the same layer with no offset up to BUS_BUNDLE_FROM
-// (id + '-flat'), and with the offset from there; a layer's own zoom range
-// is exact.
-export { BUS_BUNDLE_FROM, BUS_PITCH, frequentWidth };
-export const busOffset = () => byZoom(FREQUENT_BUS_WIDTH.map((w) => ['*', ['coalesce', ['get', 'slot'], 0], w * BUS_PITCH]));
-export function bundledByZoom(layer) {
+// path; the slot's width, and the zooms the slots open over, are in sizes.js
+// beside the other sizes the build reads. The routes file carries both
+// drawings of a bundled stretch: RTD's own path, marked `flat`, and the
+// bundle's pieces, each with a `slot`. Up to BUS_BUNDLE_FROM the map draws
+// the flat stretches and the street is one line, the strongest route on top
+// (the bus layer sorts by tier), as on main. From there it draws the
+// pieces, `busOffset` to the side: nothing at BUS_BUNDLE_FROM, the full
+// pitch (a frequent bus's width times BUS_PITCH per slot) from
+// BUS_BUNDLE_OPEN, so the pack fans open across the zoom between. A paint
+// property that reads both the zoom and the feature is worked out at the
+// whole zooms either side and blended between them, which is why those are
+// whole zooms, and why the switch of drawing is a layer's own zoom range,
+// which is exact: `bundledByZoom` makes two layers of one, the flat
+// drawing up to BUS_BUNDLE_FROM (id + '-flat') and the pieces from there.
+export { BUS_BUNDLE_FROM, BUS_BUNDLE_OPEN, BUS_PITCH, frequentWidth };
+export const FLAT = ['!', ['has', 'slot']];
+export const OPEN = ['!', ['has', 'flat']];
+const slot = ['coalesce', ['get', 'slot'], 0];
+const pitchAt = (z) => frequentWidth(z) * BUS_PITCH;
+// The offset's stops are whole zooms, since that is where it is worked
+// out. The opening layer runs from BUS_BUNDLE_FROM to BUS_BUNDLE_OPEN,
+// half a zoom, so its stop a whole zoom on is set where the straight line
+// through nothing at BUS_BUNDLE_FROM reaches the full pitch at
+// BUS_BUNDLE_OPEN; the open layer's stop a whole zoom back is set the same
+// way, so the two agree at BUS_BUNDLE_OPEN.
+const [z0, z1] = [BUS_BUNDLE_FROM, BUS_BUNDLE_OPEN];
+const lo = Math.floor(z0);
+const hi = lo + 1;
+const at = (z, px) => [z, ['*', slot, px]];
+export const busOffset = (stage) =>
+  stage === 'opening'
+    ? ['interpolate', ['linear'], ['zoom'], lo, 0, ...at(hi, (pitchAt(z1) * (hi - z0)) / (z1 - z0))]
+    : ['interpolate', ['linear'], ['zoom'], ...at(lo, pitchAt(z1) - ((pitchAt(hi) - pitchAt(z1)) * (z1 - lo)) / (hi - z1)), ...at(hi, pitchAt(hi)), ...at(ZOOMS.at(-1), pitchAt(ZOOMS.at(-1)))];
+// A pack's members are drawn this much thinner than a route alone at the
+// same zoom, so twelve routes on a street weigh less than the rail beside
+// them (DESIGN.md, "Hierarchy"); the pitch is still in whole widths, so
+// the land between neighbours grows by the same amount.
+export const PACK_WIDTH = 0.75;
+const both = (filter, more) => (filter ? ['all', filter, more] : more);
+export function bundledByZoom(layer, { openWidth = null } = {}) {
   const { 'line-offset': offset, ...flat } = layer.paint;
+  const open = { ...flat, 'line-width': openWidth ?? flat['line-width'] };
   return [
-    { ...layer, id: `${layer.id}-flat`, maxzoom: BUS_BUNDLE_FROM, paint: flat },
-    { ...layer, minzoom: Math.max(layer.minzoom ?? 0, BUS_BUNDLE_FROM), paint: { ...flat, 'line-offset': offset ?? busOffset() } },
+    { ...layer, id: `${layer.id}-flat`, maxzoom: BUS_BUNDLE_FROM, filter: both(layer.filter, FLAT), paint: flat },
+    { ...layer, id: `${layer.id}-opening`, minzoom: BUS_BUNDLE_FROM, maxzoom: BUS_BUNDLE_OPEN, filter: both(layer.filter, OPEN), paint: { ...open, 'line-offset': offset ?? busOffset('opening') } },
+    { ...layer, minzoom: Math.max(layer.minzoom ?? 0, BUS_BUNDLE_OPEN), filter: both(layer.filter, OPEN), paint: { ...open, 'line-offset': offset ?? busOffset('open') } },
   ];
 }
-// Where a layer id is looked up (a tap, a filter), both halves.
-export const bundledIds = (ids) => ids.flatMap((id) => [`${id}-flat`, id]);
+// Where a layer id is looked up (a tap, a filter), all three.
+export const bundledIds = (ids) => ids.flatMap((id) => [`${id}-flat`, `${id}-opening`, id]);
+export const bundledHalves = (id) => [[`${id}-flat`, FLAT], [`${id}-opening`, OPEN], [id, OPEN]];

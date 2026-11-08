@@ -10,7 +10,7 @@
 // words by padding both sides with spaces.
 
 import { FONT } from './basemap.js';
-import { PART_TIME, bundledByZoom, bundledIds, tierMatch, tierWidth } from './shared.js';
+import { PART_TIME, bundledByZoom, bundledHalves, tierMatch, tierWidth } from './shared.js';
 import { P } from './palette.js';
 
 export const DIM = 0.2;
@@ -120,8 +120,13 @@ export function selectionMarks() {
 export function setHighlight(map, code, stationIds = []) {
   map.setGlobalStateProperty('sel', code ?? '');
   map.setGlobalStateProperty('selStations', code ? ` ${stationIds.join(' ')} ` : '');
-  for (const id of bundledIds([CASING])) map.setFilter(id, chosen(code));
-  for (const { id, where, bundled } of SEL_PARTS) for (const each of bundled ? bundledIds([id]) : [id]) map.setFilter(each, within(where, code));
+  // The two halves of a bundled layer keep their gates: the flat drawing
+  // below the bundling zoom, the pieces from it (bundledByZoom).
+  for (const [id, gate] of bundledHalves(CASING)) map.setFilter(id, ['all', chosen(code), gate]);
+  for (const { id, where, bundled } of SEL_PARTS) {
+    if (bundled) for (const [each, gate] of bundledHalves(id)) map.setFilter(each, ['all', within(where, code), gate]);
+    else map.setFilter(id, within(where, code));
+  }
 }
 
 // What is marked on the map for the open panel: a route's two ends, or a ring
