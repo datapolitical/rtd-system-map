@@ -53,7 +53,7 @@ function agents() {
       out.push({
         name: a.name || f.slice(0, -5), issue: a.issue, branch: a.branch || w.branch, step: a.step || '', state, updated,
         log: (a.log || []).slice(0, 12),
-        captures: (a.captures || []).map((c) => path.resolve(w.dir, c)).filter((c) => isCapture(c, dirs)).slice(0, 8),
+        captures: (a.captures || []).map((c) => path.resolve(w.dir, c)).filter((c) => isCapture(c, dirs) && fs.existsSync(c)).slice(0, 8),
       });
     }
   }
@@ -64,7 +64,8 @@ function captures() {
   const walk = (dir, out, depth) => {
     for (const e of safe(() => fs.readdirSync(dir, { withFileTypes: true }), [])) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory() && depth < 4) walk(p, out, depth + 1);
+      // Skip Playwright trace folders: their resources/ hold internal frames, not captures.
+      if (e.isDirectory() && depth < 4 && !/^(trace|resources$)/.test(e.name)) walk(p, out, depth + 1);
       else if (e.name.endsWith('.png')) out.push(p);
     }
     return out;
