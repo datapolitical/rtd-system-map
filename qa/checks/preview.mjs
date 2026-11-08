@@ -78,8 +78,10 @@ if (run.conclusion !== 'success') {
   process.exit(1);
 }
 
+// Cloudflare's summary names the address in a row titled "Preview URL" (it
+// said "Branch Preview URL" when this was written; both are read).
 const summary = run.output?.summary || '';
-const match = summary.match(/Branch Preview URL:[\s\S]*?href='([^']+)'/);
+const match = summary.match(/Branch Preview URL:[\s\S]*?href='([^']+)'/) || summary.match(/Preview URL:[\s\S]*?href='([^']+)'/);
 const url = (match?.[1] || `https://${branch}.rtd-system-map.pages.dev`).replace(/\/$/, '');
 
 // The deployment answers a moment after the check run turns green.
