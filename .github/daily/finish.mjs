@@ -25,7 +25,9 @@
 //   there) and nothing else, so the next run tries the same job again.
 // - It stopped any other way: `agent instructions` and `in progress` off,
 //   `needs Chris` on, and a one-line comment on the issue saying why, so
-//   it waits for a person instead of being picked again every run.
+//   it waits for a person instead of being picked again every run. A run
+//   started by hand (a trial) only takes `in progress` off: whoever
+//   started it reads the Agent log line.
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
@@ -83,9 +85,9 @@ if (job.job === 'fix' && job.issue) {
   } else if (evaluation.includes(job.issue)) {
     edit(['ready for evaluation'], ['agent instructions', 'needs Chris', ...progress]);
     labelled = `#${n} handed to the evaluator`;
-  } else if (modelError && !output) {
+  } else if ((modelError && !output) || job.reason === 'started by hand') {
     edit([], progress);
-    labelled = `#${n} left queued for the next run`;
+    labelled = job.reason === 'started by hand' ? `#${n} labels left as they were (started by hand)` : `#${n} left queued for the next run`;
   } else {
     edit(['needs Chris'], ['agent instructions', ...progress]);
     const why = finished ? `the agent stopped without asking for evaluation${summary ? `: ${summary}` : ''}` : `the agent stopped unfinished after ${tries} ${tries === 1 ? 'try' : 'tries'}`;

@@ -2236,7 +2236,8 @@ without the other noticing.
   at most once a day, a review pass after the map's code on main has
   changed. With no reason it stops before installing anything or calling
   a model. One issue or one review pass per run, done by DeepSeek V4.1
-  Flash through the opencode CLI, with map changes on branches and docs,
+  Flash through the opencode CLI (a run started by hand can name a free
+  model instead, to see whether it can do the job), with map changes on branches and docs,
   tests and CI allowed to main fast-forward. Its briefs are
   `.github/daily/find.md` and `.github/daily/fix.md`, and a job is done
   when the agent writes `daily-summary.txt`; a model that ends its turn
@@ -2249,7 +2250,9 @@ without the other noticing.
   requests; `.github/daily/finish.mjs`) and sets the labels: an issue
   with an evaluation request goes to `ready for evaluation` with
   `agent instructions` off; one where the agent stopped without asking
-  goes to `needs Chris` with a comment saying why. So nothing comes back
+  goes to `needs Chris` with a comment saying why (a run started by hand,
+  such as a trial of a free model, leaves the labels as they were). So
+  nothing comes back
   to the worker by itself, and a stuck job waits for a person instead of
   running again every four hours. It records the run in `ledger.json` on
   the orphan branch `daily-ledger` and one line on the "Agent log" issue:

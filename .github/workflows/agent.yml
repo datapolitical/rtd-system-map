@@ -5,7 +5,8 @@
 # `needs Chris` issue, or a review pass once the map on main has changed
 # (.github/daily/pick.mjs). With no reason it stops in seconds, before
 # installing anything or calling a model. One job per run, done by the
-# opencode CLI on DeepSeek V4.1 Flash. When the model ends its turn
+# opencode CLI on DeepSeek V4.1 Flash (a run started by hand may pick a
+# free model instead, to try it). When the model ends its turn
 # before the job is done (no daily-summary.txt), it is told to carry on
 # in the same session, up to five times. Then .github/daily/finish.mjs
 # reads what the run really did from GitHub, sets the issue's labels so
@@ -28,6 +29,15 @@ on:
         description: 'Issue number to work on (optional; runs even with nothing waiting)'
         required: false
         type: string
+      model:
+        description: 'Model (DeepSeek unless trying a free one by hand)'
+        required: false
+        type: choice
+        default: deepseek-v4.1-flash
+        options:
+          - deepseek-v4.1-flash
+          - crouton-alpha-free
+          - beam-free
 
 permissions:
   contents: write
@@ -46,7 +56,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     env:
-      MODEL: deepseek-v4.1-flash
+      # Scheduled runs have no inputs, so they always use DeepSeek.
+      MODEL: ${{ inputs.model || 'deepseek-v4.1-flash' }}
     steps:
       - uses: actions/checkout@v7
         with:
