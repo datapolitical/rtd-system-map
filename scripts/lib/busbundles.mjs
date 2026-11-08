@@ -174,16 +174,18 @@ const TIER_STEP = 25;
  * and the stretches in other tiers as they came; the bundles found (routes
  * left to right, meters, middle); and where two routes swap sides between
  * bundles. `tiers` are the tiers that bundle; `terminals` are [lon, lat]
- * points of transit centers and Park-n-Rides, where routes end.
+ * points of transit centers and Park-n-Rides, and `ends` each route's end
+ * points (route -> [[lon, lat], ...], from the directory): a route that
+ * ends at a terminal ends at its edge (sharedtrack's atTerminals).
  */
-export function busBundles(features, { tiers = BUNDLED_TIERS, terminals = [] } = {}) {
+export function busBundles(features, { tiers = BUNDLED_TIERS, terminals = [], ends = {} } = {}) {
   const bundled = features.filter((f) => tiers.includes(f.properties.tier));
   const rest = features.filter((f) => !tiers.includes(f.properties.tier));
   const byRoute = new Map();
   for (const f of bundled) (byRoute.get(f.properties.route) ?? byRoute.set(f.properties.route, []).get(f.properties.route)).push(f);
   const whole = [...byRoute].map(([route, list]) => ({
     type: 'Feature',
-    properties: { route },
+    properties: { route, ends: ends[route] ?? [] },
     geometry: { type: 'MultiLineString', coordinates: list.flatMap((f) => partsOf(f.geometry)).filter((p) => p.length >= 2) },
   }));
   const { pieces, places, crossings } = sharedTrack(whole, terminals, RULES);

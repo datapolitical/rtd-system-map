@@ -190,7 +190,7 @@ export function sharedTrack(features, stations = [], options = {}) {
     // fold has left two parts meeting. Terminal loops and laps go before
     // the fold, so a direction that only differed inside the terminal
     // folds into the other.
-    parts: joinParts(ownTrack(withoutLoops(atTerminals(joinParts(unique(partsOf(f.geometry)).map((part) => densify(despike(part.map(project), rules), rules))), marks, rules, f.properties.route), rules), rules)),
+    parts: joinParts(ownTrack(withoutLoops(atTerminals(joinParts(unique(partsOf(f.geometry)).map((part) => densify(despike(part.map(project), rules), rules))), marks, rules, (f.properties.ends ?? []).map(project)), rules), rules)),
   }));
   if (rules.flushMeters) flushEnds(lines, rules);
 
@@ -1278,17 +1278,18 @@ function ownTrack(parts, rules) {
   return kept;
 }
 
-// Lines end at the edge of their terminal (rules.terminalMeters). Where a
-// line goes into the circle of that radius about a station point and all
-// its crossings of the circle are within a radius of each other (it comes
-// in and goes out by the same street or two beside each other, and goes
-// nowhere beyond), it is cut where it crosses, and what it drew inside (its
-// lap of the terminal's block, its bay in the concourse) is left out, so it
-// ends square on the circle. A line that crosses the circle on two sides
-// passes through, and is left alone.
-function atTerminals(parts, marks, rules, route = '') {
+// Lines end at the edge of their terminal (rules.terminalMeters). A line
+// whose trips end (`ends`, from the schedule) within that of a station
+// point is cut wherever it crosses the circle of that radius about it,
+// and what it drew inside (its lap of the terminal's block, its bay in the
+// concourse, the street it leaves by) is left out, so it ends square on
+// the circle where it comes in. A line that only passes through is left
+// alone. Where a line leaves by another street, the piece that left comes
+// out at the circle's edge, and the two directions read as a pair that
+// ends at the place.
+function atTerminals(parts, marks, rules, ends = []) {
   const r = rules.terminalMeters;
-  if (!r || !marks.length) return parts;
+  if (!r || !marks.length || !ends.length) return parts;
   const dist = (p, m) => Math.hypot(p[0] - m[0], p[1] - m[1]);
   // Where the segment a-b crosses the circle about m, by bisection (a step
   // is 20 m; a meter is close enough).
@@ -1303,19 +1304,8 @@ function atTerminals(parts, marks, rules, route = '') {
   };
   let out = parts;
   for (const m of marks) {
-    const crossings = [];
-    let anyInside = false;
-    for (const part of out) {
-      for (let i = 0; i < part.length; i++) {
-        const is = dist(part[i], m) <= r;
-        anyInside ||= is;
-        if (i && is !== dist(part[i - 1], m) <= r) crossings.push(edge(part[i - 1], part[i], m));
-      }
-    }
-    if (!anyInside) continue;
-    const spread = Math.max(0, ...crossings.flatMap((a) => crossings.map((b) => dist(a, b))));
-    if (process.env.DEBUG_TERMINAL && dist(m, [0, 0]) < 1e9) console.error('TERMINAL', route, 'mark', m.map(Math.round), 'crossings', crossings.length, 'spread', Math.round(spread), crossings.map((c) => c.map(Math.round).join(',')).join(' '));
-    if (spread > r) continue;
+    const anyInside = out.some((part) => part.some((p) => dist(p, m) <= r));
+    if (!anyInside || !ends.some((e) => dist(e, m) <= r)) continue;
     const next = [];
     for (const part of out) {
       let piece = [];

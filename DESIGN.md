@@ -1211,6 +1211,59 @@ plan was to draw the shared stretch once, weighted by combined frequency,
 counting only stops both routes serve. That is still open (see "Open
 questions"); today the map draws each route by its own frequency.
 
+### Bus routes side by side (prototype, branch bundles-prototype)
+
+Where bus routes share a street, the map draws them side by side from zoom
+14.5, the way the rail lines are drawn on shared track, instead of on top
+of each other where only the last drawn shows. The build does it
+(`scripts/lib/busbundles.mjs`, on the rail pipeline in `sharedtrack.mjs`);
+the page only turns each piece's `slot` into an on-screen offset. Only the
+frequent and every-30 tiers bundle; the thinner tiers are drawn as they
+come, underneath. The rules, each from a view that was wrong without it:
+
+- **A street is where a route's own path runs.** Routes within 35 m and 25
+  degrees of each other share a street, transitively; a route is only ever
+  drawn on the path of a street it runs on, never on the other half of a
+  one-way pair a block away. Two runs of the same routes are drawn as one
+  pack only where they lie alongside each other for at least 50 m
+  (`alongsideMeters`); before that rule, Broadway's and Lincoln's runs
+  touched at the ends of the couplet and were taken for one street, which
+  put the 0 and 0L on Lincoln, 150 m from Broadway. A route's second
+  carriageway, drawn 40 m or more from the first, is its own path (`OFF`
+  40; at 70 the second carriageway of US 36 was dropped, and 3 km of the
+  FF and 120X with it). The measure is the reviewer's `lost.py`: every
+  25 m of every frequent or every-30 stretch, how far the nearest drawn
+  piece of that route is; the round-two build had 59.6 km more than 40 m
+  off, this one has none.
+- **Below the bundling zoom the map is main's.** Up to 14 the page draws
+  RTD's own paths, carried through the build marked `flat`, one line per
+  route (a 12-route pack opened at 13 was a 30 px bar). From 14 to 14.5
+  the slots open from nothing to their full pitch, and from 14.5 they are
+  open; each stage is a layer of its own because MapLibre works out a
+  paint expression that reads the feature and the zoom at whole zooms
+  only, so a ramp with stops at 14 and 15 is half open at 14.5 whatever
+  the stops say.
+- **Terminal loops and terminals.** A route's lap of the block at its
+  terminal is cut where it begins (a part that comes back within 35 m of
+  its own end with no more than 800 m between), and a turnaround drawn as
+  a closed part of its own is dropped; a closed part nothing else meets is
+  a circulator and kept. A route whose schedule says it ends at a transit
+  center or Park-n-Ride (the directory's route ends, `facilities.geojson`
+  for the places) ends square where it enters the 150 m circle about it,
+  and what it drew inside (its bay, the street it leaves by) is left out;
+  a route passing through is left alone. Before this, Civic Center and
+  Union Station were eight routes each on its own lap of the block.
+- **Weight and spacing.** Slots are a frequent bus's width times 1.4
+  (`BUS_PITCH`), and a route in a pack is drawn at 0.75 of its tier's
+  width (`PACK_WIDTH`), so 0.65 of a width of land shows between
+  neighbours in both themes; square line caps, so a tier change mid-block
+  is flush. Rail stays heavier than any pack: a pack is many thin lines,
+  never one wide one.
+
+What it still gets wrong is in the round-three report and the review
+rubric; the knots where packs end at Civic Center at different points on
+the circle, one per approach street, are the worst of it.
+
 ### By zoom level
 
 Each bus tier fades in over about a zoom level rather than popping on.
@@ -2859,6 +2912,16 @@ marks that overlap, a letter missing) are the next thing to add there.
   roads and terrain past the boundary and gave the map a ragged edge; Chris:
   "there's no reason to limit it to the RTD service area and it looks weird."
   The page no longer loads the boundary layer.
+
+- 2026-11-08: Bus bundling round three ("Bus routes side by side"): a
+  route is only drawn on its own street (one-way pairs are two streets,
+  `alongsideMeters` 50, `OFF` 40), the map below zoom 14 is main's (the
+  originals marked `flat`), the slots open over 14 to 14.5 in three
+  layers, terminal loops are cut and a route ending at a transit center
+  ends at its edge, pitch 1.4 with pack members at 0.75 width and square
+  caps. From the independent reviewer's round-two scorecard (Accurate 0:
+  the 0 and 0L drawn on Lincoln, 59.6 km of frequent route more than 40 m
+  from its street).
 
 ## Sources
 

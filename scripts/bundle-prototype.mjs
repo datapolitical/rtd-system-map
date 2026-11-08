@@ -46,7 +46,9 @@ const tiers = allTiers ? TIERS : BUNDLED_TIERS;
 // Transit centers and Park-n-Rides: where routes end, the bundler ends them
 // at the terminal's edge.
 const terminals = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'facilities.geojson'), 'utf8')).features.map((f) => f.geometry.coordinates);
-const { features, places, crossings } = busBundles(buses, { tiers, terminals });
+const directory = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'directory.json'), 'utf8'));
+const ends = Object.fromEntries(directory.routes.filter((r) => r.mode === 'bus').map((r) => [r.route, (r.goes ?? []).map((g) => g.at).filter(Boolean)]));
+const { features, places, crossings } = busBundles(buses, { tiers, terminals, ends });
 const ms = Math.round(performance.now() - started);
 const out = { ...geo, features: [...features, ...geo.features.filter((f) => f.properties.mode !== 'bus')] };
 const text = JSON.stringify(out);
