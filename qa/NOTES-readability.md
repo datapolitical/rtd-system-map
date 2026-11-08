@@ -72,7 +72,7 @@ be a JPEG artefact.
 5. Runtime health on this branch: console errors, MapLibre style errors, missing
    glyphs, across the zoom sweep.
 6. Opening-view load under mobile throttling (spec floor 2 s,
-   `DESIGN.md:966`), now with the extra corridors request.
+   `DESIGN.md:1067`), now with the extra corridors request.
 7. Keyboard order and axe, to confirm the new layers did not regress either.
 
 

@@ -6,8 +6,13 @@ every finding. Where the two disagree, this file is current: the raw report's
 `main.js:68` reference for `CORRIDOR_LABELS_FROM` is wrong (it is `:59`).
 
 - Repo: `/home/chris/code/rtd-v2` (worktree of `datapolitical/rtd-system-map`)
-- Branch `feat/v2-finish`, HEAD `9d3f347`. Nothing under `public/`, `scripts/`,
-  `test/` or `DESIGN.md` has been modified by the QA pass — every defect is live.
+- Branch `feat/v2-finish`, HEAD `9d3f347` when the pass ran; both it and `main`
+  now carry this work order. Nothing under `public/`, `scripts/` or `test/` has
+  been modified by the QA pass — every defect is live.
+- `DESIGN.md` has changed since the pass: it gained "Installed on a phone" and
+  the decision log entries of 2026-11-07, which pushed every line this file
+  quotes from 950 downward by 101 or 104. The references below were remapped
+  through the diff, and the 2026-11-01 spec text they point at is unchanged.
 - Authority: `/home/chris/code/rtd-v2/DESIGN.md`. Two findings (F-01, F-03) are
   *deliberate* code choices that contradict the spec. For those, decide explicitly:
   change the code, or amend `DESIGN.md` with a one-line reason. Do not leave the
@@ -41,11 +46,11 @@ Harnesses, all runnable as-is, outputs in `qa/vision/results/`:
 1. Every finding below is fixed, or closed as "spec amended" with the `DESIGN.md`
    edit in the same commit.
 2. `node qa/vision/opening.mjs 390 844` and `... 1440 900` satisfy
-   `DESIGN.md:1150-1152`: every line drawn has a name or number on screen, and the
+   `DESIGN.md:1254-1256`: every line drawn has a name or number on screen, and the
    airport, downtown, Boulder and every rail end are labeled.
 3. `npm test` green; `node qa/scripts/audit-corridors.mjs` still exits 0.
 4. `node qa/vision/perf.mjs 5` reports median usable under 2,000 ms
-   (`DESIGN.md:966`).
+   (`DESIGN.md:1067`).
 
 ---
 
@@ -56,7 +61,7 @@ Harnesses, all runnable as-is, outputs in `qa/vision/results/`:
 disappear at 13.
 
 **Spec.** `DESIGN.md:744` — "Frequent buses and corridors, **each with one number**";
-acceptance at `DESIGN.md:1150-1151`.
+acceptance at `DESIGN.md:1254-1255`.
 
 **Source.** `public/js/main.js:59` `const CORRIDOR_LABELS_FROM = 11.5;` → used as
 `minzoom` at `public/js/main.js:423`, `maxzoom: CORRIDOR_LABELS_UNTIL` at `:424`,
@@ -93,8 +98,8 @@ FREE** have no number anywhere on the phone opening view; desktop misses **121, 
 FREE**. Every one of those labels is inside the viewport — collision drops them, not
 geometry.
 
-**Spec.** `DESIGN.md:1146-1147` ("one tag per frequent route at the opening zoom"),
-`DESIGN.md:1151` (every drawn line carries a name or number).
+**Spec.** `DESIGN.md:1250-1251` ("one tag per frequent route at the opening zoom"),
+`DESIGN.md:1255` (every drawn line carries a name or number).
 
 **Source.** `public/js/main.js:401-414` — layer `bus-tags-region`: `maxzoom: 11.5`,
 `text-field: ['get','route']`, `text-padding: 1` at `:411`, and **no**
@@ -155,7 +160,7 @@ hidden line-signs   hub: []
 **Rider sees.** The phone view labels Aurora, Boulder, Broomfield, Longmont and
 Thornton — and not Denver. Desktop shows it.
 
-**Spec.** `DESIGN.md:1151` names downtown among the things the phone opening
+**Spec.** `DESIGN.md:1255` names downtown among the things the phone opening
 screenshot must label; `DESIGN.md:744` requires "every town and city in the district".
 
 **Source.** Same splice as F-03 (`public/js/main.js:164-165`): `city-label` is placed
@@ -253,7 +258,7 @@ at 10.5.
 **Rider sees.** 67 station marks in one phone screen, 32 pairs closer than 12 px, 10
 closer than 8 px, closest 2.09 px — downtown reads as a blob.
 
-**Spec.** `DESIGN.md:744` asks for stations at the opening view; `DESIGN.md:1143-1144`
+**Spec.** `DESIGN.md:744` asks for stations at the opening view; `DESIGN.md:1247-1248`
 requires stations to read first in a screenshot at every zoom.
 
 **Source.** `public/js/main.js:344-358` — layer `stations`: **no `minzoom`**, plus
@@ -276,7 +281,7 @@ so a `minzoom` or a graduated size is sufficient; the layer itself is fine.
 
 **Rider sees.** Tabbing into the map changes nothing on screen.
 
-**Spec.** `DESIGN.md:1153-1155` (V2 step 5): keyboard access to all of it.
+**Spec.** `DESIGN.md:1257-1259` (V2 step 5): keyboard access to all of it.
 
 **Source.** `public/css/app.css:55-57` — `:focus-visible { outline: 2px solid
 var(--focus); outline-offset: 2px; }`. The rule is correct; the **geometry** defeats
@@ -342,7 +347,7 @@ px overlap at 320 × 568.
 
 **Rider sees.** Half-words at the edges of the phone view.
 
-**Spec.** No rule stated; `DESIGN.md:1150-1152` only requires the named anchors to be
+**Spec.** No rule stated; `DESIGN.md:1254-1256` only requires the named anchors to be
 labeled. Decide whether clipping is acceptable and record it.
 
 **Source.** No label layer sets `symbol-avoid-edges`: basemap labels at
@@ -387,8 +392,8 @@ opening view, so the airport is named.
 **Rider sees.** On 1.6 Mbps with a 4× slower CPU the loading toast clears after more
 than four seconds.
 
-**Spec.** `DESIGN.md:966` — "a usable map in under 2 seconds on a mid-range phone over
-4G"; `DESIGN.md:966-970` also requires loading interaction data (trips, stop names)
+**Spec.** `DESIGN.md:1067` — "a usable map in under 2 seconds on a mid-range phone over
+4G"; `DESIGN.md:1067-1071` also requires loading interaction data (trips, stop names)
 only when needed and pausing live updates on a hidden tab.
 
 **Repro.**

@@ -63,7 +63,7 @@ At the desktop opening centre it is `corridors 9, corridor-labels 3`
 says this is deliberate — "at that zoom a corridor is a few pixels long and the
 numbers cannot fit" — but `DESIGN.md:744` still promises "Frequent buses and
 corridors, each with one number" at the opening view, and the V2 step 4
-done-when (`DESIGN.md:1150-1151`) says every line drawn must have a name or number
+done-when (`DESIGN.md:1254-1255`) says every line drawn must have a name or number
 in the opening screenshot. One of the two has to change; today the spec is
 false.
 
@@ -98,7 +98,7 @@ renders all 21:
                  "40","43","73","83","BOND","FF","FREE","JUMP","SKIP"]
 ```
 
-so the cause is collision, not missing data. `DESIGN.md:1146-1147` promises "one tag
+so the cause is collision, not missing data. `DESIGN.md:1250-1251` promises "one tag
 per frequent route at the opening zoom"; `:1151` requires every drawn line to
 carry a name or number in the opening screenshot on phone and desktop.
 
@@ -149,7 +149,7 @@ hidden line-signs   city: ["Aurora","Boulder","Broomfield","Denver","Lakewood","
 ```
 
 Hiding the line-end signs brings Denver, Lakewood and Parker back: the signs win
-the space. `DESIGN.md:1151` names "downtown" as one of the things that must be
+the space. `DESIGN.md:1255` names "downtown" as one of the things that must be
 labeled in the phone opening screenshot.
 
 ## F-05 — The T line's Lincoln end sign is missing on the phone opening (medium)
