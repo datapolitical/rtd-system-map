@@ -74,7 +74,9 @@ const waiting = open.filter((i) => has(i, 'agent instructions') || (has(i, 'need
 function chrisAfterEvaluator(i) {
   const cs = comments(i.number);
   const lastEv = [...cs].reverse().find((c) => /^(Instructions for the agent|Evaluation request)/.test((c.body || '').trimStart()));
-  const lastChris = [...cs].reverse().find((c) => c.user?.login === 'datapolitical' && c.author_association !== 'NONE' && !/^(Instructions for the agent|Evaluation request)/.test((c.body || '').trimStart()) && !(c.body || '').startsWith('Agent log'));
+  // The evaluator and Claude sessions post from Chris's account too; they mark
+  // every comment with <!-- agent -->, so only unmarked comments are his.
+  const lastChris = [...cs].reverse().find((c) => c.user?.login === 'datapolitical' && c.author_association !== 'NONE' && !(c.body || '').includes('<!-- agent -->') && !/^(Instructions for the agent|Evaluation request)/.test((c.body || '').trimStart()) && !(c.body || '').startsWith('Agent log'));
   if (!lastChris) return false;
   return !lastEv || new Date(lastChris.created_at) > new Date(lastEv.created_at);
 }

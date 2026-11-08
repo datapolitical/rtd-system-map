@@ -2244,6 +2244,11 @@ without the other noticing.
   check for a human), `revise` (instructions for the worker), or
   `escalate` (a decision only a human can make). After round 3 without a
   pass it escalates whatever the evaluation said.
+- A human's newest comment on a `needs Chris` issue is the worker's next
+  instruction. The evaluator posts from the same GitHub account as the
+  human, so every comment it posts ends with the hidden mark
+  `<!-- agent -->`, and the worker skips marked comments when it looks
+  for the human's.
 
 The satellite overlay (`qa/sat/render.py`) draws Esri satellite tiles
 with OpenStreetMap shapes and the map's own stops, rail lines,
@@ -3120,6 +3125,10 @@ work against the real structure before asking for evaluation.
   work and writes the worker's next instructions. Either side can stop or
   restart without the other noticing; the satellite overlay
   (`qa/sat/render.py`) is how builders check their own work first.
+- 2026-11-08: The evaluator posts from the same GitHub account as the human,
+  so its comments carry the hidden mark `<!-- agent -->`. Without it the
+  worker read the evaluator's own pass note as the human's go-ahead and
+  would have started the issue again.
 
 ## Sources
 
