@@ -22,7 +22,8 @@ const SIPS = fs.existsSync('/usr/bin/sips');
 const GH = process.env.GH || ['/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh'].find((p) => fs.existsSync(p)) || 'gh';
 
 const safe = (f, d) => { try { return f(); } catch { return d; } };
-const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+// --no-optional-locks: never take index.lock, so a commit in another session can't collide with a refresh.
+const git = (dir, ...a) => execFileSync('git', ['--no-optional-locks', '-C', dir, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 const [OWNER, NAME] = safe(() => git(ROOT, 'remote', 'get-url', 'origin').match(/[:/]([^/:]+)\/([^/]+?)(?:\.git)?$/).slice(1), []);
 
 // Every checkout of this repo on this machine (the main one and its worktrees).
@@ -152,7 +153,8 @@ function sessions() {
   return memo.v;
 }
 
-const commits = () => worktrees().map((w) => ({
+// Skip the page's own pinned copy (see CLAUDE.md, "Status page").
+const commits = () => worktrees().filter((w) => !(w.dir === ROOT && w.branch === '(detached)')).map((w) => ({
   name: w.branch || path.basename(w.dir),
   log: safe(() => git(w.dir, 'log', '-8', '--format=%h|%cr|%s').split('\n').map((l) => l.split('|')), []),
   dirty: safe(() => git(w.dir, 'status', '--short', '--', '.', ':!node_modules').split('\n').filter(Boolean).length, 0),

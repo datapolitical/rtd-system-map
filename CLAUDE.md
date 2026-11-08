@@ -62,6 +62,11 @@ repo on that machine it also lists the Claude Code sessions and subagents
 working there (read from their transcripts in `~/.claude/projects`), agents'
 progress files, the newest captures in `qa/.scratch/`, and recent commits.
 
+Run it from its own worktree pinned to main, used for nothing else
+(`git worktree add --detach ../rtd-system-map-status origin/main`), so a
+session switching a shared checkout's branch can't stop it from starting. To
+update it, check out the newer origin/main there and restart the server.
+
 When you read Claude plan usage, add a reading to `status/usage.json`, which
 git ignores: `{"plan": "Pro", "snapshots": [{"t": "<ISO time>", "w":
 [{"label": "Weekly · all models", "pct": 86, "resets": "<ISO time>"}],
