@@ -76,7 +76,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['boundary', 'flexride', 'routes', 'stations', 'facilities', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'stations', 'facilities', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -147,20 +147,6 @@ const served = ['==', ['get', 'served'], true];
 // Lines and areas, beneath the basemap's place names.
 export function transitLines(lines) {
   return [
-    // RTD's boundary layer is a mask over everything outside the district: a
-    // gray wash, with a soft edge rather than a hard one.
-    { id: 'district-wash', type: 'fill', source: 'boundary', paint: { 'fill-color': P.wash, 'fill-opacity': 0.72 } },
-    {
-      id: 'district-edge',
-      type: 'line',
-      source: 'boundary',
-      paint: {
-        'line-color': P.wash,
-        'line-opacity': 0.6,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 8, 14, 60],
-        'line-blur': ['interpolate', ['linear'], ['zoom'], 8, 8, 14, 60],
-      },
-    },
     // FlexRide: a light hatch with a dashed edge, never a green that reads as park.
     // Not until close in: further out, zone outlines are boxes around
     // nothing, and read as city limits.

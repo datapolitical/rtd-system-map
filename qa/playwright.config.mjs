@@ -6,6 +6,12 @@ import { defineConfig, devices } from '@playwright/test';
 
 const baseURL = (process.env.CHECK_URL || 'http://127.0.0.1:8788').replace(/\/$/, '');
 
+// The iPhone 14 profile defaults to WebKit, which ignores the software-GL
+// flags below and draws the map on the GPU: on 2026-11-07 its GPU process
+// reached 8.4 GB in 90 seconds and the 16 GB Mac ran out of memory. So the
+// engine is named here, after the profile.
+const phone = { ...devices['iPhone 14'], browserName: 'chromium' };
+
 export default defineConfig({
   testDir: 'checks',
   outputDir: 'checks/out',
@@ -21,8 +27,8 @@ export default defineConfig({
     launchOptions: { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
   },
   projects: [
-    { name: 'phone-light', use: { ...devices['iPhone 14'], colorScheme: 'light' } },
-    { name: 'phone-dark', use: { ...devices['iPhone 14'], colorScheme: 'dark' } },
+    { name: 'phone-light', use: { ...phone, colorScheme: 'light' } },
+    { name: 'phone-dark', use: { ...phone, colorScheme: 'dark' } },
   ],
   // No webServer: the checks run against a dev server you already have up
   // (`npm run dev`, and `npm run dev:live` for live.spec.mjs). Starting one
