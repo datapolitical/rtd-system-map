@@ -11,7 +11,7 @@
 import { FONT, lineKeepOut } from './basemap.js';
 import { lightenTo, shade, textOn } from './color.js';
 import { DARK_RAIL_MIN, P, PALETTES } from './palette.js';
-import { DETAIL_FROM, PART_TIME, TIER_RANK, byZoom, tierMatch, tierWidth } from './shared.js';
+import { CLASS_RANK, DETAIL_FROM, PART_TIME, byZoom, classMatch, classWidth, classWidthAt, classWidthTimes, tierMatch, tierWidth } from './shared.js';
 import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
 import { fade, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
 import { edgeLetterLayer } from './edgeletters.js';
@@ -35,6 +35,25 @@ const STOPS_PRELOAD_ZOOM = 14;
 
 // A bus line fades in by tier as you zoom, and to 20% when another route is open.
 const fadeIn = ['interpolate', ['linear'], ['zoom'], ...[8, 9, 10, 11, 12, 13].flatMap((z) => [z, ['*', tierMatch((t) => Math.min(1, Math.max(0, (z - t.from) / 1.5 + 0.25))), fade(isRoute())]])];
+// A street fades in by class the same way, and to 20% when a route that
+// isn't on it is open.
+const onStreet = inList('routes');
+const streetFade = ['interpolate', ['linear'], ['zoom'], ...[8, 9, 10, 11, 12, 13].flatMap((z) => [z, ['*', classMatch((c) => Math.min(1, Math.max(0, (z - c.from) / 1.5 + 0.25))), fade(onStreet)]])];
+// Inside a shared street, from STRANDS_FROM, a hairline between each pair
+// of routes hints how many run there, like strands in a cable: no gap and no
+// land between them, so the street still reads as one line. Up to
+// STRANDS_MAX routes; a street with more is too crowded for strands to read
+// and gets a core line instead, which says "many routes" without counting.
+const STRANDS_FROM = 13.5;
+const STRANDS_MAX = 6;
+// A strand narrower than this (the street's width over its routes) can't
+// hold a seam: the seams wait for the zoom where the strands have room.
+const STRAND_MIN = 2.6;
+const strandWidth = ['interpolate', ['linear'], ['zoom'], STRANDS_FROM, 0.6, 16, 1];
+const strandRoom = (zoom) => ['>=', ['/', classMatch((c) => classWidthAt(c.id, zoom)), ['get', 'n']], STRAND_MIN];
+const strandZooms = Array.from({ length: Math.round((18 - STRANDS_FROM) / 0.5) + 1 }, (_, i) => STRANDS_FROM + i / 2);
+const strandFade = ['step', ['zoom'], 0, ...strandZooms.flatMap((z) => [z, ['case', strandRoom(z), fade(onStreet), 0]])];
+const coreFade = ['interpolate', ['linear'], ['zoom'], STRANDS_FROM, 0, STRANDS_FROM + 1, fade(onStreet)];
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -76,7 +95,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'stations', 'facilities', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'facilities', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -186,17 +205,45 @@ export function transitLines(lines) {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn, 'line-dasharray': [0.1, 2.2] },
     },
+    // Every street a bus runs on all day, drawn once at the width of the
+    // buses along it, all routes counted (DESIGN.md, "Bus routes"; the
+    // build: scripts/lib/streets.mjs). Butt ends: a run ends flush where
+    // its routes part, and the heavier run carries on through the crossing
+    // (the build gives it the point), so widths step with no blob or notch.
     {
-      id: 'bus',
+      id: 'street',
       type: 'line',
-      source: 'routes',
-      filter: ['all', bus, ['!', partTime]],
+      source: 'streets',
       layout: {
-        'line-cap': 'round',
+        'line-cap': 'butt',
         'line-join': 'round',
-        'line-sort-key': tierMatch((t) => TIER_RANK[t.id]),
+        'line-sort-key': classMatch((c) => CLASS_RANK[c.id]),
       },
-      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn },
+      paint: { 'line-color': classMatch((c) => c.color), 'line-width': classWidth(), 'line-opacity': streetFade },
+    },
+    ...Array.from({ length: STRANDS_MAX - 1 }, (_, i) => i + 1).map((k) => ({
+      id: `street-strand-${k}`,
+      type: 'line',
+      source: 'streets',
+      minzoom: STRANDS_FROM,
+      filter: ['all', ['>', ['get', 'n'], k], ['<=', ['get', 'n'], STRANDS_MAX]],
+      layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      paint: {
+        'line-color': P.strand,
+        'line-width': strandWidth,
+        // The k-th seam of n equal strands, measured from the line's middle.
+        'line-offset': classWidthTimes(['-', ['/', k, ['get', 'n']], 0.5]),
+        'line-opacity': strandFade,
+      },
+    })),
+    {
+      id: 'street-core',
+      type: 'line',
+      source: 'streets',
+      minzoom: STRANDS_FROM,
+      filter: ['>', ['get', 'n'], STRANDS_MAX],
+      layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      paint: { 'line-color': P.strand, 'line-width': classWidthTimes(0.34), 'line-opacity': coreFade },
     },
 
     // The open bus route, drawn over its faded neighbours.

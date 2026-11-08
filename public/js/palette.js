@@ -52,6 +52,13 @@ const light = {
   clear: 'rgba(255, 255, 255, 0)',
   // Bus tiers (shared.js). Contrast against land: 12.3, 7.4, 3.5.
   tier: { frequent: '#1d3044', every30: '#3f5266', slow: '#78848f' },
+  // Streets by combined frequency (frequency.js, shared.js STREETS; `freq`): one
+  // navy ink, lighter by class down to the hairline. The three heaviest
+  // share the full ink: above "every 15" the width says the rest.
+  freq: { c3: '#1d3044', c5: '#1d3044', c10: '#1d3044', c15: '#2a3d52', c30: '#3f5266', c60: '#78848f' },
+  // The hairline between the strands of a shared street, and the core of one
+  // too crowded for strands: a shade off the ink, never the land.
+  strand: '#4f6478',
   tagSlow: '#4c5a69', // a slow tier's number, darkened to read on its tag
   tagFill: '#ffffff',
   stop: { fill: '#ffffff', edge: '#6f7c89' },
@@ -116,6 +123,8 @@ const dark = {
   // sky blue at 226 and the E's purple at 303), lighter and stronger by tier.
   // Contrast against land: 9.2, 5.6, 3.7; against a road (`road`): 6.7, 4.1, 2.7.
   tier: { frequent: '#a1bdf9', every30: '#7c92c1', slow: '#667493' },
+  freq: { c3: '#a1bdf9', c5: '#a1bdf9', c10: '#a1bdf9', c15: '#8fa7dd', c30: '#7c92c1', c60: '#667493' },
+  strand: '#6d84b8',
   tagSlow: '#a9b7c5',
   tagFill: '#1c2229',
   stop: { fill: '#1c2229', edge: '#8a97a4' },

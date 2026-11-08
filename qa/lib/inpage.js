@@ -13,12 +13,14 @@
   if (window.__qa) return;
   const qa = (window.__qa = {});
   const map = () => window.__map;
-  let routes = null, stations = null, evaluate = null, uncoveredFn = null;
+  let routes = null, stations = null, streets = [], evaluate = null, uncoveredFn = null;
   const filters = {};
 
   qa.init = async (evaluateSource) => {
     if (!routes) routes = (await (await fetch('data/routes.geojson')).json()).features;
     if (!stations) stations = (await (await fetch('data/stations.geojson')).json()).features;
+    // Streets by combined bus frequency (the `street` layer), where the site has them.
+    if (!streets.length) { try { const r = await fetch('data/streets.geojson'); if (r.ok) streets = (await r.json()).features; } catch {} }
     if (evaluateSource && !evaluate) {
       const url = URL.createObjectURL(new Blob([evaluateSource], { type: 'text/javascript' }));
       try { evaluate = (await import(url)).evaluate; } catch { evaluate = null; }
@@ -26,7 +28,7 @@
     try { uncoveredFn = (await import('/js/edgeletters.js')).uncovered; } catch { uncoveredFn = null; }
     // The filters as the site set them: a test that drops a piece from a
     // layer still expects the piece to be drawn.
-    for (const id of ['rail', 'rail-part-time', 'bus']) if (map().getLayer(id) && !(id in filters)) filters[id] = map().getFilter(id);
+    for (const id of ['rail', 'rail-part-time', 'bus', 'street']) if (map().getLayer(id) && !(id in filters)) filters[id] = map().getFilter(id);
     return { routes: routes.length, stations: stations.length, evaluate: !!evaluate, uncovered: !!uncoveredFn };
   };
 
@@ -146,16 +148,20 @@
     return n;
   };
 
-  // The bus tiers, strongest first, as the `bus` layer's color match lists them.
+  // The bus tiers, strongest first, as the bus layer's color match lists
+  // them: the `street` layer's classes (match on `cls`) where the site draws
+  // streets by combined frequency, else the `bus` layer's tiers.
+  const busLayer = () => (map().getLayer('street') ? { id: 'street', key: 'cls' } : map().getLayer('bus') ? { id: 'bus', key: 'tier' } : null);
+  qa.busLayer = () => busLayer()?.id ?? null;
   qa.busTiers = () => {
-    const m = map();
-    if (!m.getLayer('bus')) return [];
-    const expr = m.getPaintProperty('bus', 'line-color');
+    const L = busLayer();
+    if (!L) return [];
+    const expr = map().getPaintProperty(L.id, 'line-color');
     const out = [];
     const walk = (e) => {
       if (!Array.isArray(e)) return;
-      if (e[0] === 'match' && Array.isArray(e[1]) && e[1][1] === 'tier') {
-        for (let i = 2; i + 1 < e.length; i += 2) for (const t of [].concat(e[i])) out.push({ tier: t, color: rgb(value('bus', 'line-color', { tier: t, mode: 'bus' })) });
+      if (e[0] === 'match' && Array.isArray(e[1]) && e[1][1] === L.key) {
+        for (let i = 2; i + 1 < e.length; i += 2) for (const t of [].concat(e[i])) out.push({ tier: t, color: rgb(value(L.id, 'line-color', { [L.key]: t, mode: 'bus', n: 1, routes: '' })) });
         return;
       }
       e.forEach(walk);
@@ -201,13 +207,18 @@
     const a = m.unproject([-margin, -margin]), b = m.unproject([innerWidth + margin, innerHeight + margin]);
     const [w, e, s, n] = [Math.min(a.lng, b.lng), Math.max(a.lng, b.lng), Math.min(a.lat, b.lat), Math.max(a.lat, b.lat)];
     const strong = bus ? qa.busTiers()[0]?.tier : null;
+    const L = busLayer();
     const out = [];
-    routes.forEach((f, i) => {
+    // Streets (one line per street, its routes listed) stand in for the
+    // strongest bus tier where the site draws them; reported as layer `bus`.
+    const pieces = L?.id === 'street' ? [...routes, ...streets] : routes;
+    pieces.forEach((f, i) => {
       const p = f.properties;
       let layer = null;
       if (p.mode === 'rail' && draws('rail', p)) layer = 'rail';
       else if (p.mode === 'rail' && draws('rail-part-time', p)) layer = 'rail-part-time';
-      else if (strong && p.mode === 'bus' && p.tier === strong && draws('bus', p)) layer = 'bus';
+      else if (strong && L?.id === 'bus' && p.mode === 'bus' && p.tier === strong && draws('bus', p)) layer = 'bus';
+      else if (strong && L?.id === 'street' && p.cls === strong && draws('street', p)) layer = 'street';
       if (!layer) return;
       const parts = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates;
       parts.forEach((c, k) => {
@@ -217,7 +228,7 @@
         const raw = project(c);
         if (raw.length < 2) return;
         out.push({
-          id: `${i}.${k}`, route: p.route, slot: p.slot ?? 0, layer, width, offset,
+          id: `${i}.${k}`, route: p.route ?? p.routes, slot: p.slot ?? 0, layer: layer === 'street' ? 'bus' : layer, width, offset,
           color: rgb(value(layer, 'line-color', p)),
           edge: layer === 'rail' && m.getLayer('rail-edge') ? rgb(value('rail-edge', 'line-color', p)) : null,
           casing: layer.startsWith('rail') && m.getLayer('rail-casing') ? value('rail-casing', 'line-width', p) : width,

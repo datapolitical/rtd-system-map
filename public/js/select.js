@@ -20,7 +20,7 @@ import * as ui from './panel.js';
 import { setHighlight, setEnds } from './highlight.js';
 import { TIERS, TIER_RANK, bullet, dayFreq, date, esc, freq, goesText, isPhone, joinDot, middayPhrase, time, weekendOnly } from './shared.js';
 
-const ROUTE_LAYERS = ['bus', 'bus-part-time', 'bus-limited', 'rail', 'rail-part-time'];
+const ROUTE_LAYERS = ['street', 'bus-part-time', 'bus-limited', 'rail', 'rail-part-time'];
 const STATION_LAYERS = ['stations', 'stations-dot', 'stations-unserved'];
 const TAG_LAYERS = ['rail-bullets', 'rail-edge-letters', 'line-signs'];
 const POINTER_LAYERS = [...ROUTE_LAYERS, ...STATION_LAYERS, 'facilities', 'stops', ...TAG_LAYERS, 'flexride-fill', 'vehicles-rail', 'vehicles-bus'];
@@ -605,15 +605,16 @@ function closest(features, point) {
   return best;
 }
 
-// Each route once, at its stretch nearest the tap.
+// Each route once, at its stretch nearest the tap. A street names every
+// route along it (`routes`); each is then described by its own stretch there.
 function routesNear(features, at) {
   const best = new Map();
   for (const f of features) {
-    const code = f.properties.route;
     const d = distToFeature(at, f.geometry);
-    if (!best.has(code) || d < best.get(code).d) best.set(code, { d, props: f.properties });
+    const codes = f.properties.route ? [f.properties.route] : words(f.properties.routes);
+    for (const code of codes) if (!best.has(code) || d < best.get(code).d) best.set(code, { d, props: f.properties.route ? f.properties : null });
   }
-  return [...best].map(([code, { props }]) => [code, props]);
+  return [...best].map(([code, { props }]) => [code, props ?? stretchAt(code, at) ?? null]);
 }
 
 async function onTap(e) {

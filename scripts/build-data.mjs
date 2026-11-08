@@ -16,6 +16,8 @@ import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtr
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
 import { busStretches } from './lib/stretches.mjs';
+import { busStreets } from './lib/streets.mjs';
+import { STREET_CLASSES } from '../public/js/frequency.js';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
 const EXPERIENCE = { portal: 'https://www.arcgis.com', id: '4a812ebf793646be945b7d58dcfbb794' };
@@ -331,6 +333,11 @@ async function main() {
 
   // Names along the streets buses share, one run per street.
   geo.busnames = busNames(geo.routes.filter((f) => f.properties.mode === 'bus'), { precision: PRECISION });
+  // The streets themselves, each drawn once, by the combined frequency of
+  // every route along it (DESIGN.md, "Bus routes"; scripts/lib/streets.mjs).
+  geo.streets = busStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION });
+  const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
+  const classes = Object.fromEntries(STREET_CLASSES.map((c) => [c.id, { streets: geo.streets.filter((f) => f.properties.cls === c.id).length, km: Math.round(streetKm(c.id) * 10) / 10 }]));
   // Stops name the lines the map draws, families as their map route (FF1 is
   // FF), and which way their buses head.
   const drawnLines = new Set(geo.routes.map((f) => f.properties.route));
@@ -387,6 +394,8 @@ async function main() {
       .map((p) => ({ ...p, ends: railEnds(p.route) })),
     counts,
     tiers,
+    // How much street is drawn in each frequency class (frequency.js).
+    classes,
     // The Live relay's feeds, and the realtime route ids that belong to a map
     // route under another name (public/js/realtime.js, routeOf).
     live: { feeds: RT_FEEDS, routes: live.routes },
@@ -401,11 +410,12 @@ async function main() {
     renamed: Object.fromEntries(renamed),
   };
 
-  if (!geo.busnames.length) {
-    console.error(`\nBuild checks failed; ${OUT_NAME} was left as it was:\n  - No bus name runs built`);
+  if (!geo.busnames.length || !geo.streets.length) {
+    console.error(`\nBuild checks failed; ${OUT_NAME} was left as it was:\n  - No bus ${geo.busnames.length ? 'streets' : 'name runs'} built`);
     process.exit(1);
   }
   counts.busnames = geo.busnames.length;
+  counts.streets = geo.streets.length;
 
   // Write to a fresh folder, then swap it in, so a crash mid-write can't leave
   // half a dataset behind.
@@ -423,6 +433,7 @@ async function main() {
   console.log(`\nWrote ${OUT_NAME} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   console.log(`  ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ')}`);
   console.log(`  tiers: ${Object.entries(tiers).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  console.log(`  streets by class: ${Object.entries(classes).map(([k, v]) => `${k} ${v.streets} (${v.km} km)`).join(', ')}`);
   console.log(`  ${flexLines} FlexRide outlines in the route layer left to the FlexRide zones`);
   if (unserved.length) {
     const list = unserved.map((f) => `${f.properties.name}${f.properties.returns ? ` (returns ${f.properties.returns})` : ''}`);
@@ -469,6 +480,14 @@ function simplifyPath(points) {
   }
   const round = (v) => Math.round(v * 10 ** PRECISION) / 10 ** PRECISION;
   return points.filter((_, i) => keep[i]).map(([x, y]) => [round(x), round(y)]);
+}
+
+// Length of a lon/lat line in km.
+function lengthKm(coords) {
+  const k = Math.cos((coords[0][1] * Math.PI) / 180);
+  let sum = 0;
+  for (let i = 1; i < coords.length; i++) sum += Math.hypot((coords[i][0] - coords[i - 1][0]) * k * 111.32, (coords[i][1] - coords[i - 1][1]) * 110.54);
+  return sum;
 }
 
 function bbox(features) {

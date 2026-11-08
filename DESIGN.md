@@ -564,8 +564,8 @@ publishes:
   tiers and one look for every slower tier, so a route's hourly and
   rush-hour stretches share a row), `text_main` (the routes every 30 minutes
   or better, as text), `more` (1 when the row doesn't name every route),
-  `routes`, `tier` and `n`. This is naming only: lines are still drawn per
-  route, not by combined frequency (see "Open questions").
+  `routes`, `tier` and `n`. This is naming only: the drawn lines are the
+  streets of `streets.geojson` (see "Bus routes").
 - **Stops** with `lines`, the drawn map routes that actually stop there
   (families mapped to the drawn code, so FF1 is FF), and `heading`
   ("Northbound", "Southeast-bound", and so on). Stop popups used to list
@@ -910,10 +910,13 @@ change gets a decision-log line that says what the views showed.
 
 1. Rail lines, in their official hues, always heavier than any bus, with a
    white casing
-2. Frequent bus routes, in full ink
+2. Bus streets, by how often a bus comes along them with every route
+   counted: the busiest (every 10 minutes or better) in full ink, as wide
+   as or wider than rail close in, but under it and in no hue
 3. Stations and Park-n-Rides
 4. In Live, vehicles and alert marks
-5. Less frequent bus routes, lighter and thinner by tier
+5. Quieter bus streets, lighter and thinner by class, and part-time routes
+   dashed or dotted
 6. FlexRide zones, as a light hatch with a dashed edge
 7. Lines not running at the time shown, as faint hairlines
 8. Basemap: streets, water, parks, labels, the same inside RTD's district
@@ -1144,30 +1147,94 @@ and Storandt.)
 
 ### Bus routes
 
-Frequency is the main visual variable for buses: line weight and ink
-darkness follow the tier table above. Frequent buses are nearly as dark as
-text; each tier below is thinner and lighter, and dashed (rush hours) or
-dotted (a few trips) where service is part-time. Every tier stays visible
-against the land, so even the lightest bus line meets 3:1. Frequent buses are
-a deep navy ink (`#1D3044`) rather than black, so a dense downtown grid
-doesn't read as a solid block.
+**Each street a bus runs on is one line, and its width says how often a bus
+comes along it, every route on it counted together.** Chris, 2026-11-08: "the
+trunks are not gonna work... show the frequency of the section of road and
+just have it scale up, so it's a single line but very thick". A downtown
+street with twelve routes is one very thick line; a street with one hourly
+route is a hairline; a route's own weight no longer exists on the map. The
+build (`scripts/lib/streets.mjs`, from the per-stretch departures
+`stretches.mjs` measures) does this:
 
-As drawn, on the land color (`#F4F5F6`), with widths at zoom 9, 11, 13 and 16:
+- Routes within 35 m and 25 degrees of each other for at least 50 m share a
+  street (`TOGETHER`). Shorter is a crossing or a touch: a one-way pair a
+  block apart, whose streets meet only at an end, stays two streets. Each
+  street is drawn once, on the middle line of the routes on it, so nothing
+  overlaps and nothing darkens.
+- A street's buses per hour are the rider's rate, not a sum: the weekday
+  9am–3pm departures of every all-day route on it, merged each way along
+  the street, the busier way counting (a one-way street has one). The wait
+  a rider arriving at random expects is half the sum of the squared gaps
+  over the sum of the gaps; doubled, that is the headway they feel, and the
+  rate is an hour over it (`rate`). Two every-30 routes that leave a minute
+  apart stay "every 30"; two that interleave are "every 15". This is the
+  interleaving idea of the earlier corridor prototype (`feat/v2-finish`,
+  `corridors.mjs`: routes add up only where the longest wait is at most 1.5
+  times the combined median gap) made continuous: no threshold, and a
+  partly bunched pair counts for something between one route and two. Raw
+  counts were rejected because they would make a bunched pair of hourly
+  routes look like a 30-minute street, which is a lie to the rider waiting.
+- Part-time routes (rush hours, a few trips) are listed on the street but
+  add nothing to its rate, and keep their own dashed and dotted lines.
+- Six classes, each a width and a key row (`public/js/frequency.js`,
+  `STREET_CLASSES`); discrete rather than continuous because the key must
+  be able to name every width, and six steps of about 1.4 times are the
+  most a reader can tell apart. Width grows about with the square root of
+  frequency at the overview and faster close in, so the busiest downtown
+  streets are unmistakable at 14 and up without swallowing the overview. A
+  class that holds for under 200 m with the same routes, or one step from
+  its neighbour where routes join one after another, takes its neighbour's
+  class (`CLASS_MIN`), so a width doesn't flicker along a block.
+- Each shared run carries its routes (`routes`, `n`, `bph`, `hw`, `cls`),
+  so a tap on a street names every route along it and the highlight follows
+  the open route through every street it uses.
+- Joins are flush: two runs on one street share the vertex where they cut,
+  taken on the side where the routes run together; the heavier run carries
+  on one point into the lighter one, with round joins and butt caps, so a
+  branch starts inside the trunk's line and a trunk ends where its branch
+  begins. Loose ends within 55 m meet at one point, and a loose end with no
+  partner is carried onto the street it leaves.
+- **Strands.** From zoom 13.5, a hairline a shade off the ink runs along
+  the inside of a shared street between each pair of routes, like the
+  strands of a cable, so a reader can see that several routes run there
+  without the street breaking into separate lines (Chris: "you can draw a
+  very thin dividing line inside the line or something... you can indicate
+  the fact that there are multiple lines without having to have like
+  visibly separate lines"). No land shows between strands. A seam is drawn
+  only where each strand would be at least 2.6 px wide at that zoom, so a
+  four-route every-10 street gets its seams at 17, a two-route one at 14.
+  Streets with more than six routes don't get strands (Chris: "something
+  special on the places where there's just like too many lines to have a
+  divider"): a core line a third of the width, in the strand color, runs
+  down the middle instead, which says "many" without counting.
 
-| Look | Color | Width | Style |
-|---|---|---|---|
-| Every 15 min or better | `#1D3044` | 1.2 / 1.9 / 3 / 5.2 | solid |
-| Every 16–30 min | `#3F5266` | 0.85 / 1.4 / 2.1 / 3.7 | solid |
-| Every 31 min or more (hourly, less than hourly) | `#78848F` | 0.45 / 0.6 / 1 / 2 | solid |
-| Rush hours only | `#78848F` | 0.5 / 0.7 / 1.1 / 2.1 | dashed |
-| A few trips | `#78848F` | 0.6 / 0.9 / 1.4 / 2.5 | dotted |
+As drawn on the land (`#F4F5F6`), widths at zoom 9, 11, 13 and 16; dark
+mode uses the periwinkles under "Dark mode":
 
-The 30-minute, hourly and less-than-hourly looks could not be told apart,
-and the key's swatches were in the wrong order, so the two slowest tiers now
-share one look and one key row, "Every 31 min or more".
+| Key row | Buses an hour | Color | Width | From zoom |
+|---|---|---|---|---|
+| Every 3 min or better | 20 or more | `#1D3044` | 2.8 / 4.4 / 7 / 14 | 0 |
+| Every 4 to 5 min | 12 to 20 | `#1D3044` | 2.1 / 3.3 / 5 / 10 | 0 |
+| Every 6 to 10 min | 6 to 12 | `#1D3044` | 1.6 / 2.5 / 3.6 / 7.2 | 0 |
+| Every 11 to 15 min | 4 to 6 | `#2A3D52` | 1.2 / 1.8 / 2.6 / 5.2 | 0 |
+| Every 16 to 30 min | 2 to 4 | `#3F5266` | 0.8 / 1.2 / 1.7 / 3.4 | 9 |
+| Every 31 min or more | under 2 | `#78848F` | 0.45 / 0.6 / 1 / 2 | 10.5 |
+| Rush hours only (a route) | | `#78848F` | 0.5 / 0.7 / 1.1 / 2.1 | dashed, 11 |
+| A few trips (a route) | | `#78848F` | 0.6 / 0.9 / 1.4 / 2.5 | dotted, 11 |
 
-Each stretch of a route takes the tier measured for it (see "Bus routes are
-measured by stretch"), so one route can change weight where its service does.
+Hierarchy against rail: a street with a bus every three minutes moves more
+buses than a line with a train every fifteen, and close in it is drawn
+wider than the rail line (14 px against 9 at zoom 16; 7 against 5.6 at 13).
+Rail still leads, by what width can't give: its saturated hue against the
+buses' one navy, its white casing, and its place above every bus layer. At
+the overview the busiest streets and rail are about the same width (2.8–4.4
+against 3–4), and the squint test holds: color first, then the heavy navy
+grid, then everything else. Only about 16 km of street (classes 3 and 5,
+downtown and the station approaches) is wider than rail at all.
+
+The route tiers in the table above (frequent, every 30, hourly...) remain
+what a route *is*, for its panel, its tag, its part-time line and the Lines
+list; the map's bus lines are streets.
 
 **Numbers.** The map carries no bus route numbers. The lines' weight says
 how often a bus comes, which is the question the map is for; a tap on a line
@@ -1202,14 +1269,12 @@ need. Where routes share a street the build still reads the street as one
 are one run, named strongest tier first, a route's per-tier stretches joined
 end to end, neighbouring stretches with the same names merged), so a shared
 street can be named once when a reason to name it is shown; the file it
-writes is not loaded by the page.
+writes is not loaded by the page. The drawn streets come from
+`streets.mjs`, which uses the same alongside rule.
 
-**Corridors by combined frequency are not built.** Where several routes share
-a street and its stops, riders can take whichever comes first, so two routes
-every 30 minutes, evenly spaced, are a frequent corridor to a rider. The
-plan was to draw the shared stretch once, weighted by combined frequency,
-counting only stops both routes serve. That is still open (see "Open
-questions"); today the map draws each route by its own frequency.
+**Streets by combined frequency are built** (above); the earlier plan to
+count only stops both routes serve was dropped in favour of the rider's
+rate, which asks only whether the buses interleave.
 
 ### By zoom level
 
@@ -1217,8 +1282,8 @@ Each bus tier fades in over about a zoom level rather than popping on.
 
 | Zoom | Shows | Also in Live |
 |---|---|---|
-| Below 9 (the overview: a phone's "Whole network") | Relief. Rail, with each line's letter at both ends and nothing else on it. Frequent buses as lines, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
-| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-30 buses from 9, drawn lighter until their tags arrive. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Hourly and less from 10.5. Stations are small ticks (or dots, where lines part) to 10.25, one per cluster; capsules from 11. The hub's ring from 9.75 to 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 9.75, closed stations |
+| Below 9 (the overview: a phone's "Whole network") | Relief. Rail, with each line's letter at both ends and nothing else on it. Bus streets with a bus every 15 minutes or better, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
+| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-16-to-30 streets from 9, fading in. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Streets with a bus every 31 minutes or more from 10.5. Stations are small ticks (or dots, where lines part) to 10.25, one per cluster; capsules from 11. The hub's ring from 9.75 to 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 9.75, closed stations |
 | 11.5–13 | Names keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. No bus numbers (see "Numbers"). | |
 | 13–14.5 | Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
 | 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15. | Buses' route numbers, closed stops crossed out |
@@ -1691,9 +1756,11 @@ and the time the lines show ("Weekdays, 9am to 3pm"; later "Sunday, 9am to
 `meta.json`. Open, it lists:
 
 - A one-line "An unofficial map of RTD buses and trains."
-- **Buses:** the frequency tiers, each a swatch of the line itself. The two
-  slowest share one row, "Every 31 min or more". There is no row for tier
-  `none`.
+- **Buses:** how often a bus comes along a street, every route counted
+  (`meta.classes`: only the classes the network has), each row a swatch of
+  the street layer itself at its width, the busiest first; then "Rush hours
+  only" and "A few trips", the part-time route lines. There is no row for
+  tier `none`.
 - **Trains:** each rail line with its bullet, where it goes ("A to Airport"),
   and a "How often" column.
 - **On the map:** Rail station; the hub ("Union Station, where the most
@@ -1714,8 +1781,8 @@ layer asks for), shown at the size its layer draws it at the map's zoom now
 from the layer definition itself, so no size is typed twice). A closed
 station and a bus stop are drawn from their circle layer's paint, FlexRide
 from its fill's hatch and its edge's dash, and
-each bus tier's swatch is its bus layer's own width, color, dash and cap at
-zoom 13. The station row follows the zoom: below 9, "Rail stations: zoom in
+each bus row's swatch is its layer's own width, color, dash and cap at zoom
+13 (the street layer for the classes, the part-time layers for the rest). The station row follows the zoom: below 9, "Rail stations: zoom in
 to see them"; from 9 to 11 the tick or dot for a one-line station and for
 one across the most lines (both picked from the data); from where the
 capsule is at least half crossfaded in (10.625), the capsules. The hub's
@@ -2097,8 +2164,8 @@ marks that overlap, a letter missing) are the next thing to add there.
    2. **Build-step geometry and color.** Contrast-adjusted rail colors and
       bullet letter colors; computed shared track with per-line offsets
       (including one-way couplets); bus corridors with combined frequency.
-      Partly done: shared streets are named together, but lines are drawn per
-      route, not by combined frequency (see "Open questions").
+      Done 2026-11-08: bus streets by combined (rider's) frequency,
+      `scripts/lib/streets.mjs` (see "Bus routes").
       *Done when:* no line overlaps another on shared track anywhere in the
       network, and every line and bullet meets its contrast target, all
       computed with nothing listed by hand.
@@ -2272,13 +2339,11 @@ marks that overlap, a letter missing) are the next thing to add there.
 
 ## Open questions
 
-- **Shared corridors by combined frequency (open):** shared streets are
-  named together ("30 · 31"), but each route is still drawn by its own
-  frequency, so two routes every 30 minutes that run evenly spaced on one
-  street don't draw as a frequent corridor. Whether to draw them that way,
-  and how evenly two routes must be spaced to count (two routes every 30
-  minutes that leave a minute apart are not "every 15" to a rider), are
-  unsettled.
+- **Shared streets by combined frequency (decided 2026-11-08):** each
+  street is drawn once at the rider's combined rate (see "Bus routes"). Still
+  open: whether the busiest streets should be capped at rail's width rather
+  than drawn wider, and the right threshold for strands against a core line
+  (six routes today).
 - **Span:** should "Frequent" also require all-day service? A strict test
   (4 or more departures in every hour from 6am to 8pm) leaves only 4 routes:
   FreeRide, 15, 31, and SKIP. Even 15-minute rail fails it at the edges of
@@ -2859,6 +2924,28 @@ marks that overlap, a letter missing) are the next thing to add there.
   roads and terrain past the boundary and gave the map a ragged edge; Chris:
   "there's no reason to limit it to the RTD service area and it looks weird."
   The page no longer loads the boundary layer.
+- 2026-11-08: Buses are drawn as streets by combined frequency, one line
+  per street, its width the rider's rate of every route on it, replacing
+  per-route lines and the trunk idea. Chris: "the trunks are not gonna
+  work... show the frequency of the section of road and just have it scale
+  up, so it's a single line but very thick", and on showing how many routes
+  share a street: "up to a certain point, you can draw a very thin dividing
+  line inside the line or something, or just make it doubly thick or
+  something, but like you can indicate the fact that there are multiple
+  lines without having to have like visibly separate lines and then maybe
+  we use something special on the places where there's just like too many
+  lines to have a divider or something." Hence `scripts/lib/streets.mjs`,
+  six width classes (`public/js/frequency.js`), hairline strands inside a
+  shared street from 13.5 where each strand has 2.6 px, and a core line on
+  streets with more than six routes. The rate is evenness-adjusted (the
+  expected wait of a rider arriving at random, not a count of buses), the
+  continuous form of the `feat/v2-finish` corridor prototype's interleaving
+  test; raw counts were rejected because a bunched pair would be drawn
+  twice as frequent as it is to a rider. Rail keeps the lead by hue, casing
+  and draw order; the busiest streets are allowed to be wider than rail
+  close in, since they carry more buses than a 15-minute line carries
+  trains (open whether to cap them). Part-time routes keep their own dashed
+  and dotted lines and add no width.
 
 ## Sources
 
