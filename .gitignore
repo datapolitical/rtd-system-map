@@ -12,3 +12,7 @@ qa/node_modules/
 # Captures from the headless checks (qa/checks/README.md).
 qa/checks/out/
 qa/report/
+# Agent scratch and captures.
+qa/.scratch/
+# The sweep's report and captures (qa/sweep/sweep.mjs).
+qa/sweep/out/
