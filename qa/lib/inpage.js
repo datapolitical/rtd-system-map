@@ -160,7 +160,7 @@
   // draw, up to `rounds` times. A quiet spell alone read the view while the
   // page was still working and reported lines with no letter on a map that
   // was about to draw one (#31).
-  qa.rest = async (quiet = 700, rounds = 2) => {
+  qa.rest = async (quiet = 700, rounds = 3) => {
     await qa.settle(quiet);
     for (let i = 0; i < rounds; i++) {
       if (!(await qa.pending())) break;

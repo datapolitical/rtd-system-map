@@ -3891,6 +3891,14 @@ work against the real structure before asking for evaluation.
   the lines end there: every point beside the mark is on a track, and a
   haloed name on its own station's tracks reads where no name at all does
   not.
+- 2026-11-08: Edge letters no longer wait for the map to go idle. A slow
+  renderer can draw frame after frame without ever reporting idle (#31), so a
+  letter is placed after a short debounce from `moveend`, when the routes
+  source reports loaded, and again on later frames until the drawing settles.
+  A pass writes only when the letters change, so the events cannot make them
+  flicker. The check's rest gets its third round back (the issue's "three
+  rounds"), because a slow renderer can still need one more frame to draw
+  letters that are already in the source.
 
 ## Sources
 

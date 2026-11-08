@@ -7,13 +7,16 @@
 // gets one, a little in from where it enters.
 //
 // Which lines there are, and where they run, is read from what the map has
-// drawn: nothing here knows RTD's network. Work happens once per move, after
-// the map is idle, on rail lines only. A pass took 1 to 2 ms at zoom 11 to 12
-// over downtown on the phone profile (Playwright's iPhone 14, software GL,
-// measured with performance.now around placeEdgeLetters), most of it
-// queryRenderedFeatures. "On screen" means the part of the map no control
-// covers (see uncovered): a letter under the search or Key cards can't be
-// read, so it doesn't count, and none is put there.
+// drawn: nothing here knows RTD's network. Work happens once per move, on rail
+// lines only, after a short debounce from `moveend` and again when the routes
+// source reports its data. The map is not required to go idle: a slow renderer
+// can draw frame after frame without ever reporting idle (#31), which left a
+// line with no letter until something else happened to draw one. A pass took 1
+// to 2 ms at zoom 11 to 12 over downtown on the phone profile (Playwright's
+// iPhone 14, software GL, measured with performance.now around
+// placeEdgeLetters), most of it queryRenderedFeatures. "On screen" means the
+// part of the map no control covers (see uncovered): a letter under the search
+// or Key cards can't be read, so it doesn't count, and none is put there.
 
 const LAYER = 'rail-edge-letters';
 const LETTERS = 'rail-bullets';
@@ -56,21 +59,122 @@ export function edgeLetterLayer(letters) {
 }
 
 export function initEdgeLetters(map) {
-  let pending = false;
-  const later = () => {
-    if (pending) return;
-    pending = true;
-    // The map is idle once the letters along the lines are placed for this
-    // view, so what is missing can be told.
-    map.once('idle', () => {
-      pending = false;
-      const source = map.getSource(LAYER);
-      if (!source) return;
-      source.setData({ type: 'FeatureCollection', features: placeEdgeLetters(map) });
-    });
+  let timer = null;
+  let running = false;
+  let again = false;
+  let waiting = false;
+  let moving = false;
+  let settling = false;
+  let settleUntil = 0;
+  let lastPass = 0;
+  let follow = null;
+  let frameMark = -1;
+  let frames = 0;
+  let last = '';
+
+  const write = () => {
+    const source = map.getSource(LAYER);
+    if (!source) return;
+    running = true;
+    const features = placeEdgeLetters(map);
+    running = false;
+    // Both events can ask for the same pass. Writing only when the letters
+    // changed keeps the ones already drawn from flickering.
+    const next = JSON.stringify(features);
+    if (next !== last) {
+      last = next;
+      source.setData({ type: 'FeatureCollection', features });
+    }
+    // A source can hold the letters before the map has drawn them, with no
+    // frame coming to draw them (a slow renderer, #31). Keep asking for one
+    // while a letter it should show is missing from what is drawn.
+    if (settling && features.length) {
+      const shown = new Set(map.queryRenderedFeatures({ layers: [LAYER] }).map((f) => f.properties.route));
+      if (features.some((f) => !shown.has(f.properties.route))) map.triggerRepaint();
+    }
+    if (again) {
+      again = false;
+      schedule();
+    }
   };
-  map.on('moveend', later);
-  map.once('load', later);
+
+  const run = () => {
+    timer = null;
+    lastPass = performance.now();
+    if (running) {
+      again = true;
+      return;
+    }
+    // A move or new source data changes what the map will draw, and the pass
+    // reads what it has drawn: wait for a frame drawn after that change
+    // rather than read the view we left. Render fires on every frame, unlike
+    // idle, so a slow renderer still gets a pass.
+    if (frameMark >= 0 && frames === frameMark) {
+      if (!waiting) {
+        waiting = true;
+        map.once('render', () => {
+          waiting = false;
+          schedule();
+        });
+      }
+      return;
+    }
+    frameMark = -1;
+    write();
+  };
+
+  // `fresh` waits for the next frame; an idle is already after one.
+  const schedule = (delay = 0, fresh = false) => {
+    frameMark = fresh ? frames : -1;
+    if (timer !== null) return;
+    timer = setTimeout(run, delay);
+  };
+
+  // Symbols can settle several frames after the data that holds them, so a
+  // move or a source report keeps passing while the map draws, then gets one
+  // more pass after things go quiet.
+  const settlingFrom = () => {
+    settling = true;
+    settleUntil = performance.now() + 8000;
+    clearTimeout(follow);
+    follow = setTimeout(() => {
+      follow = null;
+      schedule(0, true);
+    }, 500);
+  };
+
+  map.on('render', () => {
+    frames++;
+    // Symbols can settle several frames after a move or new data, with no
+    // source event to say so. While the map is at rest but still drawing,
+    // keep passing (a pass that changes nothing writes nothing, so this
+    // stops itself once the drawing settles).
+    if (!moving && settling && performance.now() < settleUntil && performance.now() - lastPass > 150) schedule();
+  });
+  map.on('movestart', () => {
+    moving = true;
+    settling = false;
+  });
+  map.on('moveend', () => {
+    moving = false;
+    settlingFrom();
+    schedule(120, true);
+  });
+  map.on('idle', () => {
+    // Still watch the next frame or two: a forced frame can move a letter
+    // just past the edge of what a control leaves clear.
+    settling = true;
+    settleUntil = Math.max(settleUntil, performance.now() + 1000);
+    schedule();
+  });
+  map.once('load', () => schedule());
+  // The rail lines arrive with the routes source; a pass once it reports
+  // loaded picks up lines the frame before did not have yet.
+  map.on('sourcedata', (e) => {
+    if (e.sourceId !== 'routes' || !e.isSourceLoaded) return;
+    settlingFrom();
+    schedule(80, true);
+  });
   // A theme change re-colors the letters along the lines in place; this
   // layer follows.
   map.on('styledata', () => {
