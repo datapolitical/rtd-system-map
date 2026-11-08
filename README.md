@@ -9,8 +9,10 @@ are. It is built for phones first.
 
 **Open it: [rtd-system-map.pages.dev](https://rtd-system-map.pages.dev)**
 
-**How it's built: [the design specification](DESIGN.md).** Every part of the
-map follows it: what it shows, how it looks and behaves, and how it's checked.
+**How it's built: [the design specification](DESIGN.md)**, also [in the
+wiki](https://github.com/datapolitical/rtd-system-map/wiki), one page per
+section. Every part of the map follows it: what it shows, how it looks and
+behaves, and how it's checked.
 
 This is unofficial. It is built only from RTD's public data and is not
 affiliated with RTD.
