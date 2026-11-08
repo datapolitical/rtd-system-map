@@ -120,25 +120,44 @@
   });
   // The map's own rest: the next idle, which is what the page waits for
   // before it places a letter for each line with none (edgeletters.js), or
-  // `max` ms of no idle at all.
-  qa.idle = (max = 5000) => new Promise((res) => {
+  // `max` ms of no idle at all. A frame is forced because MapLibre only
+  // fires idle from inside a frame, and after a teleport it can go quiet
+  // without drawing one.
+  qa.idle = (max = 3000) => new Promise((res) => {
     const m = map();
     const t = setTimeout(() => { m.off('idle', onIdle); res(false); }, max);
     const onIdle = () => { clearTimeout(t); res(true); };
     m.once('idle', onIdle);
     m.triggerRepaint();
   });
+  // The routes with a letter drawn, sorted, as one string.
+  qa.letterKey = () => {
+    const m = map();
+    const layers = ['rail-bullets', 'rail-edge-letters'].filter((id) => m.getLayer(id));
+    return [...new Set(m.queryRenderedFeatures({ layers }).map((f) => f.properties.route))].sort().join(',');
+  };
   // A move, then the map at rest: its own idle (every tile and source
-  // parsed, everything drawn) before the quiet spell. A quiet spell alone
-  // read the view while the page was still working: after a zoom change it
-  // adds layers and sources, whose worker work draws no frame, and the
-  // edge letters are placed on idle, so a view fetched 700 ms after the
-  // last frame had no letters yet for the lines that needed one (#31).
+  // parsed, everything drawn) and the letters it places once it is, which
+  // arrive a frame or two later on a slow renderer. Each round forces one
+  // frame and waits for the map to go quiet again; it stops when a round
+  // adds no letter, so a view is read once the map has stopped adding them.
+  // A quiet spell alone read the view while the page was still working and
+  // reported lines with no letter on a map that was about to draw one (#31).
+  qa.rest = async (quiet = 700, rounds = 3) => {
+    let seen = null;
+    for (let i = 0; i < rounds; i++) {
+      await qa.idle();
+      await qa.settle(quiet);
+      const now = qa.letterKey();
+      if (now === seen) return now;
+      seen = now;
+    }
+    return seen;
+  };
   qa.jump = async (v, quiet) => {
     map().jumpTo({ center: [v.lon, v.lat], zoom: v.zoom, bearing: 0, pitch: 0 });
     await new Promise((r) => setTimeout(r, 150));
-    await qa.idle();
-    return qa.settle(quiet);
+    return qa.rest(quiet);
   };
 
   // Every symbol and circle layer hidden, so the lines can be read from
