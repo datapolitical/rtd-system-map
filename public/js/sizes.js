@@ -25,6 +25,35 @@ export const TICK = { across: 10, single: 8 };
 // plus this much, so it encloses the knot.
 export const HUB_EXTRA = 12;
 
+// A frequent bus's width at the ZOOMS stops (shared.js's TIERS draws it;
+// the thinner tiers are there too). Bus routes that share a street are
+// drawn side by side (scripts/lib/busbundles.mjs): each piece is `slot`
+// slots from the street's path, a slot being a frequent bus's width times
+// BUS_PITCH, the same for every route in a bundle so thin routes don't
+// overlap thick ones. Further out than BUS_BUNDLE_FROM the widest downtown
+// bundle doesn't fit in a block, so the slots are closed and the routes
+// are drawn on one line, the strongest on top; from there they are open
+// (bundledByZoom, shared.js). BUS_BUNDLE_FROM is the zoom the bundler
+// (scripts/bundle-prototype.mjs) reports as the first where the widest
+// downtown bundle, middle of its first line to middle of its last, is no
+// wider than a downtown block, both measured on the data (2026-11-07: 12
+// routes, 48.5 px, against a 128 m block, 49 px, at 14.5).
+export const FREQUENT_BUS_WIDTH = [1.2, 1.9, 3, 5.2];
+export const BUS_PITCH = 1.15;
+export const BUS_BUNDLE_FROM = 14.5;
+// A frequent bus's width at `zoom`, as the map interpolates it (byZoom,
+// shared.js: exponential, base 1.4, between the ZOOMS stops).
+export const frequentWidth = (zoom) => {
+  const w = FREQUENT_BUS_WIDTH;
+  if (zoom <= ZOOMS[0]) return w[0];
+  for (let i = 1; i < ZOOMS.length; i++) {
+    if (zoom > ZOOMS[i]) continue;
+    const t = (1.4 ** (zoom - ZOOMS[i - 1]) - 1) / (1.4 ** (ZOOMS[i] - ZOOMS[i - 1]) - 1);
+    return w[i - 1] + t * (w[i] - w[i - 1]);
+  }
+  return w.at(-1);
+};
+
 // Below this zoom the map is an overview of the whole network: the lines, a
 // letter at each rail line's end, and city names. Station marks, the names
 // on end signs, bus numbers and FlexRide zones start here, where stations

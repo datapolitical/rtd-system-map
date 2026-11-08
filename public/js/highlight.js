@@ -10,7 +10,7 @@
 // words by padding both sides with spaces.
 
 import { FONT } from './basemap.js';
-import { PART_TIME, busOffset, tierMatch, tierWidth } from './shared.js';
+import { PART_TIME, bundledByZoom, bundledIds, tierMatch, tierWidth } from './shared.js';
 import { P } from './palette.js';
 
 export const DIM = 0.2;
@@ -40,7 +40,7 @@ const broken = tierIs(PART_TIME);
 // vary by feature in MapLibre, so there is one layer per dash pattern, drawn
 // with the same filters as the network layers they sit over (network.js).
 const SEL_PARTS = [
-  { id: 'sel-bus', where: ['!', broken], cap: 'round' },
+  { id: 'sel-bus', where: ['!', broken], cap: 'round', bundled: true },
   { id: 'sel-bus-dashed', where: ['all', broken, ['!=', ['get', 'tier'], 'limited']], dash: [3, 2] },
   { id: 'sel-bus-dotted', where: ['==', ['get', 'tier'], 'limited'], dash: [0.1, 2.2], cap: 'round' },
 ];
@@ -48,25 +48,31 @@ const CASING = 'sel-bus-casing';
 const chosen = (code) => ['all', bus, ['==', ['get', 'route'], code ?? '']];
 const within = (where, code) => ['all', chosen(code), where];
 
+// The casing and the all-day part follow a bundled route to its slot from
+// BUS_BUNDLE_FROM, so each is two layers (bundledByZoom, shared.js); the
+// broken tiers are never bundled.
 export function selectionLines() {
   const layout = (cap = 'butt') => ({ 'line-cap': cap, 'line-join': 'round' });
   return [
-    {
+    ...bundledByZoom({
       id: CASING,
       type: 'line',
       source: 'routes',
       filter: chosen(''),
       layout: layout('round'),
-      paint: { 'line-color': P.casing, 'line-width': tierWidth(4.2), 'line-offset': busOffset(), 'line-opacity': 0.92 },
-    },
-    ...SEL_PARTS.map(({ id, where, dash, cap }) => ({
-      id,
-      type: 'line',
-      source: 'routes',
-      filter: within(where, ''),
-      layout: layout(cap),
-      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(1.6), 'line-offset': busOffset(), ...(dash ? { 'line-dasharray': dash } : {}) },
-    })),
+      paint: { 'line-color': P.casing, 'line-width': tierWidth(4.2), 'line-opacity': 0.92 },
+    }),
+    ...SEL_PARTS.flatMap(({ id, where, dash, cap, bundled }) => {
+      const layer = {
+        id,
+        type: 'line',
+        source: 'routes',
+        filter: within(where, ''),
+        layout: layout(cap),
+        paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(1.6), ...(dash ? { 'line-dasharray': dash } : {}) },
+      };
+      return bundled ? bundledByZoom(layer) : [layer];
+    }),
   ];
 }
 
@@ -114,8 +120,8 @@ export function selectionMarks() {
 export function setHighlight(map, code, stationIds = []) {
   map.setGlobalStateProperty('sel', code ?? '');
   map.setGlobalStateProperty('selStations', code ? ` ${stationIds.join(' ')} ` : '');
-  map.setFilter(CASING, chosen(code));
-  for (const { id, where } of SEL_PARTS) map.setFilter(id, within(where, code));
+  for (const id of bundledIds([CASING])) map.setFilter(id, chosen(code));
+  for (const { id, where, bundled } of SEL_PARTS) for (const each of bundled ? bundledIds([id]) : [id]) map.setFilter(each, within(where, code));
 }
 
 // What is marked on the map for the open panel: a route's two ends, or a ring

@@ -7,15 +7,27 @@
 // This is the rail bundler (sharedtrack.mjs) run on buses with rules of
 // their own:
 //
-// 1. Each route once. A route is several features, one per stretch of
-//    frequency (stretches.mjs); here they are one line again, so it is
-//    bundled as a whole and keeps its place across a change of tier.
-// 2. Routes within SHARED meters of each other, running within ALIGN degrees
+// 1. Only routes that run every 30 minutes or better are bundled, and only
+//    along the stretches where they do (stretches.mjs gives each stretch
+//    its tier). Hourly, less than hourly, rush-hour and few-trip stretches
+//    keep today's drawing: one line each on the street's centerline, at
+//    their own thin look, beneath the bundle. The map is frequency first,
+//    and the slow routes would double the width of every downtown bundle.
+//    `tiers` says which tiers are bundled; the runner can bundle every tier
+//    for comparison.
+// 2. Each route once per street. A route's stretches are one line again
+//    here, so it is bundled as a whole and keeps its place across a change
+//    of tier. GTFS draws a route's two directions as two shapes a few
+//    meters apart on a two-way street, and the second is folded into the
+//    first (ownTrack): the other direction is kept only where it goes
+//    somewhere the first doesn't, by at least OFF meters for at least
+//    MIN_RUN. A one-way couplet is two streets, each its own bundle, which
+//    is right; a bus pulling wide through a stop bay is not.
+// 3. Routes within SHARED meters of each other, running within ALIGN degrees
 //    of the same way, share a street (busnames.mjs's rule): a route that
-//    crosses the street doesn't, so a downtown grid isn't one bundle. Runs
-//    shorter than MIN_RUN are smoothed away. A route's own two directions on
-//    a one-way pair stay two streets, each its own bundle.
-// 3. Order. As for rail, each pair of routes is ordered once for every
+//    crosses the street doesn't, so a downtown grid isn't one bundle.
+//    Runs shorter than MIN_RUN, less than a block, are smoothed away.
+// 4. Order. As for rail, each pair of routes is ordered once for every
 //    bundle it runs through in a row, by which side each route leaves
 //    toward (LOOK meters past each end): a route that turns left sits on
 //    the left. A route then keeps its side of its companions while they go
@@ -23,57 +35,128 @@
 //    Where three or more routes' pairwise sides can't all be kept (they
 //    disagree around a loop), the order is the closest the ranks allow, and
 //    the routes cross; `crossings` counts them.
-// 4. Slots, and easing between them, as rail: the bundle sits on the
-//    middle of its routes' paths, each route `slot` widths from it; where a
-//    route leaves, the smaller bundle eases from the slots it had to its
-//    own over EASE meters (or by APART meters away from the routes that
-//    left), so no line steps sideways at a corner.
-// 5. Each piece takes back the frequency of the stretch it lies on, so it
+// 5. One path per bundle. Every route in a bundle is redrawn on the longest
+//    member's path (sharedtrack's onCorridor), so the bundle is one
+//    polyline and its offsets turn a corner together, instead of each
+//    route's own shape wobbling a slot to the side. Where a route joins or
+//    leaves, it swings onto the bundle's path over BLEND meters. The cut
+//    between a route's pieces is moved CUT_SLIDE meters past the corner
+//    where it parts from the others, so the corner is turned inside the
+//    bundle at the route's slot (two pieces that meet at a corner, each
+//    square to its own street, don't meet), and every corner of a bundle
+//    is rounded to an arc wide enough for its innermost line (FILLET_PER_SLOT
+//    per slot of half its width plus one): a line offset further than the
+//    corner's radius would turn back on itself.
+// 6. Slots, and easing between them, as rail: each route sits `slot` widths
+//    from the bundle's path; where a route leaves, or goes from one bundle
+//    into another, it eases from the slot it had to its new one over EASE
+//    meters, EASE_PER_SLOT more for each slot it moves (within the run: by
+//    its middle if it eases at both ends), in steps of EASE_STEP of a slot,
+//    so no line steps sideways at a corner. The ease starts past the last
+//    bend near the join (EASE_AFTER_BEND): the route holds its old slot
+//    round the corner and slides over on the straight, since the short
+//    pieces of a slide don't meet each other round a bend. Each step is a
+//    piece of its own, since a piece has one offset. A route RTD draws in
+//    several parts is one line across them, so it keeps its side through a
+//    junction where three parts meet (the 38 and 43 swapped edges of the
+//    widest downtown bundle there). A bundle is centered on its street where
+//    it is widest; from there, each place along the street keeps the slots
+//    of the routes running on into it from the place before, moving its
+//    lines over together by up to DRIFT slots, so that a route holds its
+//    course when another joins or leaves at the edge. Centering every place
+//    slid all twelve lines of the widest bundle half a slot at every corner
+//    where one route turned off, in short eased pieces, and the bundle
+//    read as a weave.
+// 7. Each piece takes back the frequency of the stretch it lies on, so it
 //    keeps its route's tier look; a piece that crosses a change of tier is
 //    cut there.
 //
-// The page turns `slot` into a `line-offset` of one frequent bus width plus
-// a gap per slot, from the zoom where the widest bundle fits (network.js).
+// The page turns `slot` into a `line-offset` of one frequent bus width times
+// BUS_PITCH per slot (shared.js), from the zoom where the widest bundle fits
+// in a block; further out the slots close and the bundle is one line again,
+// the strongest route on top.
 
 import { sharedTrack } from './sharedtrack.mjs';
 
 export const SHARED = 35;
 export const ALIGN = 25;
-export const MIN_RUN = 70;
+export const MIN_RUN = 100;
+export const OFF = 70;
 export const LOOK = 600;
 export const EASE = 150;
-export const APART = 80;
-// A route sliding to a new slot moves in steps of this part of a slot.
-export const EASE_STEP = 1 / 4;
+// Rail finishes an ease once the lines it left are APART meters away; buses
+// part at street corners, where that is a few meters along, so the ease is
+// by distance along alone.
+export const APART = Infinity;
+export const BLEND = 60;
+// A cut between runs is moved this far past where the routes part, so a
+// corner there is turned inside the bundle's piece; a bundle's corners are
+// arcs of this many meters per slot of its half width plus one (the slot at
+// the zoom the slots open, on the ground: a frequent bus's width times
+// BUS_PITCH at BUS_BUNDLE_FROM, in meters at downtown's latitude).
+export const CUT_SLIDE = 30;
+export const FILLET_PER_SLOT = 12;
+// An ease is this much longer per slot moved (a five-slot move over EASE
+// alone crossed a street's width in a block).
+export const EASE_PER_SLOT = 60;
+// An ease starts past the last bend of more than this (between one 20 m
+// step and the next) near the join: a route holds its old slot round the
+// corner and slides over on the straight.
+export const EASE_AFTER_BEND = 8;
+// A route sliding to a new slot moves in steps of this part of a slot: at
+// 14.5 about half a pixel, so the slide reads as a drift, not stairs.
+export const EASE_STEP = 1 / 8;
+// No piece of an ease is shorter than this (half a frequent line's width at
+// 14.5): a move too steep for eighth-slot steps that long takes bigger
+// steps instead. A route alone between two bundles moves from the one's
+// slot to the other's over its whole length in one move.
+export const PIECE = 5;
+// A bundle keeps its lines' slots from the place before, moving over as a
+// whole by up to this many slots (half a lane at the zoom the slots open),
+// so a line that runs on holds its course when another joins or leaves.
+export const DRIFT = 1.5;
+export const BUNDLED_TIERS = ['frequent', 'every30'];
 const RULES = {
   sharedMeters: SHARED,
   alignCos: Math.cos((ALIGN * Math.PI) / 180),
   minRunMeters: MIN_RUN,
+  offMeters: OFF,
   lookMeters: LOOK,
   easeMeters: EASE,
   apartMeters: APART,
   // Buses don't end at platforms side by side; nothing to level.
   flushMeters: 0,
-  blendMeters: 120,
-  roundMeters: 30,
+  blendMeters: BLEND,
+  corridor: true,
+  cutSlideMeters: CUT_SLIDE,
+  filletMetersPerSlot: FILLET_PER_SLOT,
+  easeMetersPerSlot: EASE_PER_SLOT,
+  easeAfterBendDegrees: EASE_AFTER_BEND,
+  joinParts: true,
+  driftSlots: DRIFT,
+  pieceMeters: PIECE,
   easeStep: EASE_STEP,
   easeEqual: true,
   letters: false,
 };
 // How far from a stretch a piece's point can be and still take its tier
-// (pieces are moved onto their bundle's middle, a few meters).
+// (pieces are moved onto their bundle's path, a few meters).
 const TIER_REACH = 60;
-const TIER_STEP = 10;
+const TIER_STEP = 25;
 
 /**
  * `features` are bus stretch features (route, tier, stretch, ...). Returns
- * { features, places, crossings }: the routes as pieces with `slot`, each
- * with its stretch's properties; the bundles found (routes left to right,
- * meters, middle); and where two routes swap sides between bundles.
+ * { features, places, crossings }: the routes' bundled stretches as pieces
+ * with `slot`, each with its stretch's properties, and the stretches in
+ * other tiers as they came; the bundles found (routes left to right, meters,
+ * middle); and where two routes swap sides between bundles. `tiers` are
+ * the tiers that bundle.
  */
-export function busBundles(features) {
+export function busBundles(features, { tiers = BUNDLED_TIERS } = {}) {
+  const bundled = features.filter((f) => tiers.includes(f.properties.tier));
+  const rest = features.filter((f) => !tiers.includes(f.properties.tier));
   const byRoute = new Map();
-  for (const f of features) (byRoute.get(f.properties.route) ?? byRoute.set(f.properties.route, []).get(f.properties.route)).push(f);
+  for (const f of bundled) (byRoute.get(f.properties.route) ?? byRoute.set(f.properties.route, []).get(f.properties.route)).push(f);
   const whole = [...byRoute].map(([route, list]) => ({
     type: 'Feature',
     properties: { route },
@@ -85,12 +168,13 @@ export function busBundles(features) {
     const stretches = byRoute.get(piece.properties.route);
     out.push(...byStretch(piece, stretches));
   }
-  return { features: out, places, crossings };
+  return { features: [...out, ...rest], places, crossings };
 }
 
 // A piece cut where the stretch it lies on changes, each part with that
 // stretch's properties and the piece's slot.
 function byStretch(piece, stretches) {
+  if (stretches.length === 1) return [{ ...piece, properties: { ...stretches[0].properties, slot: piece.properties.slot } }];
   const coords = piece.geometry.coordinates;
   const origin = coords[0];
   const kx = 111320 * Math.cos((origin[1] * Math.PI) / 180);

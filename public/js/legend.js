@@ -11,7 +11,7 @@ import { STATE } from './highlight.js';
 import { loadData } from './select.js';
 import { vehicleLayers } from './live.js';
 import { P, PALETTES } from './palette.js';
-import { PHONE_QUERY, TIERS, bullet, esc, ends, middayLabel } from './shared.js';
+import { PHONE_QUERY, TIERS, bullet, esc, ends, middayLabel, bundledIds } from './shared.js';
 import { ZOOMS } from './sizes.js';
 import { RATIO, addSymbol, canvas } from './symbols.js';
 import { transitLines, transitMarks } from './network.js';
@@ -181,7 +181,7 @@ export function buildLegend(meta, lines) {
   // its width, color, dashes and caps at SWATCH_ZOOM.
   const present = meta.tiers ?? {};
   const drawTiers = (layers) => {
-    const bus = ['bus', 'bus-part-time', 'bus-limited'].map((id) => layers.get(id));
+    const bus = [...bundledIds(['bus']), 'bus-part-time', 'bus-limited'].map((id) => layers.get(id));
     const seen = new Set();
     document.getElementById('legend-tiers').innerHTML = TIERS.filter((t) => present[t.id] && !seen.has(t.label) && seen.add(t.label))
       .map((t) => {

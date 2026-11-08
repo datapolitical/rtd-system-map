@@ -4,7 +4,7 @@
 
 import { textOn } from './color.js';
 import { P, PALETTES } from './palette.js';
-import { ZOOMS } from './sizes.js';
+import { BUS_BUNDLE_FROM, BUS_PITCH, FREQUENT_BUS_WIDTH, ZOOMS, frequentWidth } from './sizes.js';
 
 // Phones, and any short screen (a phone on its side): framing, key closed,
 // panel as a bottom sheet. The same query is in app.css.
@@ -29,7 +29,7 @@ const tier = (look, spec) => ({
   },
 });
 export const TIERS = [
-  tier('frequent', { id: 'frequent', label: 'Every 15 min or better', width: [1.2, 1.9, 3, 5.2], from: 0 }),
+  tier('frequent', { id: 'frequent', label: 'Every 15 min or better', width: FREQUENT_BUS_WIDTH, from: 0 }),
   tier('every30', { id: 'every30', label: 'Every 16 to 30 min', width: [0.85, 1.4, 2.1, 3.7], from: 9 }),
   tier('slow', { id: 'hourly', label: 'Every 31 min or more', width: [0.45, 0.6, 1, 2], from: 10.5 }),
   tier('slow', { id: 'infrequent', label: 'Every 31 min or more', width: [0.45, 0.6, 1, 2], from: 10.5 }),
@@ -174,28 +174,26 @@ export const mapDots = (text) => text.replaceAll(' \u00b7 ', ' \u2022 ');
 
 // Bus routes that share a street are drawn side by side (prototype,
 // scripts/lib/busbundles.mjs): each piece is `slot` slots from the street's
-// middle, a slot being a frequent bus's width times BUS_PITCH, the same for
-// every route in a bundle so thin routes don't overlap thick ones. Further
-// out than BUS_BUNDLE_FROM a bundle doesn't fit between the blocks either
-// side of it, so the routes are drawn on one line, the strongest on top; the
-// slots open over the BUS_BUNDLE_OPEN zooms before it.
-export const BUS_PITCH = 1.15;
-export const BUS_BUNDLE_FROM = 12.5;
-const BUS_BUNDLE_OPEN = 0.25;
-// A frequent bus's width at `zoom`, as tierWidth interpolates it.
-export const frequentWidth = (zoom) => {
-  const w = TIERS[0].width;
-  if (zoom <= ZOOMS[0]) return w[0];
-  for (let i = 1; i < ZOOMS.length; i++) {
-    if (zoom > ZOOMS[i]) continue;
-    const t = (1.4 ** (zoom - ZOOMS[i - 1]) - 1) / (1.4 ** (ZOOMS[i] - ZOOMS[i - 1]) - 1);
-    return w[i - 1] + t * (w[i] - w[i - 1]);
-  }
-  return w.at(-1);
-};
-export const busOffset = () => {
-  const slot = ['coalesce', ['get', 'slot'], 0];
-  const from = BUS_BUNDLE_FROM;
-  const stops = [from, ...ZOOMS.filter((z) => z > from)];
-  return ['interpolate', ['exponential', 1.4], ['zoom'], from - BUS_BUNDLE_OPEN, 0, ...stops.flatMap((z) => [z, ['*', slot, frequentWidth(z) * BUS_PITCH]])];
-};
+// path; the slot's width, and the zoom the slots open at, are in sizes.js
+// beside the other sizes the build reads. `busOffset` is the open offset: a
+// frequent bus's width times BUS_PITCH per slot at every zoom. Below
+// BUS_BUNDLE_FROM the routes of a bundle, all on one path, are drawn with no
+// offset and are one line, the strongest on top (the bus layer sorts by
+// tier). The two can't be one expression: a paint property that reads both
+// the zoom and the feature is worked out at the whole zooms either side and
+// blended between them, so a gate at 14.5 would open from 14 to 15, with
+// the lines half over each other all the way. So `bundledByZoom` makes two
+// layers of one: the same layer with no offset up to BUS_BUNDLE_FROM
+// (id + '-flat'), and with the offset from there; a layer's own zoom range
+// is exact.
+export { BUS_BUNDLE_FROM, BUS_PITCH, frequentWidth };
+export const busOffset = () => byZoom(FREQUENT_BUS_WIDTH.map((w) => ['*', ['coalesce', ['get', 'slot'], 0], w * BUS_PITCH]));
+export function bundledByZoom(layer) {
+  const { 'line-offset': offset, ...flat } = layer.paint;
+  return [
+    { ...layer, id: `${layer.id}-flat`, maxzoom: BUS_BUNDLE_FROM, paint: flat },
+    { ...layer, minzoom: Math.max(layer.minzoom ?? 0, BUS_BUNDLE_FROM), paint: { ...flat, 'line-offset': offset ?? busOffset() } },
+  ];
+}
+// Where a layer id is looked up (a tap, a filter), both halves.
+export const bundledIds = (ids) => ids.flatMap((id) => [`${id}-flat`, id]);
