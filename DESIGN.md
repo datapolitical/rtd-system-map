@@ -3166,6 +3166,14 @@ work against the real structure before asking for evaluation.
   `daily-summary.txt` (until then it is told to carry on), and the
   workflow sets the labels after each run from what really happened on
   GitHub, so a finished or stuck issue is never picked again by itself.
+- 2026-11-08: The checks get a model of the map in plain Node
+  (`qa/drawn/`): the page's own style, data, glyphs and symbols worked out as
+  line, mark and label geometry at any zoom and either theme, tile by tile,
+  with the basemap from the tiles the style names. Nothing in it restates a
+  width, colour, offset or font, so a styling change flows through; a drift
+  test in the browser keeps the two from parting (`drawn.spec.mjs`). It
+  exists because the screenshot checks only see zoom 9 to 14 of a phone
+  screen, and the next steps' checks need to see everywhere.
 
 ## Sources
 

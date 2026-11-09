@@ -16,6 +16,9 @@ qa/report/
 qa/review/
 # Agent scratch and captures.
 qa/.scratch/
+# Tiles the drawn model caches (qa/drawn/README.md); a new basemap version
+# gets its own folder rather than mixing with the old.
+qa/drawn/.cache/
 # The sweep's report and captures (qa/sweep/sweep.mjs).
 qa/sweep/out/
 # Agent progress files for the status page (CLAUDE.md, "Status page").
