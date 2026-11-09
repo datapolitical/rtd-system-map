@@ -67,6 +67,13 @@ function stepAt(part, i, maxStep) {
   return jump;
 }
 
+function distToSeg([px, py], a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const L = dx * dx + dy * dy;
+  const t = L ? Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / L)) : 0;
+  return Math.hypot(px - a[0] - t * dx, py - a[1] - t * dy);
+}
+
 /**
  * Faults in a zoom's drawn lines.
  * @param {{lines: Array}} zoom the model's zoom(z) output
@@ -90,6 +97,44 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
     });
   };
 
+  // A short piece that lies on another route line is a fragment of that line,
+  // not a stray dot: at low zooms the build splits a route into many small
+  // pieces that draw on top of one another. Only a short piece with no route
+  // line within a few px of any of its points is a fault.
+  const coverPx = 2;
+  const coverCell = 64;
+  const coverGrid = new Map();
+  const routeLines = zoom.lines.filter((e) => !isCasing(e.layer) && e.source !== 'flexride' && isRoute(e));
+  for (const e of routeLines) {
+    for (const part of e.parts) {
+      for (let i = 1; i < part.length; i++) {
+        const [a, b] = [part[i - 1], part[i]];
+        const x0 = Math.floor(Math.min(a[0], b[0]) / coverCell);
+        const x1 = Math.floor(Math.max(a[0], b[0]) / coverCell);
+        const y0 = Math.floor(Math.min(a[1], b[1]) / coverCell);
+        const y1 = Math.floor(Math.max(a[1], b[1]) / coverCell);
+        for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+          const k = `${x},${y}`;
+          if (!coverGrid.has(k)) coverGrid.set(k, []);
+          coverGrid.get(k).push({ a, b, part });
+        }
+      }
+    }
+  }
+  const covered = (part) => {
+    for (const q of part) {
+      const cx = Math.floor(q[0] / coverCell);
+      const cy = Math.floor(q[1] / coverCell);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        for (const s of coverGrid.get(`${cx + dx},${cy + dy}`) ?? []) {
+          if (s.part === part) continue;
+          if (distToSeg(q, s.a, s.b) <= coverPx) return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // The build writes a route's pieces in order (one MultiLineString per
   // feature), so the end of one piece should be the start of the next. That
   // order is what the gap test follows: pairing arbitrary ends instead would
@@ -111,7 +156,7 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
       const gapPx = maxGap / metresPerPx(toLonLat(part[0], zoom.z)[1], zoom.z);
       // A short piece is a fault only when it stands alone: a tiny segment
       // between two exact joins is just a vertex pair the build split.
-      if (len < minPiece && join(p) > gapPx && join(p + 1) > gapPx) {
+      if (len < minPiece && !covered(part) && join(p) > gapPx && join(p + 1) > gapPx) {
         add('short', entry, at(part), `isolated piece ${len.toFixed(1)} px long`);
       }
       for (let i = 1; i < part.length - 2; i++) {
