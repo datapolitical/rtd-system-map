@@ -15,7 +15,7 @@ import { compareBoxes, compareLines, comparePoints } from '../drawn/compare.mjs'
 import { seededViews } from '../lib/views.mjs';
 
 const VIEWS = Number(process.env.DRAWN_VIEWS ?? 10);
-const ZOOMS = [10, 12, 14, 16];
+const ZOOMS = (process.env.DRAWN_ZOOMS ?? '10,12,14,16').split(',').map(Number);
 
 test('the drawn model matches what the browser draws', async ({ mapPage }) => {
   test.setTimeout(1_800_000);
@@ -155,10 +155,10 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
   const missingLayers = report.flatMap((r) => r.lines.missingLayers.map(([l, n]) => `${l}:${n}`));
   console.log(`${views.length} views, ${report.reduce((n, r) => n + r.lines.pairs, 0)} line points, ${totalMissing} line points the model does not have, ${report.reduce((n, r) => n + r.marks.checked, 0)} marks, ${report.reduce((n, r) => n + r.labels.checked, 0)} label boxes; ${failed.length} view(s) off`);
   // A run that compared almost nothing is a broken run, not a pass: a camera
-  // that never settled, or a style with no layers the model knows. The label
-  // floor scales with the number of views: a short run can see only a handful
-  // of on-screen names.
-  expect(report.reduce((n, r) => n + r.lines.pairs, 0)).toBeGreaterThan(1000);
+  // that never settled, or a style with no layers the model knows. Both floors
+  // scale with the number of views, so a short run over one zoom is not held
+  // to the point count of a long walk over four.
+  expect(report.reduce((n, r) => n + r.lines.pairs, 0)).toBeGreaterThan(Math.max(100, views.length * 40));
   expect(report.reduce((n, r) => n + r.marks.checked, 0)).toBeGreaterThan(30);
   expect(report.reduce((n, r) => n + r.labels.checked, 0)).toBeGreaterThan(Math.max(1, Math.floor(views.length / 3)));
   // Every line point the page drew must have a model line to be compared
