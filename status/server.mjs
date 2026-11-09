@@ -2,7 +2,7 @@
 // what's waiting come from the repo's GitHub milestones and issues; local work
 // comes from Claude Code's transcripts and from the progress files agents keep
 // in .agents/ (see CLAUDE.md, "Status page"). No dependencies; needs git and a signed-in gh.
-//   node status/server.mjs [port]      (PORT, WAIT_LABEL and GH also work)
+//   node status/server.mjs [port]      (PORT, WAIT_LABEL, GH, USAGE_FILE and JOBS_FILE also work)
 import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,6 +17,9 @@ const WAIT = process.env.WAIT_LABEL || 'needs Chris';
 const PAGE = fs.readFileSync(path.join(ROOT, 'status/index.html'));
 // Claude plan usage readings, kept on this machine only (ignored by git).
 const USAGE = process.env.USAGE_FILE || path.join(ROOT, 'status/usage.json');
+// Jobs: facts and plain summaries for each running job, written by a collector
+// on the machine that runs the agents (ignored by git; see CLAUDE.md, "Status page").
+const JOBS = process.env.JOBS_FILE || path.join(ROOT, 'status/jobs.json');
 const THUMBS = path.join(os.tmpdir(), 'repo-status-thumbs');
 const SIPS = fs.existsSync('/usr/bin/sips');
 const GH = process.env.GH || ['/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh'].find((p) => fs.existsSync(p)) || 'gh';
@@ -258,7 +261,7 @@ http.createServer((req, res) => {
     if (Date.now() - gh.at > 60000) refresh();
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     const { busy, ...g } = gh;
-    return res.end(JSON.stringify({ now: new Date(), repo: OWNER ? `${OWNER}/${NAME}` : '', waitLabel: WAIT, ...g, usage: safe(() => JSON.parse(fs.readFileSync(USAGE, 'utf8')), null), sessions: sessions(), hermes: hermes(), agents: agents(), captures: captures(), commits: commits() }));
+    return res.end(JSON.stringify({ now: new Date(), repo: OWNER ? `${OWNER}/${NAME}` : '', waitLabel: WAIT, ...g, usage: safe(() => JSON.parse(fs.readFileSync(USAGE, 'utf8')), null), jobs: safe(() => JSON.parse(fs.readFileSync(JOBS, 'utf8')), null), sessions: sessions(), hermes: hermes(), agents: agents(), captures: captures(), commits: commits() }));
   }
   if (u.pathname === '/img' || u.pathname === '/thumb') {
     const p = path.resolve(u.searchParams.get('p') || '');
