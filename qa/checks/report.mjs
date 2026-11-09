@@ -12,7 +12,9 @@ import path from 'node:path';
 import { DATA_SOURCES, openModel } from '../drawn/model.mjs';
 import { lineFaults } from '../drawn/lines.mjs';
 import { labelFaults } from '../drawn/labels.mjs';
-import { toLonLat } from '../drawn/mercator.mjs';
+import { toLonLat, toWorld } from '../drawn/mercator.mjs';
+import { markFaults } from '../drawn/marks.mjs';
+import { streetFaults } from '../drawn/streets.mjs';
 import { seededViews } from '../lib/views.mjs';
 
 const arg = (name, fallback) => {
@@ -49,6 +51,22 @@ const line = (fault, zoom) => {
   };
 };
 
+const SEVERITY = { gap: 1, 'off-street': 2, 'stray-stop': 3, duplicate: 4, 'over-line': 5, step: 6, hidden: 7, far: 8, translucent: 9 };
+const atPlace = (px, view, width = 390, height = 664) => {
+  const centre = toWorld([view.lon, view.lat], view.zoom);
+  const [lon, lat] = toLonLat([centre[0] + px[0] - width / 2, centre[1] + px[1] - height / 2], view.zoom);
+  return { lon, lat };
+};
+const framed = (fault, check, view) => ({
+  check,
+  kind: fault.kind,
+  layer: fault.layer,
+  route: fault.route ?? null,
+  zoom: view.zoom,
+  ...atPlace(fault.px, view),
+  msg: fault.msg,
+  link: `${SITE}/#${view.zoom}/${view.lat.toFixed(5)}/${view.lon.toFixed(5)}`,
+});
 const label = (fault, view) => ({
   check: 'labels',
   kind: fault.kind,
@@ -85,14 +103,19 @@ for (const theme of THEMES) {
       const key = `${zoom}/${place.lat.toFixed(4)}/${place.lon.toFixed(4)}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const frame = await model.frame({ zoom, center: [place.lon, place.lat], width: 390, height: 664 });
+      const frame = await model.frame({ zoom, center: [place.lon, place.lat], width: 390, height: 664, basemap: zoom === 17 });
       for (const fault of labelFaults(frame, { layers: nameLayers })) findings.push({ theme, ...label(fault, { ...place, zoom }) });
+      if (zoom === 17) {
+        for (const fault of markFaults(frame)) findings.push({ theme, ...framed(fault, 'marks', { ...place, zoom }) });
+        for (const fault of streetFaults(frame)) findings.push({ theme, ...framed(fault, 'streets', { ...place, zoom }) });
+      }
     }
   }
 }
 
 fs.mkdirSync(OUT, { recursive: true });
-findings.sort((a, b) => a.check.localeCompare(b.check) || a.kind.localeCompare(b.kind) || a.theme.localeCompare(b.theme));
+for (const f of findings) f.severity = SEVERITY[f.kind] ?? 9;
+findings.sort((a, b) => a.severity - b.severity || a.check.localeCompare(b.check) || a.theme.localeCompare(b.theme));
 const payload = { generated: new Date().toISOString(), site: SITE, themes: THEMES, zooms: ZOOMS, total: findings.length, findings };
 fs.writeFileSync(path.join(OUT, 'findings.json'), JSON.stringify(payload, null, 2));
 
