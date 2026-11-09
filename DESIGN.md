@@ -3552,6 +3552,23 @@ work against the real structure before asking for evaluation.
   and is taken out; only a route that stops inside the hall is touched, and a
   through route keeps every street it really runs along (see "Bus routes",
   "Terminals").
+- 2026-11-08: Near a station, a street run shorter than 100 m takes the width
+  of the longest street it joins, because at that length its own buses are
+  noise and the line otherwise flicks thick, thin, thick; a run under 30 m
+  with an end in the air, or with both ends on its own street, is a stub and
+  is not drawn (see "Bus routes", "Readable geometry").
+- 2026-11-08: Where a regional or rapid bus runs through a freeway
+  interchange with no stop or station near, both directions are one line
+  through the middle: carriageways merge across the wider ramp spacing, an
+  out-and-back ramp U closes to its midpoint, and a few-metre stitch spike is
+  dropped. A local route's terminal loop has its stops and is left alone (see
+  "Bus routes", "Readable geometry").
+- 2026-11-08: A part-time route is dashed on the all-day line it shares, not
+  beside it: a part that leaves that line for under 300 m and comes back is
+  drawn along the line, and a part that starts and ends on one all-day line
+  but weaves off it is drawn along that line between its ends. A departure
+  that ends somewhere else (an approach to a concourse) is not moved (see
+  "Bus routes").
 
 ## Sources
 

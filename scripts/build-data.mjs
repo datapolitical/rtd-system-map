@@ -19,8 +19,9 @@ import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
 import { groupPlatforms, meters, platformMarks } from './lib/platforms.mjs';
 import { busStretches } from './lib/stretches.mjs';
-import { busStreets, terminalPlaces, terminals } from './lib/streets.mjs';
+import { busStreets, calm, terminalPlaces, terminals } from './lib/streets.mjs';
 import { generalize } from './lib/generalize.mjs';
+import { snapPartTime } from './lib/parttime.mjs';
 import { closestOnSegment, clipOutRings, insideRing } from './lib/geom.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
@@ -266,8 +267,19 @@ async function main() {
   // carriageways simplified from each route's own line (DESIGN.md, "Bus
   // routes", "Readable geometry"; scripts/lib/generalize.mjs).
   const laps = [];
-  geo.routes = [...generalize(split.features, { precision: PRECISION, report: laps, places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates), halls }), ...rails];
-  console.log(`  bus laps generalized: ${laps.filter((l) => l.kind === 'turn').length} turns, ${laps.filter((l) => l.kind === 'end').length} short ends`);
+  geo.routes = [
+    ...generalize(split.features, {
+      precision: PRECISION,
+      report: laps,
+      places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates),
+      halls,
+      stops: geo.stops.map((f) => f.geometry.coordinates),
+    }),
+    ...rails,
+  ];
+  console.log(
+    `  bus laps generalized: ${laps.filter((l) => l.kind === 'turn').length} turns, ${laps.filter((l) => l.kind === 'end').length} short ends, ${laps.filter((l) => l.kind === 'through').length} through`,
+  );
   const splitRoutes = split.report.filter((r) => r.stretches > 1);
   console.log(`  bus routes in stretches: ${splitRoutes.length} of ${split.report.length} split, ${split.features.length} stretches`);
   console.log(`    ${splitRoutes.map((r) => `${r.route} ${r.stretches}`).join(', ')}`);
@@ -516,6 +528,10 @@ async function main() {
       for (const line of String(s.properties.lines ?? '').split(' ')) if (line) served.add(line);
     }
     geo.routes = shortenAtHall(geo.routes, halls, served);
+    // A part-time route that leaves the all-day line it shares and comes
+    // back draws as a second line; snap the short excursion onto the line
+    // (DESIGN.md, "Bus routes"; scripts/lib/parttime.mjs).
+    geo.routes = snapPartTime(geo.routes, { precision: PRECISION });
     const busRoutes = geo.routes.filter((f) => f.properties.mode === 'bus');
     geo.busnames = busNames(busRoutes, { precision: PRECISION });
     geo.streets = busStreets(busRoutes, split.loads, { precision: PRECISION });
@@ -537,6 +553,10 @@ async function main() {
         return parts.map((p) => ({ ...f, properties: { ...f.properties }, geometry: { type: 'LineString', coordinates: p } }));
       });
     geo.streets = outside(geo.streets);
+    // Near a station, short runs take the width of the street they join and
+    // a stub that joins back onto its own street goes (DESIGN.md, "Bus
+    // routes"; scripts/lib/streets.mjs).
+    geo.streets = calm(geo.streets, [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates), { precision: PRECISION });
     geo.routes = geo.routes.flatMap((f) => {
       if (f.properties.mode !== 'bus') return [f];
       const parts = partsOf(f.geometry)

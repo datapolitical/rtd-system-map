@@ -44,6 +44,10 @@ import { Grid, closestOnSegment, dedupe, densify, length, partsOf, projection, s
 const STEP = 10;
 // A lap: back within this of where it began...
 export const LAP_CLOSE = 30;
+// At a through movement (no stop near either end of the closure) the two
+// directions of a ramp can be wider apart than a city street's: a triangle
+// at an interchange closes within this, and is still one line through.
+export const THROUGH_CLOSE = 100;
 // ...after at least this much travel, and no more than this.
 export const LAP_MIN = 60;
 export const LAP_MAX = 2000;
@@ -75,6 +79,19 @@ const LAP_ROUTE_SHARE = 0.5;
 export const PAIR_NEAR = 40;
 export const PAIR_FAR = 60;
 export const PAIR_RUN = 100;
+// At a freeway interchange the bus runs through, the two carriageways swing
+// wider than a city one-way pair: up to this far apart, and merged fully
+// within THROUGH_NEAR, when no stop is near enough to be served. A rider
+// waiting on a one-way pair keeps the two streets; a bus that picks nobody
+// up between the ramps is one line down the middle.
+export const THROUGH_FAR = 140;
+export const THROUGH_NEAR = 100;
+// No stop within this of a thin lap or a wide carriageway pair means the bus
+// is passing through, not serving the street. A stop on the ramp itself is
+// within a few metres; a frontage-road stop a block away is not on the bus's
+// path, so the lap test uses the tighter THROUGH_STOP.
+export const STOP_NEAR = 150;
+export const THROUGH_STOP = 60;
 // Travel beyond across-and-back that makes this line's own way back a
 // carriageway (a circle of any size travels less).
 const TIP_SLACK = 20;
@@ -90,12 +107,23 @@ const MIN_PIECE = STEP;
  * `report` (optional array) receives one entry per lap changed:
  * { route, kind: 'turn' | 'end', length, at: [lon, lat] }.
  */
-export function generalize(features, { precision = 5, report = null, places = [], halls = [] } = {}) {
+export function generalize(features, { precision = 5, report = null, places = [], halls = [], stops = [] } = {}) {
   const first = features.find((f) => partsOf(f.geometry).some((p) => p.length));
   if (!first) return features;
   const { project, unproject } = projection(partsOf(first.geometry).find((p) => p.length)[0], precision);
-  const stops = places.map(project);
+  const stopsHere = places.map(project);
   const hallsHere = halls.map((ring) => ring.map(project));
+  // Where a bus picks riders up, in one grid: a through lap or a wide pair
+  // with no stop near it is the freeway, not a street. Without stops (the
+  // unit tests, a caller that has none), nothing is known to be through.
+  const stopGrid = stops.length ? new Grid(STOP_NEAR) : null;
+  for (const s of stops) {
+    const p = project(s);
+    stopGrid.add(p, p, s);
+  }
+  // A station or transit center is where a rider boards too: a loop round
+  // one is not a through movement, even if no stop sits on the loop.
+  for (const p of stopsHere) if (stopGrid) stopGrid.add(p, p, p);
 
   const byRoute = new Map();
   features.forEach((f, fi) => {
@@ -105,6 +133,7 @@ export function generalize(features, { precision = 5, report = null, places = []
 
   const out = features.map((f) => ({ ...f }));
   for (const [route, list] of byRoute) {
+    const express = list.some((fi) => /REGIONAL|RAPID/.test(features[fi].properties.category || ''));
     // Every part of the route, projected and densified, then stitched into
     // whole lines across the route's own stretches: a lap round a block can
     // be split between two stretches of one route, and is only seen whole
@@ -120,13 +149,17 @@ export function generalize(features, { precision = 5, report = null, places = []
     const total = parts.reduce((s, p) => s + length(p.points), 0);
     // 1. Carriageways onto one line, so a lap's two sides on a divided road
     // meet where it turns.
-    mergeCarriageways(parts);
+    mergeCarriageways(parts, { stopGrid, express });
     // 2. Laps.
     parts = parts.flatMap((p) =>
-      laps(p.points, total, stops, (kind, lap) => report?.push({ route, kind, length: Math.round(length(lap)), at: unproject(lap[0]), line: lap.map(unproject) }), hallsHere).map((points) => ({ fi: p.fi, points })),
+      laps(p.points, total, stopsHere, (kind, lap) => report?.push({ route, kind, length: Math.round(length(lap)), at: unproject(lap[0]), line: lap.map(unproject) }), hallsHere, stopGrid, express).map((points) => ({ fi: p.fi, points })),
     );
     // 3. Loose ends.
     trimHooks(parts);
+    // 4. A point the line doubles back through for a few metres is how two
+    // directions of one ramp are stitched together, not a road: it reads as
+    // a spike or a triangle. Where no stop is near, it goes.
+    for (const p of parts) p.points = despike(p.points, stopGrid, express);
     // Back to features: a line that runs through two stretches is cut back
     // into the feature each of its points came from.
     for (const fi of list) {
@@ -140,7 +173,14 @@ export function generalize(features, { precision = 5, report = null, places = []
           if (k < p.points.length && here === was) continue;
           if (was === fi && k - start >= 2 && length(p.points.slice(start, k)) >= MIN_PIECE) {
             const line = dedupe(simplify(p.points.slice(start, k), 1).map(unproject));
-            if (line.length >= 2) lines.push(line);
+            if (line.length >= 2) {
+              // The stitched pass can join two stretches in a way that leaves
+              // a ramp U in the piece after it is cut back: take through laps
+              // out again on the piece itself, and nothing else.
+              const c = removeThroughLaps(line.map(project), stopGrid, express).map(unproject);
+              const simple = dedupe(c);
+              if (simple.length >= 2 && length(simple.map(project)) >= MIN_PIECE) lines.push(simple);
+            }
           }
           start = k;
           was = here;
@@ -191,7 +231,74 @@ export function stitch(lines) {
 // cutLaps until no lap is left: a ramp circle taken out can leave the ramp
 // to it and back as a spur, itself a lap.
 const PASSES = 4;
-function laps(points, routeLength, places, note, halls) {
+// A point the line comes back through within SPIKE_LEG metres, turning more
+// than 90 degrees with one leg under SPIKE_SHORT (a reversal of a few metres
+// between two long ones), and with no stop near, is a stitching seam: remove
+// it, and look again at its neighbours.
+export const SPIKE_LEG = 40;
+export const SPIKE_SHORT = 15;
+export const SPIKE_COS = 0;
+
+export function despike(points, stopGrid = null, express = false) {
+  if (!stopGrid) return points;
+  const out = points.slice();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 1; i < out.length - 1; i++) {
+      const a = out[i - 1];
+      const b = out[i];
+      const c = out[i + 1];
+      const l1 = dist(a, b);
+      const l2 = dist(b, c);
+      if (l1 > SPIKE_LEG || l2 > SPIKE_LEG || Math.min(l1, l2) > SPIKE_SHORT) continue;
+      const cos = ((b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])) / (l1 * l2 || 1);
+      if (!express || cos >= SPIKE_COS || stopGrid.near(b, THROUGH_STOP).length) continue;
+      out.splice(i, 1);
+      changed = true;
+      break;
+    }
+  }
+  return out;
+}
+
+// Out-and-back along the same few metres with no stop near: a ramp U at an
+// interchange, not a road. Replace it with the middle of its two ends. Used
+// on a finished piece, so it never splits a line or moves a terminal.
+export function removeThroughLaps(points, stopGrid = null, express = false) {
+  if (!stopGrid || !express || points.length < 3) return points;
+  const pts = densify(points, STEP);
+  const n = pts.length;
+  const cum = [0];
+  for (let i = 1; i < n; i++) cum.push(cum[i - 1] + dist(pts[i - 1], pts[i]));
+  const out = [pts[0]];
+  let i = 0;
+  while (i < n - 1) {
+    let found = -1;
+    for (let j = i + 2; j < n; j++) {
+      const travel = cum[j] - cum[i];
+      if (travel < LAP_MIN) continue;
+      if (travel > LAP_MAX) break;
+      if (dist(pts[i], pts[j]) > LAP_CLOSE) continue;
+      let clear = true;
+      for (let k = i; k <= j && clear; k++) if (stopGrid.near(pts[k], THROUGH_STOP).length) clear = false;
+      if (clear) {
+        found = j;
+        break;
+      }
+    }
+    if (found < 0) {
+      out.push(pts[i + 1]);
+      i++;
+      continue;
+    }
+    out.push([(pts[i][0] + pts[found][0]) / 2, (pts[i][1] + pts[found][1]) / 2]);
+    i = found;
+  }
+  return dedupe(out);
+}
+
+function laps(points, routeLength, places, note, halls, stopGrid = null, express = false) {
   const out = [];
   let line = points;
   for (let pass = 0; pass < PASSES; pass++) {
@@ -199,7 +306,7 @@ function laps(points, routeLength, places, note, halls) {
     const [kept, ...ends] = cutLaps(line, routeLength, places, (...a) => {
       changed = true;
       note(...a);
-    }, halls);
+    }, halls, stopGrid, express);
     out.push(...ends);
     if (!kept || !changed) return kept ? [kept, ...out] : out;
     line = densify(kept, STEP);
@@ -209,7 +316,7 @@ function laps(points, routeLength, places, note, halls) {
 
 // A line with its laps taken out: returns the pieces it becomes (the line
 // itself, and a short end for each terminal lap).
-export function cutLaps(points, routeLength = Infinity, places = [], note = () => {}, halls = []) {
+export function cutLaps(points, routeLength = Infinity, places = [], note = () => {}, halls = [], stopGrid = null, express = false) {
   const n = points.length;
   if (n < 3) return [points];
   const cum = [0];
@@ -218,13 +325,25 @@ export function cutLaps(points, routeLength = Infinity, places = [], note = () =
   const ends = [];
   let i = 0;
   while (i < n - 1) {
+    const close = (a, b) => {
+      const dd = dist(points[a], points[b]);
+      if (dd <= LAP_CLOSE) return true;
+      // Wider only where no stop is near and the line is doubled back: a
+      // ramp pair at an interchange, not a crossing of two streets (which
+      // carries straight on).
+      if (dd > THROUGH_CLOSE || !stopGrid) return false;
+      if (stopGrid.near(points[a], THROUGH_STOP).length || stopGrid.near(points[b], THROUGH_STOP).length) return false;
+      const A = dirAt(points, a);
+      const B = dirAt(points, b);
+      return A[0] * B[0] + A[1] * B[1] < -0.5;
+    };
     // The first lap starting here: where the line first comes back.
     let found = -1;
     for (let j = i + 2; j < n; j++) {
       const travel = cum[j] - cum[i];
       if (travel < LAP_MIN) continue;
       if (travel > LAP_MAX || travel >= routeLength * LAP_ROUTE_SHARE) break;
-      if (dist(points[i], points[j]) <= LAP_CLOSE) {
+      if (close(i, j)) {
         found = j;
         break;
       }
@@ -238,9 +357,9 @@ export function cutLaps(points, routeLength = Infinity, places = [], note = () =
     // left, so the turn leaves no hook of the lap behind on either side.
     {
       let [bi, bj] = [i, found];
-      for (let k = i; k < found && cum[k] - cum[i] <= 2 * LAP_CLOSE; k++) {
-        for (let j = found; j < n && cum[j] - cum[found] <= 2 * LAP_CLOSE; j++) {
-          if (cum[j] - cum[k] >= LAP_MIN && dist(points[k], points[j]) < dist(points[bi], points[bj])) [bi, bj] = [k, j];
+      for (let k = i; k < found && cum[k] - cum[i] <= 2 * THROUGH_CLOSE; k++) {
+        for (let j = found; j < n && cum[j] - cum[found] <= 2 * THROUGH_CLOSE; j++) {
+          if (cum[j] - cum[k] >= LAP_MIN && close(k, j) && dist(points[k], points[j]) < dist(points[bi], points[bj])) [bi, bj] = [k, j];
         }
       }
       for (let k = i + 1; k <= bi; k++) kept.push(points[k]);
@@ -273,7 +392,19 @@ export function cutLaps(points, routeLength = Infinity, places = [], note = () =
       return (a[0] * b[0] + a[1] * b[1]) / (Math.hypot(...a) * Math.hypot(...b) || 1);
     };
     const spur = () => (turnCos() ?? -1) > SPUR_COS;
-    if (thin && !aroundHall && (reach >= SPUR_REACH || !spur())) {
+    // A lap with no stop and no station or transit center anywhere near it is
+    // two directions of a freeway, a ramp or an interchange the bus passes
+    // through without picking anyone up: one line through the middle, not a
+    // loop or a street each way (DESIGN.md, "Bus routes", "Readable
+    // geometry"). A one-way pair a rider can use has stops along it, and a
+    // terminal loop has its place, so both stay.
+    const through =
+      express &&
+      !aroundHall &&
+      stopGrid &&
+      lap.every((p) => stopGrid.near(p, THROUGH_STOP).length === 0) &&
+      !places.some((q) => lap.some((p) => dist(p, q) <= STOP_NEAR));
+    if (!through && thin && !aroundHall && (reach >= SPUR_REACH || !spur())) {
       kept.push(points[i + 1]);
       i++;
       continue;
@@ -286,12 +417,13 @@ export function cutLaps(points, routeLength = Infinity, places = [], note = () =
     // (Under TIP_TINY it can't be one: going out LAP_MIN and back along one
     // line reaches further. It is the lens where a road's two carriageways
     // meet, and goes.)
-    if (reach < CIRCLE && reach >= TIP_TINY && (turnCos() ?? 1) <= SPUR_COS && !aroundHall) {
+    if (!through && reach < CIRCLE && reach >= TIP_TINY && (turnCos() ?? 1) <= SPUR_COS && !aroundHall) {
       kept.push(points[i + 1]);
       i++;
       continue;
     }
-    if (reach >= CIRCLE) {
+    if (through) note('through', lap);
+    else if (reach >= CIRCLE) {
       // A short end: the shorter way round to the place the loop serves,
       // the station or transit center nearest it within PLACE_NEAR, or with
       // none, to its farthest point.
@@ -363,9 +495,12 @@ export function trimHooks(parts) {
   }
 }
 
-// Both carriageways of a road onto its middle line (in place).
-export function mergeCarriageways(parts) {
-  const grid = new Grid(PAIR_FAR);
+// Both carriageways of a road onto its middle line (in place). Where no stop
+// is near, the pair may be a freeway's two ramps, which swing wider than a
+// city pair: merge them within THROUGH_FAR too (DESIGN.md, "Bus routes",
+// "Readable geometry").
+export function mergeCarriageways(parts, { stopGrid = null, express = false } = {}) {
+  const grid = new Grid(stopGrid ? THROUGH_FAR : PAIR_FAR);
   parts.forEach((p, pi) => {
     p.cum = [0];
     for (let i = 1; i < p.points.length; i++) {
@@ -379,8 +514,11 @@ export function mergeCarriageways(parts) {
     // part, or this one far enough along that it isn't the same stretch.
     const found = pts.map((pt, i) => {
       const d = dirAt(pts, i);
+      const through = express && stopGrid ? stopGrid.near(pt, STOP_NEAR).length === 0 : false;
+      const far = through ? THROUGH_FAR : PAIR_FAR;
+      const near = through ? THROUGH_NEAR : PAIR_NEAR;
       let best = null;
-      for (const { a, b, item } of grid.near(pt, PAIR_FAR)) {
+      for (const { a, b, item } of grid.near(pt, far)) {
         const v = [b[0] - a[0], b[1] - a[1]];
         const len = Math.hypot(...v) || 1;
         const dot = (d[0] * v[0] + d[1] * v[1]) / len;
@@ -393,11 +531,11 @@ export function mergeCarriageways(parts) {
         // so a circle or a bend isn't taken for one.
         if (item.pi === self) {
           const along = Math.abs(parts[item.pi].cum[item.i] - p.cum[i]);
-          if (along < PAIR_FAR * 3 && !(dot < 0 && along >= 2 * dd + TIP_SLACK)) continue;
+          if (along < far * 3 && !(dot < 0 && along >= 2 * dd + TIP_SLACK)) continue;
         }
         // The same line (a part drawn twice) needs no moving.
         if (dd < 1) continue;
-        if (!best || dd < best.d) best = { d: dd, q, side: Math.sign(d[0] * (q[1] - pt[1]) - d[1] * (q[0] - pt[0])) };
+        if (!best || dd < best.d) best = { d: dd, q, far, near, side: Math.sign(d[0] * (q[1] - pt[1]) - d[1] * (q[0] - pt[0])) };
       }
       return best;
     });
@@ -429,7 +567,7 @@ export function mergeCarriageways(parts) {
     }
     return found.map((f, i) => {
       if (!f) return pts[i];
-      const w = Math.max(0, Math.min(1, (PAIR_FAR - f.d) / (PAIR_FAR - PAIR_NEAR)));
+      const w = Math.max(0, Math.min(1, (f.far - f.d) / (f.far - f.near)));
       return [pts[i][0] + (w * (f.q[0] - pts[i][0])) / 2, pts[i][1] + (w * (f.q[1] - pts[i][1])) / 2];
     });
   });

@@ -647,6 +647,81 @@ function alongBy(l, d) {
   return l.at(-1);
 }
 
+// Near a station (DESIGN.md, "Bus routes", "Readable geometry"). A run
+// shorter than CALM_SHORT takes its width from its own few cells, so a line
+// a block from a station flicks thick, thin, thick for buses that turn off
+// one street over: at that length the width is noise, not service. It takes
+// the class of the longest street it joins instead. A run shorter than
+// STUB_SHORT whose two ends join back onto the same street is a hairpin or a
+// redundant link, not a connection a reader can use, and goes. Only runs
+// near a station or a transit center are touched, so a real change of
+// service elsewhere still shows.
+export const CALM_SHORT = 100;
+export const CALM_NEAR = 400;
+export const STUB_SHORT = 30;
+const CALM_TOUCH = 3;
+
+export function calm(streets, places, { precision = 5 } = {}) {
+  if (streets.length < 3 || !places.length) return streets;
+  const { project } = projection(streets[0].geometry.coordinates[0], precision);
+  const lines = streets.map((f) => f.geometry.coordinates.map(project));
+  const lens = lines.map(length);
+  const grid = new Grid(CALM_TOUCH * 2);
+  lines.forEach((l, li) => {
+    for (let i = 1; i < l.length; i++) grid.add(l[i - 1], l[i], li);
+  });
+  const placePts = places.map(project);
+  const middle = (l) => {
+    let half = length(l) / 2;
+    for (let i = 1; i < l.length; i++) {
+      const s = dist(l[i - 1], l[i]);
+      if (half <= s) return [l[i - 1][0] + ((l[i][0] - l[i - 1][0]) * half) / (s || 1), l[i - 1][1] + ((l[i][1] - l[i - 1][1]) * half) / (s || 1)];
+      half -= s;
+    }
+    return l.at(-1);
+  };
+  const near = lines.map((l) => {
+    const m = middle(l);
+    return placePts.some((p) => dist(p, m) <= CALM_NEAR);
+  });
+  const touches = lines.map((l, li) => {
+    const at = (p) => new Set(grid.near(p, CALM_TOUCH).map((s) => s.item).filter((i) => i !== li));
+    return [at(l[0]), at(l.at(-1))];
+  });
+  const gone = new Set();
+  lines.forEach((l, i) => {
+    if (lens[i] >= STUB_SHORT || !near[i]) return;
+    const [t0, t1] = touches[i];
+    // An end in the air, or both ends on the same street: a stub.
+    if (!t0.size || !t1.size) return gone.add(i);
+    if ([...t0].some((j) => t1.has(j))) return gone.add(i);
+    // The whole run lies on a longer one: the same street drawn twice.
+    const m = middle(l);
+    const dupNear = CALM_TOUCH * 2;
+    const dup = grid.near(m, dupNear).some((s) => s.item !== i && lens[s.item] > lens[i] && segmentDistance(m, s.a, s.b) <= dupNear);
+    if (dup) gone.add(i);
+  });
+  // The class of the longest street it joins, settled from the long runs in
+  // (a short run may join another short one).
+  for (let pass = 0; pass < 3; pass++) {
+    let changed = false;
+    lines.forEach((l, i) => {
+      if (gone.has(i) || lens[i] >= CALM_SHORT || !near[i]) return;
+      const nearEnds = [...touches[i][0], ...touches[i][1]].filter((j) => !gone.has(j) && j !== i);
+      if (!nearEnds.length) return;
+      const best = nearEnds.reduce((a, j) => (lens[j] > lens[a] ? j : a), nearEnds[0]);
+      const cls = streets[best].properties.cls;
+      if (cls && cls !== streets[i].properties.cls) {
+        streets[i].properties.cls = cls;
+        changed = true;
+      }
+    });
+    if (!changed) break;
+  }
+  streets.splice(0, streets.length, ...streets.filter((_, i) => !gone.has(i)));
+  return streets;
+}
+
 // Wyes (DESIGN.md, "Bus routes", "Readable geometry"). Where a short
 // street forks off another and both reach the same crossing street a little
 // way apart (two ramps from one road up to a crossing road, one each way),
