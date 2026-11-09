@@ -267,6 +267,25 @@ async function main() {
   // carriageways simplified from each route's own line (DESIGN.md, "Bus
   // routes", "Readable geometry"; scripts/lib/generalize.mjs).
   const laps = [];
+  // Two stretches of one route that meet within this many metres are one
+  // line. A route's shapes are concatenated, and where two of them meet at a
+  // terminal or a shape seam they can be a few metres apart, which draws as a
+  // break in the line; bridging them keeps the route whole.
+  const PIECE_GAP = 30;
+  const bridge = (f) => {
+    if (f.properties.mode !== 'bus') return f;
+    const parts = partsOf(f.geometry);
+    const out = [];
+    for (const part of parts) {
+      const last = out[out.length - 1];
+      if (last && meters(last[last.length - 1], part[0]) <= PIECE_GAP) out[out.length - 1] = last.concat(part);
+      else out.push(part.slice());
+    }
+    return {
+      ...f,
+      geometry: out.length === 1 ? { type: 'LineString', coordinates: out[0] } : { type: 'MultiLineString', coordinates: out },
+    };
+  };
   geo.routes = [
     ...generalize(split.features, {
       precision: PRECISION,
@@ -274,7 +293,7 @@ async function main() {
       places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates),
       halls,
       stops: geo.stops.map((f) => f.geometry.coordinates),
-    }),
+    }).map(bridge),
     ...rails,
   ];
   console.log(
