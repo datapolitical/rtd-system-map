@@ -36,11 +36,11 @@ test('two pieces joined exactly are not a gap', () => {
   assert.deepEqual(lineFaults(at).map((f) => f.kind), []);
 });
 
-test('a piece three px long is a short', () => {
-  const at = zoom([entry('bus', '15', [[P(0, 0), P(3, 0)]])]);
+test('a piece two px long is a short', () => {
+  const at = zoom([entry('bus', '15', [[P(0, 0), P(2, 0)]])]);
   const faults = lineFaults(at).filter((f) => f.kind === 'short');
   assert.equal(faults.length, 1);
-  assert.match(faults[0].msg, /3\.0 px long/);
+  assert.match(faults[0].msg, /2\.0 px long/);
 });
 
 test('a sideways jog between two parallel runs is a step', () => {

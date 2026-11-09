@@ -22,6 +22,12 @@ import { toLonLat } from './mercator.mjs';
 
 const isCasing = (layer) => /-(casing|edge|outline)$/.test(layer);
 
+// A line that carries at least one route: a rail or bus feature with a route
+// name, or a street drawn for the routes that run on it. A bare street is
+// basemap-shaped geometry, not a route, and none of these checks apply to it.
+const isRoute = (entry) => entry.route != null
+  || String(entry.properties?.routes ?? '').split(/\s+/).some(Boolean);
+
 // Ground metres per screen px at a latitude, for the model's 512 px tiles.
 const metresPerPx = (lat, z) => (40075016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** z);
 
@@ -68,7 +74,7 @@ function stepAt(part, i, maxStep) {
  *   maxGap in ground metres (the data's own join scale), the rest in screen px
  * @returns {Array<{kind:string, layer:string, route:string|null, px:number[], msg:string}>}
  */
-export function lineFaults(zoom, { maxGap = 30, minPiece = 6, maxStep = 8 } = {}) {
+export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}) {
   const faults = [];
   const seen = new Set();
   const add = (kind, entry, px, detail) => {
@@ -80,7 +86,7 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 6, maxStep = 8 } = {}
       layer: entry.layer,
       route: entry.route,
       px: [Math.round(px[0] * 10) / 10, Math.round(px[1] * 10) / 10],
-      msg: `${kind} on ${entry.layer} ${entry.route ?? '(no route)'} at ${px[0].toFixed(0)},${px[1].toFixed(0)}: ${detail}`,
+      msg: `${kind} on ${entry.layer} ${entry.route ?? entry.properties?.routes ?? '(no route)'} at ${px[0].toFixed(0)},${px[1].toFixed(0)}: ${detail}`,
     });
   };
 
@@ -89,7 +95,7 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 6, maxStep = 8 } = {}
   // order is what the gap test follows: pairing arbitrary ends instead would
   // join a branch to a main line and report every branch mouth as a break.
   for (const entry of zoom.lines) {
-    if (isCasing(entry.layer) || entry.source === 'flexride') continue;
+    if (isCasing(entry.layer) || entry.source === 'flexride' || !isRoute(entry)) continue;
     const parts = entry.parts.filter((p) => p.length >= 2);
     // The join distance from part p-1's end to part p's start, in px (Infinity
     // when either part is missing or the ends are not on the same ground).
