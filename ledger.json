@@ -27,7 +27,7 @@
   ],
   "rounds": {
     "30": 1,
-    "31": 1
+    "31": 2
   },
   "last_main_sha": null,
   "last_feed": null,
@@ -50,6 +50,17 @@
       "job": "fix",
       "model": "deepseek-v4.1-flash",
       "ts": "2026-11-08T22:29:59.828Z",
+      "reason": "instructions waiting (agent instructions)",
+      "finished": true,
+      "output": true,
+      "tries": 1,
+      "issue": 31
+    },
+    {
+      "date": "2026-11-09",
+      "job": "fix",
+      "model": "deepseek-v4.1-flash",
+      "ts": "2026-11-09T06:52:16.788Z",
       "reason": "instructions waiting (agent instructions)",
       "finished": true,
       "output": true,
