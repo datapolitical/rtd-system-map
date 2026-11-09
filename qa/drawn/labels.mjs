@@ -27,13 +27,13 @@ export function segmentHitsBox(a, b, box) {
   return edges.some(([c, d]) => crosses(a, b, c, d));
 }
 
-function boxHitsLines(box, lines) {
+function lineInBox(box, lines) {
   for (const line of lines) {
     for (const part of line.parts) {
-      for (let i = 1; i < part.length; i++) if (segmentHitsBox(part[i - 1], part[i], box)) return true;
+      for (let i = 1; i < part.length; i++) if (segmentHitsBox(part[i - 1], part[i], box)) return line;
     }
   }
-  return false;
+  return null;
 }
 
 function distToBox([x, y], box) {
@@ -71,8 +71,27 @@ export function labelFaults(frame, { layers = null, maxFromMark = 25 } = {}) {
   const faults = [];
   for (const l of placed) {
     const [x0, y0, x1, y1] = l.box;
-    if (boxHitsLines(l.box, frame.lines.filter((line) => !/-(casing|edge|outline)$/.test(line.layer)))) {
-      faults.push({ kind: 'over-line', layer: l.layer, text: l.text, px: [(x0 + x1) / 2, (y0 + y1) / 2], msg: `"${l.text}" crosses a line` });
+    // The map keeps station names off rail and the frequent streets (the
+    // keep-out layers run before the names); the lighter streets and the
+    // part-time routes are drawn after the names, so a name may cross one.
+    // Only what the map itself keeps names off can be a fault here.
+    const keepOut = (line) =>
+      line.layer === 'rail' || (line.layer === 'street' && /^c(3|5|10|15)$/.test(String(line.properties?.cls ?? '')));
+    const crossed = lineInBox(l.box, frame.lines.filter((line) => keepOut(line) && !/-(casing|edge|outline)$/.test(line.layer)));
+    // A name sits beside its own station, where the lines it serves converge
+    // and there is often no clear side: crossing one of those is the design.
+    // Crossing a line the station does not serve is the fault.
+    const served = new Set(`${l.properties?.lines ?? ''} ${l.properties?.buses ?? ''}`.split(/\s+/).filter(Boolean));
+    const own = crossed ? String(crossed.route ?? crossed.properties?.routes ?? '').split(/\s+/).some((r) => served.has(r)) : false;
+    if (crossed && !own) {
+      faults.push({
+        kind: 'over-line',
+        layer: l.layer,
+        text: l.text,
+        px: [(x0 + x1) / 2, (y0 + y1) / 2],
+        crossed: { layer: crossed.layer, route: crossed.route ?? crossed.properties?.routes ?? null, kind: crossed.kind ?? null, cls: crossed.properties?.cls ?? null },
+        msg: `"${l.text}" crosses ${crossed.route ?? crossed.properties?.routes ?? crossed.layer}`,
+      });
     }
     const id = l.properties?.id;
     if (id != null) {

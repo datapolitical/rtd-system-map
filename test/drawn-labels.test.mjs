@@ -21,6 +21,28 @@ test('a name over a line is a fault', () => {
   assert.equal(faults.filter((f) => f.kind === 'over-line').length, 1);
 });
 
+test('a name over a light street is not a fault', () => {
+  const light = { layer: 'street', route: '20', properties: { cls: 'c30' }, parts: [[[0, 100], [200, 100]]] };
+  const f = { ...frame([label('Empower Field', [80, 90, 120, 110])]), lines: [light] };
+  assert.deepEqual(labelFaults(f), []);
+});
+
+test('a name over the rail it serves is not a fault', () => {
+  const mine = { ...line, route: 'R' };
+  const l = label('Nine Mile', [80, 90, 120, 110]);
+  l.properties.lines = 'R';
+  const f = { ...frame([l]), lines: [mine] };
+  assert.deepEqual(labelFaults(f), []);
+});
+
+test('a name over rail it does not serve is a fault', () => {
+  const other = { ...line, route: 'R' };
+  const l = label('Nine Mile', [80, 90, 120, 110]);
+  l.properties.lines = 'A';
+  const f = { ...frame([l]), lines: [other] };
+  assert.equal(labelFaults(f).filter((x) => x.kind === 'over-line').length, 1);
+});
+
 test('a name clear of the line is not a fault', () => {
   const faults = labelFaults(frame([label('Union Station', [80, 40, 120, 60])]));
   assert.deepEqual(faults, []);
