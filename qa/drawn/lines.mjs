@@ -91,7 +91,7 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
     faults.push({
       kind,
       layer: entry.layer,
-      route: entry.route,
+      route: entry.route ?? entry.properties?.routes ?? null,
       px: [Math.round(px[0] * 10) / 10, Math.round(px[1] * 10) / 10],
       msg: `${kind} on ${entry.layer} ${entry.route ?? entry.properties?.routes ?? '(no route)'} at ${px[0].toFixed(0)},${px[1].toFixed(0)}: ${detail}`,
     });
