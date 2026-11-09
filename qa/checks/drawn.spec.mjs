@@ -141,7 +141,7 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
     }, { tolerance: 2 });
 
     report.push({ view: i, zoom: +view.zoom.toFixed(2), lon: +view.lon.toFixed(5), lat: +view.lat.toFixed(5), lines, marks, labels });
-    console.log(`${i} z${view.zoom.toFixed(2)} ${view.lat.toFixed(4)},${view.lon.toFixed(4)}: lines ${lines.pairs} worst ${lines.worst.toFixed(2)}; marks ${marks.checked} worst ${marks.worst.toFixed(2)}; labels ${labels.checked} worst ${labels.worst.toFixed(2)}`);
+    console.log(`${i} z${view.zoom.toFixed(2)} ${view.lat.toFixed(4)},${view.lon.toFixed(4)}: lines ${lines.pairs} missing ${lines.missing} worst ${lines.worst.toFixed(2)}; marks ${marks.checked} worst ${marks.worst.toFixed(2)}; labels ${labels.checked} worst ${labels.worst.toFixed(2)}`);
   }
 
   for (const r of report) {
@@ -151,11 +151,16 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
   }
   const failed = report.filter((r) => r.lines.failures.length || r.marks.failures.length || r.labels.failures.length);
   const detail = failed.map((r) => `view ${r.view} z${r.zoom} ${r.lat},${r.lon}: ` + JSON.stringify({ lines: r.lines.failures, marks: r.marks.failures, labels: r.labels.failures }));
-  console.log(`${views.length} views, ${report.reduce((n, r) => n + r.lines.pairs, 0)} line points, ${report.reduce((n, r) => n + r.marks.checked, 0)} marks, ${report.reduce((n, r) => n + r.labels.checked, 0)} label boxes; ${failed.length} view(s) off`);
+  const totalMissing = report.reduce((n, r) => n + r.lines.missing, 0);
+  const missingLayers = report.flatMap((r) => r.lines.missingLayers.map(([l, n]) => `${l}:${n}`));
+  console.log(`${views.length} views, ${report.reduce((n, r) => n + r.lines.pairs, 0)} line points, ${totalMissing} line points the model does not have, ${report.reduce((n, r) => n + r.marks.checked, 0)} marks, ${report.reduce((n, r) => n + r.labels.checked, 0)} label boxes; ${failed.length} view(s) off`);
   // A run that compared almost nothing is a broken run, not a pass: a camera
   // that never settled, or a style with no layers the model knows.
   expect(report.reduce((n, r) => n + r.lines.pairs, 0)).toBeGreaterThan(1000);
   expect(report.reduce((n, r) => n + r.marks.checked, 0)).toBeGreaterThan(30);
   expect(report.reduce((n, r) => n + r.labels.checked, 0)).toBeGreaterThan(5);
+  // Every line point the page drew must have a model line to be compared
+  // with; a layer the model does not load would otherwise pass unseen.
+  expect(totalMissing, `line points the model does not have (${missingLayers.join(' ')})`).toBe(0);
   await expect(detail, 'the model and the browser disagree').toEqual([]);
 });

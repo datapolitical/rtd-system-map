@@ -36,7 +36,8 @@ model.zoom(14);         // the whole district at zoom 14 (cache-friendly)
 await model.frame({ zoom: 14, center: [-105.0005, 39.753], width: 390, height: 664 });
 ```
 
-Pass `data` (the six source FeatureCollections, by source name) and `meta` to
+Pass `data` (the source FeatureCollections named by `DATA_SOURCES`, streets
+included) and `meta` to
 read a deployed build's output instead of the checkout's `public/data`:
 `qa/checks/drawn.spec.mjs` does that, because a CI checkout has not built the
 data and the preview under test is that commit's build.
@@ -94,7 +95,10 @@ compares the page's own `queryRenderedFeatures` geometry and MapLibre's
 collision boxes with the model's, and fails with the distance and the layer
 when they part. It reads both sides' data from the site under test, so it can
 run on a CI checkout that has no `public/data`. Thresholds: 1 px for line
-vertices and mark centres, 2 px for label boxes.
+vertices and mark centres, 2 px for label boxes. Every line point the page
+drew must have a model line for the same layer and route; a page line the
+model has nothing for fails the run, so a layer missing from `DATA_SOURCES`
+cannot pass unseen (that is how the bus lines in `streets` went missing).
 
 ```sh
 npm run dev                                     # or a server of your own

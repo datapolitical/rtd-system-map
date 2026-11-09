@@ -38,10 +38,20 @@ export function compareLines(drawn, model, { tolerance = 1, width, height } = {}
   }
   let pairs = 0;
   let worst = 0;
+  let missing = 0;
+  const missingLayers = new Map();
   const failures = [];
   for (const line of drawn) {
     const parts = (byKey.get(key(line)) ?? []).flatMap((l) => l.parts);
-    if (!parts.length) continue;
+    // A page line the model has nothing for is not a pass: without this the
+    // model could omit a whole layer and every page vertex on it would be
+    // skipped in silence (which is how `streets` went unseen).
+    if (!parts.length) {
+      const n = line.parts.reduce((sum, part) => sum + part.length, 0);
+      missing += n;
+      missingLayers.set(line.layer, (missingLayers.get(line.layer) ?? 0) + n);
+      continue;
+    }
     for (const part of line.parts) {
       for (const pt of part) {
         if (pt[0] < 0 || pt[1] < 0 || pt[0] > width || pt[1] > height) continue;
@@ -52,7 +62,7 @@ export function compareLines(drawn, model, { tolerance = 1, width, height } = {}
       }
     }
   }
-  return { pairs, worst, failures };
+  return { pairs, worst, missing, missingLayers: [...missingLayers], failures };
 }
 
 // Every point the page drew must lie within `tolerance` px of one of the

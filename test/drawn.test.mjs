@@ -74,6 +74,17 @@ test('the drift comparison passes lines that agree and names the ones that do no
   assert.equal(outside.failures.length, 0);
 });
 
+test('a page line the model does not load is missing, not silently passed', () => {
+  // The model has nothing for `street`, the layer the buses are drawn in;
+  // comparing nothing must not read as agreeing.
+  const page = [{ layer: 'street', route: null, parts: [[[10, 10], [50, 10]]] }];
+  const r = compareLines(page, [line], { tolerance: 1, width: 390, height: 664 });
+  assert.equal(r.pairs, 0);
+  assert.equal(r.failures.length, 0);
+  assert.equal(r.missing, 2);
+  assert.deepEqual(r.missingLayers, [['street', 2]]);
+});
+
 test('the drift comparison passes boxes that agree and flags a two px shift', () => {
   const box = [100, 100, 160, 120];
   const ok = compareBoxes([{ layer: 'station-labels', props: { id: 1 }, box }], () => [box], { tolerance: 2 });

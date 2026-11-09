@@ -45,7 +45,7 @@ export const ZOOMS = Array.from({ length: 17 }, (_, i) => 9 + i / 2);
 // The data sources the page draws from the build (network.js, dataSources).
 // Exported so a caller can hand the model a deployed build's data instead of
 // a checkout's public/data, which a CI checkout has not built.
-export const DATA_SOURCES = ['flexride', 'routes', 'stations', 'facilities', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'facilities', 'labels', 'stops'];
 // Loaded only when the map is close enough (network.js, loadWhenNeeded).
 const LAZY = { stops: 14 };
 
