@@ -9,8 +9,8 @@
 // in a way the model does not follow, a view fails here with the distance
 // and the layer, and the model gets fixed before anything built on it is
 // trusted (needs the dev server and a browser).
-import { test, expect, readData } from './fixtures.mjs';
-import { openModel } from '../drawn/model.mjs';
+import { test, expect, siteData } from './fixtures.mjs';
+import { DATA_SOURCES, openModel } from '../drawn/model.mjs';
 import { compareBoxes, compareLines, comparePoints } from '../drawn/compare.mjs';
 import { seededViews } from '../lib/views.mjs';
 
@@ -19,18 +19,24 @@ const ZOOMS = [10, 12, 14, 16];
 
 test('the drawn model matches what the browser draws', async ({ mapPage }) => {
   test.setTimeout(1_800_000);
-  const routes = readData('routes.geojson');
+  // The page's own build output, as the site under test serves it: the
+  // preview is this commit's build, and a CI checkout has no public/data.
+  const meta = await siteData('meta.json');
+  const data = Object.fromEntries(await Promise.all(
+    DATA_SOURCES.map(async (name) => [name, await siteData(`${name}.geojson`)]),
+  ));
+  const routes = data.routes;
   // Seeded views over the lines, plus the busiest interchanges the data has
   // (by how many lines meet there), where names are densest and label boxes
   // have the most to disagree about. No place is named here.
-  const stations = readData('stations.geojson').features;
+  const stations = data.stations.features;
   const busiest = stations.filter((f) => f.properties.served)
     .sort((a, b) => (b.properties.links ?? 0) - (a.properties.links ?? 0))
     .slice(0, 3);
   const busy = busiest.map((f, i) => ({ zoom: 15.25 + i, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }));
   const views = [...seededViews(routes, { count: VIEWS, zooms: ZOOMS, seed: 42 }), ...busy];
   await mapPage.goto(views[0], { settle: 800 });
-  const model = await openModel({ theme: mapPage.theme });
+  const model = await openModel({ theme: mapPage.theme, data, meta });
 
   // The layers that draw the network's own data, in the style's order. Text
   // placed along a line draws as circles of collision, not boxes, so it is
@@ -103,6 +109,9 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
       out.labels = window.__qa.placed()
         .filter((p) => p.layers.some((l) => labels.includes(l)))
         .filter((p) => p.props.id != null && onScreen.has(p.props.id))
+        // A label placed in a tile's buffer can sit wholly outside the canvas;
+        // it is not drawn on this screen, so there is no drawn box to match.
+        .filter((p) => p.box[2] > 0 && p.box[3] > 0 && p.box[0] < s.width && p.box[1] < s.height)
         .map((p) => ({ layer: p.layers.find((l) => labels.includes(l)), props: p.props, box: p.box }));
       return out;
     }, [lineLayers, markLayers, labelLayers]);

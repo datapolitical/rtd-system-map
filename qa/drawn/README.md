@@ -16,7 +16,7 @@ model imports the page's own definitions and reads the build's own output.
 |---|---|
 | `public/js/network.js`, `basemap.js` | the style's layers, filters, paint and layout, as the page builds them (`style.mjs` already did this) |
 | `public/js/{palette,sizes,shared,symbols}.js` | colours per theme, sizes, and the images the page draws itself: station ticks, capsules, bullets, signs |
-| `public/data/*.geojson`, `meta.json` | the network's geometry and each feature's properties |
+| `public/data/*.geojson`, `meta.json` | the network's geometry and each feature's properties; a caller can pass a deployed build's copies instead (`data`, `meta` below) |
 | `public/vendor/glyphs/<font>/<range>.pbf` | text metrics: each glyph's advance and ink box, drawn by `scripts/glyphs.mjs` |
 | the style's vector source (OpenFreeMap) | the basemap's streets, water, land and buildings, tile by tile |
 
@@ -35,6 +35,11 @@ model.data;             // every GeoJSON the style's sources name, by source id
 model.zoom(14);         // the whole district at zoom 14 (cache-friendly)
 await model.frame({ zoom: 14, center: [-105.0005, 39.753], width: 390, height: 664 });
 ```
+
+Pass `data` (the six source FeatureCollections, by source name) and `meta` to
+read a deployed build's output instead of the checkout's `public/data`:
+`qa/checks/drawn.spec.mjs` does that, because a CI checkout has not built the
+data and the preview under test is that commit's build.
 
 `zoom(z)` returns, in world pixels at zoom `z` (512 px tiles: world pixels at
 zoom `z` are screen pixels at zoom `z`):
@@ -87,8 +92,9 @@ walks the whole network zoom by zoom, so nothing holds more than one zoom.
 browser, at seeded views over the network plus the busiest interchanges, it
 compares the page's own `queryRenderedFeatures` geometry and MapLibre's
 collision boxes with the model's, and fails with the distance and the layer
-when they part. Thresholds: 1 px for line vertices and mark centres, 2 px for
-label boxes.
+when they part. It reads both sides' data from the site under test, so it can
+run on a CI checkout that has no `public/data`. Thresholds: 1 px for line
+vertices and mark centres, 2 px for label boxes.
 
 ```sh
 npm run dev                                     # or a server of your own

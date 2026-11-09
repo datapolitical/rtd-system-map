@@ -25,6 +25,7 @@
 
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -42,15 +43,20 @@ export const ROOT = path.resolve(HERE, '..', '..');
 export const ZOOMS = Array.from({ length: 17 }, (_, i) => 9 + i / 2);
 
 // The data sources the page draws from the build (network.js, dataSources).
-const DATA = ['flexride', 'routes', 'stations', 'facilities', 'labels', 'stops'];
+// Exported so a caller can hand the model a deployed build's data instead of
+// a checkout's public/data, which a CI checkout has not built.
+export const DATA_SOURCES = ['flexride', 'routes', 'stations', 'facilities', 'labels', 'stops'];
 // Loaded only when the map is close enough (network.js, loadWhenNeeded).
 const LAZY = { stops: 14 };
 
 const readJSON = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 // The page's style for one theme, through the page's own code (style.mjs).
-export async function buildStyle(root = ROOT, theme = 'dark') {
-  const { stdout } = await run(process.execPath, [path.join(root, 'qa', 'drawn', 'style.mjs'), '--theme', theme, '--root', root], {
+// `metaFile` points style.mjs at a meta.json other than the checkout's own.
+export async function buildStyle(root = ROOT, theme = 'dark', metaFile = null) {
+  const args = [path.join(root, 'qa', 'drawn', 'style.mjs'), '--theme', theme, '--root', root];
+  if (metaFile) args.push('--meta', metaFile);
+  const { stdout } = await run(process.execPath, args, {
     cwd: root,
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -74,11 +80,30 @@ function parts(feature) {
   return [];
 }
 
-export async function openModel({ root = ROOT, theme = 'dark', tileCache = true } = {}) {
-  const style = await buildStyle(root, theme);
+export async function openModel({ root = ROOT, theme = 'dark', tileCache = true, data: given = null, meta = null } = {}) {
+  // A caller with a deployed build's data passes it in; then nothing here is
+  // read from a checkout's public/data. meta is the build's meta.json (rail
+  // colours), and only style.mjs reads it, so it goes through a temp file.
+  let metaFile = null;
+  let metaDir = null;
+  if (meta) {
+    metaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'drawn-meta-'));
+    metaFile = path.join(metaDir, 'meta.json');
+    fs.writeFileSync(metaFile, JSON.stringify(meta));
+  }
+  const style = await buildStyle(root, theme, metaFile);
+  if (metaDir) fs.rmSync(metaDir, { recursive: true, force: true });
   setState(style.state);
   const data = {};
-  for (const name of DATA) data[name] = readJSON(path.join(root, 'public', 'data', `${name}.geojson`));
+  for (const name of DATA_SOURCES) {
+    if (!given) {
+      data[name] = readJSON(path.join(root, 'public', 'data', `${name}.geojson`));
+    } else if (given[name]) {
+      data[name] = given[name];
+    } else {
+      throw new Error(`openModel: no data given for "${name}"`);
+    }
+  }
   const imageSizes = await icons(theme);
 
   const sourceFor = (layer) => {
@@ -89,7 +114,7 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true 
   };
 
   const features = {};
-  for (const name of DATA) features[name] = data[name].features.map((f, i) => featureAt(name, i, f));
+  for (const name of DATA_SOURCES) features[name] = data[name].features.map((f, i) => featureAt(name, i, f));
 
   // Project a feature's coordinates to world px at z, once per feature per
   // zoom whatever number of layers read it.
