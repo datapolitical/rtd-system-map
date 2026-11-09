@@ -60,12 +60,24 @@ we are" section from them (closed issues show as done).
 ## Status page
 
 `node status/server.mjs [port]` (default 8795) serves a page that reads this
-repo's milestones and issues through `gh`. Issues labeled `in progress` show
-under "In progress", and issues labeled `needs Chris` under "Waiting on you",
-each with the first line of its newest comment. For every checkout of the
-repo on that machine it also lists the Claude Code sessions and subagents
-working there (read from their transcripts in `~/.claude/projects`), agents'
+repo's milestones and issues through `gh`. From the top: issues labeled
+`needs Chris` ("Waiting on you"), the jobs running now, the milestones ("How
+close we are") and Claude usage. A folded "Details" section holds the rest:
+issues labeled `in progress`, each with the first line of its newest comment,
+and, for every checkout of the repo on that machine, the Hermes agents and
+Claude Code sessions working there with their latest commands (read from
+`~/.hermes/state.db` and the transcripts in `~/.claude/projects`), agents'
 progress files, the newest captures in `qa/.scratch/`, and recent commits.
+
+The jobs come from `status/jobs.json` (ignored by git; `JOBS_FILE` can point
+elsewhere), which a collector on the machine running the agents rewrites
+every few minutes. It isn't in this repo. Each job has a health light from
+facts alone (green when a file in its worktree changed in the last 15
+minutes, yellow up to 30, red after that or when a step stopped), its steps,
+the issue's "Done when" line, facts (uncommitted files, the last test run,
+the last commit and whether it is pushed, the last command), and a short
+summary a model writes every 15 minutes from the job's commands and their
+output, never its reasoning.
 
 Run it from its own worktree pinned to main, used for nothing else
 (`git worktree add --detach ../rtd-system-map-status origin/main`), so a

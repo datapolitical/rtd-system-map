@@ -52,19 +52,24 @@ if (job.job === 'find' && job.lens) {
 }
 ledger.runs.push(entry);
 fs.writeFileSync('/tmp/ledger.json', JSON.stringify(ledger, null, 2) + '\n');
-// Update the orphan branch in a temp worktree so the runner's checkout is untouched.
+// Update the orphan branch in its own temporary worktree, so whatever the
+// agent left in the runner's checkout (edits it never committed) can't stop
+// the ledger being written, and the checkout is left as it was.
 run('git fetch origin daily-ledger --quiet 2>/dev/null || true');
 let onLedger = false;
 try { run('git rev-parse --verify origin/daily-ledger >/dev/null'); onLedger = true; } catch {}
+const wt = fs.mkdtempSync(`${process.env.RUNNER_TEMP || '/tmp'}/ledger-`);
+const inWt = (args) => execFileSync('git', ['-C', wt, ...args], { stdio: 'inherit' });
 if (onLedger) {
-  execFileSync('git', ['checkout', '-q', '-B', 'daily-ledger', 'origin/daily-ledger'], { stdio: 'inherit' });
+  execFileSync('git', ['worktree', 'add', '-q', '-B', 'daily-ledger', wt, 'origin/daily-ledger'], { stdio: 'inherit' });
 } else {
-  execFileSync('git', ['checkout', '-q', '--orphan', 'daily-ledger'], { stdio: 'inherit' });
-  execFileSync('git', ['rm', '-rfq', '.'], { stdio: 'inherit' });
+  execFileSync('git', ['worktree', 'add', '-q', '--detach', wt], { stdio: 'inherit' });
+  inWt(['checkout', '-q', '--orphan', 'daily-ledger']);
+  inWt(['rm', '-rfq', '.']);
 }
-run('cp /tmp/ledger.json ledger.json');
-execFileSync('git', ['add', 'ledger.json'], { stdio: 'inherit' });
-execFileSync('git', ['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-q', '-m', `Ledger: ${job.summary || job.job} on ${entry.date}`], { stdio: 'inherit' });
-execFileSync('git', ['push', '-u', 'origin', 'daily-ledger'], { stdio: 'inherit' });
-execFileSync('git', ['checkout', '-q', '-'], { stdio: 'inherit' });
+fs.copyFileSync('/tmp/ledger.json', `${wt}/ledger.json`);
+inWt(['add', 'ledger.json']);
+inWt(['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-q', '-m', `Ledger: ${job.summary || job.job} on ${entry.date}`]);
+inWt(['push', '-u', 'origin', 'daily-ledger']);
+execFileSync('git', ['worktree', 'remove', '--force', wt], { stdio: 'inherit' });
 console.log(`ledger updated: ${entry.date} ${job.job}${job.issue ? ' #' + job.issue : ''} model=${model || 'none'}`);
