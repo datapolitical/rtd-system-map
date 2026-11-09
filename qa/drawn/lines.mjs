@@ -161,13 +161,13 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
       }
       for (let i = 1; i < part.length - 2; i++) {
         const off = stepAt(part, i, maxStep);
-        if (off !== null) add('step', entry, part[i], `sideways ${off.toFixed(1)} px between parallel runs`);
+        if (off !== null && off >= 2) add('step', entry, part[i], `sideways ${off.toFixed(1)} px between parallel runs`);
       }
       if (p === 0) continue;
       const d = join(p);
       // The join scale is ground metres: 30 m is 2 px at zoom 12 and 50 px at
       // zoom 17, so the same data gap is judged the same at every zoom.
-      if (d >= 1 && d <= gapPx) {
+      if (d >= 3 && d <= gapPx) {
         const a = parts[p - 1][parts[p - 1].length - 1];
         const b = part[0];
         add('gap', entry, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], `pieces ${p - 1} and ${p} end ${d.toFixed(1)} px apart`);

@@ -73,8 +73,7 @@ const label = (fault, view) => ({
   layer: fault.layer,
   route: null,
   zoom: view.zoom,
-  lat: view.lat,
-  lon: view.lon,
+  ...atPlace(fault.px, view),
   msg: fault.msg,
   link: `${SITE}/#${view.zoom}/${view.lat.toFixed(5)}/${view.lon.toFixed(5)}`,
 });
@@ -114,6 +113,21 @@ for (const theme of THEMES) {
 }
 
 fs.mkdirSync(OUT, { recursive: true });
+// One fault, one row: the same fault measured at several zooms is one
+// finding, with the zooms it was seen at.
+const merged = new Map();
+for (const f of findings) {
+  const key = `${f.check}|${f.kind}|${f.route ?? ''}|${f.lat.toFixed(4)}|${f.lon.toFixed(4)}`;
+  const had = merged.get(key);
+  if (had) {
+    had.zooms.push(f.zoom);
+    if (f.msg.length > had.msg.length) had.msg = f.msg;
+  } else {
+    merged.set(key, { ...f, zooms: [f.zoom] });
+  }
+}
+findings.length = 0;
+findings.push(...merged.values());
 for (const f of findings) f.severity = SEVERITY[f.kind] ?? 9;
 findings.sort((a, b) => a.severity - b.severity || a.check.localeCompare(b.check) || a.theme.localeCompare(b.theme));
 const payload = { generated: new Date().toISOString(), site: SITE, themes: THEMES, zooms: ZOOMS, total: findings.length, findings };
@@ -128,7 +142,7 @@ console.log(`${findings.length} findings over ${THEMES.length} theme(s), zooms $
 for (const [k, n] of Object.entries(counts).sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(4)}  ${k}`);
 
 const rows = findings.map((f) => `      <tr class="${f.check}">
-        <td>${f.check}</td><td>${f.kind}</td><td>${f.theme}</td><td>z${f.zoom}</td>
+        <td>${f.check}</td><td>${f.kind}</td><td>${f.theme}</td><td>z${f.zooms.join(', ')}</td>
         <td>${f.route ?? f.layer}</td><td>${f.msg.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</td>
         <td><a href="${f.link}">open</a></td>
       </tr>`).join('\n');

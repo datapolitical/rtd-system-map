@@ -46,6 +46,16 @@ const isRoute = (l) => l.route != null || String(l.properties?.routes ?? '').tri
  */
 export function streetFaults(frame, { maxOff = 12 } = {}) {
   const grid = gridOf(frame.basemap?.streets ?? []);
+  // A bus inside a terminal or on a platform is where it should be; the
+  // street grid does not run through the building.
+  const inside = (p, b) => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
+  const facility = [];
+  for (const a of frame.areas ?? []) {
+    if (!/terminal|platform/i.test(a.layer)) continue;
+    const xs = [], ys = [];
+    for (const part of a.parts ?? []) for (const p of part) { xs.push(p[0]); ys.push(p[1]); }
+    if (xs.length) facility.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+  }
   const faults = [];
   for (const line of frame.lines) {
     if (/-(casing|edge|outline)$/.test(line.layer) || line.source === 'flexride' || !isRoute(line)) continue;
@@ -78,7 +88,7 @@ export function streetFaults(frame, { maxOff = 12 } = {}) {
             if (d < best) best = d;
           }
         }
-        if (best > maxOff) run.push({ p, d: best }); else flush();
+        if (best > maxOff && !facility.some((b) => inside(p, b))) run.push({ p, d: best }); else flush();
       }
       flush();
     }

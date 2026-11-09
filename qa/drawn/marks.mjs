@@ -46,6 +46,8 @@ export function markFaults(frame, { maxStray = 50 } = {}) {
   const routeLines = frame.lines.filter((l) => l.route != null || routesOf(l.properties?.routes).length);
   for (const m of frame.marks) {
     if (m.layer !== 'stops') continue;
+    // A station gate or platform is inside the station, not a street stop.
+    if (/\b(Gate|Track|Platform|Bay)\b/i.test(m.properties?.name ?? '')) continue;
     const mine = new Set(routesOf(m.properties?.lines));
     if (!mine.size) continue;
     let best = Infinity, matched = false;
