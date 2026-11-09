@@ -9,10 +9,11 @@
 // themes cannot be built in one process; this script builds one theme per
 // run and prints the style JSON on stdout.
 //
-//   node qa/drawn/style.mjs --theme dark [--root /path/to/checkout]
+//   node qa/drawn/style.mjs --theme dark [--root /path/to/checkout] [--meta FILE]
 //
 // It is the drawn model's style source: qa/drawn/model.mjs reads this file's
-// output (the model never re-implements the style, it evaluates it).
+// output (the model never re-implements the style, it evaluates it). --meta
+// points at a meta.json from a deployed build, when the checkout has none.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,7 +47,11 @@ globalThis.innerWidth = 390;
 globalThis.innerHeight = 844;
 
 const js = (name) => path.join(root, 'public', 'js', name);
-const meta = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'meta.json'), 'utf8'));
+const metaIdx = process.argv.indexOf('--meta');
+const metaFile = metaIdx >= 0
+  ? process.argv[metaIdx + 1]
+  : path.join(root, 'public', 'data', 'meta.json');
+const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
 
 const { BASEMAP_SOURCES, basemapBelow, basemapLabels } = await import(js('basemap.js'));
 const { dataSources, lettersFirst, railStyle, transitLines, transitMarks } = await import(js('network.js'));
