@@ -272,6 +272,27 @@ async function main() {
   // terminal or a shape seam they can be a few metres apart, which draws as a
   // break in the line; bridging them keeps the route whole.
   const PIECE_GAP = 30;
+
+  // A jog is a short segment that turns only a little: two stretches of one
+  // street digitised a few metres apart, joined by a sideways step. Dropping
+  // the step's middle vertex joins the stretches directly, which is what the
+  // eye expects and what the line would look like if it had been drawn once.
+  const JOG_METRES = 4;
+  function collapseJogs(parts) {
+    return parts.map((part) => {
+      if (part.length < 4) return part;
+      const dir = (a, b) => Math.atan2(b[1] - a[1], (b[0] - a[0]) * Math.cos((b[1] * Math.PI) / 180));
+      const keep = part.map(() => true);
+      for (let i = 2; i < part.length - 1; i++) {
+        if (!keep[i - 1]) continue;
+        const d = meters(part[i - 1], part[i]);
+        if (!(d > 0 && d <= JOG_METRES)) continue;
+        const turn = Math.abs(((dir(part[i], part[i + 1]) - dir(part[i - 2], part[i - 1]) + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+        if (turn <= (30 * Math.PI) / 180) keep[i - 1] = false; // the step is straight: drop its first point
+      }
+      return part.filter((_, i) => keep[i]);
+    });
+  }
   const bridge = (f) => {
     if (f.properties.mode !== 'bus') return f;
     const parts = partsOf(f.geometry);
@@ -281,9 +302,10 @@ async function main() {
       if (last && meters(last[last.length - 1], part[0]) <= PIECE_GAP) out[out.length - 1] = last.concat(part);
       else out.push(part.slice());
     }
+    const smoothed = collapseJogs(out);
     return {
       ...f,
-      geometry: out.length === 1 ? { type: 'LineString', coordinates: out[0] } : { type: 'MultiLineString', coordinates: out },
+      geometry: smoothed.length === 1 ? { type: 'LineString', coordinates: smoothed[0] } : { type: 'MultiLineString', coordinates: smoothed },
     };
   };
   geo.routes = [
@@ -504,7 +526,13 @@ async function main() {
   geo.busnames = busNames(geo.routes.filter((f) => f.properties.mode === 'bus'), { precision: PRECISION });
   // The streets themselves, each drawn once, by the combined frequency of
   // every route along it (DESIGN.md, "Bus routes"; scripts/lib/streets.mjs).
-  geo.streets = busStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION });
+  const smooth = (f) => {
+    const parts = partsOf(f.geometry);
+    if (!parts.length) return f;
+    const done = collapseJogs(parts);
+    return { ...f, geometry: done.length === 1 ? { type: 'LineString', coordinates: done[0] } : { type: 'MultiLineString', coordinates: done } };
+  };
+  geo.streets = busStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION }).map(smooth);
   let shapesForTerminals;
   // Bus stations drawn as their own buildings: the place where streets end
   // (DESIGN.md, "Bus routes", "Terminals"), then the shape its bus gates
@@ -553,7 +581,7 @@ async function main() {
     geo.routes = snapPartTime(geo.routes, { precision: PRECISION });
     const busRoutes = geo.routes.filter((f) => f.properties.mode === 'bus');
     geo.busnames = busNames(busRoutes, { precision: PRECISION });
-    geo.streets = busStreets(busRoutes, split.loads, { precision: PRECISION });
+    geo.streets = busStreets(busRoutes, split.loads, { precision: PRECISION }).map(smooth);
     terminals(geo.streets, placeOf, { precision: PRECISION, footprints: new Map([...shapesForTerminals.terminals].map(([i, s]) => [i, s.rings])) });
   }
   // The rings as they are drawn (a hall snapped to the map's precision), so
