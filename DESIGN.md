@@ -2236,8 +2236,7 @@ without the other noticing.
   at most once a day, a review pass after the map's code on main has
   changed. With no reason it stops before installing anything or calling
   a model. One issue or one review pass per run, done by DeepSeek V4.1
-  Flash through the opencode CLI (a run started by hand can name a free
-  model instead, to see whether it can do the job), with map changes on branches and docs,
+  Flash through the opencode CLI, with map changes on branches and docs,
   tests and CI allowed to main fast-forward. Its briefs are
   `.github/daily/find.md` and `.github/daily/fix.md`, and a job is done
   when the agent writes `daily-summary.txt`; a model that ends its turn
@@ -2250,8 +2249,8 @@ without the other noticing.
   filed, comments, evaluation requests; `.github/daily/finish.mjs`) and sets the labels: an issue
   with an evaluation request goes to `ready for evaluation` with
   `agent instructions` off; one where the agent stopped without asking
-  goes to `needs Chris` with a comment saying why (a run started by hand,
-  such as a trial of a free model, leaves the labels as they were). So
+  goes to `needs Chris` with a comment saying why (a run started by hand
+  leaves the labels as they were). So
   nothing comes back
   to the worker by itself, and a stuck job waits for a person instead of
   running again every four hours. It records the run in `ledger.json` on
@@ -2268,11 +2267,13 @@ without the other noticing.
   human, so every comment it posts ends with the hidden mark
   `<!-- agent -->`, and the worker skips marked comments when it looks
   for the human's.
-- All work says who made it: a free model, DeepSeek, or Claude.
+- All work says who made it: DeepSeek or Claude. Only DeepSeek V4.1
+  Flash builds, on GitHub and on the home machine; Claude evaluates.
   `.github/daily/madeby/madeby.sh` (`made_by <model>`) sets the git
   author to the model, and its `gh` wrapper ends every comment, issue and
-  pull request with "Made by: ..." and labels the issue `made by: free
-  model`, `made by: DeepSeek` or `made by: Claude`. The worker sets it for
+  pull request with "Made by: ..." and labels the issue `made by: DeepSeek` or
+  `made by: Claude` (`made by: free model` marks earlier work by the free
+  models). The worker sets it for
   its model, the home lanes the same, and the evaluator always runs as
   Claude.
 
@@ -3166,6 +3167,11 @@ work against the real structure before asking for evaluation.
   `daily-summary.txt` (until then it is told to carry on), and the
   workflow sets the labels after each run from what really happened on
   GitHub, so a finished or stuck issue is never picked again by itself.
+- 2026-11-08: The free models are no longer used; DeepSeek V4.1 Flash does
+  all the building, on GitHub and on the home machine, and Claude still
+  evaluates. On most jobs they were given they ended their turns within
+  minutes, wrote a plan instead of the change, or left edits uncommitted,
+  while DeepSeek finished its jobs and asked for evaluation.
 
 ## Sources
 

@@ -9,8 +9,6 @@
         "apiKey": "{env:OPENCODE_GO_API_KEY}"
       },
       "models": {
-        "crouton-alpha-free": { "name": "Crouton Alpha Free" },
-        "beam-free": { "name": "Beam Free" },
         "deepseek-v4.1-flash": { "name": "DeepSeek V4.1 Flash" }
       }
     }
