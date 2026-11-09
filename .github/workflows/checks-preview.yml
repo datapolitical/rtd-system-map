@@ -43,6 +43,9 @@ jobs:
         env:
           CHECK_URL: ${{ steps.preview.outputs.url }}
           CHECK_JSON: qa/report/results.json
+          # Four views are enough to catch a regression here; the full
+          # fifteen-view district run is `npm run check:map` locally.
+          DRAWN_VIEWS: 4
         run: npm run check
       - name: Capture the design review's fixed views
         if: always() && steps.preview.outputs.url != ''
