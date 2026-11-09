@@ -141,7 +141,7 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
     }, { tolerance: 2 });
 
     report.push({ view: i, zoom: +view.zoom.toFixed(2), lon: +view.lon.toFixed(5), lat: +view.lat.toFixed(5), lines, marks, labels });
-    console.log(`${i} z${view.zoom.toFixed(2)} ${view.lat.toFixed(4)},${view.lon.toFixed(4)}: lines ${lines.pairs} missing ${lines.missing} worst ${lines.worst.toFixed(2)}; marks ${marks.checked} worst ${marks.worst.toFixed(2)}; labels ${labels.checked} worst ${labels.worst.toFixed(2)}`);
+    console.log(`${i} z${view.zoom.toFixed(2)} ${view.lat.toFixed(4)},${view.lon.toFixed(4)}: lines ${lines.pairs} missing ${lines.missing}${lines.missing ? ' ' + JSON.stringify(lines.missingLayers) : ''} worst ${lines.worst.toFixed(2)}; marks ${marks.checked} worst ${marks.worst.toFixed(2)}; labels ${labels.checked} worst ${labels.worst.toFixed(2)}`);
   }
 
   for (const r of report) {
@@ -155,10 +155,12 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
   const missingLayers = report.flatMap((r) => r.lines.missingLayers.map(([l, n]) => `${l}:${n}`));
   console.log(`${views.length} views, ${report.reduce((n, r) => n + r.lines.pairs, 0)} line points, ${totalMissing} line points the model does not have, ${report.reduce((n, r) => n + r.marks.checked, 0)} marks, ${report.reduce((n, r) => n + r.labels.checked, 0)} label boxes; ${failed.length} view(s) off`);
   // A run that compared almost nothing is a broken run, not a pass: a camera
-  // that never settled, or a style with no layers the model knows.
+  // that never settled, or a style with no layers the model knows. The label
+  // floor scales with the number of views: a short run can see only a handful
+  // of on-screen names.
   expect(report.reduce((n, r) => n + r.lines.pairs, 0)).toBeGreaterThan(1000);
   expect(report.reduce((n, r) => n + r.marks.checked, 0)).toBeGreaterThan(30);
-  expect(report.reduce((n, r) => n + r.labels.checked, 0)).toBeGreaterThan(5);
+  expect(report.reduce((n, r) => n + r.labels.checked, 0)).toBeGreaterThan(Math.max(1, Math.floor(views.length / 3)));
   // Every line point the page drew must have a model line to be compared
   // with; a layer the model does not load would otherwise pass unseen.
   expect(totalMissing, `line points the model does not have (${missingLayers.join(' ')})`).toBe(0);

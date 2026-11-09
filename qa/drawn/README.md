@@ -36,8 +36,9 @@ model.zoom(14);         // the whole district at zoom 14 (cache-friendly)
 await model.frame({ zoom: 14, center: [-105.0005, 39.753], width: 390, height: 664 });
 ```
 
-Pass `data` (the source FeatureCollections named by `DATA_SOURCES`, streets
-included) and `meta` to
+Pass `data` (the source FeatureCollections named by `DATA_SOURCES`: the
+network, streets, stations, platforms, facilities, terminals, structures,
+labels and stops) and `meta` to
 read a deployed build's output instead of the checkout's `public/data`:
 `qa/checks/drawn.spec.mjs` does that, because a CI checkout has not built the
 data and the preview under test is that commit's build.
