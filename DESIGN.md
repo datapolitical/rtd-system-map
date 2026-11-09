@@ -3529,6 +3529,7 @@ work against the real structure before asking for evaluation.
   restart without the other noticing; the satellite overlay
   (`qa/sat/render.py`) is how builders check their own work first.
 
+
 - 2026-11-08: Round four, Union Station and Civic Center. A train runs the
   whole platform it stops at, so a line ends at the platform's far end from
   the side it came in on, and the lines of a terminal end together in one row
@@ -3569,6 +3570,30 @@ work against the real structure before asking for evaluation.
   but weaves off it is drawn along that line between its ends. A departure
   that ends somewhere else (an approach to a concourse) is not moved (see
   "Bus routes").
+- 2026-11-08: The evaluator posts from the same GitHub account as the human,
+  so its comments carry the hidden mark `<!-- agent -->`. Without it the
+  worker read the evaluator's own pass note as the human's go-ahead and
+  would have started the issue again.
+- 2026-11-08: Work is credited to who made it (free model, DeepSeek or
+  Claude) in the commit author, a "Made by" line on every comment, and a
+  `made by:` label on the issue, so it is clear which models did which work.
+- 2026-11-08: The worker runs DeepSeek V4.1 Flash only, and only when there
+  is a reason to: instructions waiting, a human's answer, or a review once
+  the map on main has changed. Its first four runs, on the free models,
+  produced nothing: the models ended their turns early and the workflow
+  took that as success. Now a job is done only when the agent writes
+  `daily-summary.txt` (until then it is told to carry on), and the
+  workflow sets the labels after each run from what really happened on
+  GitHub, so a finished or stuck issue is never picked again by itself.
+- 2026-11-08: The checks get a model of the map in plain Node
+  (`qa/drawn/`): the page's own style, data, glyphs and symbols worked out as
+  line, mark and label geometry at any zoom and either theme, tile by tile,
+  with the basemap from the tiles the style names. Nothing in it restates a
+  width, colour, offset or font, so a styling change flows through; a drift
+  test in the browser keeps the two from parting (`drawn.spec.mjs`). It
+  exists because the screenshot checks only see zoom 9 to 14 of a phone
+  screen, and the next steps' checks need to see everywhere.
+
 
 ## Sources
 

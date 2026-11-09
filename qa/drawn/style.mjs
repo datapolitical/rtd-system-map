@@ -1,0 +1,70 @@
+// qa/drawn/style.mjs — build the map's style JSON for one theme, in Node.
+//
+// The page assembles it in public/js/main.js:
+//   layers: [...lettersFirst([...basemapBelow(), ...transitLines(lines),
+//            ...basemapLabels(), ...transitMarks(lines)]), ...vehicleLayers(lines)]
+// with sources from BASEMAP_SOURCES + dataSources().
+//
+// palette.js reads the system theme through matchMedia at load, so the two
+// themes cannot be built in one process; this script builds one theme per
+// run and prints the style JSON on stdout.
+//
+//   node qa/drawn/style.mjs --theme dark [--root /path/to/checkout]
+//
+// It is the drawn model's style source: qa/drawn/model.mjs reads this file's
+// output (the model never re-implements the style, it evaluates it).
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const theme = process.argv.includes('--theme') ? process.argv[process.argv.indexOf('--theme') + 1] : 'dark';
+if (!['light', 'dark'].includes(theme)) {
+  console.error('usage: node qa/drawn/style.mjs --theme light|dark [--root DIR]');
+  process.exit(2);
+}
+const rootIdx = process.argv.indexOf('--root');
+const root = rootIdx >= 0 ? process.argv[rootIdx + 1] : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+// palette.js calls matchMedia at module load. Live.js imports panel.js and
+// select.js, which touch the DOM at module load; the layer functions are
+// pure, so stub the DOM with a proxy that absorbs everything.
+globalThis.matchMedia = () => ({ matches: theme === 'dark', addEventListener() {} });
+globalThis.devicePixelRatio = 2;
+const inert = new Proxy(function () {}, {
+  get: (t, k) => (k === 'querySelector' || k === 'getElementById' ? () => inert : inert),
+  apply: () => inert,
+  set: () => true,
+});
+globalThis.document = new Proxy({ baseURI: 'http://localhost/' }, {
+  get: (t, k) => (k in t ? t[k] : inert),
+});
+globalThis.window = globalThis;
+globalThis.addEventListener = () => {};
+globalThis.removeEventListener = () => {};
+globalThis.location = { hash: '' };
+globalThis.innerWidth = 390;
+globalThis.innerHeight = 844;
+
+const js = (name) => path.join(root, 'public', 'js', name);
+const meta = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'meta.json'), 'utf8'));
+
+const { BASEMAP_SOURCES, basemapBelow, basemapLabels } = await import(js('basemap.js'));
+const { dataSources, lettersFirst, railStyle, transitLines, transitMarks } = await import(js('network.js'));
+const { STATE } = await import(js('highlight.js'));
+// live.js also pulls select.js and panel.js; vehicleLayers is pure, so take
+// it from a fresh read of the file without its import chain: its imports
+// (panel, select) are UI only.
+const { vehicleLayers } = await import(js('live.js'));
+
+const lines = railStyle(meta.rail);
+const style = {
+  version: 8,
+  sources: { ...BASEMAP_SOURCES, ...dataSources() },
+  state: STATE,
+  layers: [
+    ...lettersFirst([...basemapBelow(), ...transitLines(lines), ...basemapLabels(), ...transitMarks(lines)]),
+    ...vehicleLayers(lines),
+  ],
+};
+
+console.log(JSON.stringify(style));
