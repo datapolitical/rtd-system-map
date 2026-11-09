@@ -24,10 +24,10 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
   // (by how many lines meet there), where names are densest and label boxes
   // have the most to disagree about. No place is named here.
   const stations = readData('stations.geojson').features;
-  const busy = [...stations]
+  const busiest = stations.filter((f) => f.properties.served)
     .sort((a, b) => (b.properties.links ?? 0) - (a.properties.links ?? 0))
-    .filter((f, i, all) => i < 3 && f.properties.served)
-    .map((f, i) => ({ zoom: 15.25 + i, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }));
+    .slice(0, 3);
+  const busy = busiest.map((f, i) => ({ zoom: 15.25 + i, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }));
   const views = [...seededViews(routes, { count: VIEWS, zooms: ZOOMS, seed: 42 }), ...busy];
   await mapPage.goto(views[0], { settle: 800 });
   const model = await openModel({ theme: mapPage.theme });
@@ -143,5 +143,10 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
   const failed = report.filter((r) => r.lines.failures.length || r.marks.failures.length || r.labels.failures.length);
   const detail = failed.map((r) => `view ${r.view} z${r.zoom} ${r.lat},${r.lon}: ` + JSON.stringify({ lines: r.lines.failures, marks: r.marks.failures, labels: r.labels.failures }));
   console.log(`${views.length} views, ${report.reduce((n, r) => n + r.lines.pairs, 0)} line points, ${report.reduce((n, r) => n + r.marks.checked, 0)} marks, ${report.reduce((n, r) => n + r.labels.checked, 0)} label boxes; ${failed.length} view(s) off`);
+  // A run that compared almost nothing is a broken run, not a pass: a camera
+  // that never settled, or a style with no layers the model knows.
+  expect(report.reduce((n, r) => n + r.lines.pairs, 0)).toBeGreaterThan(1000);
+  expect(report.reduce((n, r) => n + r.marks.checked, 0)).toBeGreaterThan(30);
+  expect(report.reduce((n, r) => n + r.labels.checked, 0)).toBeGreaterThan(5);
   await expect(detail, 'the model and the browser disagree').toEqual([]);
 });
