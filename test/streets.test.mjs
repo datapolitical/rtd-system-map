@@ -111,3 +111,44 @@ test('a short fork that meets the crossing street beside its trunk is drawn as o
   wyes(through, { precision: 7 });
   assert.equal(through.length, 3);
 });
+
+test('a stretch of one road between two runs is not a fork, whatever runs beside it', async () => {
+  const { wyes } = await import('../scripts/lib/streets.mjs');
+  const M = 1 / 111320;
+  const f = (routes, pts, cls = 'c15') => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: pts.map(([x, y]) => [x * M, y * M]) }, properties: { mode: 'bus', routes, n: routes.split(' ').length, cls } });
+  // Route 1 along y = 0 in three runs (route 2 leaves, route 3 joins), a
+  // street 15 m beside it carrying 1 too, and a crossing street at x = 300.
+  // Without the middle run, the runs either side would end loose.
+  const road = [
+    f('1 2', [[-300, 0], [200, 0]]),
+    f('1', [[200, 0], [300, 0]]),
+    f('1 3', [[300, 0], [800, 0]]),
+    f('1 2 9', [[-300, 15], [800, 15]]),
+    f('5', [[300, -300], [300, 300]]),
+  ];
+  wyes(road, { precision: 7 });
+  assert.ok(road.some((s) => s.properties.routes === '1'), 'the stretch between the two runs stays');
+});
+
+test("a route's branch starts on the street it leaves, drawn between the routes on it", () => {
+  // Routes 1 and 2 share a street 12 m wide, drawn down its middle; a
+  // second piece of route 1 leaves route 1's own side of it southwards.
+  const out = busStreets([route('1', [[0, 0], [3, 0]]), route('2', [[0, 0.012], [3, 0.012]]), route('1', [[1, 0], [1.5, 0], [1.5, -1]])], new Map(), { precision: 7 });
+  const trunk = out.filter((s) => s.properties.routes.split(' ').includes('2'));
+  const branch = out.filter((s) => s.properties.routes === '1');
+  assert.equal(branch.length, 1, out.map((s) => s.properties.routes).join(' | '));
+  const toTrunk = (p) =>
+    Math.min(
+      ...trunk.flatMap((s) =>
+        s.geometry.coordinates.slice(1).map((b, i) => {
+          const a = s.geometry.coordinates[i];
+          const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+          const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)));
+          return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy) / KM;
+        }),
+      ),
+    );
+  const c = branch[0].geometry.coordinates;
+  const metres = Math.min(toTrunk(c[0]), toTrunk(c.at(-1))) * 1000;
+  assert.ok(metres < 1, `the branch starts ${metres.toFixed(1)} m from the street it leaves`);
+});

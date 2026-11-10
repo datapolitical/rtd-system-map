@@ -1575,7 +1575,16 @@ route on it having come along that street) whose foot is within 100 m of
 where that street meets the same crossing street closes a small triangle
 (the Federal and Colfax wye): it goes, its routes are listed on the street
 it forked from, and the fork meets the crossing street at one point. A
-dead-end stub under 60 m goes.
+dead-end stub under 60 m goes. Neither goes when another street's end
+meets it and nothing else: that street carries on through it, and without
+it the line would stop short of where its buses go. A stretch of one road
+between two runs is never a fork, however close a parallel street runs
+(on the union-building batch the fork rule took 447 such stretches and
+broke the line at each). A route's branch is cut from the route's own
+line, but a shared street is drawn down the middle of every route on it,
+metres away, so a branch that stops short of the street it leaves is
+carried on onto that street's line; a route's own first or last stop is
+where its line ends, and is left alone.
 
 *Terminals* (`streets.mjs`, `terminals`; `footprints.mjs`): where three or
 more streets end within 120 m of one of RTD's facilities, buses lay over
@@ -3806,6 +3815,15 @@ work against the real structure before asking for evaluation.
   but weaves off it is drawn along that line between its ends. A departure
   that ends somewhere else (an approach to a concourse) is not moved (see
   "Bus routes").
+- 2026-11-10: A street is taken out as a fork or a stub only when no other
+  street's end is left loose by it, and a route's branch that stops short of
+  the shared street it leaves is carried onto that street's line. On the
+  union-building batch the fork rule took stretches of one road between two
+  runs, and branches stopped a few metres short of the street drawn down the
+  middle of their routes: the route check found 346 breaks at zooms 14 to
+  17. Terminals are still found from the unmended streets' loose ends until
+  they are found from where RTD's lines end (#78) (see "Bus routes",
+  "Joins and wyes").
 
 ## Sources
 

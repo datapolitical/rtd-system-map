@@ -61,6 +61,10 @@ const JOIN = ALONG + STEP;
 const JOIN_COS = Math.cos((60 * Math.PI) / 180);
 const JOIN_BACK = 20;
 const JOIN_ANY = 8;
+// An end that meets no other run goes on to a run of its own route this
+// close ahead (joinEnds), or this close in any direction.
+const LOOSE = 30;
+const MEET_RUN = 3;
 // Tiers that run through the window and so count toward the street.
 const ALL_DAY = new Set(['frequent', 'every30', 'hourly', 'infrequent']);
 const HOURS = (MIDDAY[1] - MIDDAY[0]) / 3600;
@@ -76,8 +80,11 @@ const densify = (points) => densifyBy(points, STEP);
  * along it, space-separated, in number order), `n` (how many run all day),
  * `bph` (buses per hour in the busier direction, to a tenth), `hw` (the
  * combined wait in minutes, rounded) and `cls` (its class, frequency.js).
+ * `mend` (on unless asked) carries a branch's loose end onto the street it
+ * leaves (joinEnds) and keeps a street another street's end needs (wyes);
+ * it is off only where the build finds terminals from loose ends (#78).
  */
-export function busStreets(features, loads = new Map(), { precision = 5, simplify: tolerance = 1, classOf = classOfBph } = {}) {
+export function busStreets(features, loads = new Map(), { precision = 5, simplify: tolerance = 1, classOf = classOfBph, mend = true } = {}) {
   const first = features.find((f) => partsOf(f.geometry).some((p) => p.length));
   if (!first) return [];
   const { project, unproject } = projection(partsOf(first.geometry).find((p) => p.length)[0], precision);
@@ -213,10 +220,13 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
         // there. It is joined to the run that has the street.
         openStart: a > 0 && !owned[a - 1],
         openEnd: b < n && !owned[b],
+        // An end of the track that was cut from the route's own line.
+        joinStart: from === 0 && t.joins[0],
+        joinEnd: to === n - 1 && t.joins[1],
       });
     }
   }
-  joinEnds(runs);
+  joinEnds(runs, { mend });
   // At a cut, the heavier run goes on one point into the lighter (the width
   // of an intersection), so the heavier line runs through the crossing
   // where routes part, with its corner rounded, and the lighter one begins
@@ -255,7 +265,7 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
       };
     })
     .filter((f) => f.geometry.coordinates.length >= 2);
-  return wyes(out, { precision });
+  return wyes(out, { precision, mend });
 }
 
 // Each route's line once, as tracks of points with the route's departures
@@ -299,7 +309,9 @@ function buildTracks(features, loads, project) {
           // so the route's own branch starts from its own street.
           if (start > 0) run[0] = onto(kept, run[0]);
           if (i < points.length) run[run.length - 1] = onto(kept, run[run.length - 1]);
-          if (run.length >= 2 && length(run) >= STEP) mine.push({ route, points: run, tiers: run.map(() => tier), wks: run.map(() => wk) });
+          // `joins`: which ends were cut from the route's own line, where
+          // the route goes on (not the route's own first or last stop).
+          if (run.length >= 2 && length(run) >= STEP) mine.push({ route, points: run, tiers: run.map(() => tier), wks: run.map(() => wk), joins: [start > 0, i < points.length] });
           start = -1;
         }
       }
@@ -341,11 +353,11 @@ function chain(list) {
   // Ends this close are one line broken where a bit of it was dropped as
   // the route's own street (a few meters of RTD's line left over).
   const meet = (a, b) => dist(a, b) <= OWN + STEP;
-  const reversed = (t) => ({ points: [...t.points].reverse(), tiers: [...t.tiers].reverse(), wks: [...t.wks].reverse() });
+  const reversed = (t) => ({ points: [...t.points].reverse(), tiers: [...t.tiers].reverse(), wks: [...t.wks].reverse(), joins: [...t.joins].reverse() });
   for (let i = 0; i < list.length; i++) {
     if (used.has(i)) continue;
     used.add(i);
-    let { points, tiers, wks } = list[i];
+    let { points, tiers, wks, joins } = list[i];
     for (let grew = true; grew; ) {
       grew = false;
       for (let j = 0; j < list.length; j++) {
@@ -358,16 +370,18 @@ function chain(list) {
           points = points.concat(after.points.slice(1));
           tiers = tiers.concat(after.tiers.slice(1));
           wks = wks.concat(after.wks.slice(1));
+          joins = [joins[0], after.joins[1]];
         } else if (before) {
           points = before.points.concat(points.slice(1));
           tiers = before.tiers.concat(tiers.slice(1));
           wks = before.wks.concat(wks.slice(1));
+          joins = [before.joins[0], joins[1]];
         } else continue;
         used.add(j);
         grew = true;
       }
     }
-    out.push({ route: list[i].route, points, tiers, wks });
+    out.push({ route: list[i].route, points, tiers, wks, joins });
   }
   return out;
 }
@@ -432,7 +446,7 @@ function steady(t, values, min) {
 // are both set to the point between them, nearest pair first; a loose end
 // with no partner is carried onto the nearest other run's line, if one is
 // within JOIN, so a branch starts on the street it leaves.
-function joinEnds(runs) {
+function joinEnds(runs, { mend = true } = {}) {
   const ends = [];
   for (const run of runs) {
     if (run.openStart) ends.push({ run, side: 0 });
@@ -499,6 +513,40 @@ function joinEnds(runs) {
       if (!best || rank < best.rank || (rank === best.rank && d < best.d)) best = { d, q, rank };
     }
     if (best && best.d > 0.5) (e.side ? e.run.points.push(best.q) : e.run.points.unshift(best.q));
+  }
+  // A branch's end that meets no run, with a run carrying one of its routes
+  // ahead within LOOSE: the route goes on along that street. A route's
+  // branch is cut from its own line, but a shared street is drawn in the
+  // middle of every route on it, metres away, so the branch would stop
+  // short of the street it leaves. It is carried onto that street's line,
+  // so the route is drawn whole. Only a branch's end: a route's own first
+  // or last stop is where its line ends (and where terminalPlaces looks for
+  // ends). Only ahead (within JOIN_COS of the end's bearing) or within
+  // MEET_RUN: a line on a street beside the end is a street it passes, and
+  // a tick across to it would read as a hook.
+  if (!mend) return;
+  for (const run of runs) {
+    for (const side of [0, 1]) {
+      if (!(side ? run.joinEnd : run.joinStart)) continue;
+      const e = { run, side };
+      const p = at(e);
+      if (grid.near(p, 0.5).some((s) => s.item !== run)) continue;
+      const pts = side ? [...run.points].reverse() : run.points;
+      let k = 1;
+      while (k < pts.length - 1 && dist(pts[k], p) < JOIN_BACK) k++;
+      const v = [p[0] - pts[k][0], p[1] - pts[k][1]];
+      let best = null;
+      for (const seg of grid.near(p, LOOSE)) {
+        if (seg.item === run || !seg.item.routes.some((r) => run.routes.includes(r))) continue;
+        const q = closestOnSegment(p, seg.a, seg.b);
+        const d = dist(p, q);
+        const w = [q[0] - p[0], q[1] - p[1]];
+        const cos = (v[0] * w[0] + v[1] * w[1]) / ((Math.hypot(...v) * Math.hypot(...w)) || 1);
+        if (d > MEET_RUN && cos < JOIN_COS) continue;
+        if (!best || d < best.d) best = { d, q };
+      }
+      if (best) side ? run.points.push(best.q) : run.points.unshift(best.q);
+    }
   }
 }
 
@@ -732,15 +780,21 @@ export function calm(streets, places, { precision = 5 } = {}) {
 // street it forked from, which carries them to the crossing street. The
 // fork becomes one line meeting the crossing street at one point. Only a
 // fork whose every route came along the street it leaves (TOUCH is the
-// build's own slack where runs meet, half of JOIN). Changes
-// `streets` in place.
+// build's own slack where runs meet, half of JOIN). A street goes, as a
+// fork or as a stub, only when no other street's end is left loose by it:
+// one whose end meets it and nothing else is a line it carries on, and
+// without it the line would stop short of where its buses go (a stretch
+// of one road between two runs is not a fork, however close a parallel
+// street runs). Changes `streets` in place.
 export const WYE_LEN = 150;
 export const WYE_GAP = 100;
 const WYE_COS = Math.cos((75 * Math.PI) / 180);
 const WYE_STRAIGHT = Math.cos((30 * Math.PI) / 180);
 const TOUCH = 25;
 export const STUB = 60;
-export function wyes(streets, { precision = 5 } = {}) {
+// Ends this close meet (the build's own rounding where runs share a vertex).
+const MEET = 3;
+export function wyes(streets, { precision = 5, mend = true } = {}) {
   if (streets.length < 3) return streets;
   const { project } = projection(streets[0].geometry.coordinates[0], precision);
   const lines = streets.map((f) => densify(f.geometry.coordinates.map(project)));
@@ -750,6 +804,24 @@ export function wyes(streets, { precision = 5 } = {}) {
   });
   const touching = (p, not) => new Set(grid.near(p, TOUCH).map((s) => s.item).filter((li) => !not.includes(li)));
   const gone = new Set();
+  const ends = new Grid(JOIN);
+  lines.forEach((l, li) => {
+    if (l.length >= 2) for (const p of [l[0], l.at(-1)]) ends.add(p, p, li);
+  });
+  // Would taking street `a` away leave another street's end loose: an end
+  // on `a` that meets no other street still drawn.
+  const strands = (a) => {
+    const l = lines[a];
+    for (let i = 1; i < l.length; i++) {
+      const mid = [(l[i - 1][0] + l[i][0]) / 2, (l[i - 1][1] + l[i][1]) / 2];
+      for (const e of ends.near(mid, dist(l[i - 1], l[i]) / 2 + MEET)) {
+        const b = e.item;
+        if (b === a || gone.has(b) || segmentDistance(e.a, l[i - 1], l[i]) > MEET) continue;
+        if (!grid.near(e.a, MEET).some((s) => s.item !== a && s.item !== b && !gone.has(s.item))) return true;
+      }
+    }
+    return false;
+  };
   lines.forEach((l, a) => {
     if (length(l) >= WYE_LEN) return;
     for (const start of [true, false]) {
@@ -794,7 +866,7 @@ export function wyes(streets, { precision = 5 } = {}) {
             if (i !== at) walked += dist(B[i], B[i - step]);
             if (dist(B[i], foot) <= WYE_GAP && [...touching(B[i], [a, b])].some((c) => crossing.has(c))) met = true;
           }
-          if (!met) continue;
+          if (!met || (mend && strands(a))) continue;
           const [fa, fb] = [streets[a].properties, streets[b].properties];
           fb.routes = [...new Set([...fb.routes.split(' '), ...fa.routes.split(' ')])].sort(byNumber).join(' ');
           gone.add(a);
@@ -809,8 +881,8 @@ export function wyes(streets, { precision = 5 } = {}) {
   // broken line.
   lines.forEach((l, a) => {
     if (gone.has(a) || length(l) >= STUB) return;
-    const ends = [l[0], l.at(-1)].map((p) => grid.near(p, 3).some((seg) => seg.item !== a && !gone.has(seg.item)));
-    if (ends[0] !== ends[1]) gone.add(a);
+    const meets = [l[0], l.at(-1)].map((p) => grid.near(p, MEET).some((seg) => seg.item !== a && !gone.has(seg.item)));
+    if (meets[0] !== meets[1] && !(mend && strands(a))) gone.add(a);
   });
   const kept = streets.filter((f, i) => !gone.has(i));
   streets.splice(0, streets.length, ...kept);

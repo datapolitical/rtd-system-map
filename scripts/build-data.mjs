@@ -532,7 +532,12 @@ async function main() {
     const done = collapseJogs(parts);
     return { ...f, geometry: done.length === 1 ? { type: 'LineString', coordinates: done[0] } : { type: 'MultiLineString', coordinates: done } };
   };
-  geo.streets = busStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION }).map(smooth);
+  // This first pass is only for finding the terminals (terminalPlaces), which
+  // counts the streets' loose ends, so it is not mended (busStreets' `mend`):
+  // the terminals stay the ones the round-four check saw until they are
+  // found from where RTD's lines end (#78). The streets drawn are the
+  // second pass, below, mended.
+  geo.streets = busStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION, mend: false }).map(smooth);
   let shapesForTerminals;
   // Bus stations drawn as their own buildings: the place where streets end
   // (DESIGN.md, "Bus routes", "Terminals"), then the shape its bus gates
