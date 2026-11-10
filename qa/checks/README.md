@@ -82,6 +82,15 @@ to capture the visual baselines). They are green runs on the site, not tests
 of the check code itself. `CHECK_JSON` makes Playwright write
 `qa/report/results.json`, which `github.mjs` reads.
 
+The map checks run beside them. On a branch's preview, `checks-preview.yml`
+runs `npm run check:map` (`report.mjs`) on the preview and on main's live
+site, both with this branch's checks and each site's own page code (main is
+checked out beside the branch; `--root`), and `map-diff.mjs` compares them:
+the same check and kind within 10 m is the same fault. The run's summary
+lists what the branch adds and what it removes, with links, and a commit
+status, `checks/map`, fails when it adds a fault main doesn't have. The
+nightly run writes the live site's report into its artifact.
+
 - **Checks (nightly)** runs at 01:20 Denver time and on `workflow_dispatch`,
   against https://rtd-system-map.pages.dev. Each failing spec opens an issue
   labelled `found by checks` (or comments on the open one) with its failing

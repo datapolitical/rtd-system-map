@@ -4,6 +4,9 @@
 //
 //   node qa/checks/report.mjs                     # reads public/data
 //   CHECK_URL=https://... node qa/checks/report.mjs  # reads the site's data
+//   ... --root <checkout>   # the model from another checkout's page code (the
+//                           # site under test is that checkout's build: main's
+//                           # live site checked by this branch's checks)
 //
 // Every finding carries the place on the ground and a link that opens the map
 // there at the zoom the fault was found at.
@@ -22,19 +25,20 @@ const VIEWS = Number(arg('views', '10'));
 const OUT = arg('out', path.join('qa', 'findings'));
 const SITE = arg('url', process.env.CHECK_URL ?? 'https://drawn-map.rtd-system-map.pages.dev').replace(/\/$/, '');
 const BASE = (process.env.CHECK_URL ?? '').replace(/\/$/, '');
+const ROOT = arg('root', null) && path.resolve(arg('root', null));
 
 const readData = async (name) => {
   if (BASE) return (await fetch(`${BASE}/data/${name}`)).json();
-  return JSON.parse(fs.readFileSync(path.join('public', 'data', name), 'utf8'));
+  return JSON.parse(fs.readFileSync(path.join(ROOT ?? '.', 'public', 'data', name), 'utf8'));
 };
 
 // The build files the page draws, from the page's own code (network.js).
-const data = Object.fromEntries(await Promise.all((await pageSources()).map(async (n) => [n, await readData(`${n}.geojson`)])));
+const data = Object.fromEntries(await Promise.all((await pageSources(ROOT ?? undefined)).map(async (n) => [n, await readData(`${n}.geojson`)])));
 const meta = await readData('meta.json');
 
 // The checks themselves are in run.mjs, shared with qa/recall/recall.mjs.
 const all = [];
-for (const theme of THEMES) all.push(...await runChecks({ data, meta, theme, zooms: ZOOMS, views: VIEWS, site: SITE }));
+for (const theme of THEMES) all.push(...await runChecks({ ...(ROOT ? { root: ROOT } : {}), data, meta, theme, zooms: ZOOMS, views: VIEWS, site: SITE }));
 const findings = mergeFindings(all);
 
 fs.mkdirSync(OUT, { recursive: true });
