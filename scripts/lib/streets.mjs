@@ -81,8 +81,11 @@ const densify = (points) => densifyBy(points, STEP);
  * `bph` (buses per hour in the busier direction, to a tenth), `hw` (the
  * combined wait in minutes, rounded) and `cls` (its class, frequency.js).
  * `mend` (on unless asked) carries a branch's loose end onto the street it
- * leaves (joinEnds) and keeps a street another street's end needs (wyes);
- * it is off only where the build finds terminals from loose ends (#78).
+ * leaves (joinEnds), keeps a street another street's end needs (wyes),
+ * reads a street with buses both ways as two way (bothWays) and smooths
+ * classes and one-way to the end, not for 100 passes (#77). Off, the
+ * streets are as the union-building batch drew them; it is off only where
+ * the build finds terminals from loose ends (#78).
  */
 export function busStreets(features, loads = new Map(), { precision = 5, simplify: tolerance = 1, classOf = classOfBph, mend = true } = {}) {
   const first = features.find((f) => partsOf(f.geometry).some((p) => p.length));
@@ -177,11 +180,11 @@ export function busStreets(features, loads = new Map(), { precision = 5, simplif
       dirs[i] = rw > 0 && ra <= ONE_WAY * rw ? 1 : ra > 0 && rw <= ONE_WAY * ra ? -1 : 0;
       return Math.max(rw, ra);
     });
-    t.oneway = steady(t, dirs, ONE_WAY_MIN);
+    t.oneway = mend ? steady(t, bothWays(t, dirs, ONE_WAY_MIN), ONE_WAY_MIN) : steady(t, dirs, ONE_WAY_MIN, 100);
     t.routes = t.points.map((p, i) => [t.route, ...t.beside[i].keys()].sort(byNumber));
     t.n = t.points.map((p, i) => (t.allDay[i] ? 1 : 0) + [...t.beside[i].values()].filter((f) => f.track.allDay[f.k]).length);
     t.pt = t.points.map((p, i) => t.routes[i].length - t.n[i]);
-    t.cls = smoothClasses(t, t.bph.map(classOf));
+    t.cls = smoothClasses(t, t.bph.map(classOf), mend ? Infinity : 100);
   }
 
   // 4. Each shared run once, from the first route in number order, cut
@@ -390,10 +393,10 @@ function chain(list) {
 // neighbour, shortest first: a neighbour with the same routes, or one a
 // single class away, so a street's width doesn't flicker where routes join
 // one after another, as they do into a terminal.
-function smoothClasses(t, cls) {
+function smoothClasses(t, cls, passes = Infinity) {
   const out = [...cls];
   const setKey = (i) => t.routes[i].join(' ');
-  for (let pass = 0; pass < 100; pass++) {
+  for (let pass = 0; pass < (Number.isFinite(passes) ? passes : out.length + 1); pass++) {
     const runs = [];
     for (let i = 0; i < out.length; ) {
       let j = i;
@@ -420,11 +423,39 @@ function smoothClasses(t, cls) {
   return out;
 }
 
+// Buses read one way and the other way, each at BOTH_WAYS or more of the
+// points within `min` along a track, run both ways there: two way. A
+// route whose two directions run a few metres apart (the carriageways of a
+// divided highway) is one track, and each point reads the nearest measured
+// cell, which is on one carriageway or the other, so the track read one
+// way, then the other, every 40 to 60 m (BOLT on the Diagonal Highway);
+// drawn, each one-way piece sits on its own side of the line, and the line
+// broke at every turn. A point or two read the other way (a cell on the
+// crossing street at a junction) is noise, which `steady` takes out.
+const BOTH_WAYS = 0.3;
+function bothWays(t, dirs, min) {
+  const cum = [0];
+  for (let i = 1; i < t.points.length; i++) cum.push(cum[i - 1] + dist(t.points[i - 1], t.points[i]));
+  const out = [...dirs];
+  let lo = 0;
+  let hi = 0;
+  const count = { 1: 0, '-1': 0, 0: 0 };
+  for (let i = 0; i < dirs.length; i++) {
+    while (hi < dirs.length && cum[hi] - cum[i] <= min / 2) count[dirs[hi++]]++;
+    while (cum[i] - cum[lo] > min / 2) count[dirs[lo++]]--;
+    const minority = Math.min(count[1], count[-1]);
+    if (minority >= 2 && minority >= BOTH_WAYS * (count[1] + count[-1])) out[i] = 0;
+  }
+  return out;
+}
+
 // A run of one value shorter than `min` takes its longer neighbour's,
-// shortest first, so a street isn't one way for a few meters.
-function steady(t, values, min) {
+// shortest first, so a street isn't one way for a few meters. Each pass
+// takes one run in, so it settles within as many passes as there are
+// points (a cap of 100 left a long track flickering).
+function steady(t, values, min, passes = Infinity) {
   const out = [...values];
-  for (let pass = 0; pass < 100; pass++) {
+  for (let pass = 0; pass < (Number.isFinite(passes) ? passes : out.length + 1); pass++) {
     const runs = [];
     for (let i = 0; i < out.length; ) {
       let j = i;
