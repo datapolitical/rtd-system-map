@@ -28,3 +28,5 @@ qa/sweep/out/
 # Agent progress files for the status page (CLAUDE.md, "Status page").
 .agents/
 status/usage.json
+qa/recall/fixtures/
+qa/recall/out/

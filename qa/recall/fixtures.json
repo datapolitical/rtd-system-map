@@ -1,0 +1,28 @@
+{
+  "about": "Frozen builds for npm run check:recall (qa/recall/README.md). Each is a tarball on the checks-fixtures release; recall.mjs downloads one when qa/recall/fixtures/<id> is missing and checks its sha256.",
+  "base": "https://github.com/datapolitical/rtd-system-map/releases/download/checks-fixtures/",
+  "plant_on": "430ea4a",
+  "fixtures": {
+    "0fe749b": {
+      "commit": "0fe749b1ea8b837de6545d19b13789d809b92620",
+      "preview": "https://79038766.rtd-system-map.pages.dev",
+      "sha256": "0f36f809360cbd2120d9979df539da951e74bea524243b7ae2de6b99316f9da1",
+      "bytes": 7651790,
+      "why": "The build Chris looked at on 2026-11-08 when he listed the faults in #42 (the union-building preview until 74d93c6 landed at 18:11)."
+    },
+    "74d93c6": {
+      "commit": "74d93c697344c42cee6b930252b90f6cc605a78b",
+      "preview": "https://3588f719.rtd-system-map.pages.dev",
+      "sha256": "3d02db6dfa8216e698e9491e42c4c5f7dfb6a4b65bb3ed4f3cda15f498b0b0a0",
+      "bytes": 7203439,
+      "why": "The next union-building build."
+    },
+    "430ea4a": {
+      "commit": "430ea4a2997442beef0a812c1ba1b371196c827c",
+      "preview": "https://31481281.rtd-system-map.pages.dev",
+      "sha256": "6098b9dc7da1eaf5596bfe57420a9bf3a8a9b06c4fab44c6d7a2f9e7380457dc",
+      "bytes": 17230962,
+      "why": "The newest evaluator build on 2026-11-10; faults are planted in it."
+    }
+  }
+}

@@ -16,7 +16,8 @@
     "check:baselines": "playwright test -c qa/playwright.config.mjs visual --update-snapshots",
     "check:report": "playwright show-report qa/report",
     "sweep": "node qa/sweep/sweep.mjs",
-    "check:map": "node qa/checks/report.mjs"
+    "check:map": "node qa/checks/report.mjs",
+    "check:recall": "node qa/recall/recall.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.0",

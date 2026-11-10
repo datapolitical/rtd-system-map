@@ -3593,6 +3593,13 @@ work against the real structure before asking for evaluation.
   test in the browser keeps the two from parting (`drawn.spec.mjs`). It
   exists because the screenshot checks only see zoom 9 to 14 of a phone
   screen, and the next steps' checks need to see everywhere.
+- 2026-11-10: The checks are scored, not just run (`qa/recall/`). Every fault
+  a person finds is pinned on the build it was seen on (`finds.json`), and
+  faults are planted in a frozen build's data on purpose; `npm run
+  check:recall` reports how many of each the checks catch, and fails when a
+  change catches fewer. A report with few findings no longer counts as a good
+  map on its own: the checks had been tuned until the report came out clean
+  while most of the faults in #42 were still on the map.
 
 
 ## Sources
