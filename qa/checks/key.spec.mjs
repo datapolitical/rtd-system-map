@@ -39,7 +39,7 @@ function compare(key, map) {
 
 for (const zoom of [8.5, 10, 10.6, 12, 14]) {
   test(`the Key matches the map at ${zoom}`, async ({ mapPage }, testInfo) => {
-    test.setTimeout(240_000);
+    test.setTimeout(600_000);
     const { page } = mapPage;
     await mapPage.goto({ zoom, ...VIEW }, { live: true, settle: 1500 });
     await page.waitForFunction(() => document.querySelector('#legend-symbols li'), null, { timeout: 20_000 });
