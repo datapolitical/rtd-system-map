@@ -10,13 +10,14 @@
 // that misses a fault from a run that never looked there).
 import { openModel } from '../drawn/model.mjs';
 import { lineFaults } from '../drawn/lines.mjs';
+import { routeFaults } from '../drawn/routes.mjs';
 import { labelFaults } from '../drawn/labels.mjs';
 import { toLonLat, toWorld } from '../drawn/mercator.mjs';
 import { markFaults } from '../drawn/marks.mjs';
 import { streetFaults } from '../drawn/streets.mjs';
 import { seededViews } from '../lib/views.mjs';
 
-export const SEVERITY = { gap: 1, 'off-street': 2, 'stray-stop': 3, duplicate: 4, 'over-line': 5, step: 6, hidden: 7, far: 8, translucent: 9 };
+export const SEVERITY = { gap: 1, overshoot: 1, dangling: 1, hook: 2, 'off-street': 2, 'stray-stop': 3, duplicate: 4, 'over-line': 5, step: 6, hidden: 7, far: 8, translucent: 9 };
 export const FRAME = { width: 390, height: 664 };
 // The zooms a place is looked at when the caller names none; marks and street
 // alignment need the basemap, read from z16.
@@ -52,7 +53,8 @@ export async function runChecks({ data, meta, root, theme, zooms = [12, 14, 16, 
     && l.layout?.['symbol-placement'] !== 'line' && model.data[l.source]).map((l) => l.id);
 
   for (const zoom of zooms) {
-    for (const fault of lineFaults(model.zoom(zoom))) {
+    const at = model.zoom(zoom);
+    for (const fault of [...lineFaults(at), ...routeFaults(at)]) {
       const [lon, lat] = toLonLat(fault.px, zoom);
       findings.push({ theme, check: 'lines', kind: fault.kind, layer: fault.layer, route: fault.route ?? null, zoom, lat, lon, msg: fault.msg, link: linkTo(site, zoom, lat, lon), where: 'district' });
     }

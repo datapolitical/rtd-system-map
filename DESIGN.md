@@ -3308,6 +3308,12 @@ work against the real structure before asking for evaluation.
   change catches fewer. A report with few findings no longer counts as a good
   map on its own: the checks had been tuned until the report came out clean
   while most of the faults in #42 were still on the map.
+- 2026-11-10: A break in a line is judged as a rider sees it (#43,
+  `qa/drawn/routes.mjs`): each route is followed across every piece that
+  carries it, and a break is a line end with nothing drawn over it whose
+  route carries on just ahead across empty land. The old check compared
+  pieces inside one feature only, so it never saw a bus line, which is many
+  street features, break where one street meets the next.
 - 2026-11-10: Six principles, in priority order, at the top of this file
   ("Principles"): nothing a rider acts on is wrong; everything can be read;
   how often service comes is obvious; every label belongs to one thing; calm;

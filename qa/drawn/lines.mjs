@@ -1,4 +1,4 @@
-// Line faults in the drawn model (issue #43): gaps, short pieces and
+// Line faults in the drawn model (issue #43): short pieces and
 // sideways steps, found from the geometry alone, with no browser.
 //
 // The model gives every line layer's features as polylines in screen px at a
@@ -7,10 +7,8 @@
 // follow. Thresholds are screen px, because that is what a rider sees, and
 // they hold at every zoom.
 //
-// What is checked, and why:
-//  - gap: two ends of the same route and layer sit 1 to `maxGap` px apart.
-//    Ends further apart are termini or branches, not a break (15th Street's
-//    corner, Nine Mile's stub).
+// What is checked, and why (a break in a route, a hook and a rail line past
+// its station are in routes.mjs, which follows each route across its pieces):
 //  - short: a drawn piece shorter than `minPiece` px: a nub or a dot where a
 //    line should be (the stray marks at 15th Street).
 //  - step: two nearly parallel runs joined by a short sideways jump, 1 px to
@@ -19,9 +17,8 @@
 // reported once, on the line layer itself.
 //
 // They measure lines as drawn (#55, strokes.mjs): each centreline moved by
-// its offset, with its width and its ends. A gap is land between two ends
-// after their caps; a short piece is covered when it lies within another
-// route line's width.
+// its offset, with its width and its ends. A short piece is covered when it
+// lies within another route line's width.
 
 import { toLonLat } from './mercator.mjs';
 import { capReach } from './strokes.mjs';
@@ -143,9 +140,9 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
   };
 
   // The build writes a route's pieces in order (one MultiLineString per
-  // feature), so the end of one piece should be the start of the next. That
-  // order is what the gap test follows: pairing arbitrary ends instead would
-  // join a branch to a main line and report every branch mouth as a break.
+  // feature), so the end of one piece should be the start of the next: a
+  // short piece between two exact joins is a vertex pair the build split,
+  // not a stray.
   for (const entry of zoom.lines) {
     if (isCasing(entry.layer) || entry.source === 'flexride' || !isRoute(entry)) continue;
     const parts = (entry.drawn ?? entry.parts).filter((p) => p.length >= 2);
@@ -171,18 +168,6 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
       for (let i = 1; i < part.length - 2; i++) {
         const off = stepAt(part, i, maxStep);
         if (off !== null && off >= 2) add('step', entry, part[i], `sideways ${off.toFixed(1)} px between parallel runs`);
-      }
-      if (p === 0) continue;
-      const d = join(p);
-      // The land a rider sees between the two ends: the distance less the
-      // two caps. The join scale is ground metres: 30 m is 2 px at zoom 12
-      // and 50 px at zoom 17, so the same data gap is judged the same at
-      // every zoom.
-      const land = d - 2 * reach;
-      if (land >= 3 && d <= gapPx) {
-        const a = parts[p - 1][parts[p - 1].length - 1];
-        const b = part[0];
-        add('gap', entry, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], `pieces ${p - 1} and ${p} leave ${land.toFixed(1)} px of land between their ends`);
       }
     }
   }

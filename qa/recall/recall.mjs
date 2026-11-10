@@ -21,7 +21,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pageSources } from '../drawn/model.mjs';
+import { openModel, pageSources } from '../drawn/model.mjs';
 import { runChecks } from '../checks/run.mjs';
 import { KINDS, metres, plant } from './plant.mjs';
 
@@ -87,8 +87,19 @@ async function child() {
   const all = JSON.parse(fs.readFileSync(path.join(HERE, 'finds.json'), 'utf8')).finds;
   const finds = all.filter((f) => f.seen_on.some((c) => manifest.commit.startsWith(c)));
   const doPlant = flag('plant');
+  // What the unplanted build draws at the zooms faults are planted for, so
+  // a fault goes only into a feature someone can see.
+  let drawnKeys = null;
+  if (doPlant) {
+    const look = await openModel({ root, theme: 'dark', data, meta });
+    drawnKeys = new Set();
+    for (const z of [16, 17]) {
+      const at = look.zoom(z);
+      for (const x of [...at.lines, ...at.marks, ...at.areas]) drawnKeys.add(`${x.source}:${x.index}`);
+    }
+  }
   const planting = doPlant
-    ? await plant(data, { root, seed: Number(arg('seed', '1')), per: Number(arg('per', '3')), avoid: all.flatMap((f) => f.points) })
+    ? await plant(data, { root, seed: Number(arg('seed', '1')), per: Number(arg('per', '5')), avoid: all.flatMap((f) => f.points), drawnKeys })
     : { data, planted: [] };
 
   const places = [
@@ -142,7 +153,7 @@ async function main() {
   const fixtures = arg('fixtures', Object.keys(FIXTURE_LIST.fixtures).join(',')).split(',');
   const plantOn = arg('plant-on', FIXTURE_LIST.plant_on);
   const seed = arg('seed', '1');
-  const per = arg('per', '3');
+  const per = arg('per', '5');
   const results = [];
   for (const id of fixtures) {
     const extra = id === plantOn ? ['--plant', '--seed', seed, '--per', per] : [];

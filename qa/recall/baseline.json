@@ -1,10 +1,10 @@
 {
   "seed": 1,
-  "per": 3,
+  "per": 5,
   "scores": {
     "find 0fe749b 42-15th-short": {
-      "pipeline": false,
-      "looking": false
+      "pipeline": true,
+      "looking": true
     },
     "find 0fe749b 42-15th-corner": {
       "pipeline": false,
@@ -31,8 +31,8 @@
       "looking": false
     },
     "find 0fe749b 42-ninemile-stub": {
-      "pipeline": false,
-      "looking": false
+      "pipeline": true,
+      "looking": true
     },
     "find 0fe749b 42-ninemile-step": {
       "pipeline": false,
@@ -55,8 +55,8 @@
       "looking": true
     },
     "find 0fe749b 42-union-rail-past": {
-      "pipeline": false,
-      "looking": false
+      "pipeline": true,
+      "looking": true
     },
     "find 0fe749b 42-union-dashed": {
       "pipeline": false,
@@ -87,8 +87,8 @@
       "looking": true
     },
     "find 430ea4a 42-union-rail-past": {
-      "pipeline": false,
-      "looking": false
+      "pipeline": true,
+      "looking": true
     },
     "planted 430ea4a terminal-shape": {
       "pipeline": 0,
@@ -96,54 +96,54 @@
       "of": 1
     },
     "planted 430ea4a gap": {
-      "pipeline": 0,
-      "looking": 0,
-      "of": 3
+      "pipeline": 5,
+      "looking": 5,
+      "of": 5
     },
     "planted 430ea4a rail-gap": {
-      "pipeline": 0,
-      "looking": 0,
-      "of": 3
+      "pipeline": 5,
+      "looking": 5,
+      "of": 5
     },
     "planted 430ea4a step": {
-      "pipeline": 3,
-      "looking": 3,
-      "of": 3
+      "pipeline": 5,
+      "looking": 5,
+      "of": 5
     },
     "planted 430ea4a stray-piece": {
-      "pipeline": 3,
-      "looking": 3,
-      "of": 3
+      "pipeline": 5,
+      "looking": 5,
+      "of": 5
     },
     "planted 430ea4a overshoot": {
-      "pipeline": 0,
-      "looking": 0,
-      "of": 3
+      "pipeline": 2,
+      "looking": 2,
+      "of": 2
     },
     "planted 430ea4a hook": {
-      "pipeline": 0,
-      "looking": 0,
-      "of": 3
+      "pipeline": 2,
+      "looking": 2,
+      "of": 5
     },
     "planted 430ea4a off-street": {
       "pipeline": 0,
-      "looking": 0,
-      "of": 3
+      "looking": 1,
+      "of": 5
     },
     "planted 430ea4a slot": {
       "pipeline": 0,
-      "looking": 2,
-      "of": 3
+      "looking": 1,
+      "of": 5
     },
     "planted 430ea4a stray-stop": {
       "pipeline": 0,
-      "looking": 3,
-      "of": 3
+      "looking": 5,
+      "of": 5
     },
     "planted 430ea4a extra-mark": {
       "pipeline": 0,
       "looking": 0,
-      "of": 3
+      "of": 5
     }
   }
 }

@@ -150,6 +150,21 @@ async function readView(mapPage, v, layers) {
       .filter((st) => st.x >= 0 && st.y >= 0 && st.x <= s.width && st.y <= s.height)
       .map((st) => st.id));
     const inside = (b) => b[0] >= 0 && b[1] >= 0 && b[2] <= s.width && b[3] <= s.height;
+    // A rail letter's box is this camera's only when a letter with the same
+    // properties is drawn now, its anchor (projected by the camera as it is
+    // now) within reach of the box: a box kept from an earlier camera sits
+    // where that camera put it, far from where the letter is now.
+    const lettersNow = [];
+    for (const layer of bullets) {
+      if (!m.getLayer(layer)) continue;
+      for (const f of m.queryRenderedFeatures(query, { layers: [layer] })) {
+        if (f.geometry.type !== 'Point') continue;
+        const p = m.project(f.geometry.coordinates);
+        lettersNow.push({ layer, sig: sigOf(f.properties), x: p.x, y: p.y });
+      }
+    }
+    const letterNow = (p, layer) => lettersNow.some((q) => q.layer === layer && q.sig === sigOf(p.props)
+      && Math.hypot((p.box[0] + p.box[2]) / 2 - q.x, (p.box[1] + p.box[3]) / 2 - q.y) <= 60);
     const placed = window.__qa.placed();
     out.labels = placed
       .filter((p) => p.layers.some((l) => labels.includes(l)))
@@ -160,7 +175,8 @@ async function readView(mapPage, v, layers) {
       .map((p) => ({ layer: p.layers.find((l) => labels.includes(l)), props: p.props, box: p.box }))
       .concat(placed
         .filter((p) => p.layers.some((l) => bullets.includes(l)) && inside(p.box))
-        .map((p) => ({ layer: p.layers.find((l) => bullets.includes(l)), props: p.props, box: p.box })));
+        .map((p) => ({ layer: p.layers.find((l) => bullets.includes(l)), props: p.props, box: p.box }))
+        .filter((p) => letterNow(p, p.layer)));
     return out;
   }, layers);
   return { view, drawn };
@@ -193,8 +209,18 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
 
   const report = [];
   for (const [i, v] of views.entries()) {
-    const { view, drawn } = await readView(mapPage, v, layers);
-    const frame = await model.frame({ zoom: view.zoom, center: [view.lon, view.lat], width: view.width, height: view.height });
+    let { view, drawn } = await readView(mapPage, v, layers);
+    let frame = await model.frame({ zoom: view.zoom, center: [view.lon, view.lat], width: view.width, height: view.height });
+    // A page read before it settled returns next to nothing (on a slow
+    // renderer, a view with marks came back with none): give it a moment
+    // and read it once more, rather than compare nothing and call it a pass.
+    const marksHere = frame.marks.filter((k) => markLayers.includes(k.layer) && k.at[0] >= 0 && k.at[1] >= 0 && k.at[0] <= view.width && k.at[1] <= view.height).length;
+    if (marksHere >= 5 && drawn.marks.length === 0) {
+      console.log(`view ${i}: the page drew no marks where the model has ${marksHere}; reading it again`);
+      await mapPage.page.waitForTimeout(2000);
+      ({ view, drawn } = await readView(mapPage, v, layers));
+      frame = await model.frame({ zoom: view.zoom, center: [view.lon, view.lat], width: view.width, height: view.height });
+    }
     const shown = frame.lines.filter((l) => lineLayers.includes(l.layer));
 
     const lines = compareLines(drawn.lines, frame.lines, { tolerance: 1, width: view.width, height: view.height });
