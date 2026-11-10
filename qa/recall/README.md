@@ -32,8 +32,13 @@ it. To add a find:
 3. Read the fault's pixels off the grid; add a pin to `pins.mjs`; run `node qa/recall/pins.mjs`.
 
 **Planted faults** (`plant.mjs`): the newest frozen build's own data, broken
-on purpose at places picked by a seeded walk (at least 1.2 km apart, 400 m
-from any find), the way real faults break it: a 20 m cut in a bus street or a
+on purpose at places picked by a seeded walk, five of each kind, the way real
+faults break it, and only in features the page draws at z16 or z17 (a fault
+in a feature no layer draws is not a fault anyone can see). Each kind has its
+own random stream and its own spacing (1.2 km between its plants, 400 m from
+any find), so changing how one kind is planted never moves another. A rail
+line is carried past its end only at a real terminus, with a station of the
+line within 150 m. The kinds: a 20 m cut in a bus street or a
 rail line, an 80 m stretch moved 5 m sideways, a stray 6 m piece, a rail end
 carried past its station, a hook at a route end, a street pulled off its
 street, a part-time stretch moved off its line, a stop moved away from its

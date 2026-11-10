@@ -27,6 +27,7 @@ const VIEWS = {
   ninemile: '16/39.65900/-104.84460',
   ninemileWest: '16/39.65960/-104.84780',
   union: '16/39.75300/-105.00050',
+  unionLightRail: '16/39.75560/-105.00240',
 };
 
 const PINS = [
@@ -62,8 +63,8 @@ const PINS = [
     said: 'the name runs into the wide bus line', kind: 'over-line', caught_by: ['over-line'], confidence: 'clear', radius: 30 },
   { id: '42-union-concourse', latest: 'still there', also: '430ea4a',  place: 'Union Station', view: 'union', px: [[80, 240]],
     said: 'the concourse is a translucent grey slab with green smears', kind: 'translucent', caught_by: ['translucent', 'fill-over'], confidence: 'approximate: the slab spans about 200 by 180 px; the point is its middle', radius: 90 },
-  { id: '42-union-rail-past', latest: 'still there', also: '430ea4a',  place: 'Union Station', view: 'union', px: [[122, 415]],
-    said: 'light-rail lines run past their platform mark', kind: 'overshoot', caught_by: ['overshoot'], confidence: 'approximate: the line ends meet the capsule within a few px', radius: 30 },
+  { id: '42-union-rail-past', latest: 'still there: C, E and W run 41 to 53 px past their mark', also: '430ea4a', place: 'Union Station', view: 'unionLightRail', px: [[165, 397], [176, 405], [185, 410]],
+    said: 'light-rail lines run past their platform mark', kind: 'overshoot', caught_by: ['overshoot'], confidence: 'repinned 2026-11-10: the light-rail lines at Union (C, E, W; A, B and G are commuter rail) end at the light-rail station, at the top-left edge of the view Chris looked at, and run about 80 px past their platform capsule; first pinned by mistake at the commuter-rail capsule', radius: 30 },
   { id: '42-union-dashed', latest: 'still there, and more dashed lines wander north-east of the rail',  place: 'Union Station', view: 'union', px: [[300, 300], [260, 335]],
     said: 'dashed part-time lines wander off their solid lines', kind: 'slot', caught_by: ['slot', 'off-street', 'dangling'], confidence: 'approximate: the dashed line that runs on alone past the hook; others beside their solid lines look right', radius: 30 },
   { id: '42-union-hook', latest: 'changed: the hook is now a junction of dashed hairlines',  place: 'Union Station', view: 'union', px: [[318, 285]],

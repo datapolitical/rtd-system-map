@@ -687,33 +687,49 @@
       "latest": {
         "build": "430ea4a",
         "looked": "2026-11-10",
-        "status": "still there"
+        "status": "still there: C, E and W run 41 to 53 px past their mark"
       },
       "theme": "dark",
       "zoom": 16,
       "points": [
         [
-          -105.001348,
-          39.753181
+          -105.002786,
+          39.75593
+        ],
+        [
+          -105.002668,
+          39.755864
+        ],
+        [
+          -105.002572,
+          39.755823
         ]
       ],
       "radius_px": 30,
       "capture": {
-        "view": "16/39.75300/-105.00050",
+        "view": "16/39.75560/-105.00240",
         "size": [
           402,
           874
         ],
         "px": [
           [
-            122,
-            415
+            165,
+            397
+          ],
+          [
+            176,
+            405
+          ],
+          [
+            185,
+            410
           ]
         ]
       },
       "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
       "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
-      "confidence": "approximate: the line ends meet the capsule within a few px"
+      "confidence": "repinned 2026-11-10: the light-rail lines at Union (C, E, W; A, B and G are commuter rail) end at the light-rail station, at the top-left edge of the view Chris looked at, and run about 80 px past their platform capsule; first pinned by mistake at the commuter-rail capsule"
     },
     {
       "id": "42-union-dashed",

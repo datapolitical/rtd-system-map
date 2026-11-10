@@ -95,18 +95,28 @@ export const KINDS = {
 /**
  * @param {object} data the build's FeatureCollections by source (not changed)
  * @param {{root: string, seed?: number, per?: number, avoid?: number[][]}} opts
- *   root: the fixture (its page code gives PART_TIME, unless `partTime` is given); avoid: [lon, lat] to keep clear of
+ *   root: the fixture (its page code gives PART_TIME, unless `partTime` is given); avoid: [lon, lat] to keep clear of;
+ *   drawnKeys: the 'source:index' of every feature the page draws, to plant only in those
  * @returns {Promise<{data: object, planted: Array}>}
  */
-export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds = Object.keys(KINDS), partTime = null } = {}) {
+export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds = Object.keys(KINDS), partTime = null, drawnKeys = null } = {}) {
   // The tiers the page draws as part-time, from its own code (style.mjs
   // loads it with the browser stubbed).
   const PART_TIME = partTime ?? (await buildStyle(root, 'dark')).metadata?.['rtd:part-time'];
   if (!Array.isArray(PART_TIME)) throw new Error('plant: the page does not export PART_TIME (shared.js)');
-  const random = rng(seed);
+  // Each kind its own random stream and its own spacing, so changing how one
+  // kind is planted never moves where another is.
+  let random = rng(seed);
+  // Only what the page draws: a fault planted in a feature no layer draws at
+  // the zooms the checks read is not a fault anyone can see. `drawnKeys`
+  // ('source:index') comes from the model of the unplanted build.
   const pick = (list) => list[Math.floor(random() * list.length)];
   const out = structuredClone(data);
-  const used = [];
+  // Each original feature's key; a feature the planter adds has none.
+  const keyOf = new Map();
+  for (const [name, fc] of Object.entries(out)) fc?.features?.forEach((f, i) => keyOf.set(f, `${name}:${i}`));
+  const isDrawn = (f) => !drawnKeys || drawnKeys.has(keyOf.get(f));
+  let used = [];
   const clear = (p) => used.every((u) => metres(u, p) >= SPACING) && avoid.every((u) => metres(u, p) >= AVOID);
   const planted = [];
   const add = (kind, points, detail) => {
@@ -116,11 +126,11 @@ export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds =
   };
 
   // Candidates, from what features are.
-  const busStreets = () => out.streets.features.filter((f) => f.properties?.mode === 'bus' && f.geometry.type === 'LineString'
+  const busStreets = () => out.streets.features.filter((f) => isDrawn(f) && f.properties?.mode === 'bus' && f.geometry.type === 'LineString'
     && routesOf(f.properties).length && lengthM(f.geometry.coordinates) >= 200);
-  const railParts = () => out.routes.features.filter((f) => f.properties?.mode === 'rail')
+  const railParts = () => out.routes.features.filter((f) => isDrawn(f) && f.properties?.mode === 'rail')
     .flatMap((f) => lines(f.geometry).map((c, part) => ({ f, part, c }))).filter((x) => lengthM(x.c) >= 200);
-  const busRoutes = () => out.routes.features.filter((f) => f.properties?.mode === 'bus')
+  const busRoutes = () => out.routes.features.filter((f) => isDrawn(f) && f.properties?.mode === 'bus')
     .flatMap((f) => lines(f.geometry).map((c, part) => ({ f, part, c }))).filter((x) => lengthM(x.c) >= 150);
   const setPart = (f, part, coords) => {
     if (f.geometry.type === 'LineString') f.geometry.coordinates = coords;
@@ -144,6 +154,8 @@ export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds =
   const NEEDS = { gap: 'streets', step: 'streets', 'off-street': 'streets', 'stray-piece': 'streets', 'rail-gap': 'routes', overshoot: 'routes', hook: 'routes', slot: 'routes', 'stray-stop': 'stops', 'extra-mark': 'stations', 'terminal-shape': 'terminals' };
   for (const kind of kinds) {
     if (NEEDS[kind] && !out[NEEDS[kind]]?.features?.length) continue;
+    random = rng(seed * 1009 + [...kind].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7));
+    used = [];
     let n = 0;
     for (let t = 0; t < tries && n < (kind === 'terminal-shape' ? 1 : per); t++) {
       if (kind === 'gap' || kind === 'step' || kind === 'off-street' || kind === 'stray-piece') {
@@ -187,11 +199,15 @@ export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds =
           out.routes.features.push({ ...f, properties: { ...f.properties }, geometry: { type: 'LineString', coordinates: b } });
           add(kind, [mid.point], `cut 20 m out of rail line ${f.properties.route}`);
         } else {
-          // A line end: no other rail piece within 30 m of it.
+          // A line's real end: no other rail piece within 30 m of it, and a
+          // station of the line within 150 m (a terminus, not a break).
           const end = c.at(-1);
           if (!clear(end)) continue;
           const others = railParts().filter((x) => x.c !== c).map((x) => x.c);
           if (near(end, others, 30)) continue;
+          const route = String(f.properties.route);
+          const atStation = (out.stations?.features ?? []).some((s) => String(s.properties?.lines ?? '').split(/\s+/).includes(route) && metres(s.geometry.coordinates, end) <= 150);
+          if (!atStation) continue;
           const last = along(c, L - 0.5);
           const tip = move(end, scale(last.dir, 40));
           setPart(f, part, [...c, tip]);
@@ -210,7 +226,7 @@ export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds =
         add(kind, [end, tip], `bent the end of bus route ${f.properties.route} back on itself for 12 m`);
         n++;
       } else if (kind === 'slot') {
-        const parts = out.routes.features.filter((f) => f.properties?.mode === 'bus' && PART_TIME.includes(f.properties?.tier))
+        const parts = out.routes.features.filter((f) => isDrawn(f) && f.properties?.mode === 'bus' && PART_TIME.includes(f.properties?.tier))
           .flatMap((f) => lines(f.geometry).map((c, part) => ({ f, part, c }))).filter((x) => lengthM(x.c) >= 300);
         if (!parts.length) break;
         const { f, part, c } = pick(parts);
@@ -225,7 +241,7 @@ export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds =
       } else if (kind === 'stray-stop') {
         // Street stops only: a station's gates, tracks and bays sit inside the
         // station, off the lines, by design.
-        const stop = pick(out.stops.features.filter((f) => f.geometry.type === 'Point' && routesOf({ routes: f.properties?.lines }).length
+        const stop = pick(out.stops.features.filter((f) => isDrawn(f) && f.geometry.type === 'Point' && routesOf({ routes: f.properties?.lines }).length
           && !f.properties?.gate && !f.properties?.terminal && !/\b(Gate|Track|Platform|Bay)\b/i.test(f.properties?.name ?? '')));
         const p = stop.geometry.coordinates;
         if (!clear(p)) continue;
@@ -238,7 +254,7 @@ export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds =
         add(kind, [moved], `moved stop "${stop.properties.name}" 60 m from every line of ${stop.properties.lines}`);
         n++;
       } else if (kind === 'extra-mark') {
-        const st = pick(out.stations.features.filter((f) => f.properties?.served));
+        const st = pick(out.stations.features.filter((f) => isDrawn(f) && f.properties?.served));
         const p = st.geometry.coordinates;
         if (!clear(p)) continue;
         const angle = random() * 2 * Math.PI;
@@ -247,7 +263,7 @@ export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds =
         add(kind, [at], `drew station ${st.properties.id} a second time, 15 m away`);
         n++;
       } else if (kind === 'terminal-shape') {
-        for (const term of out.terminals.features) {
+        for (const term of out.terminals.features.filter(isDrawn)) {
           const ring = term.geometry.type === 'Polygon' ? term.geometry.coordinates[0] : term.geometry.coordinates[0][0];
           const centre = [ring.reduce((s, q) => s + q[0], 0) / ring.length, ring.reduce((s, q) => s + q[1], 0) / ring.length];
           if (ring.length < 5 || !clear(centre)) continue;

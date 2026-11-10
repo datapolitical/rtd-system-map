@@ -68,6 +68,27 @@ and its parts in screen px).
 walks the whole network zoom by zoom, so nothing holds more than one zoom.
 `node qa/drawn/describe.mjs dark` prints the same walk with counts and time.
 
+## The checks on it
+
+`qa/checks/run.mjs` runs these over the model; `npm run check:map` writes their
+findings, and `npm run check:recall` (`qa/recall/`) scores them.
+
+- `lines.mjs`: short pieces standing alone, and sideways steps between
+  parallel runs, on the lines as drawn.
+- `routes.mjs` (#43): each route followed across every piece that carries it
+  (stretches of track, the street features a bus runs on, parts of a
+  MultiLineString), on the lines as drawn. A **gap** is a line end that
+  dangles (no line at least 60% as wide is drawn over it) while its route
+  carries on within 30 m in the direction the end points, across empty land:
+  the break a rider sees. A route turning off a street whose line carries on
+  for other routes is no break. A **hook** is a dangling end that turns back
+  more than 110 degrees in its last few px. A rail line's free end that runs
+  more than 3 px past the mark of its station **overshoots**, and one with no
+  station of its line within 150 m **dangles**.
+- `marks.mjs`, `labels.mjs`, `streets.mjs`: stops off their lines, station
+  marks drawn twice, translucent fills; names over lines; lines off their
+  street. These run per screen, at the report's places.
+
 ## How the numbers are made
 
 - **Zoom in filters, fractional zoom in paint.** Filter expressions see the
