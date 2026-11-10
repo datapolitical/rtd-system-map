@@ -81,7 +81,8 @@ Fixtures are not in git: at 7 to 17 MB each (the tiles they read included)
 they would make every clone of a 5 MB repository several times larger. They
 are tarballs on the `checks-fixtures` release, listed with their sha256 in
 `fixtures.json`; `recall.mjs` downloads and checks one when
-`qa/recall/fixtures/<id>` (ignored by git) is missing. To add one: snapshot
+`qa/recall/fixtures/<id>` (ignored by git) is missing. `RECALL_FIXTURES_BASE` points it at a mirror
+of the release instead. To add one: snapshot
 it, run `check:recall` once so the tiles it needs are cached in it, pack it
 reproducibly, upload it to the release, and add it to `fixtures.json`:
 

@@ -61,7 +61,8 @@ export async function ensureFixture(id) {
   if (fs.existsSync(path.join(dir, 'manifest.json'))) return dir;
   const entry = FIXTURE_LIST.fixtures[id];
   if (!entry) throw new Error(`fixture ${id} is not in qa/recall/fixtures.json`);
-  const url = `${FIXTURE_LIST.base}${id}.tar.gz`;
+  // RECALL_FIXTURES_BASE points at a mirror of the release (or a local copy).
+  const url = `${process.env.RECALL_FIXTURES_BASE ?? FIXTURE_LIST.base}${id}.tar.gz`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`fixture ${id}: ${url}: HTTP ${res.status}`);
   const tar = Buffer.from(await res.arrayBuffer());
