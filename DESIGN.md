@@ -3172,6 +3172,21 @@ work against the real structure before asking for evaluation.
   evaluates. On most jobs they were given they ended their turns within
   minutes, wrote a plan instead of the change, or left edits uncommitted,
   while DeepSeek finished its jobs and asked for evaluation.
+- 2026-11-08: The checks get a model of the map in plain Node
+  (`qa/drawn/`): the page's own style, data, glyphs and symbols worked out as
+  line, mark and label geometry at any zoom and either theme, tile by tile,
+  with the basemap from the tiles the style names. Nothing in it restates a
+  width, colour, offset or font, so a styling change flows through; a drift
+  test in the browser keeps the two from parting (`drawn.spec.mjs`). It
+  exists because the screenshot checks only see zoom 9 to 14 of a phone
+  screen, and the next steps' checks need to see everywhere.
+- 2026-11-10: The checks are scored, not just run (`qa/recall/`). Every fault
+  a person finds is pinned on the build it was seen on (`finds.json`), and
+  faults are planted in a frozen build's data on purpose; `npm run
+  check:recall` reports how many of each the checks catch, and fails when a
+  change catches fewer. A report with few findings no longer counts as a good
+  map on its own: the checks had been tuned until the report came out clean
+  while most of the faults in #42 were still on the map.
 
 ## Sources
 

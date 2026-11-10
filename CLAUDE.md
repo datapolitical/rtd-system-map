@@ -57,6 +57,22 @@ we are" section from them (closed issues show as done).
   budget rule Chris gave you (it stays off this public repo). If you don't
   have it, ask.
 
+## Checks: what "done" and "verified" mean
+
+- A "Done when" line in an issue changes only when Chris says so. If one
+  looks wrong, say why in a comment and add `needs Chris`; keep working to it
+  until he answers.
+- "Verified" says what was run: the themes, the views or places, the zooms,
+  the build's commit, and a link to the run or its output. A run over part of
+  what a done-when names is reported as that part, not as done.
+- A detector that reports nothing at a known fault is broken, not proof that
+  the map is right. Before changing a detector's rule or threshold, run
+  `npm run check:recall` (qa/recall/README.md): a change that lowers its score
+  is not done, whatever it does to the report's count of findings. When the
+  score goes up, update `qa/recall/baseline.json` in the same commit.
+- When you or Chris find a fault the checks missed, pin it in
+  `qa/recall/finds.json` on the build it was seen on, then fix it.
+
 ## Status page
 
 `node status/server.mjs [port]` (default 8795) serves a page that reads this

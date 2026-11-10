@@ -22,3 +22,8 @@ qa/sweep/out/
 .agents/
 status/usage.json
 status/jobs.json
+# The drawn model's findings (qa/checks/report.mjs, npm run check:map).
+qa/findings/
+# Frozen builds and scores for npm run check:recall (qa/recall/README.md).
+qa/recall/fixtures/
+qa/recall/out/

@@ -1,0 +1,817 @@
+{
+  "about": "Faults people found on the map, pinned to the ground. qa/recall/recall.mjs scores every check against them. Add a find whenever a person or the release walk sees a fault (qa/recall/README.md).",
+  "finds": [
+    {
+      "id": "42-15th-short",
+      "issue": 42,
+      "place": "15th Street at Lawrence",
+      "said": "the 15th Street line stops short of the corner with two stray dots",
+      "kind": "gap",
+      "caught_by": [
+        "gap",
+        "short",
+        "dangling"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "gone"
+      },
+      "theme": "dark",
+      "zoom": 17,
+      "points": [
+        [
+          -104.997893,
+          39.747744
+        ],
+        [
+          -104.99785,
+          39.747711
+        ]
+      ],
+      "radius_px": 25,
+      "capture": {
+        "view": "17/39.74760/-104.99777",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            178,
+            402
+          ],
+          [
+            186,
+            410
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-15th-corner",
+      "issue": 42,
+      "place": "15th Street at Lawrence",
+      "said": "the cross-street line leaves its street and cuts a block corner into 15th",
+      "kind": "off-street",
+      "caught_by": [
+        "off-street",
+        "kink"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "changed: the line now follows Lawrence almost to the corner"
+      },
+      "theme": "dark",
+      "zoom": 17,
+      "points": [
+        [
+          -104.997657,
+          39.747678
+        ]
+      ],
+      "radius_px": 25,
+      "capture": {
+        "view": "17/39.74760/-104.99777",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            222,
+            418
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-15th-arrow",
+      "issue": 42,
+      "place": "15th Street at Lawrence",
+      "said": "a hook-shaped arrow on a short piece",
+      "kind": "arrow",
+      "caught_by": [
+        "arrow",
+        "hook",
+        "short"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "still there, about 35 px further along the bend"
+      },
+      "theme": "dark",
+      "zoom": 17,
+      "points": [
+        [
+          -104.997453,
+          39.747852
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "17/39.74760/-104.99777",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            260,
+            376
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-15th-stops",
+      "issue": 42,
+      "place": "15th Street at Lawrence",
+      "said": "stop circles beside the lines",
+      "kind": "stray-stop",
+      "caught_by": [
+        "stray-stop",
+        "stop-off-line"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "not compared"
+      },
+      "theme": "dark",
+      "zoom": 17,
+      "points": [
+        [
+          -104.998462,
+          39.748252
+        ],
+        [
+          -104.996783,
+          39.74854
+        ],
+        [
+          -104.997223,
+          39.749101
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "17/39.74760/-104.99777",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            72,
+            279
+          ],
+          [
+            385,
+            209
+          ],
+          [
+            303,
+            73
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "approximate: which circles were meant is a reading of the capture"
+    },
+    {
+      "id": "42-15th-strand-step",
+      "issue": 42,
+      "place": "15th Street at Lawrence",
+      "said": "the edge strand steps sideways further down 15th",
+      "kind": "step",
+      "caught_by": [
+        "step",
+        "strand-step"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "gone"
+      },
+      "theme": "dark",
+      "zoom": 17,
+      "points": [
+        [
+          -104.996799,
+          39.746878
+        ]
+      ],
+      "radius_px": 25,
+      "capture": {
+        "view": "17/39.74760/-104.99777",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            382,
+            612
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-ninemile-terminal",
+      "issue": 42,
+      "place": "Nine Mile",
+      "said": "the terminal is a small house-shaped outline with a zigzag in it, with the name on it",
+      "kind": "terminal-shape",
+      "caught_by": [
+        "terminal-shape",
+        "name-on-terminal",
+        "self-crossing"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "changed: the outline is still there, the zigzag is gone"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.845845,
+          39.658108
+        ]
+      ],
+      "radius_px": 40,
+      "capture": {
+        "view": "16/39.65900/-104.84460",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            85,
+            545
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-ninemile-stops",
+      "issue": 42,
+      "place": "Nine Mile",
+      "said": "a row of stops on no line",
+      "kind": "stray-stop",
+      "caught_by": [
+        "stray-stop",
+        "stop-off-line"
+      ],
+      "seen_on": [
+        "0fe749b",
+        "430ea4a"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "still there"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.846596,
+          39.657753
+        ],
+        [
+          -104.846435,
+          39.657835
+        ],
+        [
+          -104.846306,
+          39.657918
+        ],
+        [
+          -104.846145,
+          39.658017
+        ]
+      ],
+      "radius_px": 15,
+      "capture": {
+        "view": "16/39.65900/-104.84460",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            15,
+            588
+          ],
+          [
+            30,
+            578
+          ],
+          [
+            42,
+            568
+          ],
+          [
+            57,
+            556
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-ninemile-stub",
+      "issue": 42,
+      "place": "Nine Mile",
+      "said": "the bus line loops and ends in a dotted stub short of the stops",
+      "kind": "dangling",
+      "caught_by": [
+        "dangling",
+        "gap",
+        "short",
+        "hook",
+        "loop",
+        "slot"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "still there: the dotted line still loops and stops short"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.844375,
+          39.658579
+        ],
+        [
+          -104.844267,
+          39.658546
+        ]
+      ],
+      "radius_px": 25,
+      "capture": {
+        "view": "16/39.65900/-104.84460",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            222,
+            488
+          ],
+          [
+            232,
+            492
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-ninemile-step",
+      "issue": 42,
+      "place": "Nine Mile",
+      "said": "a step in the line west of the terminal",
+      "kind": "step",
+      "caught_by": [
+        "step",
+        "strand-step"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "changed: the step is now a break in the line at the same place"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.8478,
+          39.658402
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "16/39.65960/-104.84780",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            201,
+            582
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "approximate: a 2 to 3 px jog, from a second capture shifted west"
+    },
+    {
+      "id": "42-ninemile-marks",
+      "issue": 42,
+      "place": "Nine Mile",
+      "said": "three marks for the rail station",
+      "kind": "extra-mark",
+      "caught_by": [
+        "duplicate",
+        "extra-mark"
+      ],
+      "seen_on": [
+        "0fe749b",
+        "430ea4a"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "still there"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.845136,
+          39.657604
+        ],
+        [
+          -104.845104,
+          39.657546
+        ],
+        [
+          -104.845576,
+          39.65734
+        ]
+      ],
+      "radius_px": 15,
+      "capture": {
+        "view": "16/39.65900/-104.84460",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            151,
+            606
+          ],
+          [
+            154,
+            613
+          ],
+          [
+            110,
+            638
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-union-hairline",
+      "issue": 42,
+      "place": "Union Station",
+      "said": "the hairline between the two platform marks crosses blocks and 17th Street",
+      "kind": "platform-join",
+      "caught_by": [
+        "platform-join"
+      ],
+      "seen_on": [
+        "0fe749b",
+        "430ea4a"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "still there"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -105.002442,
+          39.754443
+        ],
+        [
+          -105.002066,
+          39.753965
+        ],
+        [
+          -105.001584,
+          39.753388
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "16/39.75300/-105.00050",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            20,
+            262
+          ],
+          [
+            55,
+            320
+          ],
+          [
+            100,
+            390
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-union-name",
+      "issue": 42,
+      "place": "Union Station",
+      "said": "the name runs into the wide bus line",
+      "kind": "over-line",
+      "caught_by": [
+        "over-line"
+      ],
+      "seen_on": [
+        "0fe749b",
+        "430ea4a"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "still there"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -105.002549,
+          39.753322
+        ]
+      ],
+      "radius_px": 30,
+      "capture": {
+        "view": "16/39.75300/-105.00050",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            10,
+            398
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    },
+    {
+      "id": "42-union-concourse",
+      "issue": 42,
+      "place": "Union Station",
+      "said": "the concourse is a translucent grey slab with green smears",
+      "kind": "translucent",
+      "caught_by": [
+        "translucent",
+        "fill-over"
+      ],
+      "seen_on": [
+        "0fe749b",
+        "430ea4a"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "still there"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -105.001798,
+          39.754625
+        ]
+      ],
+      "radius_px": 90,
+      "capture": {
+        "view": "16/39.75300/-105.00050",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            80,
+            240
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "approximate: the slab spans about 200 by 180 px; the point is its middle"
+    },
+    {
+      "id": "42-union-rail-past",
+      "issue": 42,
+      "place": "Union Station",
+      "said": "light-rail lines run past their platform mark",
+      "kind": "overshoot",
+      "caught_by": [
+        "overshoot"
+      ],
+      "seen_on": [
+        "0fe749b",
+        "430ea4a"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "still there"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -105.001348,
+          39.753181
+        ]
+      ],
+      "radius_px": 30,
+      "capture": {
+        "view": "16/39.75300/-105.00050",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            122,
+            415
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "approximate: the line ends meet the capsule within a few px"
+    },
+    {
+      "id": "42-union-dashed",
+      "issue": 42,
+      "place": "Union Station",
+      "said": "dashed part-time lines wander off their solid lines",
+      "kind": "slot",
+      "caught_by": [
+        "slot",
+        "off-street",
+        "dangling"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "still there, and more dashed lines wander north-east of the rail"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.999438,
+          39.75413
+        ],
+        [
+          -104.999867,
+          39.753841
+        ]
+      ],
+      "radius_px": 30,
+      "capture": {
+        "view": "16/39.75300/-105.00050",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            300,
+            300
+          ],
+          [
+            260,
+            335
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "approximate: the dashed line that runs on alone past the hook; others beside their solid lines look right"
+    },
+    {
+      "id": "42-union-hook",
+      "issue": 42,
+      "place": "Union Station",
+      "said": "a bus line ends in a hook",
+      "kind": "hook",
+      "caught_by": [
+        "hook",
+        "short",
+        "dangling"
+      ],
+      "seen_on": [
+        "0fe749b"
+      ],
+      "latest": {
+        "build": "430ea4a",
+        "looked": "2026-11-10",
+        "status": "changed: the hook is now a junction of dashed hairlines"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.999245,
+          39.754254
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "16/39.75300/-105.00050",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            318,
+            285
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
+      "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
+      "confidence": "clear"
+    }
+  ]
+}

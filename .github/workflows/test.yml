@@ -5,6 +5,9 @@
 # site itself, data build included, is built by Cloudflare Pages on each push.
 # The headless browser checks run in checks-nightly.yml against the live site
 # and checks-preview.yml against each branch's preview.
+# And the recall score (npm run check:recall, qa/recall/README.md): the map
+# checks run over frozen builds, scored against faults people found and
+# faults planted on purpose; it fails when a change catches fewer of them.
 name: Tests
 
 on:
@@ -26,6 +29,25 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+
+  recall:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Score the checks against known and planted faults
+        run: npm run check:recall
+      - name: Upload the score
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: recall-${{ github.run_id }}
+          path: qa/recall/out/
+          if-no-files-found: ignore
 
   workers:
     runs-on: ubuntu-latest

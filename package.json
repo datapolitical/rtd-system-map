@@ -15,6 +15,8 @@
     "check:deep": "playwright test -c qa/playwright.config.mjs --grep @deep",
     "check:baselines": "playwright test -c qa/playwright.config.mjs visual --update-snapshots",
     "check:report": "playwright show-report qa/report",
+    "check:map": "node qa/checks/report.mjs",
+    "check:recall": "node qa/recall/recall.mjs",
     "sweep": "node qa/sweep/sweep.mjs"
   },
   "devDependencies": {
