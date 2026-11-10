@@ -13,7 +13,7 @@
     "test": "node --test",
     "check": "playwright test -c qa/playwright.config.mjs --grep-invert @deep",
     "check:deep": "playwright test -c qa/playwright.config.mjs --grep @deep",
-    "check:baselines": "playwright test -c qa/playwright.config.mjs visual --update-snapshots",
+    "check:baselines": "playwright test -c qa/playwright.config.mjs visual --update-snapshots=all",
     "check:report": "playwright show-report qa/report",
     "check:map": "node qa/checks/report.mjs",
     "check:recall": "node qa/recall/recall.mjs",

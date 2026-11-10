@@ -7,7 +7,11 @@
 // looser 3% would have passed a map with no trains on it. A failure is not
 // a defect by itself: open the report (npm run check:report), look at the
 // diff, and if the change was meant, refresh the baselines with
-// `npm run check:baselines`.
+// `npm run check:baselines`. It rewrites every baseline
+// (--update-snapshots=all): Playwright's default rewrites only those
+// outside the tolerance, so a meant change just inside it (the bus streets
+// of #80, 1.2% of pixels by the seeded test's own measure) kept the old
+// images and failed the seeded test every night.
 //
 // The baselines are per platform: they are `-darwin.png` and `-linux.png`
 // side by side, and each platform compares only its own. A platform with no
