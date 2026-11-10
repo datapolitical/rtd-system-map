@@ -46,8 +46,11 @@ data and the preview under test is that commit's build.
 zoom `z` are screen pixels at zoom `z`):
 
 - `lines` — one per feature per line layer: `layer`, `source`, `route`,
-  `properties`, `parts` (its polylines), `width`, `dash`, `color`, `opacity`,
-  `offset`.
+  `properties`, `parts` (its centrelines), `drawn` (the same moved by its
+  offset as MapLibre draws it, `strokes.mjs`), `width`, `gapWidth`,
+  `drawnWidth` (what it is drawn and hit-tested at), `dash`, `color`,
+  `opacity`, `offset`, `cap`, `join`. The checks measure `drawn` with
+  `drawnWidth` and `cap`: a gap is land between two ends after their caps.
 - `marks` — `kind: 'icon'` with `image`, size, rotation, anchor, `box`; or
   `kind: 'circle'` with `radius`, `stroke`, colours and `box`.
 - `labels` — `text`, `size`, `font`, `block` (lines and measured width and
@@ -89,27 +92,54 @@ walks the whole network zoom by zoom, so nothing holds more than one zoom.
 
 ## The drift test
 
-`qa/checks/drawn.spec.mjs` is the tie between the model and the page: in the
-browser, at seeded views over the network plus the busiest interchanges, it
-compares the page's own `queryRenderedFeatures` geometry and MapLibre's
-collision boxes with the model's, and fails with the distance and the layer
-when they part. It reads both sides' data from the site under test, so it can
-run on a CI checkout that has no `public/data`. Thresholds: 1 px for line
-vertices and mark centres, 2 px for label boxes. Every line point the page
-drew must have a model line for the same layer and route; a page line the
-model has nothing for fails the run. The spec asks the page only for layers
-whose source the model has, so it cannot see a missing source by itself:
-`openModel` does that, failing when the style draws from a GeoJSON source
-that is neither in the page's `DATA_SOURCES` nor listed in `RUNTIME_ONLY`
-with the reason it is filled in the browser. What the spec does not check
-yet (offsets and widths, both directions, rail letters) is #59.
+`qa/checks/drawn.spec.mjs` is the tie between the model and the page. At
+seeded views over the network, the busiest interchanges and every place in
+`qa/recall/finds.json`, it reads both sides' data from the site under test
+(so it runs on a CI checkout with no `public/data`) and fails with the layer
+and the distance when they part:
+
+- **Lines, page to model.** Every vertex the page's `queryRenderedFeatures`
+  returns is within 1 px of the model's line for its layer and route. That
+  geometry is the source's, so this ties the projection and the filters.
+- **Lines as drawn.** `queryRenderedFeatures` doesn't return offsets or
+  widths, but MapLibre's hit-test applies both (`queryIntersectsFeature`,
+  `line_style_layer.ts`). At sample points on straight stretches of the
+  model's drawn lines, `probeLines` (`compare.mjs`) walks out along the normal
+  until the page stops returning that feature, and does the same on the model
+  (`modelHitMap`). The centres must agree within 1 px, the widths within
+  0.6 px. Samples sit mid-segment, because the hit-test offsets corners with
+  its own simpler rule (where a corner is drawn is not tested here), and only
+  where the line stands alone: the hit-test can't tell two lines of one
+  feature apart (a route's two directions, a px apart at low zoom), and the
+  page's tiles simplify each a little differently, so their combined band is
+  not a measure of either.
+- **Lines, model to page.** Every line the model draws on the screen is among
+  the page's features for that layer.
+- **Marks** within 1 px; **names and rail letters**: MapLibre's collision
+  boxes within 2 px of one of the model's.
+
+A second test plants errors in the model at one view and checks each fails:
+an offset 2 px off, a width 1 px off, a layer left out, a line the page
+doesn't draw (`test/drawn-strokes.test.mjs` does the same against a fake page
+in `npm test`). A source the model doesn't load fails in `openModel`: the
+style may draw only from the page's `DATA_SOURCES` and the runtime-only
+sources in `RUNTIME_ONLY`.
+
+Not compared yet: one-way arrows and edge letters (#56), and which names are
+placed or hidden (#57).
 
 ```sh
 npm run dev                                     # or a server of your own
-CHECK_URL=http://127.0.0.1:8788 npm run check -- drawn --project=phone-dark
+CHECK_URL=http://127.0.0.1:8788 npm run check -- 'qa/checks/drawn\.spec' --project=phone-dark --list   # check what runs
+CHECK_URL=http://127.0.0.1:8788 npm run check -- 'qa/checks/drawn\.spec' --project=phone-dark
 ```
 
-`DRAWN_VIEWS=n` sets how many seeded views the run takes.
+`DRAWN_ROOT=qa/recall/fixtures/<commit>` builds the model from a frozen
+build's own page code, to test against that commit's preview (`CHECK_URL`).
+`DRAWN_VIEWS=n` sets how many seeded views the run takes, `DRAWN_PROBES=n`
+the most drawn-line samples per view. Playwright matches a file filter
+against the whole path, so a bare `drawn` also matches a checkout whose
+folder name has it in; anchor it as above and list before running.
 
 Two things about reading the page, learned the hard way, that any check
 reading `qa.placed()` or `queryRenderedFeatures` should know:

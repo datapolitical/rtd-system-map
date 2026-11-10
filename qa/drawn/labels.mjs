@@ -27,10 +27,15 @@ export function segmentHitsBox(a, b, box) {
   return edges.some(([c, d]) => crosses(a, b, c, d));
 }
 
+// The first line a name's box touches, as drawn (#55): the line moved by its
+// offset, and the box grown by half the line's width, so a name that runs
+// into the edge of a wide line counts, not only one across its centre.
 function lineInBox(box, lines) {
   for (const line of lines) {
-    for (const part of line.parts) {
-      for (let i = 1; i < part.length; i++) if (segmentHitsBox(part[i - 1], part[i], box)) return line;
+    const h = (line.drawnWidth ?? line.width ?? 0) / 2;
+    const grown = [box[0] - h, box[1] - h, box[2] + h, box[3] + h];
+    for (const part of line.drawn ?? line.parts) {
+      for (let i = 1; i < part.length; i++) if (segmentHitsBox(part[i - 1], part[i], grown)) return line;
     }
   }
   return null;

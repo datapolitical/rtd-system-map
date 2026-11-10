@@ -17,8 +17,14 @@
 //    `maxStep` px off (lower 15th Street, west of Nine Mile).
 // A casing and an edge draw the same geometry as their line, so a fault is
 // reported once, on the line layer itself.
+//
+// They measure lines as drawn (#55, strokes.mjs): each centreline moved by
+// its offset, with its width and its ends. A gap is land between two ends
+// after their caps; a short piece is covered when it lies within another
+// route line's width.
 
 import { toLonLat } from './mercator.mjs';
+import { capReach } from './strokes.mjs';
 
 const isCasing = (layer) => /-(casing|edge|outline)$/.test(layer);
 
@@ -106,7 +112,8 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
   const coverGrid = new Map();
   const routeLines = zoom.lines.filter((e) => !isCasing(e.layer) && e.source !== 'flexride' && isRoute(e));
   for (const e of routeLines) {
-    for (const part of e.parts) {
+    const half = (e.drawnWidth ?? e.width ?? 0) / 2;
+    for (const part of e.drawn ?? e.parts) {
       for (let i = 1; i < part.length; i++) {
         const [a, b] = [part[i - 1], part[i]];
         const x0 = Math.floor(Math.min(a[0], b[0]) / coverCell);
@@ -116,7 +123,7 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
         for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
           const k = `${x},${y}`;
           if (!coverGrid.has(k)) coverGrid.set(k, []);
-          coverGrid.get(k).push({ a, b, part });
+          coverGrid.get(k).push({ a, b, part, half });
         }
       }
     }
@@ -128,7 +135,7 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
         for (const s of coverGrid.get(`${cx + dx},${cy + dy}`) ?? []) {
           if (s.part === part) continue;
-          if (distToSeg(q, s.a, s.b) <= coverPx) return true;
+          if (distToSeg(q, s.a, s.b) <= Math.max(coverPx, s.half)) return true;
         }
       }
     }
@@ -141,7 +148,9 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
   // join a branch to a main line and report every branch mouth as a break.
   for (const entry of zoom.lines) {
     if (isCasing(entry.layer) || entry.source === 'flexride' || !isRoute(entry)) continue;
-    const parts = entry.parts.filter((p) => p.length >= 2);
+    const parts = (entry.drawn ?? entry.parts).filter((p) => p.length >= 2);
+    // How far each end's cap reaches past its last point.
+    const reach = capReach(entry.cap, entry.drawnWidth ?? entry.width ?? 0);
     // The join distance from part p-1's end to part p's start, in px (Infinity
     // when either part is missing or the ends are not on the same ground).
     const join = (p) => {
@@ -165,12 +174,15 @@ export function lineFaults(zoom, { maxGap = 30, minPiece = 3, maxStep = 8 } = {}
       }
       if (p === 0) continue;
       const d = join(p);
-      // The join scale is ground metres: 30 m is 2 px at zoom 12 and 50 px at
-      // zoom 17, so the same data gap is judged the same at every zoom.
-      if (d >= 3 && d <= gapPx) {
+      // The land a rider sees between the two ends: the distance less the
+      // two caps. The join scale is ground metres: 30 m is 2 px at zoom 12
+      // and 50 px at zoom 17, so the same data gap is judged the same at
+      // every zoom.
+      const land = d - 2 * reach;
+      if (land >= 3 && d <= gapPx) {
         const a = parts[p - 1][parts[p - 1].length - 1];
         const b = part[0];
-        add('gap', entry, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], `pieces ${p - 1} and ${p} end ${d.toFixed(1)} px apart`);
+        add('gap', entry, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], `pieces ${p - 1} and ${p} leave ${land.toFixed(1)} px of land between their ends`);
       }
     }
   }

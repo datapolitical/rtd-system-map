@@ -34,6 +34,7 @@ import { icons } from './icons.mjs';
 import { css, filterOf, inZoom, property, setState } from './expressions.mjs';
 import { bbox, clipLine, tileAt, tileSpan, toWorld } from './mercator.mjs';
 import { Tiles, geometry, vectorSources } from './tiles.mjs';
+import { drawnWidth, offsetParts } from './strokes.mjs';
 
 const run = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -169,6 +170,9 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
         const width = property(layer, 'line-width', 'paint', z, x.properties, 1);
         if (!(width > 0)) continue;
         const opacity = property(layer, 'line-opacity', 'paint', z, x.properties, 1);
+        const offset = property(layer, 'line-offset', 'paint', z, x.properties, 0);
+        const gapWidth = property(layer, 'line-gap-width', 'paint', z, x.properties, 0);
+        const parts = project(x, z);
         out.push({
           layer: layer.id,
           source: layer.source,
@@ -179,9 +183,15 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
           tier: x.properties.tier,
           slot: x.properties.slot ?? 0,
           properties: x.properties,
-          parts: project(x, z),
+          parts,
+          // The line as drawn (strokes.mjs): its centreline moved by its
+          // offset the way MapLibre moves it, and the full width it is drawn
+          // and hit-tested at.
+          drawn: offset ? offsetParts(parts, offset, z) : parts,
           width,
-          offset: property(layer, 'line-offset', 'paint', z, x.properties, 0),
+          gapWidth,
+          drawnWidth: drawnWidth(width, gapWidth),
+          offset,
           dash: property(layer, 'line-dasharray', 'paint', z, x.properties, null),
           color: css(property(layer, 'line-color', 'paint', z, x.properties, '#000000')),
           opacity,
@@ -341,18 +351,20 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
       if (!list || !inZoom(layer, z)) continue;
       if (layer.type !== 'symbol' || layer.layout?.['text-field'] === undefined) continue;
       const f = filterOf(layer);
-      const variable = property(layer, 'text-variable-anchor-offset', 'layout', z, {}, null);
-      const anchor = property(layer, 'text-anchor', 'layout', z, {}, 'center');
-      const offset = property(layer, 'text-offset', 'layout', z, {}, [0, 0]);
-      const padding = pad(property(layer, 'text-padding', 'layout', z, {}, 2));
-      // Collision boxes are built at the bucket's layout size (the text size
-      // at the next whole zoom, symbol_layout.ts `sizes.layoutTextSize`), so
-      // they are a touch larger than the ink below it.
-      const boxSize = property(layer, 'text-size', 'layout', Math.floor(z) + 1, {}, 16);
       for (const x of features[layer.source]) {
         if (f && !f(z, x.properties)) continue;
         const at = point(x, z);
         if (!at) continue;
+        // Read per feature: a layer can place each feature its own way (a
+        // rail letter's text-offset puts it on its own line, #56).
+        const variable = property(layer, 'text-variable-anchor-offset', 'layout', z, x.properties, null);
+        const anchor = property(layer, 'text-anchor', 'layout', z, x.properties, 'center');
+        const offset = property(layer, 'text-offset', 'layout', z, x.properties, [0, 0]);
+        const padding = pad(property(layer, 'text-padding', 'layout', z, x.properties, 2));
+        // Collision boxes are built at the bucket's layout size (the text size
+        // at the next whole zoom, symbol_layout.ts `sizes.layoutTextSize`), so
+        // they are a touch larger than the ink below it.
+        const boxSize = property(layer, 'text-size', 'layout', Math.floor(z) + 1, x.properties, 16);
         const raw = property(layer, 'text-field', 'layout', z, x.properties, null);
         const value = typeof raw === 'string' ? raw : raw?.toString?.();
         if (!value) continue;
@@ -494,7 +506,9 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
     for (const line of m.lines) {
       const runs = [];
       for (const part of line.parts) for (const run of clipLine(part, rect)) runs.push(run.map(screen));
-      if (runs.length) lines.push({ ...line, parts: runs });
+      const drawn = [];
+      for (const part of line.drawn) for (const run of clipLine(part, rect)) drawn.push(run.map(screen));
+      if (runs.length || drawn.length) lines.push({ ...line, parts: runs, drawn });
     }
     // A mark is kept when its anchor is on the screen, even if its box sits
     // mostly off it (a tick drawn beside the point), or when its box reaches

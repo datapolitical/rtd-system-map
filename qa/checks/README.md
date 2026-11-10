@@ -17,7 +17,7 @@ view. Every spec's header says what fault it finds and its threshold.
 | `health.spec.mjs` | check (+ deep) | No console errors or warnings, page errors, failed or 4xx/5xx requests, and `validateStyleMin` passes on `map.getStyle()`. |
 | `a11y.spec.mjs` | check | axe-core, WCAG 2.0/2.1 A and AA, on the map alone, Key open, a panel open, search focused; the canvas is exempt. |
 | `visual.spec.mjs` | check | Three baseline screenshots per theme (hub at 9, 11.5, 14), tolerant threshold, Live masked. |
-| `drawn.spec.mjs` | check | The drawn model (`../drawn/`) against the page: at seeded views and the busiest interchanges, lines and mark centres within 1 px, label boxes within 2 px. Drift means the model has fallen behind the page. |
+| `drawn.spec.mjs` | check | The drawn model (`../drawn/`) against the page: at seeded views, the busiest interchanges and the finds' places, line vertices and mark centres within 1 px; lines as drawn (offset and width, by the page's hit-test) within 1 px and 0.6 px; every model line on the page; name and rail-letter boxes within 2 px. A second test plants model errors and checks each fails. Drift means the model has fallen behind the page. |
 | `continuity.spec.mjs` | deep | Rail lines (and the frequent bus tier at 14) unbroken on screen: gaps, covers, sideways jogs at piece joins; routes.geojson pieces that meet and ease between slots; a regression fixture at a known break. |
 | `marks.spec.mjs` | deep | Station marks overlapping or crowding at 9.75 to 14, every station. |
 | `labels.spec.mjs` | deep | Station names far from their mark, network labels under a card, labels over labels or marks, at 10 to 14. |
