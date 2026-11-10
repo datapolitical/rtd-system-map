@@ -1191,6 +1191,8 @@ knows nothing about a station, a platform or a line
   the end of the line is no longer the place a rider stands; the mark goes on
   the track at the stops, and only when the stops are nowhere near the drawn
   track does it fall back to the lines' ends, so it never stands in the air.
+  A line that ends at the group ends at its mark (`endAtMarks`), never past
+  it.
   It is a station mark like any other — the same image at the same size,
   turned across its lines, as wide as the lines that stop there — so a group
   reads as a station, not a new kind of thing.
@@ -1229,6 +1231,13 @@ or loses draws itself.
   (`extendLineToPlatforms`). At Union Station that fills the train hall with
   A, B, G and N and the light-rail platforms with C, E and W. A station with
   no platform in OSM is left exactly where RTD's data puts it.
+- *A line ends at its station's mark.* The mark a line ends at is the end
+  of the line: where the mark stands at the platform stops, short of the
+  platform's end (one line's terminus, or a platform group's mark), the line
+  is cut where the mark crosses it (`endAtMarks` in `sharedtrack.mjs`), so
+  no line runs on past the station it ends at. Where several lines end in a
+  row, the station's mark is drawn across the row (Union Station's train
+  hall), so they keep the platform's length.
 - *The station's point moves to its building.* A station whose OSM has a
   station building takes the platform group nearest that building as its own
   point (`geo.stations`), so its mark, its ring and its one name stand at the
@@ -3815,6 +3824,14 @@ work against the real structure before asking for evaluation.
   but weaves off it is drawn along that line between its ends. A departure
   that ends somewhere else (an approach to a concourse) is not moved (see
   "Bus routes").
+- 2026-11-10: A line ends at the mark of the station it ends at (#75). Round
+  four ran each line along its platform to the platform's far end and kept
+  the mark at the platform stops, where riders board, so a line ran 7 to 64
+  px past its station at z16 (Union Station's light rail, Golden, Lincoln,
+  the airport, Westminster, Littleton-Mineral, Peoria). Chris asked why the
+  mark wasn't at the end. The mark stays at the stops and the line is cut
+  there; where several lines end in a row the mark was already across the
+  row (see "Stations", "The station's real shape").
 - 2026-11-10: A street is taken out as a fork or a stub only when no other
   street's end is left loose by it, and a route's branch that stops short of
   the shared street it leaves is carried onto that street's line. On the

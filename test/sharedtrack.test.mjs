@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { sharedTrack } from '../scripts/lib/sharedtrack.mjs';
+import { endAtMarks, sharedTrack } from '../scripts/lib/sharedtrack.mjs';
 
 // Made-up lines near (0, 0), where a kilometer is 1/111.32 of a degree
 // either way. Paths are in km, with a point every 100 m.
@@ -241,4 +241,37 @@ test('letters keep clear of stations', () => {
     const px = (Math.abs(y - Math.round(y / 3) * 3) * 1000) / (40075017 / (512 * 2 ** zoom));
     assert.ok(px >= 15, `letter ${y.toFixed(2)} km along is ${Math.round(px)} px from a station at zoom ${zoom}`);
   }
+});
+
+// Made-up track near (0, 0), in metres east and north.
+const M = 1 / 111320;
+const piece = (route, pts) => ({ type: 'Feature', properties: { route, mode: 'rail' }, geometry: { type: 'LineString', coordinates: pts.map(([x, y]) => [x * M, y * M]) } });
+const metresFrom = (a, [x, y]) => Math.hypot(a[0] / M - x, a[1] / M - y);
+
+test('a line that runs on past the mark of the station it ends at ends at the mark', () => {
+  // A runs east to x = 1000; its end station's mark stands at x = 940,
+  // 3 m off the track (the line's slot beside another).
+  const kept = endAtMarks([piece('A', [[0, 0], [500, 0], [1000, 0]])], new Map([['A', [[940 * M, 3 * M]]]]));
+  assert.equal(kept.length, 1);
+  const c = kept[0].geometry.coordinates;
+  assert.ok(metresFrom(c.at(-1), [940, 0]) < 1.5, `ends at ${c.at(-1).map((v) => (v / M).toFixed(0))}`);
+  assert.ok(metresFrom(c[0], [0, 0]) < 0.5, 'the other end stays');
+});
+
+test('a piece wholly past the mark goes; the line ends at the mark on the piece before it', () => {
+  const kept = endAtMarks([piece('A', [[0, 0], [900, 0]]), piece('A', [[900, 0], [1000, 0]])], new Map([['A', [[880 * M, 0]]]]));
+  assert.equal(kept.length, 1, 'the piece past the mark goes');
+  assert.ok(metresFrom(kept[0].geometry.coordinates.at(-1), [880, 0]) < 1.5);
+});
+
+test("a line is not cut at another line's mark, nor at a mark off its track or far from its end", () => {
+  const pieces = () => [piece('A', [[0, 0], [1000, 0]])];
+  // B's mark, a mark 60 m off the track, a mark 400 m back from the end.
+  for (const marks of [new Map([['B', [[940 * M, 0]]]]), new Map([['A', [[940 * M, 60 * M]]]]), new Map([['A', [[600 * M, 0]]]])]) {
+    const c = endAtMarks(pieces(), marks)[0].geometry.coordinates;
+    assert.ok(metresFrom(c.at(-1), [1000, 0]) < 0.5);
+  }
+  // A line that stops short of its mark is left as it is.
+  const short = endAtMarks(pieces(), new Map([['A', [[1040 * M, 0]]]]))[0].geometry.coordinates;
+  assert.ok(metresFrom(short.at(-1), [1000, 0]) < 0.5);
 });

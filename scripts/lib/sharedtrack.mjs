@@ -900,6 +900,65 @@ export function trimToEnds(paths, ends) {
   });
 }
 
+// A line ends at the mark of the station it ends at (DESIGN.md, "Stations";
+// #75). A line runs along its platform to the platform's far end, or RTD's
+// line runs a few metres on, while the station's mark stands on the track
+// at the platform stops, where riders board: drawn, the line ran on past
+// the station it ends at (41 to 64 px at z16 at Union Station's light
+// rail, Golden, Lincoln and the airport). It is cut where the mark crosses
+// it, so the mark is the line's end, and the lines of a terminal end
+// together across their mark. A piece wholly past the mark goes. An end
+// with no mark of its own line's end station within END_REACH, or a mark
+// more than END_ON off the line's track, is left as it is.
+const END_REACH = 150;
+const END_ON = 25;
+// Ends this close are one line going on from piece to piece.
+const END_JOINED = 2;
+
+/**
+ * Cut each line's pieces where they run past the mark of a station the line
+ * ends at. `pieces` are `sharedTrack`'s pieces (LineStrings, one line each,
+ * `route`); `marks` maps a line to the [lon, lat] marks of its end stations.
+ * Returns the pieces kept, cut.
+ */
+export function endAtMarks(pieces, marks) {
+  const metres = (a, b) => Math.hypot((a[0] - b[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180), (a[1] - b[1]) * 110540);
+  const gone = new Set();
+  for (const [route, points] of marks) {
+    const mine = pieces.filter((p) => p.properties.route === route);
+    const joined = (piece, end) => mine.some((o) => o !== piece && !gone.has(o) && [o.geometry.coordinates[0], o.geometry.coordinates.at(-1)].some((q) => metres(q, end) <= END_JOINED));
+    for (let changed = true, guard = 0; changed && guard <= mine.length * 2; guard++) {
+      changed = false;
+      for (const piece of mine) {
+        if (gone.has(piece)) continue;
+        for (const atEnd of [false, true]) {
+          const path = piece.geometry.coordinates;
+          const end = atEnd ? path.at(-1) : path[0];
+          const inner = atEnd ? path[0] : path.at(-1);
+          if (joined(piece, end)) continue;
+          const mark = points.filter((m) => metres(m, end) <= END_REACH).sort((a, b) => metres(a, end) - metres(b, end))[0];
+          if (!mark) continue;
+          const at = closestOn(path, mark);
+          if (!at || at.meters > END_ON || metres(at.point, end) < 1) continue;
+          if (metres(at.point, inner) < 1) {
+            // The whole piece is past the mark, if the line goes on from its
+            // other end; otherwise the mark is not this piece's to end at.
+            if (joined(piece, inner)) {
+              gone.add(piece);
+              changed = true;
+            }
+            break;
+          }
+          const point = at.point.map(round);
+          piece.geometry = { ...piece.geometry, coordinates: atEnd ? [...path.slice(0, at.index), point] : [point, ...path.slice(at.index)] };
+          changed = true;
+        }
+      }
+    }
+  }
+  return pieces.filter((p) => !gone.has(p));
+}
+
 /**
  * The nearest point on the track to `point` ([lon, lat]), among the pieces
  * `sharedTrack` returned, or null if none is within `maxMeters`.
