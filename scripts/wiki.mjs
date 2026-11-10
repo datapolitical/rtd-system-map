@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 // The contents groups, by page name (the heading before any ":" or "(...)").
 // A section not listed here still gets a page, under "Other sections".
 const GROUPS = [
-  ['What the map is for', ['Objective', 'Who it is for', 'Why', 'Non goals',
+  ['What the map is for', ['Principles', 'Objective', 'Who it is for', 'Why', 'Non goals',
     'What people can do in priority order']],
   ['How it is built', ['Zero maintenance', 'Data', 'Map design', 'Interface',
     'Installed on a phone', 'Voice', 'Architecture', 'Unattended work']],

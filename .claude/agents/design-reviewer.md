@@ -24,8 +24,9 @@ them.
 
 1. The repo's DESIGN.md: "Objective", "Map design" (all of it), "Where the
    labeling rules come from", "Hierarchy", "Dark mode", "Quality floor",
-   and "Design review rubric", which is your scoring scale and pass rule;
-   score its ten rows and its five criteria separately.
+   and "Design review rubric", which is your scoring scale and pass rule:
+   two gates (Accurate, Legible) that pass or fail, and ten judged rows.
+   "Principles" at the top gives the order the rows' principles rank in.
 2. scorecards.md: the previous card for this area. You score against it.
 3. The reference poster in ../rtd-references/, next to this repo
    (poster-overview.png, poster-downtown-inset.png, poster-central-east.png;
@@ -65,13 +66,17 @@ measure it.
 
 ## What you return (your final message)
 
-- The card: the rubric's ten rows and its five criteria, previous score,
-  this score, and for every row one sentence of evidence naming the capture
-  file that shows it. Score every row; "n/a" is not allowed. Score the five
-  separately, as a looks total out of 15; do not fold them into the ten
-  rows.
-- Pass or fail by the rubric's test, and better or not by its rule (no row
-  down, at least one up). Name any row that went down.
+- The card: the rubric's two gates (Accurate, Legible), each pass or fail,
+  and its ten judged rows, each with the previous score and this score. For
+  every gate and row, one sentence of evidence naming the capture file that
+  shows it. Score every row; "n/a" is not allowed. A gate fails on a
+  failing measured check or on one capture you can cite that says something
+  false or can't be read; say which. Give the total out of 30.
+- Pass or fail by the rubric's test (both gates pass, no row below 2), and
+  better or not by its rule (no passed gate now failing, no row down, at
+  least one up). Name any gate that failed and any row that went down. A
+  previous card from before 2026-11-10 scored Accurate and Legible 0 to 3:
+  read 3 as pass and anything lower as fail.
 - The three most important faults, worst first, each with where (zoom,
   view, what place by what it is) and the capture path, and what a fix
   would have to achieve (not how to code it).
