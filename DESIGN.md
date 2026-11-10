@@ -3340,6 +3340,17 @@ work against the real structure before asking for evaluation.
   automated task test (not built, #66), and Chris reviews the map himself
   when he chooses. Replaces the five-person test of milestone 5 and V3 step
   11.
+- 2026-11-10: Frequency stays a weekday 9am to 3pm measure (#35). A reviewer
+  found the 120 drawn hourly though it comes about every 30 minutes in rush
+  hours; ten routes are hourly at midday and about every 30 in rush hours,
+  and four go from every 30 to every 15 or better. The lines keep the
+  midday measure the key names, and the route panel gains weekday morning
+  and afternoon rush-hour rows in RTD's own periods, 6 to 9am and 3 to 6pm
+  (#22). A longer measuring day (6am to 7pm) was not adopted: the 120 would
+  still draw hourly, and the 8, 88 and 92 would drop from every 30 to
+  hourly. A time-of-day choice is looked at again once streets are drawn as
+  one line. Chris left the choice to the review; it took the research's
+  recommendation.
 
 ## Sources
 
