@@ -56,10 +56,10 @@ test('the detector finds seeded low contrast @deep', async ({ mapPage }, testInf
     const A = q.area();
     const fill = q.bullets().find((b) => b.x > A.x0 + 10 && b.x < A.x1 - 10 && b.y > A.y0 + 10 && b.y < A.y1 - 10)?.fill;
     if (fill) for (const id of ['rail-bullets', 'rail-edge-letters']) set(id, 'text-color', `rgb(${fill.join(',')})`);
-    // The bus tiers: the outputs of the match on `tier`, reversed.
+    // The bus tiers (or street classes): the outputs of the match on `tier` (`cls`), reversed.
     const flip = (e) => {
       if (!Array.isArray(e)) return e;
-      if (e[0] === 'match' && Array.isArray(e[1]) && e[1][1] === 'tier') {
+      if (e[0] === 'match' && Array.isArray(e[1]) && (e[1][1] === 'tier' || e[1][1] === 'cls')) {
         const outs = []; for (let i = 3; i < e.length - 1; i += 2) outs.push(e[i]);
         outs.reverse();
         const c = [...e]; let k = 0; for (let i = 3; i < e.length - 1; i += 2) c[i] = outs[k++];
@@ -67,7 +67,8 @@ test('the detector finds seeded low contrast @deep', async ({ mapPage }, testInf
       }
       return e.map(flip);
     };
-    set('bus', 'line-color', flip(m.getPaintProperty('bus', 'line-color')));
+    const busLayer = window.__qa.busLayer();
+    if (busLayer) set(busLayer, 'line-color', flip(m.getPaintProperty(busLayer, 'line-color')));
     window.__keep = keep;
     return route;
   });

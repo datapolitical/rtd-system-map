@@ -91,6 +91,7 @@ export function busStretches(features, text, dates, groupOf = (id) => id, { stop
   const kx = 111320 * Math.cos((origin[1] * Math.PI) / 180);
   const ky = 110540;
   const project = ([lon, lat]) => [(lon - origin[0]) * kx, (lat - origin[1]) * ky];
+  const unproject = ([x, y]) => [round(x / kx + origin[0]), round(y / ky + origin[1])];
 
   // Trip patterns: trips on one shape with the same stops share their stops'
   // places along it.
@@ -116,6 +117,7 @@ export function busStretches(features, text, dates, groupOf = (id) => id, { stop
 
   const out = [];
   const report = [];
+  const loads = new Map();
   for (const f of features) {
     const p = f.properties;
     const routePatterns = patternsByRoute.get(p.route) ?? [];
@@ -141,8 +143,9 @@ export function busStretches(features, text, dates, groupOf = (id) => id, { stop
       });
     });
     report.push({ route: p.route, stretches: result.stretches.length, uncovered: result.uncovered });
+    loads.set(p.route, [...(loads.get(p.route) ?? []), ...result.loads.map((l) => ({ ...l, at: unproject(l.at) }))]);
   }
-  return { features: out, report };
+  return { features: out, report, loads };
 }
 
 function splitRoute(p, parts, routePatterns, { shapes, stops, project, kinds }) {
@@ -227,11 +230,14 @@ function splitRoute(p, parts, routePatterns, { shapes, stops, project, kinds }) 
           // bend, not past where it turns away: a branch going straight on
           // isn't on the one that turns.
           if (((raw < 0 && !seg.first) || (raw > seg.len && !seg.last)) && d > BEND) continue;
-          if (d <= WIDE) (passes.get(seg.id) ?? passes.set(seg.id, []).get(seg.id)).push({ d, s: seg.at + t });
+          // Which way the shape runs here against the drawn line: with it (1) or
+          // against it (-1), so a street's two directions can be told apart.
+          const sense = c.dir[0] * seg.ux + c.dir[1] * seg.uy >= 0 ? 1 : -1;
+          if (d <= WIDE) (passes.get(seg.id) ?? passes.set(seg.id, []).get(seg.id)).push({ d, s: seg.at + t, sense });
         }
       }
     }
-    c.on = []; // [pattern, place along its shape]
+    c.on = []; // [pattern, place along its shape, sense]
     const serves = (pattern, s) => s >= pattern.pos[0] - END_SLACK && s <= pattern.pos.at(-1) + END_SLACK;
     const near = []; // [pattern, its closest pass in service]
     for (const [id, list] of passes) {
@@ -241,7 +247,7 @@ function splitRoute(p, parts, routePatterns, { shapes, stops, project, kinds }) 
       }
     }
     const here = new Set(near.filter(([, pass]) => pass.d <= COVER).map(([pattern]) => pattern.dir));
-    for (const [pattern, pass] of near) if (pass.d <= COVER || here.has(pattern.dir)) c.on.push([pattern, pass.s]);
+    for (const [pattern, pass] of near) if (pass.d <= COVER || here.has(pattern.dir)) c.on.push([pattern, pass.s, pass.sense]);
   }
   const covered = cells.filter((c) => c.on.length);
   if (!covered.length) return null;
@@ -394,7 +400,14 @@ function splitRoute(p, parts, routePatterns, { shapes, stops, project, kinds }) 
     return { length, values, lines: group.map((g) => g.line).filter((l) => l.length >= 2) };
   });
   stretches.sort((a, b) => b.length - a.length);
-  return { stretches, uncovered };
+  // Each cell as the street map needs it (scripts/lib/streets.mjs): where it
+  // is, which way the drawn line runs there, the tier it ended in, and the
+  // weekday departures in the window each way along the line.
+  const loads = cells.map((c) => {
+    const day = c.on.length ? measure(c, 'weekday') : { with: [], against: [] };
+    return { at: c.mid, dir: c.dir, tier: tier[c.id], with: day.with, against: day.against };
+  });
+  return { stretches, uncovered, loads };
 }
 
 // A cell's tier on one kind of day, from `measure`, with two allowances so
@@ -431,8 +444,9 @@ function cellDay(cell, kind, route) {
 // The trips that pass a cell's middle on one kind of day, per direction.
 function measure(cell, kind) {
   const byDir = new Map();
+  const bySense = { with: [], against: [] };
   let trips = 0;
-  for (const [pattern, s] of cell.on) {
+  for (const [pattern, s, sense] of cell.on) {
     const { pos } = pattern;
     // The stop at or before s.
     let lo = 0;
@@ -451,12 +465,17 @@ function measure(cell, kind) {
       if (!Number.isFinite(t)) continue;
       trips++;
       (byDir.get(trip.dir) ?? byDir.set(trip.dir, []).get(trip.dir)).push(t);
+      if (t >= MIDDAY[0] && t < MIDDAY[1]) bySense[sense < 0 ? 'against' : 'with'].push(Math.round(t));
     }
   }
-  if (!trips) return { trips: 0, firstSeconds: null, lastSeconds: null };
+  if (!trips) return { trips: 0, firstSeconds: null, lastSeconds: null, with: [], against: [] };
   const dirs = [...byDir.values()].map(directionSummary);
   return {
     ...daySummary(dirs, trips),
+    // Departure times (seconds) in the window past this cell, each way along
+    // the drawn line, for the street map to add up across routes.
+    with: bySense.with.sort((a, b) => a - b),
+    against: bySense.against.sort((a, b) => a - b),
     firstSeconds: Math.min(...dirs.map((d) => d.first)),
     lastSeconds: Math.max(...dirs.map((d) => d.last)),
   };

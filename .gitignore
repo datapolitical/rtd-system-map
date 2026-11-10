@@ -27,3 +27,5 @@ qa/findings/
 # Frozen builds and scores for npm run check:recall (qa/recall/README.md).
 qa/recall/fixtures/
 qa/recall/out/
+# Captures and scripts from the frequency work (not kept).
+.captures/

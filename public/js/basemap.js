@@ -6,7 +6,7 @@
 // layer lists are functions, called again when the system theme changes.
 
 import { P } from './palette.js';
-import { DETAIL_FROM, TIERS, tierWidth } from './shared.js';
+import { DETAIL_FROM, PART_TIME, STREETS, TIERS, classWidth, tierWidth } from './shared.js';
 import { OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, ZOOMS } from './sizes.js';
 
 // Overpass, the interface's own face, drawn from glyphs the site makes itself
@@ -168,21 +168,29 @@ const KEEP_OUT = 2; // px of clear space on each side, besides the shield's own 
 // lines are a block apart, and a station with no name is worse than a name
 // across one of them. Every other name is placed after them all.
 const THIN_CLEAR_FROM = 11.5;
-const BUS_FROM = [...new Set(TIERS.map((t) => t.from))].sort((a, b) => a - b);
+// Where the lighter streets, then the part-time routes, start to be drawn.
+const LIGHT_FROM = [Math.min(...STREETS.filter((c) => c.from > 0).map((c) => c.from)), Math.min(...TIERS.filter((t) => PART_TIME.includes(t.id)).map((t) => t.from))];
 const alongLine = { 'symbol-placement': 'line', 'symbol-spacing': 4, 'icon-rotation-alignment': 'viewport' };
-// Buses, one layer for each zoom a tier starts at, so a line that isn't drawn
-// yet holds nothing back. A tier the page doesn't know is drawn like the
-// last, and kept clear of like the last.
-const busKeepOut = () =>
-  BUS_FROM.map((from, i) => {
-    const last = i === BUS_FROM.length - 1;
-    const mine = ['in', ['get', 'tier'], ['literal', TIERS.filter((t) => (last ? t.from < from : t.from === from)).map((t) => t.id)]];
-    return clear(`keep-out-bus-${i}`, 'routes', {
-      ...(i ? { minzoom: Math.max(from, THIN_CLEAR_FROM) } : {}),
-      filter: ['all', ['==', ['get', 'mode'], 'bus'], last ? ['!', mine] : mine],
-      layout: { ...alongLine, 'icon-size': tierWidth(1) },
-    });
-  });
+// The streets, by class: the heaviest (every 15 or better) in the first
+// layer, which every name stays off; the lighter ones from THIN_CLEAR_FROM;
+// and last the part-time routes, drawn by route.
+const HEAVY = STREETS.filter((c) => c.from === 0).map((c) => c.id);
+const busKeepOut = () => [
+  clear('keep-out-bus-0', 'streets', {
+    filter: ['in', ['get', 'cls'], ['literal', HEAVY]],
+    layout: { ...alongLine, 'icon-size': classWidth(1) },
+  }),
+  clear('keep-out-bus-1', 'streets', {
+    minzoom: THIN_CLEAR_FROM,
+    filter: ['!', ['in', ['get', 'cls'], ['literal', HEAVY]]],
+    layout: { ...alongLine, 'icon-size': classWidth(1) },
+  }),
+  clear('keep-out-bus-2', 'routes', {
+    minzoom: THIN_CLEAR_FROM,
+    filter: ['all', ['==', ['get', 'mode'], 'bus'], ['in', ['get', 'tier'], ['literal', PART_TIME]]],
+    layout: { ...alongLine, 'icon-size': tierWidth(1) },
+  }),
+];
 // Rail and the strongest bus tier: what station names stay off (network.js).
 export const lineKeepOut = () => [
   busKeepOut()[0],
@@ -205,7 +213,7 @@ export const lineKeepOut = () => [
 const shieldKeepOut = () =>
   busKeepOut()
     .slice(1)
-    .map((l, i) => ({ ...l, id: `keep-out-bus-shields-${i + 1}`, minzoom: BUS_FROM[i + 1], maxzoom: THIN_CLEAR_FROM }));
+    .map((l, i) => ({ ...l, id: `keep-out-bus-shields-${i + 1}`, minzoom: LIGHT_FROM[i], maxzoom: THIN_CLEAR_FROM }));
 
 // Stations and stops hold back the basemap's names too, and so do the lighter
 // bus lines. Not the stations' own names: those sit beside their mark.
