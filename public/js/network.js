@@ -235,8 +235,11 @@ export function transitLines(lines) {
       id: 'street',
       type: 'line',
       source: 'streets',
+      // Round ends: streets meet at the street graph's nodes (#80), so a
+      // street turning into another at an angle shows no notch at the
+      // corner, and a route's own end is rounded.
       layout: {
-        'line-cap': 'butt',
+        'line-cap': 'round',
         'line-join': 'round',
         'line-sort-key': classMatch((c) => CLASS_RANK[c.id]),
       },

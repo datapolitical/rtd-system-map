@@ -1,450 +1,512 @@
-// Streets by combined bus frequency (DESIGN.md, "Bus routes"). Each street
-// a bus runs on is drawn once, and its width says how often a bus comes
-// along that stretch, every route on it counted together: a downtown street
-// with twelve routes is one very thick line, a street with one hourly route
-// a hairline. (Chris, 2026-11-08: "show the frequency of the section of road
-// and just have it scale up, so it's a single line but very thick".)
+// Streets by combined bus frequency, on one street graph (DESIGN.md, "Bus
+// routes"; #80). Each street a bus runs on is drawn once, and its width says
+// how often a bus comes along it, every route on it counted together.
+// (Chris, 2026-11-08: "show the frequency of the section of road and just
+// have it scale up, so it's a single line but very thick".)
 //
-// 1. Each route's line, once (the longest piece whole, the others only where
-//    they go somewhere it doesn't), as points STEP apart. Each point takes
-//    the route's weekday departures in the window past there, each way along
-//    the line, from the cells busStretches measured (`loads`).
-// 2. Every point finds the other routes running alongside: within ALONG
-//    meters and ANGLE degrees of the same bearing, and alongside for at least
-//    TOGETHER meters, so routes that merely cross, or a one-way pair whose
-//    streets meet at an end, don't count. Where routes run together the
-//    drawn point is moved to the middle of them, so the street is drawn once
-//    where they all run, within meters of each.
-// 3. A point's buses per hour come from the departures of every all-day
-//    route alongside it, merged each way along the street; the busier way
-//    counts (a one-way street has one). The rate is the rider's: the wait a
-//    rider arriving at random expects, doubled (the sum of the squared gaps
-//    over the sum of the gaps; `rate`), so two every-30 routes that leave a
-//    minute apart stay "every 30", and only buses that interleave add up to
-//    a faster street. Part-time routes (rush hours, a few trips) are listed
-//    but add nothing: they keep their own dashed lines.
-// 4. A shared run is drawn once, by the route first in number order, and cut
-//    where the routes or the class change. Runs are joined end to end where
-//    a route joins or leaves, so a branch starts on the trunk's middle line
-//    and a trunk ends where its branch begins, with no gap or stub.
+// RTD draws its bus routes on one street network: routes that share a
+// street share its line. (On 2026-11-10, where another route ran within
+// 50 m of a route, it was within 1 m for 86% of the length; the rest is
+// mostly the two carriageways of a divided road, 12 to 24 m apart, each
+// carrying every route on that road.) So the streets are not guessed from
+// which routes run near each other: RTD's lines are joined where they meet,
+// and the streets are the edges of the graph that makes.
+//
+// 1. The graph. Every vertex within NODE_METERS of another is one node, and
+//    a node lying on another line's segment splits it there, so two lines
+//    drawn along one street with their vertices in different places become
+//    the same edges. Each edge carries the route stretches (route, tier,
+//    headway) drawn along it.
+// 2. Runs. A drawn street is a run of edges with one set of stretches,
+//    through every node where that set goes straight on (a crossing street
+//    doesn't cut it) and cut where a route joins or leaves. Runs meet at
+//    shared nodes, so the drawing breaks only where RTD's lines do.
+// 3. Buses per hour, once per run. Each route's measured cells
+//    (stretches.mjs: weekday departures in the window, each way along the
+//    route's line) lie on its own line, which is the run: the cell nearest
+//    the run's middle gives the route's departures each way. The run's rate
+//    is the rider's (`rate`), from the departures of every all-day route on
+//    it, merged each way, the busier way counting. Part-time routes are
+//    listed and add nothing: they keep their own dashed lines.
+// 4. One way. A run whose buses run only one way (the other way at most
+//    ONE_WAY of the busier) is drawn the way they go, so its arrows point
+//    that way. The two carriageways of a divided road are each one way, but
+//    the road is not: a one-way run with a twin, a one-way run of one of
+//    its routes the other way within TWIN_METERS alongside it, carries no
+//    arrows (until stage 2 draws the road as one line, #81).
 
 import { MIDDAY } from './gtfs.mjs';
-import { Grid, closestOnSegment, dedupe, densify as densifyBy, direction, length, partsOf, projection, segmentDistance, simplify } from './geom.mjs';
-import { CLASS_RANK, classOf as classOfBph } from '../../public/js/frequency.js';
+import { dedupe, length, partsOf, projection, simplify } from './geom.mjs';
+import { classOf as classOfBph } from '../../public/js/frequency.js';
 
-// How far apart points are compared along each line.
-const STEP = 20;
-// Routes this close, running the same way, share a street...
-const ALONG = 35;
-const ANGLE_COS = Math.cos((25 * Math.PI) / 180);
-// ...for at least this far. Shorter is a crossing or a touch, not a street.
-export const TOGETHER = 50;
-// Routes this close count fully toward the middle of their street.
-const CLOSE = 15;
-// A route's own pieces this close are the same street (both directions drawn).
-const OWN = 30;
-// A point takes the route's cell within this distance.
-const CELL = 60;
-// Within one set of routes, a class that holds for less than this is the
-// same buses read a little differently (a trip at the window's edge), and
-// takes its neighbour's class.
-export const CLASS_MIN = 200;
-// A run's loose end joins another run's end this close (a junction).
-const JOIN = ALONG + STEP;
+// Vertices this close are one node of the street graph.
+export const NODE_METERS = 1.5;
+// A route's cell belongs to a run when it lies within this of the run's
+// line (cells are measured on the route's own line, which is the run).
+const CELL_METERS = 3;
+// ...or, for a run shorter than the cells' spacing, the nearest within this.
+const CELL_NEAR = 40;
+// Buses the other way at most this share of the busier way's: one way.
+const ONE_WAY = 0.15;
+// A one-way run with a run of one of its routes the other way, parallel
+// within TWIN_COS and this close, is a carriageway of a two-way road.
+const TWIN_METERS = 60;
+const TWIN_COS = Math.cos((20 * Math.PI) / 180);
+// A loose end whose own route has another line within this is reported as
+// a possible break (report.ends).
+const BREAK_METERS = 30;
+// ...and joined to it, if that line is ahead of it (closeGaps).
+const CLOSE_METERS = 30;
+const CLOSE_COS = Math.cos((60 * Math.PI) / 180);
+const CLOSE_ANY = 15;
 // Tiers that run through the window and so count toward the street.
 const ALL_DAY = new Set(['frequent', 'every30', 'hourly', 'infrequent']);
 const HOURS = (MIDDAY[1] - MIDDAY[0]) / 3600;
 
 const collator = new Intl.Collator('en', { numeric: true });
 const byNumber = (a, b) => collator.compare(a, b);
-const densify = (points) => densifyBy(points, STEP);
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+function closest(p, a, b) {
+  const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+  const l = dx * dx + dy * dy;
+  const t = l ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l)) : 0;
+  const q = [a[0] + t * dx, a[1] + t * dy];
+  return { t, q, d: dist(p, q) };
+}
+
+// Items in square cells, for finding what is near a point.
+class Cells {
+  constructor(size) {
+    this.size = size;
+    this.map = new Map();
+  }
+  key(x, y) {
+    return `${Math.floor(x / this.size)},${Math.floor(y / this.size)}`;
+  }
+  add(item, ...points) {
+    const keys = new Set(points.map(([x, y]) => this.key(x, y)));
+    for (const k of keys) (this.map.get(k) ?? this.map.set(k, []).get(k)).push(item);
+  }
+  // A segment, in every cell it passes through.
+  addSegment(item, a, b) {
+    const steps = Math.max(1, Math.ceil(dist(a, b) / (this.size / 2)));
+    this.add(item, ...Array.from({ length: steps + 1 }, (_, k) => [a[0] + ((b[0] - a[0]) * k) / steps, a[1] + ((b[1] - a[1]) * k) / steps]));
+  }
+  // Every item in this cell and the eight around it: everything within
+  // `size` of p, and some further.
+  near([x, y]) {
+    const [cx, cy] = [Math.floor(x / this.size), Math.floor(y / this.size)];
+    const out = new Set();
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const item of this.map.get(`${cx + dx},${cy + dy}`) ?? []) out.add(item);
+    return out;
+  }
+}
 
 /**
- * `features` are the bus route features as drawn (stretches with `route`,
- * `tier` and `wk`); `loads` is busStretches' per-route cells. Returns
- * LineString features, one per stretch of street, with `routes` (every route
- * along it, space-separated, in number order), `n` (how many run all day),
- * `bph` (buses per hour in the busier direction, to a tenth), `hw` (the
- * combined wait in minutes, rounded) and `cls` (its class, frequency.js).
+ * The street graph of `features` (bus route stretches: LineString or
+ * MultiLineString, with `route`, `tier`, `wk`), in metres from `project`.
+ * Returns { nodes: [[x, y]], edges: [{ a, b, stretches: Set }], stretches:
+ * [{ route, tier, wk }], parts: [{ stretch, ids }] }, edges with a < b.
  */
-export function busStreets(features, loads = new Map(), { precision = 5, simplify: tolerance = 1, classOf = classOfBph } = {}) {
-  const first = features.find((f) => partsOf(f.geometry).some((p) => p.length));
-  if (!first) return [];
-  const { project, unproject } = projection(partsOf(first.geometry).find((p) => p.length)[0], precision);
-
-  // 1. Each route's line once, with the departures past each point.
-  const tracks = buildTracks(features, loads, project);
-  const position = new Map([...new Set(tracks.map((t) => t.route))].sort(byNumber).map((r, i) => [r, i]));
-  const inOrder = (a, b) => position.get(a) - position.get(b);
-
-  // 2. The routes alongside each point.
-  const all = new Grid(ALONG);
-  for (const t of tracks) for (let i = 1; i < t.points.length; i++) all.add(t.points[i - 1], t.points[i], { track: t, i });
-  for (const t of tracks) {
-    t.beside = t.points.map((p, i) => {
-      const found = new Map();
-      for (const { item, a, b } of all.near(p, ALONG)) {
-        const other = item.track;
-        if (other === t || found.has(other.route)) continue;
-        const v = [b[0] - a[0], b[1] - a[1]];
-        const len = Math.hypot(...v) || 1;
-        const dot = (t.dirs[i][0] * v[0] + t.dirs[i][1] * v[1]) / len;
-        if (Math.abs(dot) < ANGLE_COS) continue;
-        // Alongside, not off the end of the other route.
-        const foot = ((p[0] - a[0]) * v[0] + (p[1] - a[1]) * v[1]) / len;
-        if (foot < -1 || foot > len + 1) continue;
-        const at = closestOnSegment(p, a, b);
-        const k = Math.hypot(at[0] - a[0], at[1] - a[1]) < len / 2 ? item.i - 1 : item.i;
-        found.set(other.route, { track: other, k, at, flipped: dot < 0 });
-      }
-      return found;
-    });
-    // Alongside for TOGETHER or more, or not at all: a run of points sharing
-    // a route that is shorter is dropped.
-    for (const r of new Set(t.beside.flatMap((m) => [...m.keys()]))) {
-      const has = t.beside.map((m) => m.has(r));
-      for (let i = 0; i < has.length; ) {
-        if (!has[i]) {
-          i++;
-          continue;
-        }
-        let j = i;
-        while (j < has.length && has[j]) j++;
-        if (length(t.points.slice(i, j)) < TOGETHER) for (let k = i; k < j; k++) t.beside[k].delete(r);
-        i = j;
-      }
-    }
-  }
-
-  // Where routes run together, each point is drawn in the middle of them. A
-  // route that has started to leave counts for less and less (from CLOSE
-  // away to ALONG), so it doesn't pull the street after it.
-  for (const t of tracks) {
-    t.mean = t.points.map((p, i) => {
-      let [sx, sy, sw] = [p[0], p[1], 1];
-      for (const f of t.beside[i].values()) {
-        const w = Math.max(0, Math.min(1, (ALONG - dist(p, f.at)) / (ALONG - CLOSE)));
-        [sx, sy, sw] = [sx + w * f.at[0], sy + w * f.at[1], sw + w];
-      }
-      return [sx / sw, sy / sw];
-    });
-  }
-
-  // 3. Buses per hour at each point: every all-day route alongside, merged
-  // each way along this track's line.
-  for (const t of tracks) {
-    t.bph = t.points.map((p, i) => {
-      const w = [...t.load[i].with];
-      const a = [...t.load[i].against];
-      for (const f of t.beside[i].values()) {
-        const l = f.track.load[f.k];
-        w.push(...(f.flipped ? l.against : l.with));
-        a.push(...(f.flipped ? l.with : l.against));
-      }
-      return Math.max(rate(w), rate(a));
-    });
-    t.routes = t.points.map((p, i) => [t.route, ...t.beside[i].keys()].sort(byNumber));
-    t.n = t.points.map((p, i) => (t.allDay[i] ? 1 : 0) + [...t.beside[i].values()].filter((f) => f.track.allDay[f.k]).length);
-    t.cls = smoothClasses(t, t.bph.map(classOf));
-  }
-
-  // 4. Each shared run once, from the first route in number order, cut
-  // where the routes or the class change. Two runs on one track share the
-  // vertex at their cut, taken on the shared side (the first point where a
-  // route has joined, the last where one is still there), which is on the
-  // middle line of the street: a trunk ends where its branch begins, and a
-  // branch starts from the trunk's middle, with no stub of trunk along it.
-  const runs = [];
-  for (const t of tracks) {
-    const owned = t.routes.map((rs) => rs.every((r) => position.get(r) >= position.get(t.route)));
-    const key = (i) => (owned[i] ? `${t.routes[i].join(' ')}|${t.cls[i]}` : null);
-    const n = t.points.length;
-    const cuts = [0];
-    for (let i = 1; i < n; i++) if (key(i) !== key(i - 1)) cuts.push(i);
-    cuts.push(n);
-    const vertex = (c) => (c <= 0 ? 0 : c >= n ? n - 1 : t.beside[c].size > t.beside[c - 1].size ? c : c - 1);
-    for (let k = 0; k + 1 < cuts.length; k++) {
-      const [a, b] = [cuts[k], cuts[k + 1]];
-      if (key(a) == null || !t.n[a]) continue;
-      const [from, to] = [vertex(a), vertex(b)];
-      if (to <= from) continue;
-      const idx = Array.from({ length: to - from + 1 }, (_, j) => from + j);
-      runs.push({
-        track: t,
-        from,
-        to,
-        points: idx.map((j) => t.mean[j]),
-        routes: t.routes[a],
-        n: t.n[a],
-        cls: t.cls[a],
-        bph: median(Array.from({ length: b - a }, (_, j) => t.bph[a + j])),
-        // A loose end: the track goes on, but another route owns the street
-        // there. It is joined to the run that has the street.
-        openStart: a > 0 && !owned[a - 1],
-        openEnd: b < n && !owned[b],
-      });
-    }
-  }
-  joinEnds(runs);
-  // At a cut, the heavier run goes on one point into the lighter (the width
-  // of an intersection), so the heavier line runs through the crossing
-  // where routes part, with its corner rounded, and the lighter one begins
-  // flush inside it: a butt end on a bend would leave a notch.
-  for (const t of tracks) {
-    const mine = runs.filter((r) => r.track === t).sort((a, b) => a.from - b.from);
-    for (let k = 1; k < mine.length; k++) {
-      const [a, b] = [mine[k - 1], mine[k]];
-      if (a.to !== b.from) continue;
-      const v = a.to;
-      if (CLASS_RANK[b.cls] > CLASS_RANK[a.cls]) b.points.unshift(t.mean[v - 1]);
-      else if (v + 1 <= b.to) a.points.push(t.mean[v + 1]);
-    }
-  }
-
-  return runs
-    .map((run) => ({
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: dedupe(simplify(dedupe(run.points), tolerance).map(unproject)) },
-      properties: {
-        mode: 'bus',
-        routes: run.routes.join(' '),
-        n: run.n,
-        bph: Math.round(run.bph * 10) / 10,
-        hw: run.bph > 0 ? Math.max(1, Math.round(60 / run.bph)) : null,
-        cls: run.cls,
-      },
-    }))
-    .filter((f) => f.geometry.coordinates.length >= 2);
-}
-
-// Each route's line once, as tracks of points with the route's departures
-// past each point each way along the line, and whether the route runs all
-// day there.
-function buildTracks(features, loads, project) {
-  const pieces = new Map(); // route -> [{ points, tier, wk }]
+export function streetGraph(features, project, { tolerance = NODE_METERS, close = CLOSE_METERS } = {}) {
+  const nodes = [];
+  const nodeCells = new Cells(tolerance * 2);
+  const nodeAt = (p) => {
+    for (const id of nodeCells.near(p)) if (dist(nodes[id], p) <= tolerance) return id;
+    nodes.push(p);
+    nodeCells.add(nodes.length - 1, p);
+    return nodes.length - 1;
+  };
+  // A stretch is a route at one tier and headway: runs are cut where one
+  // joins or leaves, so a route that runs less often past a short turn is
+  // drawn at its own rate there.
+  const stretches = [];
+  const stretchOf = new Map();
+  const parts = [];
   for (const f of features) {
     const { route, tier, wk } = f.properties;
+    const key = `${route}\u0000${tier}\u0000${wk ?? ''}`;
+    if (!stretchOf.has(key)) {
+      stretchOf.set(key, stretches.length);
+      stretches.push({ route: String(route), tier, wk: wk ?? null });
+    }
     for (const part of partsOf(f.geometry)) {
-      if (part.length < 2) continue;
-      (pieces.get(route) ?? pieces.set(route, []).get(route)).push({ points: densify(part.map(project)), tier, wk });
-    }
-  }
-  const tracks = [];
-  for (const [route, list] of pieces) {
-    const kept = new Grid(OWN);
-    const mine = [];
-    list.sort((a, b) => length(b.points) - length(a.points));
-    for (const { points, tier, wk } of list) {
-      const own = points.map((p) => kept.near(p, OWN).length > 0);
-      let start = -1;
-      for (let i = 0; i <= points.length; i++) {
-        const free = i < points.length && !own[i];
-        if (free && start < 0) start = i;
-        if (!free && start >= 0) {
-          const run = points.slice(Math.max(0, start - 1), Math.min(points.length, i + 1));
-          // An end that lies on a piece already kept is moved onto its line,
-          // so the route's own branch starts from its own street.
-          if (start > 0) run[0] = onto(kept, run[0]);
-          if (i < points.length) run[run.length - 1] = onto(kept, run[run.length - 1]);
-          if (run.length >= 2 && length(run) >= STEP) mine.push({ route, points: run, tiers: run.map(() => tier), wks: run.map(() => wk) });
-          start = -1;
-        }
+      const ids = [];
+      for (const q of part) {
+        const id = nodeAt(project(q));
+        if (ids.at(-1) !== id) ids.push(id);
       }
-      for (let i = 1; i < points.length; i++) kept.add(points[i - 1], points[i], { route, tier });
-    }
-    // The route's cells, to read each point's departures from.
-    const cells = new Grid(CELL);
-    for (const c of loads.get(route) ?? []) {
-      const at = project(c.at);
-      cells.add(at, at, c);
-    }
-    for (const t of chain(mine)) {
-      t.dirs = t.points.map((_, i) => direction(t.points, i));
-      t.allDay = t.tiers.map((tier) => ALL_DAY.has(tier));
-      t.load = t.points.map((p, i) => {
-        if (!t.allDay[i]) return { with: [], against: [] };
-        const near = cells.near(p, CELL).map((s) => s.item).sort((a, b) => dist(project(a.at), p) - dist(project(b.at), p));
-        const cell = near.find((c) => ALL_DAY.has(c.tier)) ?? near[0];
-        if (!cell) {
-          // No cell measured here: the stretch's own headway, both ways, as
-          // evenly spaced departures.
-          const times = t.wks[i] ? Array.from({ length: Math.floor((HOURS * 60) / t.wks[i]) }, (_, k) => MIDDAY[0] + k * t.wks[i] * 60) : [];
-          return { with: times, against: times };
-        }
-        const same = cell.dir[0] * t.dirs[i][0] + cell.dir[1] * t.dirs[i][1] >= 0;
-        return same ? { with: cell.with, against: cell.against } : { with: cell.against, against: cell.with };
-      });
-      tracks.push(t);
+      if (ids.length >= 2) parts.push({ stretch: stretchOf.get(key), ids });
     }
   }
-  return tracks;
-}
-
-// A route's stretches, joined where one ends where the next begins, so a
-// street isn't cut where a route's own tier changes but its company doesn't.
-function chain(list) {
-  const out = [];
-  const used = new Set();
-  const meet = (a, b) => dist(a, b) <= OWN;
-  const reversed = (t) => ({ points: [...t.points].reverse(), tiers: [...t.tiers].reverse(), wks: [...t.wks].reverse() });
-  for (let i = 0; i < list.length; i++) {
-    if (used.has(i)) continue;
-    used.add(i);
-    let { points, tiers, wks } = list[i];
-    for (let grew = true; grew; ) {
-      grew = false;
-      for (let j = 0; j < list.length; j++) {
-        if (used.has(j)) continue;
-        const t = list[j];
-        const [first, last] = [t.points[0], t.points.at(-1)];
-        const after = meet(points.at(-1), first) ? t : meet(points.at(-1), last) ? reversed(t) : null;
-        const before = after ? null : meet(points[0], last) ? t : meet(points[0], first) ? reversed(t) : null;
-        if (after) {
-          points = points.concat(after.points.slice(1));
-          tiers = tiers.concat(after.tiers.slice(1));
-          wks = wks.concat(after.wks.slice(1));
-        } else if (before) {
-          points = before.points.concat(points.slice(1));
-          tiers = before.tiers.concat(tiers.slice(1));
-          wks = before.wks.concat(wks.slice(1));
-        } else continue;
-        used.add(j);
-        grew = true;
+  // A node lying on a segment splits it, so the same street drawn with its
+  // vertices in different places is the same edges.
+  const SPLIT = 50;
+  const byCell = new Cells(SPLIT);
+  nodes.forEach((p, id) => byCell.add(id, p));
+  const onSegment = (a, b) => {
+    const [A, B] = [nodes[a], nodes[b]];
+    const found = [];
+    const len = dist(A, B);
+    const steps = Math.max(1, Math.ceil(len / SPLIT));
+    const seen = new Set();
+    for (let k = 0; k <= steps; k++) {
+      const p = [A[0] + ((B[0] - A[0]) * k) / steps, A[1] + ((B[1] - A[1]) * k) / steps];
+      for (const id of byCell.near(p)) {
+        if (seen.has(id) || id === a || id === b) continue;
+        seen.add(id);
+        const c = closest(nodes[id], A, B);
+        if (c.t > 0 && c.t < 1 && c.d <= tolerance) found.push({ id, t: c.t });
       }
     }
-    out.push({ route: list[i].route, points, tiers, wks });
-  }
-  return out;
-}
-
-// A run of one class shorter than CLASS_MIN takes the class of its longer
-// neighbour, shortest first: a neighbour with the same routes, or one a
-// single class away, so a street's width doesn't flicker where routes join
-// one after another, as they do into a terminal.
-function smoothClasses(t, cls) {
-  const out = [...cls];
-  const setKey = (i) => t.routes[i].join(' ');
-  for (let pass = 0; pass < 100; pass++) {
-    const runs = [];
-    for (let i = 0; i < out.length; ) {
-      let j = i;
-      while (j < out.length && out[j] === out[i] && setKey(j) === setKey(i)) j++;
-      runs.push({ from: i, to: j, length: length(t.points.slice(i, Math.min(out.length, j + 1))) });
-      i = j;
+    return found.sort((x, y) => x.t - y.t).map((x) => x.id);
+  };
+  const edgeOf = new Map();
+  const edges = [];
+  for (const part of parts) {
+    const ids = [part.ids[0]];
+    for (let i = 1; i < part.ids.length; i++) {
+      for (const m of onSegment(part.ids[i - 1], part.ids[i])) if (ids.at(-1) !== m) ids.push(m);
+      if (ids.at(-1) !== part.ids[i]) ids.push(part.ids[i]);
     }
-    const candidates = runs
-      .map((r, k) => {
-        if (r.length >= CLASS_MIN) return null;
-        // A neighbour with the same routes, or one a single class away (a
-        // route joining or leaving tips the rate over a boundary and back).
-        const near = [runs[k - 1], runs[k + 1]].filter(
-          (n) => n && (setKey(n.from) === setKey(r.from) || Math.abs(CLASS_RANK[out[n.from]] - CLASS_RANK[out[r.from]]) === 1),
-        );
-        return near.length ? { r, into: near.sort((a, b) => b.length - a.length)[0] } : null;
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.r.length - b.r.length);
-    if (!candidates.length) return out;
-    const { r, into } = candidates[0];
-    for (let i = r.from; i < r.to; i++) out[i] = out[into.from];
-  }
-  return out;
-}
-
-// Loose ends meet. Two loose ends within JOIN of each other (a trunk's end
-// and the start of the run that takes its street over, or a branch leaving)
-// are both set to the point between them, nearest pair first; a loose end
-// with no partner is carried onto the nearest other run's line, if one is
-// within JOIN, so a branch starts on the street it leaves.
-function joinEnds(runs) {
-  const ends = [];
-  for (const run of runs) {
-    if (run.openStart) ends.push({ run, side: 0 });
-    if (run.openEnd) ends.push({ run, side: 1 });
-  }
-  const at = (e) => (e.side ? e.run.points.at(-1) : e.run.points[0]);
-  const set = (e, p) => (e.side ? (e.run.points[e.run.points.length - 1] = p) : (e.run.points[0] = p));
-  const pairs = [];
-  for (let i = 0; i < ends.length; i++) {
-    for (let j = i + 1; j < ends.length; j++) {
-      if (ends[i].run === ends[j].run) continue;
-      const d = dist(at(ends[i]), at(ends[j]));
-      if (d <= JOIN) pairs.push({ d, a: ends[i], b: ends[j] });
+    part.ids = ids;
+    for (let i = 1; i < ids.length; i++) {
+      const [a, b] = ids[i - 1] < ids[i] ? [ids[i - 1], ids[i]] : [ids[i], ids[i - 1]];
+      const k = `${a}-${b}`;
+      if (!edgeOf.has(k)) {
+        edgeOf.set(k, edges.length);
+        edges.push({ a, b, stretches: new Set() });
+      }
+      edges[edgeOf.get(k)].stretches.add(part.stretch);
     }
   }
-  pairs.sort((x, y) => x.d - y.d);
-  const done = new Set();
-  const groups = []; // ends joined at one point, with the point
-  for (const { a, b } of pairs) {
-    if (done.has(a) && done.has(b)) continue;
-    const ga = groups.find((g) => g.ends.includes(a));
-    const gb = groups.find((g) => g.ends.includes(b));
-    if (ga && gb) continue;
-    const g = ga ?? gb ?? { ends: [] };
-    if (!ga && !gb) groups.push(g);
-    for (const e of [a, b]) if (!g.ends.includes(e)) g.ends.push(e);
-    done.add(a);
-    done.add(b);
-  }
-  for (const g of groups) {
-    const sum = g.ends.map(at).reduce((p, q) => [p[0] + q[0], p[1] + q[1]], [0, 0]);
-    const p = [sum[0] / g.ends.length, sum[1] / g.ends.length];
-    for (const e of g.ends) set(e, p);
-  }
-  // Loose ends with no partner: onto the nearest other run's line.
-  const grid = new Grid(JOIN);
-  for (const run of runs) for (let i = 1; i < run.points.length; i++) grid.add(run.points[i - 1], run.points[i], run);
-  for (const e of ends) {
-    if (done.has(e)) continue;
-    const p = at(e);
-    // A run that carries one of this run's routes first: the street the
-    // route came along, not a branch leaving it there.
-    const shares = (run) => run.routes.some((r) => e.run.routes.includes(r));
+  if (close > 0) closeGaps({ nodes, edges, stretches, edgeOf }, { close, tolerance });
+  return { nodes, edges, stretches, parts };
+}
+
+// A loose end whose own route has another line within `close` ahead of it
+// (within CLOSE_COS of the way its line came in, or within CLOSE_ANY in any
+// direction) stops short of where its buses go: a gap in RTD's lines, or a
+// terminal loop drawn open. A short edge carrying the loose end's routes
+// joins it to that line, split at the nearest point. Changes the graph.
+function closeGaps(graph, { close, tolerance }) {
+  const { nodes, edges, stretches, edgeOf } = graph;
+  const degree = new Map();
+  const at = new Map();
+  edges.forEach((e, i) => {
+    for (const n of [e.a, e.b]) {
+      degree.set(n, (degree.get(n) ?? 0) + 1);
+      (at.get(n) ?? at.set(n, []).get(n)).push(i);
+    }
+  });
+  const segs = new Cells(close);
+  edges.forEach((e, i) => segs.addSegment(i, nodes[e.a], nodes[e.b]));
+  const routesOf = (e) => new Set([...e.stretches].map((x) => stretches[x].route));
+  const addEdge = (a, b, set) => {
+    if (a === b) return;
+    const [x, y] = a < b ? [a, b] : [b, a];
+    const k = `${x}-${y}`;
+    if (!edgeOf.has(k)) {
+      edgeOf.set(k, edges.length);
+      edges.push({ a: x, b: y, stretches: new Set() });
+      segs.addSegment(edges.length - 1, nodes[x], nodes[y]);
+    }
+    for (const v of set) edges[edgeOf.get(k)].stretches.add(v);
+  };
+  const loose = [...degree].filter(([, d]) => d === 1).map(([n]) => n);
+  for (const n of loose) {
+    const mine = edges[at.get(n)[0]];
+    const from = nodes[mine.a === n ? mine.b : mine.a];
+    const p = nodes[n];
+    const way = [p[0] - from[0], p[1] - from[1]];
+    const own = routesOf(mine);
     let best = null;
-    for (const seg of grid.near(p, JOIN)) {
-      if (seg.item === e.run) continue;
-      const q = closestOnSegment(p, seg.a, seg.b);
-      const d = dist(p, q);
-      const rank = shares(seg.item) ? 0 : 1;
-      if (!best || rank < best.rank || (rank === best.rank && d < best.d)) best = { d, q, rank };
+    for (const i of segs.near(p)) {
+      const e = edges[i];
+      if (e === mine || e.a === n || e.b === n) continue;
+      if (![...routesOf(e)].some((r) => own.has(r))) continue;
+      const c = closest(p, nodes[e.a], nodes[e.b]);
+      if (c.d > close) continue;
+      const v = [c.q[0] - p[0], c.q[1] - p[1]];
+      const cos = (way[0] * v[0] + way[1] * v[1]) / ((Math.hypot(...way) * Math.hypot(...v)) || 1);
+      if (c.d > CLOSE_ANY && cos < CLOSE_COS) continue;
+      if (!best || c.d < best.c.d) best = { i, c };
     }
-    if (best && best.d > 0.5) (e.side ? e.run.points.push(best.q) : e.run.points.unshift(best.q));
+    if (!best) continue;
+    const e = edges[best.i];
+    // Onto the line: an end of the edge if the point is that close, else a
+    // new node splitting it.
+    let target;
+    if (dist(best.c.q, nodes[e.a]) <= tolerance) target = e.a;
+    else if (dist(best.c.q, nodes[e.b]) <= tolerance) target = e.b;
+    else {
+      target = nodes.length;
+      nodes.push(best.c.q);
+      const set = new Set(e.stretches);
+      edgeOf.delete(`${e.a}-${e.b}`);
+      const [a, b] = [e.a, e.b];
+      e.stretches = new Set(); // emptied: the two halves replace it
+      addEdge(a, target, set);
+      addEdge(target, b, set);
+    }
+    addEdge(n, target, mine.stretches);
   }
+  // Drop the emptied edges, and index the rest again.
+  const kept = edges.filter((e) => e.stretches.size);
+  edges.splice(0, edges.length, ...kept);
+  edgeOf.clear();
+  edges.forEach((e, i) => edgeOf.set(`${e.a}-${e.b}`, i));
 }
 
-// Buses per hour as a rider waits for them: departure `times` (seconds) in
-// the window, in any order, give the gaps between them; the expected wait of
-// someone arriving at random is half the sum of the squared gaps over the
-// sum of the gaps, so that doubled is the headway they feel, and the rate is
-// an hour over it. Evenly spaced buses give their plain rate; a pair that
-// leaves together counts about as one. Under two departures: the plain rate.
+/**
+ * The runs of a street graph: maximal paths of edges with one set of
+ * stretches, through every node where exactly two of its edges have that
+ * set. Each run is { nodes: [ids], stretches: Set }.
+ */
+export function runsOf(graph) {
+  const { edges } = graph;
+  const keyOf = edges.map((e) => [...e.stretches].sort((x, y) => x - y).join(','));
+  const at = new Map(); // node -> edge indexes
+  edges.forEach((e, i) => {
+    for (const n of [e.a, e.b]) (at.get(n) ?? at.set(n, []).get(n)).push(i);
+  });
+  const done = new Set();
+  const runs = [];
+  // From node n along edge i, keep going while the set goes straight on.
+  const walk = (n, i, key) => {
+    const out = [];
+    let [node, edge] = [n, i];
+    for (;;) {
+      const same = (at.get(node) ?? []).filter((j) => keyOf[j] === key);
+      if (same.length !== 2) break;
+      const next = same.find((j) => j !== edge);
+      if (done.has(next)) break;
+      done.add(next);
+      const e = edges[next];
+      node = e.a === node ? e.b : e.a;
+      out.push(node);
+      edge = next;
+    }
+    return out;
+  };
+  edges.forEach((e, i) => {
+    if (done.has(i)) return;
+    done.add(i);
+    const ahead = walk(e.b, i, keyOf[i]);
+    const back = walk(e.a, i, keyOf[i]);
+    runs.push({ nodes: [...back.reverse(), e.a, e.b, ...ahead], stretches: e.stretches });
+  });
+  return runs;
+}
+
+// Evenly spaced departures for a stretch with no measured cell nearby: its
+// own weekday headway, both ways.
+const evenly = (wk) => (wk ? Array.from({ length: Math.floor((HOURS * 60) / wk) }, (_, k) => MIDDAY[0] + k * wk * 60) : []);
+
+/**
+ * The streets: LineString features, one per run, with `routes` (every route
+ * along it, space-separated, in number order), `n` (how many run all day),
+ * `pt` (how many part-time), `bph` (buses per hour in the busier direction,
+ * to a tenth), `hw` (the rider's wait in minutes, rounded), `cls` (its class,
+ * frequency.js), and for a one-way street `oneway` and `len` (metres), drawn
+ * the way its buses go. `loads` is busStretches' cells per route. Returns
+ * { streets, report }: report counts the graph and its loose ends.
+ */
+export function buildStreets(features, loads = new Map(), { precision = 5, simplify: tolerance = 1, classOf = classOfBph, nodeMeters = NODE_METERS } = {}) {
+  const first = features.find((f) => partsOf(f.geometry).some((p) => p.length));
+  if (!first) return { streets: [], report: {} };
+  const { project, unproject } = projection(partsOf(first.geometry).find((p) => p.length)[0], precision);
+  const graph = streetGraph(features, project, { tolerance: nodeMeters });
+  const { nodes, stretches } = graph;
+  const runs = runsOf(graph);
+
+  // Each route's cells, in metres, to read a run's departures from.
+  const cellsOf = new Map();
+  for (const [route, list] of loads) {
+    const grid = new Cells(CELL_NEAR);
+    for (const c of list) {
+      const at = project(c.at);
+      grid.add({ at, dir: c.dir, with: c.with ?? [], against: c.against ?? [] }, at);
+    }
+    cellsOf.set(String(route), grid);
+  }
+
+  const lines = runs.map((run) => {
+    const pts = run.nodes.map((n) => nodes[n]);
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1], pts[i]));
+    const total = cum.at(-1);
+    // The run's middle, and its direction there.
+    let k = 1;
+    while (k < pts.length - 1 && cum[k] < total / 2) k++;
+    const seg = [pts[k - 1], pts[k]];
+    const t = cum[k] > cum[k - 1] ? (total / 2 - cum[k - 1]) / (cum[k] - cum[k - 1]) : 0;
+    const mid = [seg[0][0] + t * (seg[1][0] - seg[0][0]), seg[0][1] + t * (seg[1][1] - seg[0][1])];
+    const routes = new Map(); // route -> { allDay, wk }
+    for (const s of run.stretches) {
+      const { route, tier, wk } = stretches[s];
+      const r = routes.get(route) ?? { allDay: false, wk: null };
+      if (ALL_DAY.has(tier)) {
+        r.allDay = true;
+        r.wk = r.wk == null ? wk : Math.min(r.wk, wk ?? r.wk);
+      }
+      routes.set(route, r);
+    }
+    // Departures each way along the run, from each all-day route's cell
+    // nearest its middle on its own line.
+    const fwd = [];
+    const back = [];
+    for (const [route, r] of routes) {
+      if (!r.allDay) continue;
+      let best = null;
+      for (const c of cellsOf.get(route)?.near(mid) ?? []) {
+        let on = Infinity;
+        let along = null;
+        for (let i = 1; i < pts.length; i++) {
+          const q = closest(c.at, pts[i - 1], pts[i]);
+          if (q.d < on) [on, along] = [q.d, [pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]];
+        }
+        const d = dist(c.at, mid);
+        const onLine = on <= CELL_METERS;
+        if (!onLine && d > CELL_NEAR) continue;
+        // A cell on the run's own line first, then the nearest to its middle.
+        if (!best || (onLine && !best.onLine) || (onLine === best.onLine && d < best.d)) best = { c, onLine, d, along };
+      }
+      if (!best) {
+        fwd.push(...evenly(r.wk));
+        back.push(...evenly(r.wk));
+        continue;
+      }
+      const same = best.c.dir[0] * best.along[0] + best.c.dir[1] * best.along[1] >= 0;
+      fwd.push(...(same ? best.c.with : best.c.against));
+      back.push(...(same ? best.c.against : best.c.with));
+    }
+    const [rf, rb] = [rate(fwd), rate(back)];
+    const oneway = rf > 0 && rb <= ONE_WAY * rf ? 1 : rb > 0 && rf <= ONE_WAY * rb ? -1 : 0;
+    const bph = Math.max(rf, rb);
+    const names = [...routes.keys()].sort(byNumber);
+    const n = [...routes.values()].filter((r) => r.allDay).length;
+    return { pts, names, routes, n, pt: names.length - n, bph, oneway, total };
+  });
+
+  // Twins: the other carriageway of a two-way road.
+  const twinCells = new Cells(TWIN_METERS);
+  lines.forEach((l, i) => {
+    if (!l.oneway || !l.n) return;
+    let along = 0;
+    for (let j = 1; j < l.pts.length; j++) {
+      twinCells.addSegment({ line: i, a: l.pts[j - 1], b: l.pts[j], along }, l.pts[j - 1], l.pts[j]);
+      along += dist(l.pts[j - 1], l.pts[j]);
+    }
+  });
+  const travel = (l, a, b) => (l.oneway > 0 ? [b[0] - a[0], b[1] - a[1]] : [a[0] - b[0], a[1] - b[1]]);
+  const twinned = lines.map((l, i) => {
+    if (!l.oneway || !l.n) return false;
+    let hits = 0;
+    const samples = [0.25, 0.5, 0.75];
+    for (const f of samples) {
+      let k = 1;
+      let walked = 0;
+      while (k < l.pts.length - 1 && walked + dist(l.pts[k - 1], l.pts[k]) < l.total * f) walked += dist(l.pts[k - 1], l.pts[k++]);
+      const [a, b] = [l.pts[k - 1], l.pts[k]];
+      const s = dist(a, b) ? (l.total * f - walked) / dist(a, b) : 0;
+      const p = [a[0] + s * (b[0] - a[0]), a[1] + s * (b[1] - a[1])];
+      const mine = travel(l, a, b);
+      const ml = Math.hypot(...mine) || 1;
+      const found = [...twinCells.near(p)].some((seg) => {
+        // The run's own other side counts (a loop up one carriageway and
+        // back down the other), but not its own line next to the sample.
+        if (seg.line === i && Math.abs(seg.along - l.total * f) < 3 * TWIN_METERS) return false;
+        const o = lines[seg.line];
+        if (![...o.routes.keys()].some((r) => l.routes.get(r)?.allDay && o.routes.get(r)?.allDay)) return false;
+        if (closest(p, seg.a, seg.b).d > TWIN_METERS) return false;
+        const theirs = travel(o, seg.a, seg.b);
+        const cos = (mine[0] * theirs[0] + mine[1] * theirs[1]) / (ml * (Math.hypot(...theirs) || 1));
+        return cos <= -TWIN_COS;
+      });
+      if (found) hits++;
+    }
+    return hits >= 2;
+  });
+
+  const streets = [];
+  lines.forEach((l, i) => {
+    // A street with only part-time routes isn't a street: they keep their
+    // own dashed lines.
+    if (!l.n) return;
+    const pts = l.oneway < 0 ? [...l.pts].reverse() : l.pts;
+    const coords = dedupe(simplify(pts, tolerance).map(unproject));
+    if (coords.length < 2) return;
+    const oneway = l.oneway && !twinned[i];
+    streets.push({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: coords },
+      properties: {
+        mode: 'bus',
+        routes: l.names.join(' '),
+        n: l.n,
+        ...(l.pt ? { pt: l.pt } : {}),
+        bph: Math.round(l.bph * 10) / 10,
+        hw: l.bph > 0 ? Math.max(1, Math.round(60 / l.bph)) : null,
+        cls: classOf(l.bph),
+        ...(oneway ? { oneway: 1, len: Math.round(length(pts)) } : {}),
+      },
+    });
+  });
+  return { streets, report: graphReport(graph) };
+}
+
+/** The streets alone (buildStreets without its report). */
+export const busStreets = (...args) => buildStreets(...args).streets;
+
+/**
+ * What a drawing of the graph would show at its loose ends: nodes on one
+ * edge only. `ends` is how many; `nearOwn`, how many of those have another
+ * line of one of their own routes within BREAK_METERS (a terminal loop, or
+ * a gap in RTD's own lines), each with where it is, for the build's report.
+ */
+export function graphReport(graph) {
+  const { nodes, edges, stretches } = graph;
+  const degree = new Map();
+  for (const e of edges) for (const n of [e.a, e.b]) degree.set(n, (degree.get(n) ?? 0) + 1);
+  const loose = [...degree].filter(([, d]) => d === 1).map(([n]) => n);
+  const segs = new Cells(BREAK_METERS);
+  edges.forEach((e, i) => segs.addSegment(i, nodes[e.a], nodes[e.b]));
+  const routesOf = (e) => new Set([...e.stretches].map((s) => stretches[s].route));
+  const nearOwn = [];
+  for (const n of loose) {
+    const mine = edges.find((e) => e.a === n || e.b === n);
+    const own = routesOf(mine);
+    for (const i of segs.near(nodes[n])) {
+      const e = edges[i];
+      if (e === mine || e.a === n || e.b === n) continue;
+      if (![...routesOf(e)].some((r) => own.has(r))) continue;
+      const d = closest(nodes[n], nodes[e.a], nodes[e.b]).d;
+      if (d <= BREAK_METERS) {
+        nearOwn.push({ node: n, d: Math.round(d * 10) / 10, routes: [...own].sort(byNumber).join(' ') });
+        break;
+      }
+    }
+  }
+  return { nodes: nodes.length, edges: edges.length, ends: loose.length, nearOwn: nearOwn.length, nearOwnAt: nearOwn };
+}
+
+// A shared street's frequency as a rider waits for it: departure `times`
+// (seconds) in the window, in any order, give the gaps between them, and the
+// street is as frequent as the gap that nine in ten gaps are at or under.
+// Evenly spaced buses give their plain headway; two every-30 routes that
+// leave a minute apart stay every 30, because nine in ten waits are that
+// long gap, and only buses that interleave add up to a faster street. Gaps
+// are counted without their length, so one bunch of four buses is one bunch,
+// not four buses' worth of speed. Under two departures: the plain rate.
 export function rate(times) {
   if (times.length < 2) return times.length / HOURS;
   const s = [...times].sort((a, b) => a - b);
-  let [sum, sq] = [0, 0];
-  for (let i = 1; i < s.length; i++) {
-    const g = s[i] - s[i - 1];
-    sum += g;
-    sq += g * g;
-  }
-  if (!sum) return s.length / HOURS;
-  return 3600 / (sq / sum);
+  const gaps = [];
+  for (let i = 1; i < s.length; i++) if (s[i] > s[i - 1]) gaps.push(s[i] - s[i - 1]);
+  if (!gaps.length) return 3600;
+  gaps.sort((a, b) => a - b);
+  const wait = gaps[Math.ceil(0.9 * gaps.length) - 1];
+  return 3600 / wait;
 }
-
-// The nearest point on the lines in `grid` within OWN of `p`, else `p`.
-function onto(grid, p) {
-  let best = null;
-  for (const seg of grid.near(p, OWN)) {
-    const q = closestOnSegment(p, seg.a, seg.b);
-    const d = dist(p, q);
-    if (!best || d < best.d) best = { d, q };
-  }
-  return best ? best.q : p;
-}
-
-const median = (list) => {
-  const s = [...list].sort((a, b) => a - b);
-  return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0;
-};
-const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-export { CLASS_RANK, segmentDistance };

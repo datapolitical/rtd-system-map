@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { busStreets, rate, TOGETHER } from '../scripts/lib/streets.mjs';
+import { buildStreets, busStreets, rate } from '../scripts/lib/streets.mjs';
+
+// Routes that meet only at a corner share no street: under this many metres.
+const TOGETHER = 50;
 import { classOf } from '../public/js/frequency.js';
 
 // Made-up routes near (0, 0): a kilometer east is 1/111.32 of a degree.
@@ -33,18 +36,23 @@ test('rate is the rider\'s: evenly spaced buses give their plain rate, a bunched
 });
 
 test('two routes on one street are one line with both buses counted', () => {
-  // Every 15 and every 20 minutes interleave; two every-15 timetables that
-  // leave together count about as one (the rider's rate).
+  // Every 15 and every 20 minutes, both leaving on the hour: the street has a
+  // hole of 15 minutes in it, so it reads as every 15 (the rider's wait), and
+  // the class says so.
   const out = streets([route('1', [[0, 0], [5, 0]], 15), route('2', [[0, 0], [5, 0]], 20, 'every30')]);
   assert.equal(out.length, 1);
   const p = out[0].properties;
   assert.equal(p.routes, '1 2');
   assert.equal(p.n, 2);
-  assert.ok(p.bph > 5 && p.bph <= 7, `combined ${p.bph} an hour (4 and 3 apart)`);
+  assert.ok(p.bph > 3.5 && p.bph <= 4.5, `combined ${p.bph} an hour (4 and 3 apart, bunched on the hour)`);
   assert.equal(p.cls, classOf(p.bph));
   assert.ok(km(out[0]) > 4.9 && km(out[0]) < 5.1);
   const together = streets([route('1', [[0, 0], [5, 0]], 15), route('2', [[0, 0], [5, 0]], 15)]);
   assert.ok(together[0].properties.bph < 4.5, `bunched pair reads ${together[0].properties.bph}, about one route`);
+  // Two every-30 routes that leave a minute apart stay every 30: the wait is
+  // the long gap, so the street does not read as every 15.
+  const bunched30 = streets([route('1', [[0, 0], [5, 0]], 30), route('2', [[0, 0], [5, 0]], 30, 'every30')]);
+  assert.ok(bunched30[0].properties.bph <= 2.2, `two every-30s leaving together read ${bunched30[0].properties.bph} an hour`);
 });
 
 test('a one-way pair a block apart stays two streets, touching at an end or not', () => {
@@ -84,4 +92,70 @@ test('part-time routes are listed but add no buses', () => {
   assert.equal(out[0].properties.routes, '1 2');
   assert.equal(out[0].properties.n, 1);
   assert.ok(out[0].properties.bph < 2.5, `${out[0].properties.bph} an hour`);
+});
+
+// The street graph (#80): RTD's lines are joined where they meet.
+const at6 = (f) => f.geometry.coordinates.map(([x, y]) => [Math.round((x / KM) * 1000), Math.round((y / KM) * 1000)]);
+
+test('one street drawn twice with its vertices in different places is one line', () => {
+  // Route 2 has vertices every 700 m along route 1's street, a metre off it.
+  const out = streets([route('1', [[0, 0], [5, 0]], 15), route('2', [[0, 0], [0.7, 0.001], [1.4, 0], [2.1, -0.001], [5, 0]], 15)]);
+  assert.equal(out.length, 1, out.map((f) => f.properties.routes).join(' | '));
+  assert.equal(out[0].properties.routes, '1 2');
+});
+
+test('a route leaving a shared street starts exactly where the shared run ends', () => {
+  const out = streets([route('1', [[0, 0], [6, 0]], 15), route('2', [[0, 0], [3, 0], [3, 3]], 15)]);
+  const ends = out.flatMap((f) => [f.geometry.coordinates[0], f.geometry.coordinates.at(-1)].map((p) => p.join()));
+  // The junction at (3, 0) is the end of three runs, at one point.
+  const junction = out.find((f) => f.properties.routes === '2').geometry.coordinates;
+  const j = [junction[0], junction.at(-1)].find((p) => Math.abs(p[1]) < 1e-6);
+  assert.ok(j, 'the branch starts on the trunk');
+  assert.equal(ends.filter((p) => p === j.join()).length, 3);
+});
+
+test('a crossing street does not cut a run', () => {
+  // Both routes have a vertex where they cross; route 1 is still one line.
+  const out = streets([route('1', [[0, 0], [2, 0], [4, 0]], 15), route('2', [[2, -2], [2, 0], [2, 2]], 15)]);
+  assert.equal(out.filter((f) => f.properties.routes === '1').length, 1);
+  assert.equal(out.filter((f) => f.properties.routes === '2').length, 1);
+});
+
+test("a one-way street has arrows; a divided road's carriageways don't", () => {
+  // Route 1 east on one carriageway (y = 0) and west on the other (15 m
+  // north); route 2 one way on a street of its own, 500 m north.
+  const every = (min) => Array.from({ length: 24 }, (_, i) => 9 * 3600 + i * min * 60);
+  const cell = (x, y, dir) => ({ at: at([x, y]), dir, tier: 'frequent', with: every(15), against: [] });
+  const cells1 = [...[0.5, 1, 1.5].map((x) => cell(x, 0, [1, 0])), ...[0.5, 1, 1.5].map((x) => cell(x, 0.015, [-1, 0]))];
+  const cells2 = [0.5, 1, 1.5].map((x) => cell(x, 0.5, [1, 0]));
+  const { streets: out } = buildStreets(
+    [route('1', [[0, 0], [2, 0]], 15), route('1', [[2, 0.015], [0, 0.015]], 15), route('2', [[0, 0.5], [2, 0.5]], 15)],
+    new Map([['1', cells1], ['2', cells2]]),
+    { precision: 6 },
+  );
+  // Both carriageways are drawn (their ends, 15 m apart, are joined where
+  // the bus turns round, so they may be one loop).
+  const one = out.filter((f) => f.properties.routes === '1');
+  const drawn = one.reduce((sum, f) => sum + km(f), 0);
+  assert.ok(drawn > 3.9, `the two carriageways, ${drawn} km`);
+  assert.ok(one.every((f) => !f.properties.oneway), 'no arrows on a two-way road');
+  const two = out.find((f) => f.properties.routes === '2');
+  assert.equal(two.properties.oneway, 1);
+  // Drawn the way its buses go (east).
+  const c = two.geometry.coordinates;
+  assert.ok(c.at(-1)[0] > c[0][0]);
+});
+
+test("a line that stops short of its own route's line ahead is joined to it", () => {
+  // Route 1 stops 10 m short of its own line further on (a gap in RTD's
+  // lines): drawn as one street, with only its two real ends loose.
+  const { streets: out, report } = buildStreets([route('1', [[0, 0], [1, 0]], 15), route('1', [[1.01, 0], [2, 0]], 15)], new Map(), { precision: 6 });
+  assert.equal(out.length, 1, out.map((f) => JSON.stringify(f.geometry.coordinates)).join(' | '));
+  assert.ok(km(out[0]) > 1.99, `${km(out[0])} km`);
+  assert.equal(report.ends, 2);
+  assert.equal(report.nearOwn, 0);
+  // A line of its own beside the end, not ahead of it (the other
+  // carriageway, 20 m off), is left: no end is joined across.
+  const { report: beside } = buildStreets([route('1', [[0, 0], [1, 0]], 15), route('1', [[0.5, 0.02], [1.5, 0.02]], 15)], new Map(), { precision: 6 });
+  assert.equal(beside.ends, 4);
 });

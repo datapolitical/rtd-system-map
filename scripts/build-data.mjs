@@ -16,7 +16,7 @@ import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtr
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
 import { busStretches } from './lib/stretches.mjs';
-import { busStreets } from './lib/streets.mjs';
+import { buildStreets } from './lib/streets.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
@@ -335,7 +335,13 @@ async function main() {
   geo.busnames = busNames(geo.routes.filter((f) => f.properties.mode === 'bus'), { precision: PRECISION });
   // The streets themselves, each drawn once, by the combined frequency of
   // every route along it (DESIGN.md, "Bus routes"; scripts/lib/streets.mjs).
-  geo.streets = busStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION });
+  // RTD's lines joined where they meet into one street graph, each street
+  // drawn once (scripts/lib/streets.mjs, #80). The report says how many
+  // loose ends the drawing has, and how many of them have another line of
+  // their own route within 30 m: a terminal loop, or a gap in RTD's lines.
+  const built = buildStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION });
+  geo.streets = built.streets;
+  const streetGraph = { nodes: built.report.nodes, edges: built.report.edges, ends: built.report.ends, nearOwn: built.report.nearOwn };
   const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
   const classes = Object.fromEntries(STREET_CLASSES.map((c) => [c.id, { streets: geo.streets.filter((f) => f.properties.cls === c.id).length, km: Math.round(streetKm(c.id) * 10) / 10 }]));
   // Stops name the lines the map draws, families as their map route (FF1 is
@@ -396,6 +402,7 @@ async function main() {
     tiers,
     // How much street is drawn in each frequency class (frequency.js).
     classes,
+    streetGraph,
     // The Live relay's feeds, and the realtime route ids that belong to a map
     // route under another name (public/js/realtime.js, routeOf).
     live: { feeds: RT_FEEDS, routes: live.routes },
@@ -434,6 +441,7 @@ async function main() {
   console.log(`  ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ')}`);
   console.log(`  tiers: ${Object.entries(tiers).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   console.log(`  streets by class: ${Object.entries(classes).map(([k, v]) => `${k} ${v.streets} (${v.km} km)`).join(', ')}`);
+  console.log(`  street graph: ${streetGraph.nodes} nodes, ${streetGraph.edges} edges, ${geo.streets.length} streets; ${streetGraph.ends} loose ends, ${streetGraph.nearOwn} within 30 m of their own route's line`);
   console.log(`  ${flexLines} FlexRide outlines in the route layer left to the FlexRide zones`);
   if (unserved.length) {
     const list = unserved.map((f) => `${f.properties.name}${f.properties.returns ? ` (returns ${f.properties.returns})` : ''}`);

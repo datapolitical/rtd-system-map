@@ -1263,24 +1263,40 @@ route is a hairline; a route's own weight no longer exists on the map. The
 build (`scripts/lib/streets.mjs`, from the per-stretch departures
 `stretches.mjs` measures) does this:
 
-- Routes within 35 m and 25 degrees of each other for at least 50 m share a
-  street (`TOGETHER`). Shorter is a crossing or a touch: a one-way pair a
-  block apart, whose streets meet only at an end, stays two streets. Each
-  street is drawn once, on the middle line of the routes on it, so nothing
-  overlaps and nothing darkens.
+- **One street graph from RTD's own lines** (#80). RTD draws its bus routes
+  on one street network: routes that share a street share its line (on
+  2026-11-10, where another route ran within 50 m of a route it was within
+  1 m for 86% of the length; most of the rest is the two carriageways of a
+  divided road, 12 to 24 m apart, each carrying every route on that road).
+  So the build doesn't guess which routes run together: it joins RTD's
+  lines where they meet. Vertices within 1.5 m are one node, a node lying
+  on another line's segment splits it, and each edge between two nodes
+  carries the route stretches drawn along it (`streetGraph`). A street is a
+  run of edges with one set of stretches (route, tier and headway), through
+  every node where that set goes straight on, so a crossing street doesn't
+  cut it, and cut where a route joins or leaves (`runsOf`). Each street is
+  drawn once, on RTD's line, so nothing overlaps and nothing darkens. Until
+  stage 2 (#81) a divided road is drawn as its two carriageways, as main
+  draws its routes.
 - A street's buses per hour are the rider's rate, not a sum: the weekday
   9am–3pm departures of every all-day route on it, merged each way along
-  the street, the busier way counting (a one-way street has one). The wait
-  a rider arriving at random expects is half the sum of the squared gaps
-  over the sum of the gaps; doubled, that is the headway they feel, and the
-  rate is an hour over it (`rate`). Two every-30 routes that leave a minute
-  apart stay "every 30"; two that interleave are "every 15". This is the
-  interleaving idea of the earlier corridor prototype (`feat/v2-finish`,
+  the street, the busier way counting (a one-way street has one). The gaps
+  between the merged departures are the waits a rider can get, and the
+  street is as fast as the gap that nine in ten gaps are at or under — the
+  90th percentile, an hour over it (`rate`). So the wait the map promises
+  is a wait it keeps: evenly spaced buses give their plain headway, two
+  every-30 routes that leave a minute apart stay "every 30" (nine waits in
+  ten are the long gap), two that interleave are "every 15", and a bunch of
+  four buses is one bunch, not four times the speed. Summing routes, and
+  the interleaving rule of the corridor prototype (`feat/v2-finish`,
   `corridors.mjs`: routes add up only where the longest wait is at most 1.5
-  times the combined median gap) made continuous: no threshold, and a
-  partly bunched pair counts for something between one route and two. Raw
-  counts were rejected because they would make a bunched pair of hourly
-  routes look like a 30-minute street, which is a lie to the rider waiting.
+  times the combined median gap), were rejected because both credit a
+  street with buses a rider cannot catch. The cost is honest: the top class
+  is now rare, because a downtown street with 25 buses an hour over nine
+  routes whose timetables leave holes of more than three minutes reads
+  "every 4 to 5", which is what a rider there waits nine times in ten. A run has one set of routes, so its rate is read once, from each
+  all-day route's measured cell nearest the run's middle on its own line
+  (`stretches.mjs`), and a width can't flicker along a street.
 - Part-time routes (rush hours, a few trips) are listed on the street but
   add nothing to its rate, and keep their own dashed and dotted lines.
 - Six classes, each a width and a key row (`public/js/frequency.js`,
@@ -1295,12 +1311,16 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
 - Each shared run carries its routes (`routes`, `n`, `bph`, `hw`, `cls`),
   so a tap on a street names every route along it and the highlight follows
   the open route through every street it uses.
-- Joins are flush: two runs on one street share the vertex where they cut,
-  taken on the side where the routes run together; the heavier run carries
-  on one point into the lighter one, with round joins and butt caps, so a
-  branch starts inside the trunk's line and a trunk ends where its branch
-  begins. Loose ends within 55 m meet at one point, and a loose end with no
-  partner is carried onto the street it leaves.
+- Streets meet at the graph's nodes: a branch starts on the trunk's own
+  line where its route leaves it, at the same point the trunk's run ends,
+  and street lines have round ends, so a turn shows no notch at its corner.
+  A loose end whose own route has another line within 30 m ahead of it
+  (within 60 degrees of the way it came in), or within 15 m in any
+  direction (where the bus turns round), stops short of where its buses
+  go: a gap in RTD's lines, or a terminal loop drawn open. A short edge
+  joins it to that line (`closeGaps`). The build reports the loose ends
+  left, and those within 30 m of their own route's line (`streetGraph` in
+  meta.json); on 2026-11-10, 4 and 2.
 - **Strands.** From zoom 13.5, a hairline a shade off the ink runs along
   the inside of a shared street between each pair of routes, like the
   strands of a cable, so a reader can see that several routes run there
@@ -1325,8 +1345,12 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   down the middle instead, which says "many" without counting.
 
 *One-way arrows*: the build marks a street `oneway` where departures one
-way are no more than 15% of the other's, steady for 150 m or more, and
-draws it the way its buses go (`streets.mjs`). The page draws chevrons from
+way are no more than 15% of the other's, read once for the whole run, and
+draws it the way its buses go (`streets.mjs`). Each carriageway of a
+divided road reads one way, but the road is two way: a one-way run with a
+twin (a one-way run of one of its routes the other way, parallel and
+within 60 m, the widest median the build treats as one road) carries no
+arrows. The page draws chevrons from
 zoom 14 (`street-oneway` in `network.js`), about 300 px apart: one glyph at
 one size on every street, a light chevron in the arrow tint cased in the
 darkest street ink, so it reads inside a wide line and over a hairline
@@ -3468,6 +3492,16 @@ work against the real structure before asking for evaluation.
   hourly. A time-of-day choice is looked at again once streets are drawn as
   one line. Chris left the choice to the review; it took the research's
   recommendation.
+- 2026-11-10: Bus streets are built on one street graph from RTD's own
+  lines (#80). RTD's routes share their streets' centrelines, so the build
+  joins the lines where they meet instead of finding shared streets by
+  proximity (35 m, 25 degrees), moving each to the middle of its routes and
+  stitching the pieces back together. On the union-building batch that
+  stitching broke bus lines in 346 places at z14 to z17 (#77); drawn from
+  the graph, a break can only come from RTD's lines, and the few there are
+  joined. Built in stages from main: the graph and widths with divided
+  roads as two lines (#80), divided roads as one line (#81), then the
+  batch's readable-geometry rules as graph operations (#82).
 
 ## Sources
 
