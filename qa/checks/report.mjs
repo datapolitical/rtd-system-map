@@ -9,13 +9,8 @@
 // there at the zoom the fault was found at.
 import fs from 'node:fs';
 import path from 'node:path';
-import { DATA_SOURCES, openModel } from '../drawn/model.mjs';
-import { lineFaults } from '../drawn/lines.mjs';
-import { labelFaults } from '../drawn/labels.mjs';
-import { toLonLat, toWorld } from '../drawn/mercator.mjs';
-import { markFaults } from '../drawn/marks.mjs';
-import { streetFaults } from '../drawn/streets.mjs';
-import { seededViews } from '../lib/views.mjs';
+import { DATA_SOURCES } from '../drawn/model.mjs';
+import { mergeFindings, runChecks } from './run.mjs';
 
 const arg = (name, fallback) => {
   const at = process.argv.indexOf(`--${name}`);
@@ -36,101 +31,12 @@ const readData = async (name) => {
 const data = Object.fromEntries(await Promise.all(DATA_SOURCES.map(async (n) => [n, await readData(`${n}.geojson`)])));
 const meta = await readData('meta.json');
 
-const line = (fault, zoom) => {
-  const [lon, lat] = toLonLat(fault.px, zoom);
-  return {
-    check: 'lines',
-    kind: fault.kind,
-    layer: fault.layer,
-    route: fault.route ?? null,
-    zoom,
-    lat,
-    lon,
-    msg: fault.msg,
-    link: `${SITE}/#${zoom}/${lat.toFixed(5)}/${lon.toFixed(5)}`,
-  };
-};
-
-const SEVERITY = { gap: 1, 'off-street': 2, 'stray-stop': 3, duplicate: 4, 'over-line': 5, step: 6, hidden: 7, far: 8, translucent: 9 };
-const atPlace = (px, view, width = 390, height = 664) => {
-  const centre = toWorld([view.lon, view.lat], view.zoom);
-  const [lon, lat] = toLonLat([centre[0] + px[0] - width / 2, centre[1] + px[1] - height / 2], view.zoom);
-  return { lon, lat };
-};
-const framed = (fault, check, view) => ({
-  check,
-  kind: fault.kind,
-  layer: fault.layer,
-  route: fault.route ?? null,
-  zoom: view.zoom,
-  ...atPlace(fault.px, view),
-  msg: fault.msg,
-  link: `${SITE}/#${view.zoom}/${view.lat.toFixed(5)}/${view.lon.toFixed(5)}`,
-});
-const label = (fault, view) => ({
-  check: 'labels',
-  kind: fault.kind,
-  layer: fault.layer,
-  route: fault.crossed?.route ?? null,
-  crossed: fault.crossed ?? null,
-  zoom: view.zoom,
-  ...atPlace(fault.px, view),
-  msg: fault.msg,
-  link: `${SITE}/#${view.zoom}/${view.lat.toFixed(5)}/${view.lon.toFixed(5)}`,
-});
-
-const findings = [];
-for (const theme of THEMES) {
-  const model = await openModel({ theme, data, meta });
-  const nameLayers = model.style.layers.filter((l) => l.type === 'symbol'
-    && l.layout?.['text-field'] !== undefined
-    && l.layout?.['icon-image'] === undefined
-    && l.layout?.['symbol-placement'] !== 'line' && model.data[l.source]).map((l) => l.id);
-
-  for (const zoom of ZOOMS) {
-    for (const fault of lineFaults(model.zoom(zoom))) findings.push({ theme, ...line(fault, zoom) });
-  }
-
-  // Labels are placed per screen, so check them on screens: the busiest
-  // interchanges (where names are densest) and a seeded walk over the network.
-  const served = data.stations.features.filter((f) => f.properties?.served && f.properties.label);
-  const busiest = served.sort((a, b) => (b.properties.links ?? 0) - (a.properties.links ?? 0)).slice(0, 12);
-  const places = busiest.map((f) => ({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }));
-  for (const s of seededViews(data.routes, { count: VIEWS, zooms: [17], seed: 7 })) places.push({ lon: s.lon, lat: s.lat });
-  const seen = new Set();
-  for (const place of places) {
-    for (const zoom of [17, 14]) {
-      const key = `${zoom}/${place.lat.toFixed(4)}/${place.lon.toFixed(4)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const frame = await model.frame({ zoom, center: [place.lon, place.lat], width: 390, height: 664, basemap: zoom === 17 });
-      for (const fault of labelFaults(frame, { layers: nameLayers })) findings.push({ theme, ...label(fault, { ...place, zoom }) });
-      if (zoom === 17) {
-        for (const fault of markFaults(frame)) findings.push({ theme, ...framed(fault, 'marks', { ...place, zoom }) });
-        for (const fault of streetFaults(frame)) findings.push({ theme, ...framed(fault, 'streets', { ...place, zoom }) });
-      }
-    }
-  }
-}
+// The checks themselves are in run.mjs, shared with qa/recall/recall.mjs.
+const all = [];
+for (const theme of THEMES) all.push(...await runChecks({ data, meta, theme, zooms: ZOOMS, views: VIEWS, site: SITE }));
+const findings = mergeFindings(all);
 
 fs.mkdirSync(OUT, { recursive: true });
-// One fault, one row: the same fault measured at several zooms is one
-// finding, with the zooms it was seen at.
-const merged = new Map();
-for (const f of findings) {
-  const key = `${f.check}|${f.kind}|${f.route ?? ''}|${f.lat.toFixed(4)}|${f.lon.toFixed(4)}`;
-  const had = merged.get(key);
-  if (had) {
-    had.zooms.push(f.zoom);
-    if (f.msg.length > had.msg.length) had.msg = f.msg;
-  } else {
-    merged.set(key, { ...f, zooms: [f.zoom] });
-  }
-}
-findings.length = 0;
-findings.push(...merged.values());
-for (const f of findings) f.severity = SEVERITY[f.kind] ?? 9;
-findings.sort((a, b) => a.severity - b.severity || a.check.localeCompare(b.check) || a.theme.localeCompare(b.theme));
 const payload = { generated: new Date().toISOString(), site: SITE, themes: THEMES, zooms: ZOOMS, total: findings.length, findings };
 fs.writeFileSync(path.join(OUT, 'findings.json'), JSON.stringify(payload, null, 2));
 
