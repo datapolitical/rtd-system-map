@@ -43,6 +43,9 @@ jobs:
         env:
           CHECK_URL: ${{ steps.preview.outputs.url }}
           CHECK_JSON: qa/report/results.json
+          # drawn.spec.mjs: four seeded views per theme in CI (643b40e on the
+          # evaluator branch). #59 is what this test should check, and on how many views.
+          DRAWN_VIEWS: 4
         run: npm run check
       - name: Capture the design review's fixed views
         if: always() && steps.preview.outputs.url != ''

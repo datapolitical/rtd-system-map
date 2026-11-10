@@ -17,10 +17,20 @@ view. Every spec's header says what fault it finds and its threshold.
 | `health.spec.mjs` | check (+ deep) | No console errors or warnings, page errors, failed or 4xx/5xx requests, and `validateStyleMin` passes on `map.getStyle()`. |
 | `a11y.spec.mjs` | check | axe-core, WCAG 2.0/2.1 A and AA, on the map alone, Key open, a panel open, search focused; the canvas is exempt. |
 | `visual.spec.mjs` | check | Three baseline screenshots per theme (hub at 9, 11.5, 14), tolerant threshold, Live masked. |
+| `drawn.spec.mjs` | check | The drawn model (`../drawn/`) against the page: at seeded views and the busiest interchanges, lines and mark centres within 1 px, label boxes within 2 px. Drift means the model has fallen behind the page. |
 | `continuity.spec.mjs` | deep | Rail lines (and the frequent bus tier at 14) unbroken on screen: gaps, covers, sideways jogs at piece joins; routes.geojson pieces that meet and ease between slots; a regression fixture at a known break. |
 | `marks.spec.mjs` | deep | Station marks overlapping or crowding at 9.75 to 14, every station. |
 | `labels.spec.mjs` | deep | Station names far from their mark, network labels under a card, labels over labels or marks, at 10 to 14. |
 | `contrast.spec.mjs` | deep | Lines and marks against the land, letters on bullets (4.5:1), bus tiers in order, per theme. |
+
+`drawn.spec.mjs` is the odd one: it does not look for a fault in the map
+but for drift between the page and `../drawn/`, the model of what the page
+draws in plain Node. Its header and that folder's README say how it works;
+the short version is that the model restates nothing, so when the page's
+style, data, glyphs or symbols change the model follows, and this spec is
+what proves it still does. The checks that run on the model are
+`npm run check:map`, and how much they catch is `npm run check:recall`
+(`../recall/README.md`).
 
 Each detector spec also has a test that seeds a fault in the page (a
 `setPaintProperty`, `setFilter` or `setLayoutProperty` change, restored after)
