@@ -1310,10 +1310,30 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   visibly separate lines"). No land shows between strands. A seam is drawn
   only where each strand would be at least 2.6 px wide at that zoom, so a
   four-route every-10 street gets its seams at 17, a two-route one at 14.
+  Every route on the street has a strand, part-time ones too (`pt`, after
+  the all-day ones), and a seam that bounds a part-time strand is dashed.
+  Until the strands have room, a part-time route rides beside the street
+  from 14, a dashed hairline a shade off the ink with 2.2 px of land between
+  it and the street's edge (so it reads as a second line beside the first,
+  not as the first line's edge); the gap is measured from the street's edge
+  at that zoom and grows with the strand, so the two never touch. Chris, on
+  round three: "the dashed part-time strand rides the edge of the solid line
+  instead of sitting beside it."
   Streets with more than six routes don't get strands (Chris: "something
   special on the places where there's just like too many lines to have a
   divider"): a core line a third of the width, in the strand color, runs
   down the middle instead, which says "many" without counting.
+
+*One-way arrows*: the build marks a street `oneway` where departures one
+way are no more than 15% of the other's, steady for 150 m or more, and
+draws it the way its buses go (`streets.mjs`). The page draws chevrons from
+zoom 14 (`street-oneway` in `network.js`), about 300 px apart: one glyph at
+one size on every street, a light chevron in the arrow tint cased in the
+darkest street ink, so it reads inside a wide line and over a hairline
+alike and two arrows never differ (round two's chevron-in-the-line and
+arrowhead-on-a-hairline came in pairs of two sizes on 15th). None on a
+one-way piece under 250 m, where it would sit at a junction. Two-way
+streets have no arrows. The Key has a row for them.
 
 As drawn on the land (`#F4F5F6`), widths at zoom 9, 11, 13 and 16; dark
 mode uses the periwinkles under "Dark mode":

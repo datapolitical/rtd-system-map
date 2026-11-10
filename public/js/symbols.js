@@ -7,7 +7,7 @@
 // use; sizes shared with the build are in sizes.js.
 
 import { P } from './palette.js';
-import { HUB_EXTRA, RAIL_WIDTH, STATION_SPACING, TICK } from './sizes.js';
+import { CHEVRON, HUB_EXTRA, RAIL_WIDTH, STATION_SPACING, TICK } from './sizes.js';
 
 // Never below 2, so symbols stay sharp when a screen is zoomed.
 export const RATIO = Math.max(2, Math.ceil(devicePixelRatio || 1));
@@ -241,6 +241,29 @@ export function addSymbol(map, id, lines) {
     ctx.lineWidth = 3;
     ctx.strokeStyle = P.selEnd.ring;
     ctx.stroke();
+    return add(ctx);
+  }
+
+  // The one-way chevron (network.js, 'street-oneway'), pointing along the
+  // line: one glyph on every street, a light chevron cased in the darkest
+  // street ink, so it reads inside a wide line and over a hairline alike.
+  if (id === 'chevron') {
+    const [w, h] = [CHEVRON[0], CHEVRON[1]];
+    const ctx = canvas(w, h);
+    const pad = 3;
+    const stroke = (color, width) => {
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(w - pad, h / 2);
+      ctx.lineTo(pad, h - pad);
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    };
+    stroke(P.freq.c3, 4.6);
+    stroke(P.arrow, 2.2);
     return add(ctx);
   }
 
