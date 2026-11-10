@@ -46,15 +46,25 @@ export const ZOOMS = Array.from({ length: 17 }, (_, i) => 9 + i / 2);
 // Exported so a caller can hand the model a deployed build's data instead of
 // a checkout's public/data, which a CI checkout has not built.
 export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'structures', 'labels', 'stops'];
-// Loaded only when the map is close enough (network.js, loadWhenNeeded).
-const LAZY = { stops: 14 };
+
+// GeoJSON sources the page fills in the browser, not from the build. The model
+// cannot draw them from data, so they are named here with the reason, and any
+// other source the page draws that the model does not load fails openModel:
+// a missing source must be loud, not a layer the drift test never asks about.
+export const RUNTIME_ONLY = {
+  'rail-edge-letters': 'placed by edgeletters.js in the browser after each move; not yet modelled',
+  selection: 'the route a rider has open',
+  vehicles: 'Live positions',
+};
 
 const readJSON = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 // The page's style for one theme, through the page's own code (style.mjs).
-// `metaFile` points style.mjs at a meta.json other than the checkout's own.
+// `root` is the site whose public/js is read: a checkout, or a frozen build
+// (qa/recall); style.mjs itself is always this folder's. `metaFile` points
+// style.mjs at a meta.json other than the root's own.
 export async function buildStyle(root = ROOT, theme = 'dark', metaFile = null) {
-  const args = [path.join(root, 'qa', 'drawn', 'style.mjs'), '--theme', theme, '--root', root];
+  const args = [path.join(HERE, 'style.mjs'), '--theme', theme, '--root', path.resolve(root)];
   if (metaFile) args.push('--meta', metaFile);
   const { stdout } = await run(process.execPath, args, {
     cwd: root,
@@ -94,6 +104,15 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
   const style = await buildStyle(root, theme, metaFile);
   if (metaDir) fs.rmSync(metaDir, { recursive: true, force: true });
   setState(style.state);
+  // Every source the page draws from must be loaded here or be runtime-only.
+  const pageSources = style.metadata?.['rtd:data-sources'];
+  const notLoaded = Object.entries(style.sources)
+    .filter(([name, s]) => s.type === 'geojson' && !DATA_SOURCES.includes(name) && !(name in RUNTIME_ONLY))
+    .map(([name]) => name)
+    .concat((pageSources ?? []).filter((name) => !DATA_SOURCES.includes(name)));
+  if (notLoaded.length) {
+    throw new Error(`openModel: the page draws from ${[...new Set(notLoaded)].join(', ')}, which the model does not load (qa/drawn/model.mjs DATA_SOURCES)`);
+  }
   const data = {};
   for (const name of DATA_SOURCES) {
     if (!given) {
@@ -104,7 +123,7 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
       throw new Error(`openModel: no data given for "${name}"`);
     }
   }
-  const imageSizes = await icons(theme);
+  const imageSizes = await icons(theme, root);
 
   const sourceFor = (layer) => {
     if (!(layer.source in style.sources)) return null;

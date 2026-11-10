@@ -9,11 +9,16 @@
 // that only records what addSymbol hands it. No size is restated here, so a
 // mark reshaped in the page reshapes in the model.
 
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createCanvas } from '@napi-rs/canvas';
 
 let booted = null;
 
-export async function icons(theme = 'dark') {
+// `root` is the site whose public/js draws the images: a checkout, or a frozen
+// build (qa/recall). One root and one theme per process: symbols.js and
+// palette.js are modules, read once.
+export async function icons(theme = 'dark', root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..')) {
   if (booted) return booted;
   // palette.js reads the system theme once, at module load; symbols.js
   // imports it. One theme per process, as for the style (style.mjs).
@@ -26,7 +31,7 @@ export async function icons(theme = 'dark') {
     },
   };
   globalThis.window = globalThis;
-  const { addSymbol, RATIO } = await import('../../public/js/symbols.js');
+  const { addSymbol, RATIO } = await import(pathToFileURL(path.join(root, 'public', 'js', 'symbols.js')).href);
   const sizes = new Map();
   const map = {
     hasImage: (id) => sizes.has(id),

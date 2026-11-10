@@ -24,7 +24,7 @@ if (!['light', 'dark'].includes(theme)) {
   process.exit(2);
 }
 const rootIdx = process.argv.indexOf('--root');
-const root = rootIdx >= 0 ? process.argv[rootIdx + 1] : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const root = rootIdx >= 0 ? path.resolve(process.argv[rootIdx + 1]) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 // palette.js calls matchMedia at module load. Live.js imports panel.js and
 // select.js, which touch the DOM at module load; the layer functions are
@@ -54,8 +54,10 @@ const metaFile = metaIdx >= 0
 const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
 
 const { BASEMAP_SOURCES, basemapBelow, basemapLabels } = await import(js('basemap.js'));
-const { dataSources, lettersFirst, railStyle, transitLines, transitMarks } = await import(js('network.js'));
+const network = await import(js('network.js'));
+const { dataSources, lettersFirst, railStyle, transitLines, transitMarks } = network;
 const { STATE } = await import(js('highlight.js'));
+const shared = await import(js('shared.js'));
 // live.js also pulls select.js and panel.js; vehicleLayers is pure, so take
 // it from a fresh read of the file without its import chain: its imports
 // (panel, select) are UI only.
@@ -66,6 +68,10 @@ const style = {
   version: 8,
   sources: { ...BASEMAP_SOURCES, ...dataSources() },
   state: STATE,
+  // The page's own list of the build files it draws (network.js), so the
+  // model can check it loads every one rather than trusting a copy.
+  // and the tiers it draws as part-time (shared.js), for qa/recall/plant.mjs.
+  metadata: { 'rtd:data-sources': network.DATA_SOURCES ?? null, 'rtd:part-time': shared.PART_TIME ?? null },
   layers: [
     ...lettersFirst([...basemapBelow(), ...transitLines(lines), ...basemapLabels(), ...transitMarks(lines)]),
     ...vehicleLayers(lines),
