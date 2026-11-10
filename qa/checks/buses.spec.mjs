@@ -63,7 +63,7 @@ test('dark bus tiers read against land and road', async ({ mapPage }, testInfo) 
   const { page } = mapPage;
   await mapPage.goto(VIEW);
   const c = await page.evaluate(() => {
-    const m = window.__map, cols = [], expr = m.getPaintProperty('bus', 'line-color');
+    const m = window.__map, cols = [], expr = m.getPaintProperty(m.getLayer('street') ? 'street' : 'bus', 'line-color');
     for (let i = 2; i < expr.length - 1; i += 2) if (!cols.includes(expr[i + 1])) cols.push(expr[i + 1]);
     const road = m.getPaintProperty('road-street', 'line-color');
     return { land: m.getPaintProperty('land', 'background-color'), tiers: cols.slice(0, 3), road: Array.isArray(road) ? road.filter((x) => typeof x === 'string' && x[0] === '#').pop() : road };

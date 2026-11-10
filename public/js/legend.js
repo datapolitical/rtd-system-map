@@ -11,7 +11,7 @@ import { STATE } from './highlight.js';
 import { loadData } from './select.js';
 import { vehicleLayers } from './live.js';
 import { P, PALETTES } from './palette.js';
-import { PHONE_QUERY, TIERS, bullet, esc, ends, middayLabel } from './shared.js';
+import { PHONE_QUERY, STREETS, TIERS, bullet, esc, ends, middayLabel } from './shared.js';
 import { ZOOMS } from './sizes.js';
 import { RATIO, addSymbol, canvas } from './symbols.js';
 import { transitLines, transitMarks } from './network.js';
@@ -137,6 +137,22 @@ function howOften(r) {
   return 'No weekday trains';
 }
 
+// One-way streets (network.js, 'street-oneway'): a frequent street as the
+// map draws it once its arrows are in, with an arrow inside it in the
+// palette's arrow tint, as the map draws them.
+function oneWay(arrows, street) {
+  if (!arrows || !street) return null;
+  const z = Math.max(arrows.minzoom ?? 0, settledFrom(arrows.paint['icon-opacity'], arrows.minzoom ?? 0));
+  const at = { zoom: z, props: { cls: 'c10', n: 1, routes: '', oneway: 1 }, state: KEY_STATE };
+  const w = evaluate(street.paint['line-width'], at);
+  const h = Math.max(8, Math.ceil(w) + 2);
+  const c = h / 2;
+  const a = Math.min(w * 0.36, 5);
+  const chevron = (x) => `<path d="M${x - a * 0.7} ${c - a}L${x + a * 0.7} ${c}L${x - a * 0.7} ${c + a}" fill="none" stroke="${P.arrow}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />`;
+  const svg = `<svg class="swatch" viewBox="0 0 36 ${h}" width="36" height="${h}" aria-hidden="true" data-mark="street-oneway"><path d="M1 ${c}H35" stroke="${evaluate(street.paint['line-color'], at)}" stroke-width="${w}" />${chevron(12)}${chevron(26)}</svg>`;
+  return [svg, 'One-way street: buses go the way the arrows point'];
+}
+
 const row = (icon, text) => `<li><span class="sym">${icon}</span><span>${text}</span></li>`;
 
 export function buildLegend(meta, lines) {
@@ -169,28 +185,33 @@ export function buildLegend(meta, lines) {
   let live = false; // whether Live is on (setLive)
   let stations = []; // every station's properties, once loaded
 
-  // Only the tiers on the map today; the two slowest share one look, so one
-  // row. Each swatch is the line itself: the bus layer that draws the tier,
-  // its width, color, dashes and caps at SWATCH_ZOOM.
+  // Buses: the streets' classes on the map today, each swatch the `street`
+  // layer's own width and color for that class at SWATCH_ZOOM, then the
+  // part-time looks (dashed, dotted) from the layers that draw them by
+  // route. Only looks the data has.
   const present = meta.tiers ?? {};
+  const classes = meta.classes ?? {};
   const drawTiers = (layers) => {
-    const bus = ['bus', 'bus-part-time', 'bus-limited'].map((id) => layers.get(id));
+    const swatch = (layer, props, label) => {
+      if (!layer || !drawsAt(layer, SWATCH_ZOOM, props, KEY_STATE)) return '';
+      const at = { zoom: SWATCH_ZOOM, props, state: KEY_STATE };
+      const w = evaluate(layer.paint['line-width'], at);
+      const cap = layer.layout?.['line-cap'] ?? 'butt';
+      const dashes = evaluate(layer.paint['line-dasharray'], at);
+      const dash = dashes ? ` stroke-dasharray="${dashes.map((d) => d * w).join(' ')}"` : '';
+      const inset = dashes && cap === 'round' ? 3 : 1;
+      const h = Math.max(8, Math.ceil(w) + 2);
+      const line = `<svg class="swatch" viewBox="0 0 36 ${h}" width="36" height="${h}" aria-hidden="true" data-mark="${layer.id}"><path d="M${inset} ${h / 2}H${36 - inset + (inset > 1 ? 1 : 0)}" stroke="${evaluate(layer.paint['line-color'], at)}" stroke-width="${w}" stroke-linecap="${cap}"${dash} /></svg>`;
+      return `<li>${line}<span>${label}</span></li>`;
+    };
+    const streets = STREETS.filter((c) => classes[c.id]?.streets).map((c) => swatch(layers.get('street'), { cls: c.id, n: 1, routes: '' }, c.label));
+    const bus = ['bus-part-time', 'bus-limited'].map((id) => layers.get(id));
     const seen = new Set();
-    document.getElementById('legend-tiers').innerHTML = TIERS.filter((t) => present[t.id] && !seen.has(t.label) && seen.add(t.label))
-      .map((t) => {
-        const props = { mode: 'bus', tier: t.id };
-        const layer = bus.find((l) => drawsAt(l, SWATCH_ZOOM, props, KEY_STATE));
-        if (!layer) return '';
-        const at = { zoom: SWATCH_ZOOM, props, state: KEY_STATE };
-        const w = evaluate(layer.paint['line-width'], at);
-        const cap = layer.layout?.['line-cap'] ?? 'butt';
-        const dashes = evaluate(layer.paint['line-dasharray'], at);
-        const dash = dashes ? ` stroke-dasharray="${dashes.map((d) => d * w).join(' ')}"` : '';
-        const inset = dashes && cap === 'round' ? 3 : 1;
-        const line = `<svg class="swatch" viewBox="0 0 36 8" width="36" height="8" aria-hidden="true" data-mark="${layer.id}"><path d="M${inset} 4H${36 - inset + (inset > 1 ? 1 : 0)}" stroke="${evaluate(layer.paint['line-color'], at)}" stroke-width="${w}" stroke-linecap="${cap}"${dash} /></svg>`;
-        return `<li>${line}<span>${t.label}</span></li>`;
-      })
-      .join('');
+    const partTime = TIERS.filter((t) => (t.dashed || t.dotted) && present[t.id] && !seen.has(t.label) && seen.add(t.label)).map((t) => {
+      const props = { mode: 'bus', tier: t.id };
+      return swatch(bus.find((l) => drawsAt(l, SWATCH_ZOOM, props, KEY_STATE)), props, t.label);
+    });
+    document.getElementById('legend-tiers').innerHTML = [...streets, ...partTime].join('');
   };
 
   // Everything else the map draws, only while it's on the map, each as the
@@ -231,6 +252,7 @@ export function buildLegend(meta, lines) {
       unserved.length ? [circleImage(layers.get('stations-unserved'), at(settled(layers.get('stations-unserved')), { served: false }), 'Gray ring'), 'Closed: no trains this week'] : null,
       counts.facilities ? [icon(layers.get('facilities'), settled(layers.get('facilities')), { spaces: 1 }, 'P sign'), 'Park-n-Ride'] : null,
       counts.facilities ? [symbolImage('transit-center', lines, 'Bus sign', evaluate(layers.get('facilities').layout['icon-size'], at(settled(layers.get('facilities'))))), 'Transit center'] : null,
+      oneWay(layers.get('street-oneway'), layers.get('street')),
       counts.stops ? [circleImage(layers.get('stops'), at(settled(layers.get('stops'))), 'Small dot'), 'Bus stop, when zoomed in close'] : null,
       counts.flexride
         ? (() => {

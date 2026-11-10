@@ -210,12 +210,16 @@ body {
   line-height: 1.25;
 }
 
-/* A tier's swatch is the bus line itself, drawn at the map's width. */
+/* A tier's swatch is the bus line itself, drawn at the map's width; the
+   heaviest streets are taller than the row's 8px, and set their own height. */
 .swatch {
   display: block;
   width: 36px;
   height: 8px;
   overflow: visible;
+}
+.swatch[height] {
+  height: auto;
 }
 
 .legend .swatch {
