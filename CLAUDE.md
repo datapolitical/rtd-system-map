@@ -32,6 +32,11 @@ we are" section from them (closed issues show as done).
   publish), add the `needs Chris` label and say what is needed in a comment.
 - New work gets its own issue in the right milestone. Add a line
   `Estimate: N min of agent time` to the body when you can guess one.
+- Say who did the work. Before committing or commenting, run
+  `source .github/daily/madeby/madeby.sh; made_by <model>` (`made_by Claude`
+  for Claude). It sets the commit author to the model, and `gh` then ends
+  each comment, issue and pull request with "Made by: ..." and adds the
+  `made by: free model`, `made by: DeepSeek` or `made by: Claude` label.
 - The repo is public. Keep issues about the map: no usage or budget numbers,
   no personal details.
 
@@ -52,15 +57,48 @@ we are" section from them (closed issues show as done).
   budget rule Chris gave you (it stays off this public repo). If you don't
   have it, ask.
 
+## Checks: what "done" and "verified" mean
+
+- A "Done when" line in an issue changes only when Chris says so. If one
+  looks wrong, say why in a comment and add `needs Chris`; keep working to it
+  until he answers.
+- "Verified" says what was run: the themes, the views or places, the zooms,
+  the build's commit, and a link to the run or its output. A run over part of
+  what a done-when names is reported as that part, not as done.
+- A detector that reports nothing at a known fault is broken, not proof that
+  the map is right. Before changing a detector's rule or threshold, run
+  `npm run check:recall` (qa/recall/README.md): a change that lowers its score
+  is not done, whatever it does to the report's count of findings. When the
+  score goes up, update `qa/recall/baseline.json` in the same commit.
+- When you or Chris find a fault the checks missed, pin it in
+  `qa/recall/finds.json` on the build it was seen on, then fix it.
+- A branch's preview runs `npm run check:map` against main's and posts a
+  commit status, `checks/map`, that fails when the branch adds a map fault
+  main doesn't have; the run's summary lists each with a link. Ask Chris for
+  a phone check only when `checks/map` passes, or when each new fault has an
+  answer in the issue (fixed, or why it is not a fault).
+
 ## Status page
 
 `node status/server.mjs [port]` (default 8795) serves a page that reads this
-repo's milestones and issues through `gh`. Issues labeled `in progress` show
-under "In progress", and issues labeled `needs Chris` under "Waiting on you",
-each with the first line of its newest comment. For every checkout of the
-repo on that machine it also lists the Claude Code sessions and subagents
-working there (read from their transcripts in `~/.claude/projects`), agents'
+repo's milestones and issues through `gh`. From the top: issues labeled
+`needs Chris` ("Waiting on you"), the jobs running now, the milestones ("How
+close we are") and Claude usage. A folded "Details" section holds the rest:
+issues labeled `in progress`, each with the first line of its newest comment,
+and, for every checkout of the repo on that machine, the Hermes agents and
+Claude Code sessions working there with their latest commands (read from
+`~/.hermes/state.db` and the transcripts in `~/.claude/projects`), agents'
 progress files, the newest captures in `qa/.scratch/`, and recent commits.
+
+The jobs come from `status/jobs.json` (ignored by git; `JOBS_FILE` can point
+elsewhere), which a collector on the machine running the agents rewrites
+every few minutes. It isn't in this repo. Each job has a health light from
+facts alone (green when a file in its worktree changed in the last 15
+minutes, yellow up to 30, red after that or when a step stopped), its steps,
+the issue's "Done when" line, facts (uncommitted files, the last test run,
+the last commit and whether it is pushed, the last command), and a short
+summary a model writes every 15 minutes from the job's commands and their
+output, never its reasoning.
 
 Run it from its own worktree pinned to main, used for nothing else
 (`git worktree add --detach ../rtd-system-map-status origin/main`), so a

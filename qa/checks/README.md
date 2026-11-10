@@ -17,10 +17,20 @@ view. Every spec's header says what fault it finds and its threshold.
 | `health.spec.mjs` | check (+ deep) | No console errors or warnings, page errors, failed or 4xx/5xx requests, and `validateStyleMin` passes on `map.getStyle()`. |
 | `a11y.spec.mjs` | check | axe-core, WCAG 2.0/2.1 A and AA, on the map alone, Key open, a panel open, search focused; the canvas is exempt. |
 | `visual.spec.mjs` | check | Three baseline screenshots per theme (hub at 9, 11.5, 14), tolerant threshold, Live masked. |
+| `drawn.spec.mjs` | check | The drawn model (`../drawn/`) against the page: at seeded views, the busiest interchanges and the finds' places, line vertices and mark centres within 1 px; lines as drawn (offset and width, by the page's hit-test) within 1 px and 0.6 px; every model line on the page; name and rail-letter boxes within 2 px. A second test plants model errors and checks each fails. Drift means the model has fallen behind the page. |
 | `continuity.spec.mjs` | deep | Rail lines (and the frequent bus tier at 14) unbroken on screen: gaps, covers, sideways jogs at piece joins; routes.geojson pieces that meet and ease between slots; a regression fixture at a known break. |
 | `marks.spec.mjs` | deep | Station marks overlapping or crowding at 9.75 to 14, every station. |
 | `labels.spec.mjs` | deep | Station names far from their mark, network labels under a card, labels over labels or marks, at 10 to 14. |
 | `contrast.spec.mjs` | deep | Lines and marks against the land, letters on bullets (4.5:1), bus tiers in order, per theme. |
+
+`drawn.spec.mjs` is the odd one: it does not look for a fault in the map
+but for drift between the page and `../drawn/`, the model of what the page
+draws in plain Node. Its header and that folder's README say how it works;
+the short version is that the model restates nothing, so when the page's
+style, data, glyphs or symbols change the model follows, and this spec is
+what proves it still does. The checks that run on the model are
+`npm run check:map`, and how much they catch is `npm run check:recall`
+(`../recall/README.md`).
 
 Each detector spec also has a test that seeds a fault in the page (a
 `setPaintProperty`, `setFilter` or `setLayoutProperty` change, restored after)
@@ -71,6 +81,15 @@ Three workflows run the fast set there: `checks-nightly.yml` (main, nightly),
 to capture the visual baselines). They are green runs on the site, not tests
 of the check code itself. `CHECK_JSON` makes Playwright write
 `qa/report/results.json`, which `github.mjs` reads.
+
+The map checks run beside them. On a branch's preview, `checks-preview.yml`
+runs `npm run check:map` (`report.mjs`) on the preview and on main's live
+site, both with this branch's checks and each site's own page code (main is
+checked out beside the branch; `--root`), and `map-diff.mjs` compares them:
+the same check and kind within 10 m is the same fault. The run's summary
+lists what the branch adds and what it removes, with links, and a commit
+status, `checks/map`, fails when it adds a fault main doesn't have. The
+nightly run writes the live site's report into its artifact.
 
 - **Checks (nightly)** runs at 01:20 Denver time and on `workflow_dispatch`,
   against https://rtd-system-map.pages.dev. Each failing spec opens an issue

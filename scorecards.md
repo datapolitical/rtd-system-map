@@ -1,12 +1,15 @@
 # Scorecards
 
 Design review cards, newest first. The rubric, the views and the pass rule
-are in DESIGN.md, "Design review rubric". Scores: 0 broken, 1 careless,
-2 good, 3 poster quality. A change is better than the last version only if
-no row goes down and at least one goes up. Each card also scores Roberts'
-five criteria (simplicity, coherence, balance, harmony, topographicity) as a
-looks total out of 15 beside the ten rows' usefulness; neither stands in for
-the other.
+are in DESIGN.md, "Design review rubric". A card has two gates, Accurate and
+Legible, which pass or fail, and ten judged rows scored 0 broken, 1 careless,
+2 good, 3 poster quality, for a total out of 30. A change is better than the
+last version only if no gate that passed now fails, no row goes down, and at
+least one goes up.
+
+The cards dated 2026-11-08 below predate this card (2026-11-10): they score
+Accurate and Legible 0 to 3 as rows and have no Coherence or Topographicity
+row. They are left as they were scored.
 
 ## 2026-11-08: readable bus geometry (7f3e635), against the frequency card
 

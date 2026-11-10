@@ -8,8 +8,7 @@ origin/main. Make or switch to the issue's branch.
 
 The workflow's picker has already chosen today's job and printed it in
 the assignment below (or passed it as the `issue` input). Work only on
-that issue. If the picker printed "no job", do nothing and write
-`daily-summary.txt` saying so.
+that issue.
 
 ## Before you start
 
@@ -59,6 +58,10 @@ because of its name.
 
 ## Map changes
 
+- Your commits, comments and issues are credited to your model
+  automatically: the git author is set and `gh` adds a "Made by" line and
+  label. Do not set `git config user.name` or `user.email`, and do not pass
+  `--author`.
 - Push the branch (`git push -u origin <branch>`). Do not merge map
   changes to main.
 - Pushes made with the workflow token do not start other workflows, so
@@ -116,6 +119,14 @@ unfinished work.
 
 ## Finish
 
-Write `daily-summary.txt` in the worktree root: at most three short
+Write `daily-summary.txt` in the worktree root, last: at most three short
 plain lines — the issue (number and title), what changed, and where it
-was handed off (evaluation request posted, branch, commit).
+was handed off (evaluation request posted, branch, commit). The workflow
+takes this file to mean you are done. Until it exists you will be told to
+carry on, so write it only when the job is finished or you are truly
+blocked, and if blocked, say why in it.
+
+After you, the workflow reads what the run did from GitHub and sets the
+labels: with an evaluation request posted, the issue goes to the
+evaluator; without one, it goes to Chris (`needs Chris`) with your
+summary as the reason. Do not add `needs Chris` yourself.

@@ -1,7 +1,8 @@
 # On every push to a branch but main: wait for that commit's Cloudflare Pages
 # preview, run the fast browser checks against it, capture the design review's
-# fixed views in both themes on one contact sheet, and leave all of it in the
-# run's artifact. A failing spec opens or comments on its "found by checks"
+# fixed views in both themes on one contact sheet, run the map checks on the
+# preview and on main and post what the branch changes (checks/map), and leave
+# all of it in the run's artifact. A failing spec opens or comments on its "found by checks"
 # issue; the run's one-line result is a commit status named checks/preview.
 # Quiet runs finish green without touching anything.
 name: Checks (branch preview)
@@ -43,7 +44,26 @@ jobs:
         env:
           CHECK_URL: ${{ steps.preview.outputs.url }}
           CHECK_JSON: qa/report/results.json
+          # drawn.spec.mjs: four seeded views per theme in CI (643b40e on the
+          # evaluator branch). #59 is what this test should check, and on how many views.
+          DRAWN_VIEWS: 4
         run: npm run check
+      # The map checks (npm run check:map, issue #45) on this branch's preview
+      # and on main's live site, both by this branch's checks with each site's
+      # own page code, so the difference is the map: a commit status named
+      # checks/map fails when the branch adds a fault main doesn't have.
+      - name: Map checks on the preview and on main, and what this branch changes
+        if: always() && steps.preview.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW: ${{ steps.preview.outputs.url }}
+        run: |
+          git fetch --depth 1 origin main
+          git worktree add --detach "$RUNNER_TEMP/main" FETCH_HEAD
+          ln -s "$GITHUB_WORKSPACE/public/vendor" "$RUNNER_TEMP/main/public/vendor"
+          CHECK_URL="$PREVIEW" node qa/checks/report.mjs --out qa/findings/branch
+          CHECK_URL=https://rtd-system-map.pages.dev node qa/checks/report.mjs --root "$RUNNER_TEMP/main" --out qa/findings/main
+          node qa/checks/map-diff.mjs --base qa/findings/main/findings.json --head qa/findings/branch/findings.json --out qa/findings --status
       - name: Capture the design review's fixed views
         if: always() && steps.preview.outputs.url != ''
         env:
@@ -58,6 +78,7 @@ jobs:
             qa/report/
             qa/checks/out/
             qa/review/
+            qa/findings/
           if-no-files-found: warn
       - name: Open or comment on the issue for each failing spec
         if: always() && steps.preview.outputs.url != ''

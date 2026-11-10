@@ -1,0 +1,39 @@
+#!/bin/bash
+# gh, except that with MADE_BY set (see madeby.sh) every comment, issue and
+# pull request it creates ends with "Made by: $MADE_BY" and a hidden
+# <!-- agent --> mark, and the issue or pull request gets $MADE_BY_LABEL.
+# The mark tells the worker the comment is not Chris's own.
+self=$(readlink -f "$0"); here=$(dirname "$self")
+REAL=""
+IFS=: read -ra dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+  [ -n "$d" ] && [ "$(readlink -f "$d")" != "$here" ] && [ -x "$d/gh" ] && [ "$(readlink -f "$d/gh")" != "$self" ] && { REAL="$d/gh"; break; }
+done
+[ -z "$REAL" ] && { echo "madeby gh: no real gh on PATH" >&2; exit 127; }
+[ -z "$MADE_BY" ] && exec "$REAL" "$@"
+case "$1 $2" in
+  "issue comment"|"issue create"|"pr comment"|"pr create") ;;
+  *) exec "$REAL" "$@" ;;
+esac
+kind=$1; verb=$2
+foot=$'\n\n'"Made by: $MADE_BY"$'\n\n<!-- agent -->'
+tmp=""; args=()
+withfile() { tmp=$(mktemp); { if [ "$1" = - ]; then cat; else cat -- "$1"; fi; printf '%s' "$foot"; } > "$tmp"; args+=(--body-file "$tmp"); }
+while [ $# -gt 0 ]; do
+  a=$1; shift
+  case "$a" in
+    -b|--body) args+=(--body "$1$foot"); shift ;;
+    --body=*) args+=("$a$foot") ;;
+    -F|--body-file) withfile "$1"; shift ;;
+    --body-file=*) withfile "${a#--body-file=}" ;;
+    *) args+=("$a") ;;
+  esac
+done
+if [ "$verb" = create ] && [ -n "$MADE_BY_LABEL" ]; then args+=(--label "$MADE_BY_LABEL"); fi
+"$REAL" "${args[@]}"; rc=$?
+if [ $rc -eq 0 ] && [ "$verb" = comment ] && [ -n "$MADE_BY_LABEL" ]; then
+  target=${args[2]}
+  case "$target" in -*|"") ;; *) "$REAL" "$kind" edit "$target" --add-label "$MADE_BY_LABEL" > /dev/null 2>&1 ;; esac
+fi
+[ -n "$tmp" ] && rm -f "$tmp"
+exit $rc

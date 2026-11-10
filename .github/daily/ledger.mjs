@@ -4,8 +4,11 @@
 //
 //   node .github/daily/ledger.mjs <job.json> [model]
 //
-// job.json is pick.mjs's output plus the outcome the workflow collected:
-//   {job, issue, lens, date, model, verdict?, filed?}
+// job.json is pick.mjs's output plus finish.mjs's outcome:
+//   {job, issue, lens, date, model, reason, finished, output, tries,
+//    filed, evaluation}
+// `rounds` counts evaluation requests, so a run that stopped short does not
+// move an issue to its next round.
 // It reads the current ledger from origin/daily-ledger (or seeds one),
 // applies this run, and pushes the branch (create if absent).
 import fs from 'node:fs';
@@ -29,10 +32,13 @@ try {
 }
 ledger.runs ||= [];
 ledger.rounds ||= {};
-const entry = { date: job.date || new Date().toISOString().slice(0, 10), job: job.job, model: model || null, ts: new Date().toISOString() };
+const entry = {
+  date: job.date || new Date().toISOString().slice(0, 10), job: job.job, model: model || null, ts: new Date().toISOString(),
+  reason: job.reason || null, finished: job.finished ?? null, output: job.output ?? null, tries: job.tries ?? null,
+};
 if (job.issue) {
   entry.issue = job.issue;
-  ledger.rounds[String(job.issue)] = (ledger.rounds[String(job.issue)] || 0) + 1;
+  if ((job.evaluation || []).includes(job.issue)) ledger.rounds[String(job.issue)] = (ledger.rounds[String(job.issue)] || 0) + 1;
   if (job.branch) {
     ledger.my_branches ||= [];
     if (!ledger.my_branches.includes(job.branch)) ledger.my_branches.push(job.branch);
@@ -45,10 +51,25 @@ if (job.job === 'find' && job.lens) {
   for (const n of job.filed || []) ledger.filed.push?.({ issue: n, lens: job.lens, date: entry.date, outcome: 'open' });
 }
 ledger.runs.push(entry);
-fs.writeFileSync('ledger.json', JSON.stringify(ledger, null, 2) + '\n');
-execFileSync('git', ['checkout', '--orphan', 'daily-ledger'], { stdio: 'inherit' });
-execFileSync('git', ['rm', '-rfq', '.'], { stdio: 'inherit' });
-execFileSync('git', ['add', 'ledger.json'], { stdio: 'inherit' });
-execFileSync('git', ['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-q', '-m', `Ledger: ${job.summary || job.job} on ${entry.date}`], { stdio: 'inherit' });
-execFileSync('git', ['push', '-u', 'origin', 'daily-ledger'], { stdio: 'inherit' });
+fs.writeFileSync('/tmp/ledger.json', JSON.stringify(ledger, null, 2) + '\n');
+// Update the orphan branch in its own temporary worktree, so whatever the
+// agent left in the runner's checkout (edits it never committed) can't stop
+// the ledger being written, and the checkout is left as it was.
+run('git fetch origin daily-ledger --quiet 2>/dev/null || true');
+let onLedger = false;
+try { run('git rev-parse --verify origin/daily-ledger >/dev/null'); onLedger = true; } catch {}
+const wt = fs.mkdtempSync(`${process.env.RUNNER_TEMP || '/tmp'}/ledger-`);
+const inWt = (args) => execFileSync('git', ['-C', wt, ...args], { stdio: 'inherit' });
+if (onLedger) {
+  execFileSync('git', ['worktree', 'add', '-q', '-B', 'daily-ledger', wt, 'origin/daily-ledger'], { stdio: 'inherit' });
+} else {
+  execFileSync('git', ['worktree', 'add', '-q', '--detach', wt], { stdio: 'inherit' });
+  inWt(['checkout', '-q', '--orphan', 'daily-ledger']);
+  inWt(['rm', '-rfq', '.']);
+}
+fs.copyFileSync('/tmp/ledger.json', `${wt}/ledger.json`);
+inWt(['add', 'ledger.json']);
+inWt(['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-q', '-m', `Ledger: ${job.summary || job.job} on ${entry.date}`]);
+inWt(['push', '-u', 'origin', 'daily-ledger']);
+execFileSync('git', ['worktree', 'remove', '--force', wt], { stdio: 'inherit' });
 console.log(`ledger updated: ${entry.date} ${job.job}${job.issue ? ' #' + job.issue : ''} model=${model || 'none'}`);

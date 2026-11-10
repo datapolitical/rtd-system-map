@@ -5,6 +5,39 @@ should look and behave. Read it before changing the map, the interface, or the
 data pipeline. When a decision changes, update this file and add a line to the
 decision log at the bottom.
 
+## Principles
+
+Six principles, in priority order. When two of them pull against each other,
+the higher one wins (Chris, 2026-11-10). The sections named after each carry
+the detail.
+
+1. **Nothing a rider acts on is wrong:** which line, which station, how
+   often, where it goes. A drawing may be tidied; a fact may not ("It looks
+   designed" under "Objective", "Zero maintenance", "Data").
+2. **Everything can be read:** contrast and size, in light and in dark, on a
+   phone ("Quality floor", "Dark mode", "Phones first").
+3. **How often service comes is obvious at a glance.** It is the map's main
+   job, and the lines carry it ("Objective", "Frequency and schedules",
+   "Hierarchy").
+4. **Every label clearly belongs to one thing.** A label that can't be tied
+   to its line or place at a glance is dropped, not nudged ("Name what can be
+   read as named", "Where the labeling rules come from").
+5. **The map is calm, not crowded.** A mark is there because someone looking
+   at that much of the city needs it ("Every mark earns its place", "By zoom
+   level").
+6. **The map looks designed by a person:** even packs, clean branches, lines
+   that end together ("It looks designed", "Shared track").
+
+Two examples of the order at work. A place's name gives way to a line,
+because the lines carry how often service comes (3) and a name can move
+where a line can't: DENVER and AURORA are not drawn in a phone's "Whole
+network" view, where no clear spot is near enough. And a clean drawing wins
+over the surveyed geometry (6) only until it would put a line on another
+street or past a station (1).
+
+The design review rubric scores a change against these (see "Design review
+rubric").
+
 ## Objective
 
 Open the site and see **all of Denver's transit** at a glance: where service
@@ -33,12 +66,22 @@ fix. Instead, the map reads well at every zoom, and tapping anything (a
 line, a station, a stop, a FlexRide zone, a spot on the map) explains it. We
 specialize only after seeing what people actually do.
 
+**What the bus lines say.** Two things. How often a bus comes along a
+street, at every zoom, by the line's weight. And which routes run on it,
+without a tap, from the zoom where a rider is choosing a bus (Chris,
+2026-11-10: the map must show which route is which, at the appropriate zoom
+level). The first is drawn. The second is not yet: three ways of numbering
+the lines failed (see "Bus routes", "Numbers"), and the scheme and its zoom
+are still to be found (#7).
+
 **Name what can be read as named.** A train line carries its letter along
 it, so any line on screen can be told from the others; a station is named
-where its name can sit beside it; a bus is named by a tap. A label goes on
-the map only where a reader can tell at a glance what it belongs to. Bus
-numbers along shared streets were tried three ways and failed that test, so
-the map carries none (see "Map design"). Comparing V2 with other agencies'
+where its name can sit beside it; a bus route is named where its number can
+be tied to one line or one street, and until a way of doing that passes
+review it is named by a tap. A label goes on the map only where a reader can
+tell at a glance what it belongs to. Bus numbers along shared streets were
+tried three ways and failed that test, so the map carries none today, not an
+ambiguous one (see "Map design"). Comparing V2 with other agencies'
 maps had found unnamed lines its biggest gap (see "Why"); a week of
 screenshots found labels that couldn't be tied to their lines a worse one.
 
@@ -53,9 +96,11 @@ things it gets right. So where the exact geometry and a clean drawing
 disagree, the clean drawing wins, within reason: a line may sit some meters
 from its track, never on another street, past a station, or anywhere that
 would send a rider to the wrong place. Everything a rider acts on (which
-lines, which stations, how often, where they go) stays exact. And the
-cleaning is always a rule in the build that works on any network, never a
-hand edit of one spot. (Chris, 2026-11-06: "we want this to look intentional
+lines, which stations, how often, where they go) stays exact and is never
+set by hand. The cleaning is a rule in the build that works on any network
+wherever a place is one case of a pattern; a visual fix for one named place
+is allowed only in the way "Rule 1" sets out. (Chris, 2026-11-06: "we want
+this to look intentional
 and clean, like it was designed by a person ... the goal of this is to look
 designed while also being technically accurate as much as possible.")
 
@@ -196,6 +241,26 @@ The code knows how to draw *kinds* of things, never *specific* things.
 Tables of current values in this document (layer URLs, rail colors, counts)
 are a snapshot for reference only. The code must not depend on them.
 
+**Facts are never set by hand. A visual fix for one named place may be**
+(Chris, 2026-11-10; until then every cleanup had to be a general rule, which
+meant writing an algorithm for any network to tidy a single station).
+
+- *Facts* are routes, stations, frequencies, colors, names and what stops
+  where. They come from RTD's data on every build, as above, with no
+  exceptions.
+- *A visual fix* moves or reshapes what is drawn at one place, within the
+  limits "It looks designed" sets: some meters, never onto another street or
+  past a station. It cannot add, remove or rename anything.
+- Fixes live in one small file the build reads. Each names its place by
+  RTD's own ids and records a fingerprint of the geometry it was written
+  for. When RTD changes that place the fingerprint no longer matches, the
+  fix is skipped, and the build log says so. A stale fix can never draw, so
+  RTD's changes still flow through with nobody involved.
+- A general rule is still preferred where one place is a case of a pattern.
+
+Not built yet: neither the file nor the build's reading of it exists (#64).
+Until it does, every cleanup is still a rule in the build.
+
 ### Rule 2: the site refreshes itself
 
 ```
@@ -269,7 +334,9 @@ route RTD runs, drawn by how often it comes on a typical weekday, 9am to 3pm:
 - Rush-hour and few-trip routes are dashed or dotted and faint.
 - Rail lines are the strongest element, in their official colors.
 
-Every line is named at the zoom where it appears (see "Name what you draw").
+Rail lines carry their letter, and stations their name, where it can be read
+as theirs (see "Map design"). Bus lines carry no number yet (see "Bus
+routes", "Numbers").
 Stations without trains for now are drawn gray (see "Station service").
 
 *Done when:* someone who has never seen the map can point to the frequent
@@ -767,6 +834,13 @@ own address layer covers only RTD facilities.
 
 ## Map design
 
+Four rules shape the drawing, and each serves one of the numbered principles
+at the top of this document (see "Principles"): trains in color, buses in ink
+serves 3, so frequency and mode read at a glance; name what can be read as
+named serves 4; every mark earns its place serves 5; and no name covers a
+line serves 3, since the lines carry how often service comes and a name can
+move where a line can't.
+
 The V2 principle: **trains in color, buses in ink.** Rail is the only color
 on the map, so a rail line can be found at a glance. Buses are drawn in a
 single dark ink, and how often they come is shown by weight and darkness.
@@ -782,10 +856,13 @@ below):
   yet, the letter sits at each end instead: both at once said the same thing
   twice. The letter is the whole label: where a line goes is in the key, the
   Lines list and the line's panel, not on the map.
-- Buses carry no number. On a shared street a number beside the line can't
-  be tied to one of the lines there, and a tap says which route it is (see
-  "Bus routes", "Numbers"). The lines' weight says how often a bus comes,
-  which is what the map is for.
+- Buses carry no number today, and must carry one from the zoom where a
+  rider is choosing a bus (Chris, 2026-11-10). On a shared street a number
+  beside the line can't be tied to one of the lines there, which is why the
+  three schemes tried so far came off the map (see "Bus routes", "Numbers").
+  Until a scheme ties each number to one line or one street (#7), a tap says
+  which route it is: no number is better than one that can't be read as
+  named. The lines' weight says how often a bus comes at every zoom.
 - A station's name sits within about two ems of its mark, or isn't drawn at
   that zoom. The one exception is the hub where most lines end (Union
   Station), whose name may go further out until every station is named.
@@ -913,8 +990,9 @@ what it leaves to us:
   when each number has its own line; a 2021 study (MDPI, IJGI 11(6):338)
   found map-style bus layouts impose more cognitive load than linear ones.
   Our pills sat on streets shared by two to four routes of different tiers,
-  the known-bad case. So: no numbers on the map; if they come back it is
-  Halifax-style, one line and one box per street.
+  the known-bad case. So: no numbers on the map until each can be tied to
+  one line or one street; Halifax's one line and one box per street is the
+  form the sources support.
 - **Density by zoom** is an industry convention, not a measured rule: Mapbox
   tiers its data by zoom and shows transit stops from 11; the Google and
   Apple transit patents keep line colors at every zoom and hold station
@@ -1031,7 +1109,7 @@ reference:
 
 Some lines are close in color (B and D, E and N). Rail is never identified by
 color alone: every line carries its letter in a round bullet, along the line
-and at each end (see "Symbols").
+from zoom 9.75 and at each end below it (see "Symbols").
 
 ### Rail frequency
 
@@ -1181,8 +1259,10 @@ meters or so. Drawn exactly, that looks wrong, and a rider reads the look.
 So the build may nudge a line a little (tens of meters, never to another
 street or past a station) where that makes the picture say what is true:
 lines on the same track are one pack, lines that end at one station end
-together, and track curves. Always by a rule in the build, never by editing
-one place by hand. (Chris, 2026-11-06: "It's more important that it visually
+together, and track curves. By a rule in the build wherever the place is one
+case of a pattern; a fix for one named place goes in the fixes file "Rule 1"
+describes, never into the data. (Chris, 2026-11-06: "It's more important
+that it visually
 makes sense. And if that means nudging things a little bit so that they line
 up properly, that's actually better (within reason).")
 
@@ -1249,9 +1329,12 @@ under "Stations"). Nothing in the shared-track work treats the place
 differently.
 
 A new line, a rerouted line, or a new shared corridor is handled with no
-changes. Never fix a corridor by hand-editing data or hiding a line; improve
-the algorithm instead. (This is a studied problem; see LOOM by Bast, Brosi
-and Storandt.)
+changes. Never fix a corridor by hand-editing data or hiding a line, and
+which lines share which track is a fact, never listed: improve the algorithm
+first. (This is a studied problem; see LOOM by Bast, Brosi and Storandt.)
+Where one place still draws badly, a visual fix for it may go in the fixes
+file "Rule 1" describes, tied to RTD's data so it drops out when RTD changes
+the place (not built yet, #64).
 
 ### Bus routes
 
@@ -1357,10 +1440,12 @@ The route tiers in the table above (frequent, every 30, hourly...) remain
 what a route *is*, for its panel, its tag, its part-time line and the Lines
 list; the map's bus lines are streets.
 
-**Numbers.** The map carries no bus route numbers. The lines' weight says
-how often a bus comes, which is the question the map is for; a tap on a line
-says which route it is and where it goes, and from zoom 16 each stop names
-the routes that serve it. Numbers on the lines were tried three ways over a
+**Numbers.** The map must show which route is which without a tap, at the
+appropriate zoom (Chris, 2026-11-10; see "What the bus lines say" under
+"Objective"). It doesn't yet: the map carries no bus route numbers today.
+The lines' weight says how often a bus comes; a tap on a line says which
+route it is and where it goes, and from zoom 16 each stop names the routes
+that serve it. Numbers on the lines were tried three ways over a
 week and pulled on 2026-11-06, when Chris's phone screenshots of downtown
 showed that even the best of them could be read but not understood: a
 reader could see "0 0L 83 +" and not know what it was telling them.
@@ -1382,15 +1467,13 @@ reader could see "0 0L 83 +" and not know what it was telling them.
   apart; and on the dark map a frequent pill and an every-30 pill were both
   near white, so the fill said nothing.
 
-Route numbers belong on the map; they were pulled only because none of
-the three attempts was good enough (Chris, 2026-11-08: "I want route numbers
-on there, I just we hadn't figured out how to do it, so it didn't make sense
-to put them on until we had a good solution"). Any new scheme must avoid
-each failure above: every route named, not whichever fit; never over a
-crossing line; a one-way pair named as one street; and fills that still
-differ in dark mode. Until a scheme does all of that, and passes the
-design review in captures of the busiest streets, the map ships without
-numbers. Where routes share a street the build still reads the street as one
+The rule from here: numbers come back, at the zoom where a rider is choosing
+a bus, with a scheme in which a reader can tie every number to one line or
+one street, placed clear of every line, and shown to pass on the rubric's
+fixed views. Which scheme and which zoom are not decided; #7 researches how
+other maps place route numbers and proposes schemes for Chris to choose
+from. Until one passes, the map carries no number, not an ambiguous one.
+Where routes share a street the build still reads the street as one
 (`scripts/lib/busnames.mjs`: routes within 35 m and 25 degrees of each other
 are one run, named strongest tier first, a route's per-tier stretches joined
 end to end, neighbouring stretches with the same names merged), so a shared
@@ -1791,7 +1874,8 @@ The controls:
 
 - **Live** is the one labeled button, because it's the one that changes what
   the map means. Off, it's white with the word "Live". On, it fills with the
-  live mark and the time ("Live, 9:41 pm").
+  live mark and the age of the positions ("Live, just now"), never a clock
+  time (see "2. Live").
 - **The key** is a button with an icon (a thick rail-colored line with a
   white station circle over a shorter, thinner ink line), the word "Key" and
   the time the map shows ("Weekdays, 9am to 3pm"). It opens on demand, and is
@@ -1867,8 +1951,9 @@ Live is off. Where the map opens is the first of these that applies:
 
 1. **A shared link** opens on what it shares, and nothing moves it.
 2. **Your location, if the browser already allows it.** The map opens on
-   you at zoom 13.5 (every route number around you, and about a 20-minute
-   walk each way), with your blue dot. The page never asks for your location
+   you at zoom 13.5 (about a 20-minute walk each way), with your blue dot.
+   The bus lines around you carry no numbers yet (see "Bus routes",
+   "Numbers"). The page never asks for your location
    on load: it checks the permission, and only an existing "allowed" counts.
    If you've started using the map before the position arrives, or you're
    outside RTD's area, the map stays where it is and says nothing. Safari on
@@ -1913,8 +1998,8 @@ that meet there until about zoom 12.
 Without a card or a caption, the first screen answers:
 
 - **What the network is:** every line in view, drawn by how often it comes.
-- **What each line is:** rail letters along the lines, and frequent bus
-  numbers.
+- **What each line is:** rail letters along the lines. Bus lines are not
+  numbered yet (see "Bus routes", "Numbers").
 - **Where the stations are, and what they're called.**
 - **Where things are:** city and town names, kept quiet and off the lines.
 - **That there's more:** the "Whole network" button.
@@ -2216,8 +2301,8 @@ are deferred, not ruled out. See "Open questions".
   - GeoJSON is passed to MapLibre by URL, so it downloads and parses in the
     map's worker, off the main thread.
   - Bus stops (the largest file) load only when the map first reaches zoom
-    14, and are drawn from 15. The shared-street labels (`busnames`) load
-    from zoom 10.8, a little before the zoom that shows them.
+    14, and are drawn from 15. The shared-street labels (`busnames`) are
+    built but have not been loaded by the page since 2026-11-06.
   - `directory.json` (every route's ends, hours and stations) loads after
     the first draw, since it's only needed once something is tapped.
   - The schedule summary loads after the map first draws, and a route's
@@ -2241,71 +2326,80 @@ are deferred, not ruled out. See "Open questions".
 
 ## Design review rubric
 
-Every change to what the map draws is scored on this card before it is
+Every change to what the map draws is checked on this card before it is
 called done, and the card goes with it (Chris, 2026-11-08: "it has to be
 useful and look gorgeous"; "you should have clear design evaluation
-principles by now"). The rows are this document's own principles, so a
-score is a claim about a section above, not taste.
+principles by now"). The gates and rows are this document's own principles
+(the number beside each is its place in "Principles"), so a result is a
+claim about a section above, not taste.
 
-**The views.** Scored from phone captures (390 x 844), light and dark,
+**The views.** Judged from phone captures (390 x 844), light and dark,
 before and after, at the same fixed views every time: the metro at 10.5
 over downtown, the west side at 10.7, the south at 10.2, downtown at 12.5
 and 14.5 over the hub, and whatever the change is about (a corridor, a
 terminal). `qa/checks` takes them headless. A row is scored on the worst
 view, not the best.
 
-**The scores.** 0: broken or wrong. 1: works, but looks careless or
-accidental. 2: good; nothing a rider would notice as wrong. 3: poster
-quality; it would hold up printed beside the best hand-drawn transit maps.
+**The gates.** Two things are not scored. They pass or fail (Chris,
+2026-11-10: a score of "poster quality" means nothing for accuracy or
+contrast, and two reviewers gave the same build's accuracy 2 and 0).
+
+| Gate | Principle (section) | Fails when |
+|---|---|---|
+| Accurate | 1 (It looks designed, within reason; Data) | A measured check fails (a line on the wrong street or past a station, a data cross-check), or a reviewer cites a capture that says something false. |
+| Legible | 2 (Quality floor; Dark mode) | A measured check fails (text under 4.5:1, or an essential line under 3:1, on what it sits on, in either theme), or a reviewer cites a capture of a word or mark that can't be read. |
+
+Where a check doesn't exist yet, the cited capture decides.
+
+**The scores.** The ten rows below are judged, 0 to 3. 0: broken or wrong.
+1: works, but looks careless or accidental. 2: good; nothing a rider would
+notice as wrong. 3: poster quality; it would hold up printed beside the best
+hand-drawn transit maps.
 
 | Row | Principle (section) | Asks |
 |---|---|---|
-| Useful | Objective; Validation tasks | Can a rider answer the question this change is for from the view alone, without a tap? Name the question. |
-| Hierarchy | Hierarchy | Squint: rail first, then frequent buses, then stations, then the rest. Does anything new outrank what should be stronger? |
-| Association | Name what can be read as named; Imhof | Is every label and mark tied at a glance to one thing? Anything ambiguous is dropped, not nudged. |
-| Drawn on purpose | It looks designed; Shared track | Even packs, concentric corners, clean branches, flush ends. No stubs, knots, jogs, beads, wobble. |
-| Calm | Imhof's density rule; Hierarchy 8 | Room to breathe: nothing crowded, nothing repeated nearby, no wall of lines or words. |
-| Legible | Quality floor; Dark mode | Text 4.5:1 and essential lines 3:1 on what they sit on; both themes equally good. |
-| Accurate | It looks designed (within reason) | Nothing on the wrong street, past a station, or saying something false. |
-| Across zooms | By zoom level; The key | Changes between zooms are calm, not a jump; the same thing looks the same everywhere, and as the Key draws it. |
-| Phone | Phones first; Layout | Nothing a rider needs is under the cards or buttons; works in one hand. |
-| Gorgeous | It looks designed | Would Chris screenshot it to show someone? Side by side with the Denver poster, does it hold its own? |
+| Useful | 3 (Objective; Validation tasks) | Can a rider answer the question this change is for from the view alone, without a tap? Name the question. |
+| Hierarchy | 3 (Hierarchy) | Squint: rail first, then frequent buses, then stations, then the rest. Does anything new outrank what should be stronger? |
+| Association | 4 (Name what can be read as named; Imhof) | Is every label and mark tied at a glance to one thing? Anything ambiguous is dropped, not nudged. |
+| Calm | 5 (Imhof's density rule; Hierarchy 8) | Room to breathe: nothing crowded, nothing repeated nearby, no wall of lines or words, no crowded areas next to empty ones. |
+| Across zooms | 5 (By zoom level; The key) | Changes between zooms are calm, not a jump; the same thing looks the same everywhere, and as the Key draws it. |
+| Phone | 2 (Phones first; Layout) | Nothing a rider needs is under the cards or buttons; works in one hand. |
+| Drawn on purpose | 6 (It looks designed; Shared track) | Even packs, concentric corners, clean branches, flush ends; line paths straight and calm, not zigzag. No stubs, knots, jogs, beads, wobble. |
+| Coherence | 6 (1. See the whole network) | Do the overall shape and organization of the network read clearly? |
+| Topographicity | 6 (A sense of place) | Is the map faithful enough to geography to orient by? |
+| Gorgeous | 6 (It looks designed) | Is it appealing to look at? Would Chris screenshot it to show someone? Side by side with the Denver poster, does it hold its own? |
 
-**The five criteria.** Roberts (2014) scores schematic maps on five
-criteria, and found that how much people like a map has no correlation with
-how well they use it. The card scores these too, 0 to 3 on the same fixed
-views, and reports their total (out of 15) beside the ten rows rather than
-folding it into them:
+**Why usefulness and looks are both on the card.** Roberts (2014) scores
+schematic maps on five criteria (simplicity, coherence, balance, harmony,
+topographicity) and found that how much people like a map has no
+correlation with how well they use it. So usefulness (the Useful row and the
+Validation tasks) and looks are scored separately, and a version that is
+useful but ugly, or lovely but wrong, cannot pass on the strength of the
+other. Until 2026-11-10 the five were a second total out of 15 beside the
+rows. Three of them measured what a row already did, so simplicity is now
+part of Drawn on purpose, balance part of Calm and harmony part of Gorgeous;
+coherence and topographicity are rows of their own.
 
-- **Simplicity:** line paths straight and calm, not zigzag.
-- **Coherence:** the overall shape and organization of the network read
-  clearly.
-- **Balance:** no crowded areas next to empty ones.
-- **Harmony:** the map is appealing to look at.
-- **Topographicity:** faithful enough to geography to orient by.
+**The test.** A version passes when both gates pass, no row is below 2, and
+Gorgeous is at least 2 (aimed at 3). A pass is not a finish: the lowest row
+is named as the next work.
 
-Usefulness is the Useful row and the Validation tasks; looks are these five.
-A version that is useful but ugly, or lovely but wrong, cannot pass on the
-strength of the other.
-
-**The test.** A version passes when Accurate and Legible score 3, no row
-is below 2, and Gorgeous is at least 2 (aimed at 3). A pass is not a
-finish: the lowest row is named as the next work.
-
-**Better than the last version.** A change is better only if no row goes
-down and at least one goes up. The total (out of 30) is reported but never
-traded: a gain in Useful does not buy a loss in Calm. A change that lowers
-a row ships only if Chris accepts that trade, and the decision log says
-so. Every card is kept, dated, in `scorecards.md`, so each version is
-scored against the one before it.
+**Better than the last version.** A change is better only if no gate that
+passed now fails, no row goes down, and at least one row goes up or a failed
+gate now passes. The total (out of 30) is reported but never traded: a gain
+in Useful does not buy a loss in Calm. A change that lowers a row ships only
+if Chris accepts that trade, and the decision log says so. Every card is
+kept, dated, in `scorecards.md`, so each version is scored against the one
+before it.
 
 **Who scores.** Not whoever did the work. The orchestrator scores from the
 captures; for anything large (a new kind of mark, a roadmap step) a second
 reviewer who did not build it scores independently, and the two cards are
 shown side by side. Each score cites the capture that earns it. The measured
-checks (`npm run check`, the sweep) back the rows they can (Drawn on
-purpose, Association, Legible, Phone), and a failing check caps its row at
-1. Chris's verdict on the screenshots overrides the card.
+checks (`npm run check`, the sweep) decide the gates where they exist and
+back the rows they can (Drawn on purpose, Association, Phone), and a failing
+check caps its row at 1. Chris's verdict on the screenshots overrides the
+card.
 The second reviewer is the project's `design-reviewer` agent
 (`.claude/agents/design-reviewer.md`): it takes its own captures from a
 running server, never sees the builder's report, judges against the
@@ -2314,9 +2408,10 @@ without editing anything.
 
 ## Validation
 
-Before calling a version done, five people who don't know the system each try
-these tasks on a phone. Measure completion, time, and wrong answers, not
-whether they like it.
+Before a version is called done, these six tasks are tried on a phone and
+measured: whether each was completed, how long it took, and wrong answers.
+Not whether anyone likes the map (see "Preference is not performance" under
+"Why").
 
 1. You're at a given address. What's the most frequent bus within a 5-minute
    walk, and when does the next one leave?
@@ -2330,6 +2425,24 @@ whether they like it.
 
 Tasks 1, 5 and 6 need Live or the key's other times; tasks 2 to 4 should work
 from the opening view without either.
+
+**Who tries them.** No panel of people (Chris, 2026-11-10: validation is
+automated, apart from his own review, which he does when he chooses).
+Before that the plan was five people who don't know the system. The tasks
+are run by an automated task test, which is not built yet (#66). As
+proposed there:
+
+- Each task's place or route is picked from the data at run time, never
+  written down.
+- A model that has seen neither the code nor this document is given only a
+  headless phone browser on the site and one task at a time, as a new rider
+  would be.
+- Its answers are graded against answers worked out from RTD's GTFS by a
+  script that does not import the build's code.
+- The report gives, for each task: answered or not, right or wrong, and how
+  many taps and seconds it took. A wrong answer given with confidence is the
+  worst result and is listed first.
+- One command runs it against any preview.
 
 ## V1 review (red team, 2026-11-01)
 
@@ -2537,22 +2650,54 @@ The map is worked on continuously in two halves that talk only through
 GitHub issue labels and comments, so either side can stop or restart
 without the other noticing.
 
-- The worker runs on GitHub Actions (`.github/workflows/agent.yml`,
-  every four hours and on demand): one issue or one review pass per run,
-  done by an AI agent, with map changes on branches and docs, tests and
-  CI allowed to main fast-forward. Its briefs are `.github/daily/find.md`
-  and `.github/daily/fix.md`; it records what it did in `ledger.json` on
-  the orphan branch `daily-ledger` and one line per run on the "Agent log"
-  issue. When a run finishes a map change it posts an evaluation request
+- The worker runs on GitHub Actions (`.github/workflows/agent.yml`). It
+  wakes every four hours, or on demand for one issue, and works only when
+  there is a reason to (`.github/daily/pick.mjs`): instructions waiting
+  (an issue labelled `agent instructions`, which is also how an open
+  issue is queued for it), a human's answer on a `needs Chris` issue, or,
+  at most once a day, a review pass after the map's code on main has
+  changed. With no reason it stops before installing anything or calling
+  a model. One issue or one review pass per run, done by DeepSeek V4.1
+  Flash through the opencode CLI, with map changes on branches and docs,
+  tests and CI allowed to main fast-forward. Its briefs are
+  `.github/daily/find.md` and `.github/daily/fix.md`, and a job is done
+  when the agent writes `daily-summary.txt`; a model that ends its turn
+  before then is told to carry on in the same session, up to five times.
+  When a run finishes a map change it posts an evaluation request
   (branch, commit, round, what was asked, what changed, and where to look,
-  with views that open the map at the zooms where the change shows) and
-  labels the issue `ready for evaluation`.
+  with views that open the map at the zooms where the change shows).
+- After each run the workflow, not the model, reads what the run did
+  from GitHub (branches GitHub Actions pushed during the run, issues
+  filed, comments, evaluation requests; `.github/daily/finish.mjs`) and sets the labels: an issue
+  with an evaluation request goes to `ready for evaluation` with
+  `agent instructions` off; one where the agent stopped without asking
+  goes to `needs Chris` with a comment saying why (a run started by hand
+  leaves the labels as they were). So
+  nothing comes back
+  to the worker by itself, and a stuck job waits for a person instead of
+  running again every four hours. It records the run in `ledger.json` on
+  the orphan branch `daily-ledger` and one line on the "Agent log" issue:
+  why it ran, what it did, or "No output" when nothing changed.
 - The evaluator runs on the home machine and is the only thing that talks
   to a human. It checks the preview, puts phone captures beside a
   satellite overlay (`qa/sat/render.py`), and returns `pass` (a phone
   check for a human), `revise` (instructions for the worker), or
   `escalate` (a decision only a human can make). After round 3 without a
   pass it escalates whatever the evaluation said.
+- A human's newest comment on a `needs Chris` issue is the worker's next
+  instruction. The evaluator posts from the same GitHub account as the
+  human, so every comment it posts ends with the hidden mark
+  `<!-- agent -->`, and the worker skips marked comments when it looks
+  for the human's.
+- All work says who made it: DeepSeek or Claude. Only DeepSeek V4.1
+  Flash builds, on GitHub and on the home machine; Claude evaluates.
+  `.github/daily/madeby/madeby.sh` (`made_by <model>`) sets the git
+  author to the model, and its `gh` wrapper ends every comment, issue and
+  pull request with "Made by: ..." and labels the issue `made by: DeepSeek` or
+  `made by: Claude` (`made by: free model` marks earlier work by the free
+  models). The worker sets it for
+  its model, the home lanes the same, and the evaluator always runs as
+  Claude.
 
 The satellite overlay (`qa/sat/render.py`) draws Esri satellite tiles
 with OpenStreetMap shapes and the map's own stops, rail lines,
@@ -2729,11 +2874,11 @@ work against the real structure before asking for evaluation.
        leaves a working map that says it's showing the schedule.
    11. **Close the version.** Shareable links; a real screen reader pass;
        the headless captures from steps 1 to 7 re-run; then milestone 5's
-       five people on V3. Publishing (milestone 6) continues beside all of
+       task test on V3. Publishing (milestone 6) continues beside all of
        this: the failure email, the public repository, offline caching, a
        domain.
-       *Done when:* the five tasks are measured and what failed is listed
-       under a V3 review.
+       *Done when:* the six tasks are measured by the automated task test
+       (see "Validation") and what failed is listed under a V3 review.
    Started 2026-11-07: the relay (a Durable Object, see "Live data"), the
    Live button, and vehicles on the map: trains from zoom 9.75 (at first 11) in their line's
    color with the letter from 12.5, buses from 13 with the number from 16
@@ -2744,7 +2889,8 @@ work against the real structure before asking for evaluation.
    the map (the relay carries them, the page doesn't draw them yet),
    predictions and vehicle panels.
 4. **From here, search, near me, shareable links, Directions.**
-5. **Task testing** with five people; fix what fails.
+5. **Task testing:** the six tasks, run by the automated task test (see
+   "Validation"); fix what fails.
 6. **Publish** to Cloudflare Pages from a public GitHub repo, with the hourly
    refresh Worker, deploy hook, failure notification, and offline caching set
    up. After this one-time setup, routine RTD changes need no human.
@@ -2766,11 +2912,12 @@ work against the real structure before asking for evaluation.
   open: whether the busiest streets should be capped at rail's width rather
   than drawn wider, and the right threshold for strands against a core line
   (six routes today).
-- **Span:** should "Frequent" also require all-day service? A strict test
-  (4 or more departures in every hour from 6am to 8pm) leaves only 4 routes:
-  FreeRide, 15, 31, and SKIP. Even 15-minute rail fails it at the edges of
-  the day. A span rule needs a looser window, or span could be shown
-  separately.
+- **Span (decided 2026-11-08):** "Frequent" does not also require all-day
+  service. A strict test (4 or more departures in every hour from 6am to 8pm)
+  leaves only 4 routes: FreeRide, 15, 31, and SKIP, and even 15-minute rail
+  fails it at the edges of the day. Lines keep the frequency of the window
+  the Key names ("Weekdays, 9am to 3pm"), and span shows by switching times
+  (milestone 8: Saturday, Sunday, evening), not as a stricter tier.
 - **Rail frequency (decided, weights open):** weekday midday, A, C, E, G, R,
   T, and W run every 15 minutes; N every 30; and B hourly. (The feed's D
   trips are positioning trains and aren't drawn; see "Trains that aren't a
@@ -2798,15 +2945,16 @@ work against the real structure before asking for evaluation.
 - **Vehicles at region zoom:** about 600 buses at once would cover the map,
   which is why buses start at neighborhood zoom. Whether trains should show
   from the opening zoom is settled on screen.
-- **Remembering Live:** returning visitors get Live as they left it. If that
-  surprises people in testing (opening at night to a mostly faint map), open
+- **Remembering Live:** returning visitors get Live as they left it. If the
+  task test or Chris's review shows it misleads (opening at night to a mostly
+  faint map), open
   on the full map and remember only where they were.
 - **Push notifications (deferred):** RTD's alerts could be pushed to
   installed web apps (iOS 16.4 and later), with a badge count, and with no
   Apple Developer membership. The Live relay Worker is somewhere to send
   them from, but they still need stored per-user subscriptions, something
   that decides what is worth sending, and a privacy policy. Deferred until
-  "Alert noise" is settled and V3's five people have been watched: push is
+  "Alert noise" is settled and V3's task test has run: push is
   the least forgiving place to get alert selection wrong. If it is adopted,
   scope it to the lines someone has chosen rather than the whole network.
 - **Points of interest for V3:** which database, where it lives, how it's
@@ -3528,6 +3676,95 @@ work against the real structure before asking for evaluation.
   work and writes the worker's next instructions. Either side can stop or
   restart without the other noticing; the satellite overlay
   (`qa/sat/render.py`) is how builders check their own work first.
+- 2026-11-08: The evaluator posts from the same GitHub account as the human,
+  so its comments carry the hidden mark `<!-- agent -->`. Without it the
+  worker read the evaluator's own pass note as the human's go-ahead and
+  would have started the issue again.
+- 2026-11-08: Work is credited to who made it (free model, DeepSeek or
+  Claude) in the commit author, a "Made by" line on every comment, and a
+  `made by:` label on the issue, so it is clear which models did which work.
+- 2026-11-08: The worker runs DeepSeek V4.1 Flash only, and only when there
+  is a reason to: instructions waiting, a human's answer, or a review once
+  the map on main has changed. Its first four runs, on the free models,
+  produced nothing: the models ended their turns early and the workflow
+  took that as success. Now a job is done only when the agent writes
+  `daily-summary.txt` (until then it is told to carry on), and the
+  workflow sets the labels after each run from what really happened on
+  GitHub, so a finished or stuck issue is never picked again by itself.
+- 2026-11-08: The free models are no longer used; DeepSeek V4.1 Flash does
+  all the building, on GitHub and on the home machine, and Claude still
+  evaluates. On most jobs they were given they ended their turns within
+  minutes, wrote a plan instead of the change, or left edits uncommitted,
+  while DeepSeek finished its jobs and asked for evaluation.
+- 2026-11-08: The checks get a model of the map in plain Node
+  (`qa/drawn/`): the page's own style, data, glyphs and symbols worked out as
+  line, mark and label geometry at any zoom and either theme, tile by tile,
+  with the basemap from the tiles the style names. Nothing in it restates a
+  width, colour, offset or font, so a styling change flows through; a drift
+  test in the browser keeps the two from parting (`drawn.spec.mjs`). It
+  exists because the screenshot checks only see zoom 9 to 14 of a phone
+  screen, and the next steps' checks need to see everywhere.
+- 2026-11-10: The checks are scored, not just run (`qa/recall/`). Every fault
+  a person finds is pinned on the build it was seen on (`finds.json`), and
+  faults are planted in a frozen build's data on purpose; `npm run
+  check:recall` reports how many of each the checks catch, and fails when a
+  change catches fewer. A report with few findings no longer counts as a good
+  map on its own: the checks had been tuned until the report came out clean
+  while most of the faults in #42 were still on the map.
+- 2026-11-10: A break in a line is judged as a rider sees it (#43,
+  `qa/drawn/routes.mjs`): each route is followed across every piece that
+  carries it, and a break is a line end with nothing drawn over it whose
+  route carries on just ahead across empty land. The old check compared
+  pieces inside one feature only, so it never saw a bus line, which is many
+  street features, break where one street meets the next.
+- 2026-11-10: A branch fails its map check when it adds a fault main
+  doesn't have (#45): every preview runs `npm run check:map` on itself and on
+  main's live site with the same checks, and the commit status `checks/map`
+  says what it adds and removes. An agent asks for a phone check only when
+  that passes or each new fault is answered in the issue.
+- 2026-11-10: Six principles, in priority order, at the top of this file
+  ("Principles"): nothing a rider acts on is wrong; everything can be read;
+  how often service comes is obvious; every label belongs to one thing; calm;
+  looks designed. Chris accepted the order after a review found the
+  principles spread over four sections with nothing to say which wins, so
+  each conflict (a city's name against a line, a clean drawing against the
+  survey) had been settled on its own.
+- 2026-11-10: The map must show which bus route is which without a tap, at
+  the appropriate zoom (reverses "buses carry no number" of 2026-11-06 as a
+  principle; the bar it set stays). Chris chose this over "weight says how
+  often, a tap says which": the Nov 8 bus cards had marked main down because
+  a rider can't say where a bus goes, a question this file had never
+  claimed. No number is drawn yet. The scheme and its zoom are #7, and until
+  one ties every number to one line or one street the map carries none.
+- 2026-11-10: Facts are never set by hand, but a visual fix for one named
+  place may be, in a file the build reads, tied to RTD's own ids and a
+  fingerprint of the geometry so it drops out when RTD changes the place
+  (narrows "always a rule in the build, never a hand edit of one spot" of
+  2026-11-06). Chris chose it because a general algorithm was being written
+  for single places: only Union Station has platform groups. Not built
+  (#64).
+- 2026-11-10: The rubric's Accurate and Legible are gates that pass or fail,
+  by the measured checks where they exist, and Roberts' five criteria are no
+  longer a second total: simplicity, balance and harmony join Drawn on
+  purpose, Calm and Gorgeous, and coherence and topographicity are rows. Ten
+  judged rows, out of 30. Chris agreed after two reviewers scored the same
+  main 24 and 21 and round two's accuracy 2 and 0, and because "poster
+  quality" means nothing for accuracy. The Nov 8 cards keep their old form.
+- 2026-11-10: No panel of people. The six validation tasks are run by an
+  automated task test (not built, #66), and Chris reviews the map himself
+  when he chooses. Replaces the five-person test of milestone 5 and V3 step
+  11.
+- 2026-11-10: Frequency stays a weekday 9am to 3pm measure (#35). A reviewer
+  found the 120 drawn hourly though it comes about every 30 minutes in rush
+  hours; ten routes are hourly at midday and about every 30 in rush hours,
+  and four go from every 30 to every 15 or better. The lines keep the
+  midday measure the key names, and the route panel gains weekday morning
+  and afternoon rush-hour rows in RTD's own periods, 6 to 9am and 3 to 6pm
+  (#22). A longer measuring day (6am to 7pm) was not adopted: the 120 would
+  still draw hourly, and the 8, 88 and 92 would drop from every 30 to
+  hourly. A time-of-day choice is looked at again once streets are drawn as
+  one line. Chris left the choice to the review; it took the research's
+  recommendation.
 
 - 2026-11-08: Round four, Union Station and Civic Center. A train runs the
   whole platform it stops at, so a line ends at the platform's far end from

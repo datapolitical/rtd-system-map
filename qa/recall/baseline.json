@@ -1,0 +1,149 @@
+{
+  "seed": 1,
+  "per": 5,
+  "scores": {
+    "find 0fe749b 42-15th-short": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find 0fe749b 42-15th-corner": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-15th-arrow": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-15th-stops": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-15th-strand-step": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-ninemile-terminal": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-ninemile-stops": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-ninemile-stub": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find 0fe749b 42-ninemile-step": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-ninemile-marks": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-union-hairline": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-union-name": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-union-concourse": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find 0fe749b 42-union-rail-past": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find 0fe749b 42-union-dashed": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 0fe749b 42-union-hook": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 430ea4a 42-ninemile-stops": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 430ea4a 42-ninemile-marks": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 430ea4a 42-union-hairline": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 430ea4a 42-union-name": {
+      "pipeline": false,
+      "looking": false
+    },
+    "find 430ea4a 42-union-concourse": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find 430ea4a 42-union-rail-past": {
+      "pipeline": true,
+      "looking": true
+    },
+    "planted 430ea4a terminal-shape": {
+      "pipeline": 0,
+      "looking": 0,
+      "of": 1
+    },
+    "planted 430ea4a gap": {
+      "pipeline": 5,
+      "looking": 5,
+      "of": 5
+    },
+    "planted 430ea4a rail-gap": {
+      "pipeline": 5,
+      "looking": 5,
+      "of": 5
+    },
+    "planted 430ea4a step": {
+      "pipeline": 5,
+      "looking": 5,
+      "of": 5
+    },
+    "planted 430ea4a stray-piece": {
+      "pipeline": 5,
+      "looking": 5,
+      "of": 5
+    },
+    "planted 430ea4a overshoot": {
+      "pipeline": 2,
+      "looking": 2,
+      "of": 2
+    },
+    "planted 430ea4a hook": {
+      "pipeline": 2,
+      "looking": 2,
+      "of": 5
+    },
+    "planted 430ea4a off-street": {
+      "pipeline": 0,
+      "looking": 1,
+      "of": 5
+    },
+    "planted 430ea4a slot": {
+      "pipeline": 0,
+      "looking": 1,
+      "of": 5
+    },
+    "planted 430ea4a stray-stop": {
+      "pipeline": 0,
+      "looking": 5,
+      "of": 5
+    },
+    "planted 430ea4a extra-mark": {
+      "pipeline": 0,
+      "looking": 0,
+      "of": 5
+    }
+  }
+}
