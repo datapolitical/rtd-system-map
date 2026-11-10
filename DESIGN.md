@@ -3314,6 +3314,11 @@ work against the real structure before asking for evaluation.
   route carries on just ahead across empty land. The old check compared
   pieces inside one feature only, so it never saw a bus line, which is many
   street features, break where one street meets the next.
+- 2026-11-10: A branch fails its map check when it adds a fault main
+  doesn't have (#45): every preview runs `npm run check:map` on itself and on
+  main's live site with the same checks, and the commit status `checks/map`
+  says what it adds and removes. An agent asks for a phone check only when
+  that passes or each new fault is answered in the issue.
 - 2026-11-10: Six principles, in priority order, at the top of this file
   ("Principles"): nothing a rider acts on is wrong; everything can be read;
   how often service comes is obvious; every label belongs to one thing; calm;

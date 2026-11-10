@@ -43,6 +43,11 @@ jobs:
           CHECK_URL: https://rtd-system-map.pages.dev
           CHECK_JSON: qa/report/results.json
         run: npm run check
+      - name: The map checks on the live site (npm run check:map)
+        if: always()
+        env:
+          CHECK_URL: https://rtd-system-map.pages.dev
+        run: node qa/checks/report.mjs --out qa/findings
       - name: Upload the report and captures
         if: always()
         uses: actions/upload-artifact@v7
@@ -51,6 +56,7 @@ jobs:
           path: |
             qa/report/
             qa/checks/out/
+            qa/findings/
           if-no-files-found: warn
       - name: Open, comment on or close the issue for each spec
         if: always() && github.ref_name == 'main'
