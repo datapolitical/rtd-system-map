@@ -7,16 +7,17 @@
 // gets one, a little in from where it enters.
 //
 // Which lines there are, and where they run, is read from what the map has
-// drawn: nothing here knows RTD's network. Work happens once per move, on rail
-// lines only, after a short debounce from `moveend` and again when the routes
-// source reports its data. The map is not required to go idle: a slow renderer
-// can draw frame after frame without ever reporting idle (#31), which left a
-// line with no letter until something else happened to draw one. A pass took 1
-// to 2 ms at zoom 11 to 12 over downtown on the phone profile (Playwright's
-// iPhone 14, software GL, measured with performance.now around
-// placeEdgeLetters), most of it queryRenderedFeatures. "On screen" means the
-// part of the map no control covers (see uncovered): a letter under the search
-// or Key cards can't be read, so it doesn't count, and none is put there.
+// drawn: nothing here knows RTD's network. Work is done on rail lines only,
+// after a short debounce from `moveend`, when the routes source reports its
+// data, and on later frames or a short timer until the tiles and symbols have
+// settled. The map is not required to go idle: a slow renderer can draw a
+// frame without ever reporting idle, and a pass that ran before a tile arrived
+// saw nothing to letter (#31). A pass took 1 to 2 ms at zoom 11 to 12 over
+// downtown on the phone profile (Playwright's iPhone 14, software GL, measured
+// with performance.now around placeEdgeLetters), most of it
+// queryRenderedFeatures. "On screen" means the part of the map no control
+// covers (see uncovered): a letter under the search or Key cards can't be
+// read, so it doesn't count, and none is put there.
 
 const LAYER = 'rail-edge-letters';
 const LETTERS = 'rail-bullets';
@@ -25,8 +26,15 @@ const INSET = 18;
 // Two letters this near on screen can touch.
 const APART = 28;
 const STEP = 4;
+// A letter's circle: the room it needs from a control and the screen's edge.
+const RADIUS = 10;
+// A name's box and a letter's halo need a little more room.
+const LABEL_PAD = 13;
 // What sits over the map: found in the page by its position, not by name.
 const COVERS = ['#finder', '#legend', '#live-button', '.maplibregl-ctrl-top-left', '.maplibregl-ctrl-top-right', '.maplibregl-ctrl-bottom-left', '.maplibregl-ctrl-bottom-right', '#panel:not([hidden])'];
+// Layers that are not names: the letters themselves, the signs, and the
+// invisible keep-out boxes the basemap uses to hold names back.
+const NOT_NAMES = new Set([LAYER, LETTERS, 'line-signs']);
 
 // The part of the map no control covers, as a rectangle in map pixels: the
 // whole width, less a band across the top for whatever sits in the upper half
@@ -42,6 +50,47 @@ export function uncovered(map) {
     else bottom = Math.min(bottom, r.top - box.top);
   }
   return { x0: 0, y0: top, x1: box.width, y1: Math.max(top, bottom) };
+}
+
+// The controls as rectangles in map pixels, so a letter can keep its circle
+// clear of each one rather than only of the full-width bands above.
+function controlBoxes(map) {
+  const box = map.getContainer().getBoundingClientRect();
+  const out = [];
+  for (const el of document.querySelectorAll(COVERS.join(','))) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height || r.bottom <= box.top || r.top >= box.bottom) continue;
+    out.push({ x0: r.left - box.left, y0: r.top - box.top, x1: r.right - box.left, y1: r.bottom - box.top });
+  }
+  return out;
+}
+
+// The letter layers that draw text or a mark on the map: stay clear of every
+// one so a name and a letter can both be read (DESIGN.md, "no name covers a
+// line"). The rail letters and signs are read separately.
+function nameLayers(map) {
+  return map.style._order.filter((id) => {
+    if (NOT_NAMES.has(id) || id.startsWith('keep-out')) return false;
+    const layer = map.getLayer(id);
+    return layer && layer.type === 'symbol' && (map.getLayoutProperty(id, 'visibility') ?? 'visible') !== 'none';
+  });
+}
+
+// Is a letter centred here clear of the screen's edge, of every control and
+// of every name already drawn? A box query returns a placed name whose box
+// the letter would touch.
+function clearAt(map, [x, y], controls, names) {
+  const box = map.getContainer();
+  if (x < RADIUS || x > box.clientWidth - RADIUS || y < RADIUS || y > box.clientHeight - RADIUS) return false;
+  for (const b of controls) {
+    if (x > b.x0 - RADIUS && x < b.x1 + RADIUS && y > b.y0 - RADIUS && y < b.y1 + RADIUS) return false;
+  }
+  if (!names.length) return true;
+  try {
+    return map.queryRenderedFeatures([[x - LABEL_PAD, y - LABEL_PAD], [x + LABEL_PAD, y + LABEL_PAD]], { layers: names }).length === 0;
+  } catch {
+    return true;
+  }
 }
 
 // The layer: a copy of the one that draws the letters along the lines (same
@@ -70,6 +119,7 @@ export function initEdgeLetters(map) {
   let follow = null;
   let frameMark = -1;
   let frames = 0;
+  let repaints = 0;
   let last = '';
 
   const write = () => {
@@ -84,13 +134,20 @@ export function initEdgeLetters(map) {
     if (next !== last) {
       last = next;
       source.setData({ type: 'FeatureCollection', features });
+      // New data needs a frame. A slow renderer can hold the source without
+      // drawing it, so a few short, bounded passes ask for frames until every
+      // letter it should show is drawn (#31).
+      repaints = features.length ? 8 : 0;
     }
-    // A source can hold the letters before the map has drawn them, with no
-    // frame coming to draw them (a slow renderer, #31). Keep asking for one
-    // while a letter it should show is missing from what is drawn.
-    if (settling && features.length) {
+    if (repaints > 0 && features.length) {
       const shown = new Set(map.queryRenderedFeatures({ layers: [LAYER] }).map((f) => f.properties.route));
-      if (features.some((f) => !shown.has(f.properties.route))) map.triggerRepaint();
+      if (features.some((f) => !shown.has(f.properties.route))) {
+        repaints--;
+        map.triggerRepaint();
+        schedule(160);
+      } else {
+        repaints = 0;
+      }
     }
     if (again) {
       again = false;
@@ -131,16 +188,20 @@ export function initEdgeLetters(map) {
   };
 
   // Symbols can settle several frames after the data that holds them, so a
-  // move or a source report keeps passing while the map draws, then gets one
-  // more pass after things go quiet.
+  // move or a source report keeps passing while the map draws. The timer is
+  // the fallback for a renderer that draws no later frame at all: with only
+  // the render loop, a pass that ran before a tile arrived never ran again.
   const settlingFrom = () => {
     settling = true;
-    settleUntil = performance.now() + 8000;
+    settleUntil = performance.now() + 6000;
     clearTimeout(follow);
-    follow = setTimeout(() => {
+    const tick = () => {
       follow = null;
+      if (!settling) return;
       schedule(0, true);
-    }, 500);
+      if (performance.now() < settleUntil) follow = setTimeout(tick, 250);
+    };
+    follow = setTimeout(tick, 120);
   };
 
   map.on('render', () => {
@@ -154,6 +215,8 @@ export function initEdgeLetters(map) {
   map.on('movestart', () => {
     moving = true;
     settling = false;
+    clearTimeout(follow);
+    follow = null;
   });
   map.on('moveend', () => {
     moving = false;
@@ -192,13 +255,24 @@ export function placeEdgeLetters(map) {
   const layer = map.getLayer(LETTERS);
   if (!layer || map.getZoom() < layer.minzoom) return [];
   const area = uncovered(map);
+  const controls = controlBoxes(map);
   const drawn = map.queryRenderedFeatures({ layers: [LETTERS] });
   const taken = drawn.map((f) => {
     const p = map.project(f.geometry.coordinates);
     return [p.x, p.y];
   });
-  // A line is named if one of its letters is in the open part of the map.
-  const named = new Set(drawn.filter((f, i) => within(taken[i], area)).map((f) => f.properties.route));
+  // A line is named if one of its letters is on the map and not under a
+  // control. The open bands above leave out the gap between the Key and the
+  // Live button, where a letter is still readable, so a letter there counts.
+  const named = new Set(
+    drawn
+      .filter((f, i) => {
+        const [x, y] = taken[i];
+        if (x < 0 || y < 0 || x > map.getContainer().clientWidth || y > map.getContainer().clientHeight) return false;
+        return !controls.some((b) => x > b.x0 - RADIUS && x < b.x1 + RADIUS && y > b.y0 - RADIUS && y < b.y1 + RADIUS);
+      })
+      .map((f) => f.properties.route),
+  );
   // Where each unnamed line is on screen, as runs of points inside it.
   const runs = new Map();
   for (const f of map.queryRenderedFeatures({ layers: ['rail'] })) {
@@ -213,11 +287,22 @@ export function placeEdgeLetters(map) {
     }
   }
   // One letter per line, on its longest run, in a fixed order so lines
-  // entering together on shared track stack the same way each time.
+  // entering together on shared track stack the same way each time. A run
+  // that has no spot clear of the controls and names gives way to another
+  // run of the same line, so the line keeps a letter while it crosses.
+  const names = nameLayers(map);
   const out = [];
   for (const route of [...runs.keys()].sort()) {
-    const run = runs.get(route).reduce((a, b) => (b.length > a.length ? b : a));
-    const at = spot(run, taken);
+    const ordered = [...runs.get(route)].sort((a, b) => b.length - a.length);
+    let best = null;
+    for (const run of ordered) {
+      const at = spot(run, taken, (p) => clearAt(map, p, controls, names));
+      if (!at) continue;
+      if (!best || at.clear || (!best.at.clear && at.gap > best.at.gap)) best = { at, run };
+      if (at.clear) break;
+    }
+    if (!best) continue;
+    const { at, run } = best;
     taken.push(at.point);
     const [lng, lat] = map.unproject(at.point).toArray();
     // How far right and down the screen the line is drawn from its track's
@@ -289,9 +374,11 @@ function clipSegment(a, b, { x0, y0, x1, y1 }) {
 }
 
 // Where on a run the letter goes: INSET px in from the edge the run enters
-// at, pushed further along while it is within APART px of another letter.
-// A run that is short, or touches no edge, gets it in the middle.
-function spot(run, taken) {
+// at, pushed further along while it is within APART px of another letter, a
+// control or a name. A run that is short, or touches no edge, gets it in the
+// middle. `clear` asks whether a spot is clear of controls and names; the
+// best-gap spot is kept as a fallback so a crowded line still gets a letter.
+function spot(run, taken, clear) {
   const from = run.startsAtEdge ? 0 : run.endsAtEdge ? run.length : run.length / 2;
   const sign = run.startsAtEdge || !run.endsAtEdge ? 1 : -1;
   const first = run.startsAtEdge || run.endsAtEdge ? INSET : 0;
@@ -301,9 +388,9 @@ function spot(run, taken) {
     const here = along(run.points, from + sign * s);
     const gap = Math.min(Infinity, ...taken.map((p) => Math.hypot(p[0] - here.point[0], p[1] - here.point[1])));
     if (!best || gap > best.gap) best = { ...here, gap };
-    if (gap >= APART) return here;
+    if (gap >= APART && clear(here.point)) return { ...here, clear: true };
   }
-  return best;
+  return best && { ...best, clear: false };
 }
 
 // The point `s` px along a polyline from its start, and the way it is going

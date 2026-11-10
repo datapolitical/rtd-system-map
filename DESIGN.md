@@ -1848,6 +1848,14 @@ draws it at its zoom (see "The key"). Nothing in the key is a second drawing.
   from the page, and the map less a full-width band for each of the top and
   bottom ones is where a letter counts, so a line seen only under a card gets
   none and a letter hidden under one does not name its line.
+  A letter keeps its circle clear of every on-screen control (the search
+  and Key cards, Live, the locate and Whole network buttons, a panel) and of
+  every name already drawn: where its first spot would touch one, it moves
+  along its line to the nearest free spot, or uses another run of the same
+  line that is still on screen. A line with a built letter in the gap
+  between two controls counts as named there, so no second, clipped letter
+  is added beside it. The layer sits just below the built letters, so a
+  built letter is placed first and wins if the two would touch.
   It runs once after each move, only over the rail layer (1 to 2 ms at zoom
   12 on the phone profile), never while the map moves. Why not more
   letters in the build: a set is shown across a whole zoom, so the spacing
@@ -3899,6 +3907,17 @@ work against the real structure before asking for evaluation.
   flicker. The check's rest gets its third round back (the issue's "three
   rounds"), because a slow renderer can still need one more frame to draw
   letters that are already in the source.
+- 2026-11-10: An edge letter stays off the controls and off names already on
+  the map, moving along its line or to another visible run when its first
+  spot is taken; a built letter in the gap between two controls counts as
+  naming its line, so no clipped second letter is drawn there. Edge letters
+  are placed below the built ones, so a built letter wins where the two
+  would touch (#31, round 2).
+- 2026-11-10: A pass that runs before a tile arrives now retries on a short
+  timer as well as on frames, so a renderer that draws no later frame still
+  letters the view. The check's rest gets six rounds instead of three: a
+  loaded runner can need several frames to draw letters that are already in
+  the source (#31, round 2).
 
 ## Sources
 

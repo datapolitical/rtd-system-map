@@ -155,17 +155,21 @@
     return mod.placeEdgeLetters(map()).length > 0;
   };
   // A move, then the map at rest: its own idle, and the letters the page
-  // places once it is. The map can take a frame or two to place them, so
-  // while the page says it still has one to place, force a frame and let it
-  // draw, up to `rounds` times. A quiet spell alone read the view while the
-  // page was still working and reported lines with no letter on a map that
-  // was about to draw one (#31).
-  qa.rest = async (quiet = 700, rounds = 3) => {
+  // places once it is. The map can take several frames to place them on a
+  // loaded runner, so while the page says it still has one to place, force a
+  // frame and let it draw, up to `rounds` times. A quiet spell alone read the
+  // view while the page was still working and reported lines with no letter
+  // on a map that was about to draw one (#31).
+  qa.rest = async (quiet = 700, rounds = 6) => {
     await qa.settle(quiet);
     for (let i = 0; i < rounds; i++) {
-      if (!(await qa.pending())) break;
+      // Force a frame even when `pending` still reads the view before the
+      // jump: a teleport can leave the rendered features on the old view
+      // until the next frame, and a check that then saw no line to place for
+      // returned before the map had drawn the new one.
       await qa.idle();
       await qa.settle(400, 4000);
+      if (!(await qa.pending())) break;
     }
     return qa.letterKey();
   };
@@ -398,6 +402,11 @@
   qa.letters = () => {
     const m = map(), A = qa.area();
     const inA = (p) => p.x >= A.x0 && p.x <= A.x1 && p.y >= A.y0 && p.y <= A.y1;
+    // A letter counts where it can be read: on the screen and not under a
+    // control. The open bands leave out the gap between the Key and the Live
+    // button, where a letter is still visible (edgeletters.js counts it too).
+    const { step, cols, bits } = qa.cover(4);
+    const onScreen = (p) => p.x >= 0 && p.y >= 0 && p.x < innerWidth && p.y < innerHeight && bits[Math.floor(p.y / step) * cols + Math.floor(p.x / step)] !== '1';
     const reach = {};
     for (const f of m.queryRenderedFeatures({ layers: ['rail'] })) {
       const route = f.properties.route;
@@ -415,7 +424,7 @@
     }
     const lines = Object.keys(reach).filter((k) => reach[k].xs.length).sort();
     const letterLayers = ['rail-bullets', 'rail-edge-letters'].filter((id) => m.getLayer(id));
-    const letters = [...new Set(m.queryRenderedFeatures({ layers: letterLayers }).filter((f) => inA(m.project(f.geometry.coordinates))).map((f) => f.properties.route))];
+    const letters = [...new Set(m.queryRenderedFeatures({ layers: letterLayers }).filter((f) => onScreen(m.project(f.geometry.coordinates))).map((f) => f.properties.route))];
     const out = {};
     for (const k of lines) {
       const { xs, ys } = reach[k];
