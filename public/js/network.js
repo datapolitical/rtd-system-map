@@ -71,8 +71,10 @@ const letterOffset = (unit) =>
 // letter can't be named, and a number has the rest of its route to sit on.
 export function lettersFirst(layers) {
   const [letters] = layers.splice(layers.findIndex((l) => l.id === 'rail-bullets'), 1);
-  // The letters added where a line enters the screen (edgeletters.js) go right after.
-  layers.splice(layers.findIndex((l) => l.id === 'line-signs'), 0, letters, edgeLetterLayer(letters));
+  // The letters added where a line enters the screen (edgeletters.js) go just
+  // below the built ones, so a built letter is placed first and wins where
+  // the two would touch.
+  layers.splice(layers.findIndex((l) => l.id === 'line-signs'), 0, edgeLetterLayer(letters), letters);
   return layers;
 }
 
