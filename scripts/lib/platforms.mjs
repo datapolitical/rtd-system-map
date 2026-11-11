@@ -169,6 +169,27 @@ export function clearFrom(stationPoint, station, group) {
 }
 
 /**
+ * Where every platform group of each served station stands on the track
+ * (placeGroup), whether or not it gets a mark of its own: `{ station, at,
+ * lines }`, `station` the index in `stations`. For ending each line at its
+ * end station's mark (sharedtrack.mjs, endAtMarks).
+ */
+export function groupPoints(stations, platforms, pieces) {
+  const paths = linePaths(pieces);
+  return stations.flatMap((f, i) => {
+    if (!f.properties.served) return [];
+    const lines = new Set(String(f.properties.lines ?? '').split(' ').filter(Boolean));
+    const stops = (platforms[i] ?? [])
+      .map((s) => ({ at: s.at, lines: s.lines.filter((line) => lines.has(line)) }))
+      .filter((s) => s.lines.length);
+    return groupPlatforms(stops).map((group) => {
+      const { at, lines: on } = placeGroup(group, pieces, paths);
+      return { station: i, at, lines: on };
+    });
+  });
+}
+
+/**
  * The platform marks a station gets, as GeoJSON features for platforms.geojson:
  * a `mark` point at each group (the station's own mark stands for the group
  * nearest it, when it sits on it) and a `join` line from the station to each.

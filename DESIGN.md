@@ -1185,7 +1185,8 @@ knows nothing about a station, a platform or a line
   the end of the line is no longer the place a rider stands. The mark goes on
   the track at the stops, and only when the stops are nowhere near the drawn
   track does it fall back to the lines' ends, so it never stands in the air.
-  It is a station mark like any other, the same image at the same size,
+  A line that ends at the group ends at its mark (`endAtMarks`), never past
+  it. It is a station mark like any other, the same image at the same size,
   turned across its lines, as wide as the lines that stop there, so a group
   reads as a station, not a new kind of thing.
 - *When it comes.* A group's mark waits until it clears the station's own mark
@@ -1232,6 +1233,15 @@ or loses draws itself.
   (`ROW_METERS` in the build), not fanned out at whichever end RTD's own route
   ends happen to fall on. Union Station's A, B, G and N end together at the
   train hall's southwest end.
+- *A line ends at its station's mark.* The mark a line ends at is the end
+  of the line: where the mark stands at the platform stops, short of the
+  platform's end (one line's terminus, or a platform group's mark), the line
+  is cut where the mark crosses it (`endAtMarks` in `sharedtrack.mjs`), so
+  no line runs on past the station it ends at. A piece wholly past the mark
+  goes; an end with no mark of its line within 150 m, or a mark more than
+  25 m off its track, is left as it is. Where several lines end in a row, the
+  station's mark is drawn across the row (Union Station's train hall), so
+  they keep the platform's length.
 - *The station's point moves to its building.* A station whose OSM has a
   station building takes the platform group nearest that building as its own
   point (`geo.stations`), so its mark, its ring and its one name stand at the
@@ -3695,6 +3705,15 @@ work against the real structure before asking for evaluation.
   happen to fall on (see "The station's real shape"). This is the rail half
   of that round; its bus-hall changes are not ported, since the street graph
   draws the halls and the lines that end at them.
+- 2026-11-10: A rail line ends at the mark of the station it ends at, not
+  past it. Running each line along its platform to the platform's far end
+  while the mark stays at the stops, where riders board, left lines running
+  on past the station they end at: on the map-fixes branch's build that was
+  41 to 53 px at zoom 16 at Union Station's light rail (C, E, W), 51 at
+  Golden, 47 at Lincoln and 64 at the airport, and 16 overshoots in the route
+  check (#74, #75). The line is now cut where its
+  end station's mark, or its platform group's mark, crosses it (see "The
+  station's real shape").
 
 ## Sources
 

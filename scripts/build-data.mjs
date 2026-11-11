@@ -12,10 +12,10 @@ import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { busNames } from './lib/busnames.mjs';
 import { heading, stopLines } from './lib/stops.mjs';
-import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
+import { endAtMarks, nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
-import { groupPlatforms, meters, platformMarks } from './lib/platforms.mjs';
+import { groupPlatforms, groupPoints, meters, platformMarks } from './lib/platforms.mjs';
 import { busStretches } from './lib/stretches.mjs';
 import { buildStreets } from './lib/streets.mjs';
 import { BUILDING_R, terminalFootprints } from './lib/footprints.mjs';
@@ -371,6 +371,34 @@ async function main() {
       const on = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), at, SNAP_METERS);
       if (on && meters(on, at) <= ROW_METERS) f.geometry = { type: 'Point', coordinates: on };
     }
+  }
+  // A line ends at its end station's mark (DESIGN.md, "Stations"; #75): the
+  // station's own mark, or the mark of the platform group the line stops
+  // at. Where the line ran on along its platform past the mark, it is cut
+  // where the mark crosses it, before the ends are signed and the marks
+  // drawn from the track. A group has a mark of its own only where the
+  // station has more than one and it is not the group the station's own
+  // mark stands for (platformMarks); a station with one group is drawn at
+  // its own point, which can be tens of metres from its stops (the airport).
+  {
+    const groups = groupPoints(geo.stations, service.stations.map((s) => s.platforms ?? []), pieces);
+    const marks = new Map();
+    for (const [route, ends] of Object.entries(service.ends)) {
+      const at = [];
+      for (const i of ends) {
+        if (!geo.stations[i]?.properties.served) continue;
+        const here = geo.stations[i].geometry.coordinates;
+        at.push(here);
+        const mine = groups.filter((g) => g.station === i);
+        if (mine.length < 2) continue;
+        const own = mine.reduce((best, g) => (meters(here, g.at) < meters(here, best.at) ? g : best));
+        for (const g of mine) if (g !== own && g.lines.includes(route)) at.push(g.at);
+      }
+      if (at.length) marks.set(route, at);
+    }
+    const kept = endAtMarks(pieces, marks);
+    pieces.splice(0, pieces.length, ...kept);
+    geo.routes = [...geo.routes.filter((f) => f.properties.mode !== 'rail'), ...pieces];
   }
   // Wider screens open on the routes drawn at full strength from far out,
   // rail and buses every 30 minutes or better, not on the long reach of a few
