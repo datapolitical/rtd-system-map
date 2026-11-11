@@ -18,7 +18,7 @@ import { stationMarks } from './lib/stationmarks.mjs';
 import { busStretches } from './lib/stretches.mjs';
 import { buildStreets } from './lib/streets.mjs';
 import { terminalFootprints } from './lib/footprints.mjs';
-import { clipOutRings, insideRing } from './lib/geom.mjs';
+import { clipAtHalls, shortenAtHall, stopsOfHalls } from './lib/halls.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
@@ -47,6 +47,9 @@ const ROLES = {
 
 // About a meter, in degrees: plenty for drawing, and it keeps the files the
 // map loads first small. Coordinates are rounded to match (5 decimals).
+// Our own published site: where the last build's halls are, on a fresh
+// checkout, for a station OpenStreetMap doesn't answer for.
+const SITE = (process.env.RTD_SITE_URL ?? 'https://rtd-system-map.pages.dev').replace(/\/$/, '');
 const SIMPLIFY = 0.00001;
 // A stop within this of a terminal's hall (metres) and farther than
 // HALL_STOP_LINE from every bus line drawn is shown with the hall.
@@ -356,11 +359,17 @@ async function main() {
   // above ground or below; at a rail station only a bus hall or bus
   // platforms. A bus that boards in a hall is drawn only as far as its edge:
   // the way round the block to its ramp is the approach, not the route
-  // (shortenAtHall), and no line is drawn through a hall. Last build's halls
-  // stand in for a station OSM doesn't answer for.
+  // (shortenAtHall), and no line is drawn through a hall (scripts/lib/halls.mjs).
+  // Last build's halls stand in for a station OSM doesn't answer for: this
+  // folder's, or on a fresh checkout (the daily build) the published site's.
   const busStations = geo.facilities.flatMap((f, i) => (['BUS', 'STN'].includes(f.properties.class) ? [i] : []));
   const nearRail = (q) => geo.stations.some((s) => Math.hypot((s.geometry.coordinates[0] - q[0]) * 85300, (s.geometry.coordinates[1] - q[1]) * 110540) < 100);
-  const hallsBefore = JSON.parse(await readFile(path.join(OUT, 'terminals.geojson'), 'utf8').catch(() => '{"features":[]}')).features;
+  const hallsBefore =
+    (await readFile(path.join(OUT, 'terminals.geojson'), 'utf8').then((t) => JSON.parse(t).features).catch(() => null)) ??
+    (await fetch(`${SITE}/data/terminals.geojson`, { signal: AbortSignal.timeout(20_000) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.features ?? [])
+      .catch(() => []));
   const footprints = await terminalFootprints({
     facilities: geo.facilities,
     indexes: busStations,
@@ -373,6 +382,11 @@ async function main() {
   const served = new Set(geo.stops.filter((f) => f.properties.terminal).flatMap((f) => String(f.properties.lines ?? '').split(' ').filter(Boolean)));
   geo.routes = shortenAtHall(geo.routes, halls, served);
   console.log(`  bus terminals drawn as their halls: ${geo.terminals.map((f) => `${f.properties.name} (${f.properties.kind}${f.properties.underground ? ', below ground' : ''}, ${f.properties.gates} gates)`).join(', ') || 'none'}`);
+  // Said loudly and recorded (meta.json, `halls`): a hall drawn from the last
+  // build, or lost, is OpenStreetMap not answering, not a change in the place.
+  const hallReport = { drawn: geo.terminals.map((f) => f.properties.name), fellBack: footprints.fellBack, lost: footprints.lost };
+  if (hallReport.fellBack.length) console.log(`  HALLS FROM THE LAST BUILD (OpenStreetMap didn't answer): ${hallReport.fellBack.join(', ')}`);
+  if (hallReport.lost.length) console.log(`  HALLS NOT DRAWN (OpenStreetMap didn't answer, and no last build to draw them from): ${hallReport.lost.join(', ')}`);
   const built = buildStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, {
     precision: PRECISION,
     places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates),
@@ -380,40 +394,13 @@ async function main() {
   });
   geo.streets = built.streets;
   // No line through a hall: each ends where it meets one, where its buses go in.
-  const clear = (p) => p.filter((q) => !halls.some((r) => insideRing(q, r)));
-  const outside = (f) => partsOf(f.geometry).flatMap((p) => clipOutRings(p, halls).map(clear)).filter((p) => p.length >= 2);
-  if (halls.length) {
-    geo.streets = geo.streets.flatMap((f) => outside(f).map((p) => ({ ...f, properties: { ...f.properties }, geometry: { type: 'LineString', coordinates: p } })));
-    geo.routes = geo.routes.flatMap((f) => {
-      if (f.properties.mode !== 'bus') return [f];
-      const parts = outside(f);
-      return parts.length ? [{ ...f, geometry: parts.length === 1 ? { type: 'LineString', coordinates: parts[0] } : { type: 'MultiLineString', coordinates: parts } }] : [];
-    });
-  }
-  // A stop by a hall that no line reaches any more (the way round to the
-  // ramp, which it stood on, is the approach and isn't drawn) is the hall's:
-  // it goes with the hall's own stops, not left as a dot beside nothing.
-  if (halls.length) {
-    const m = (a, b) => Math.hypot((a[0] - b[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180), (a[1] - b[1]) * 110540);
-    const toSeg = (p, a, b) => {
-      const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
-      const l = dx * dx + dy * dy;
-      const t = l ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l)) : 0;
-      return m(p, [a[0] + t * dx, a[1] + t * dy]);
-    };
-    const toLine = (p, line) => line.slice(1).reduce((best, b, n) => Math.min(best, toSeg(p, line[n], b)), Infinity);
-    const drawn = [...geo.streets, ...geo.routes.filter((f) => f.properties.mode === 'bus')].flatMap((f) => partsOf(f.geometry));
-    let taken = 0;
-    for (const stop of geo.stops) {
-      if (stop.properties.terminal) continue;
-      const p = stop.geometry.coordinates;
-      if (!halls.some((ring) => toLine(p, [...ring, ring[0]]) <= HALL_STOP_NEAR)) continue;
-      if (drawn.some((line) => toLine(p, line) <= HALL_STOP_LINE)) continue;
-      stop.properties.terminal = 1;
-      taken += 1;
-    }
-    if (taken) console.log(`  stops by a hall with no line left to stand on, shown with the hall: ${taken}`);
-  }
+  geo.streets = clipAtHalls(geo.streets, halls, { split: true });
+  geo.routes = geo.routes.flatMap((f) => (f.properties.mode === 'bus' ? clipAtHalls([f], halls) : [f]));
+  // A stop by a hall that no line reaches any more (it stood on the way round
+  // to the ramp, which isn't drawn) goes with the hall's own stops. Measured
+  // against the streets, which are the bus lines the page draws.
+  const hallStops = stopsOfHalls(geo.stops, halls, geo.streets.map((f) => f.geometry.coordinates), { near: HALL_STOP_NEAR, line: HALL_STOP_LINE });
+  if (hallStops) console.log(`  stops by a hall with no line left to stand on, shown with the hall: ${hallStops}`);
   const streetGraph = { nodes: built.report.nodes, edges: built.report.edges, ends: built.report.ends, nearOwn: built.report.nearOwn };
   const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
   const classes = Object.fromEntries(STREET_CLASSES.map((c) => [c.id, { streets: geo.streets.filter((f) => f.properties.cls === c.id).length, km: Math.round(streetKm(c.id) * 10) / 10 }]));
@@ -471,6 +458,7 @@ async function main() {
     // How much street is drawn in each frequency class (frequency.js).
     classes,
     streetGraph,
+    halls: hallReport,
     // The Live relay's feeds, and the realtime route ids that belong to a map
     // route under another name (public/js/realtime.js, routeOf).
     live: { feeds: RT_FEEDS, routes: live.routes },
@@ -587,47 +575,3 @@ main().catch((err) => {
 });
 
 const partsOf = (g) => (g.type === 'LineString' ? [g.coordinates] : g.coordinates);
-
-// A bus that boards in a terminal's concourse is drawn only as far as the
-// hall: where its line comes to the hall, goes away round the block and comes
-// back (the way in on one street and out on another, to and from the ramp),
-// the stretch between is the approach, and goes (DESIGN.md, "Bus routes",
-// "Terminals"). The clip that follows ends each side at the hall's edge; a street the bus really runs along, or one it only passes,
-// is untouched. Only routes that stop inside the hall are shortened.
-function shortenAtHall(routes, halls, served, { close = 120, longest = 1500 } = {}) {
-  if (!halls.length || !served.size) return routes;
-  const metres = (a, b) => Math.hypot((a[0] - b[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180), (a[1] - b[1]) * 110540);
-  const middle = (ring) => [ring.reduce((s, p) => s + p[0], 0) / ring.length, ring.reduce((s, p) => s + p[1], 0) / ring.length];
-  const centres = halls.map(middle);
-  return routes.map((f) => {
-    if (f.properties.mode !== 'bus' || !served.has(f.properties.route)) return f;
-    const out = [];
-    for (const part of partsOf(f.geometry)) {
-      let line = part.slice();
-      let at = 0;
-      while (at < line.length - 2) {
-        let run = 0;
-        let cut = null;
-        for (let j = at + 2; j < line.length; j += 1) {
-          run += metres(line[j - 1], line[j]);
-          if (run > longest) break;
-          if (metres(line[at], line[j]) > close) continue;
-          if (run < 100) continue;
-          const loop = line.slice(at, j + 1);
-          if (centres.some((c) => insideRing(c, loop))) { cut = j; break; }
-        }
-        if (!cut) { at += 1; continue; }
-        // The stretch from where the line comes to the hall to where it
-        // leaves again, round the block and through the hall: the way in,
-        // not the route. Both sides end at the hall's edge.
-        out.push(line.slice(0, at + 1), line.slice(cut));
-        line = [];
-        break;
-      }
-      if (line.length) out.push(line);
-    }
-    const kept = out.filter((p) => p.length >= 2);
-    if (!kept.length) return f;
-    return { ...f, geometry: kept.length === 1 ? { type: 'LineString', coordinates: kept[0] } : { type: 'MultiLineString', coordinates: kept } };
-  });
-}

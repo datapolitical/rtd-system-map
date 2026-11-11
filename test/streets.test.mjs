@@ -229,3 +229,29 @@ test('a loop no rider boards on is a turn, even by a station; one with a stop en
   const four = stop.filter((f) => f.properties.routes === '4').reduce((sum, f) => sum + km(f), 0);
   assert.ok(four < 0.25, `a short end, ${four.toFixed(3)} km, not the whole loop`);
 });
+
+test('a street is not taken for the stem of a loop when a ramp drawn straight ends where the loop hung', () => {
+  // Route 4 leaves its street at x = 300 m round a ramp back to x = 390 m
+  // (drawn straight), laps a stopless loop there, and goes on 80 m to a
+  // crossing street and beyond. The 80 m is its street, not the loop's stem.
+  // (Route 5 shares the street as far as the ramp, so the ramp starts at a
+  // junction.)
+  const out = streets([
+    route('2', [[0.47, -1], [0.47, 1]]),
+    route('4', [[0, 0], [0.3, 0], [0.3, 0.1], [0.39, 0.1], [0.39, 0], [0.36, -0.06], [0.39, -0.12], [0.42, -0.06], [0.39, 0], [0.47, 0], [1, 0]]),
+    route('5', [[0, 0], [0.3, 0], [0.3, -1]]),
+  ]);
+  const four = out.filter((f) => f.properties.routes.split(' ').includes('4'));
+  const P = at([0.43, 0]);
+  const near = Math.min(
+    ...four.flatMap((f) =>
+      f.geometry.coordinates.slice(1).map((b, i) => {
+        const a = f.geometry.coordinates[i];
+        const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+        const t = Math.max(0, Math.min(1, ((P[0] - a[0]) * dx + (P[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+        return Math.hypot(P[0] - a[0] - t * dx, P[1] - a[1] - t * dy) / KM;
+      }),
+    ),
+  );
+  assert.ok(near * 1000 < 1, `route 4 is ${(near * 1000).toFixed(0)} m from its own street at x = 430 m`);
+});
