@@ -18,7 +18,7 @@ import { stationMarks } from './lib/stationmarks.mjs';
 import { groupPlatforms, meters, platformMarks } from './lib/platforms.mjs';
 import { busStretches } from './lib/stretches.mjs';
 import { buildStreets } from './lib/streets.mjs';
-import { terminalFootprints } from './lib/footprints.mjs';
+import { BUILDING_R, terminalFootprints } from './lib/footprints.mjs';
 import { extendLineToPlatforms, stationStructures } from './lib/structures.mjs';
 import { clipOutRings, insideRing } from './lib/geom.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
@@ -57,6 +57,9 @@ const HALL_STOP_LINE = 30;
 const PRECISION = 5;
 // A station is moved onto its lines' track when it's at most this far away.
 const SNAP_METERS = 200;
+// Line ends this close together are one row of platforms, and the station's
+// bar goes across them (Union Station's four commuter lines).
+const ROW_METERS = 60;
 // Phones open on the box holding this share of weekday service, east to west
 // and north to south (scripts/lib/core.mjs).
 const CORE_SHARE = 0.6;
@@ -324,6 +327,50 @@ async function main() {
     const lines = new Set(f.properties.lines.split(' '));
     const home = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), groups[0], SNAP_METERS);
     if (home) f.geometry = { type: 'Point', coordinates: home };
+  }
+  // A station where several lines end draws its bar across the row they end
+  // in. Each line runs to the end of its own platform; at a terminal the
+  // platforms stand side by side, so the lines end in one row there, and the
+  // mark belongs on it, not at the platforms' middle nor at the end RTD's
+  // single point falls on. Union Station's four commuter lines end together
+  // at the train hall's southwest end.
+  {
+    const endsAt = new Map();
+    for (const f of rail) {
+      const ends = service.ends[f.properties.route];
+      if (!ends) continue;
+      const parts = partsOf(f.geometry);
+      for (const i of ends) {
+        const ref = shapesAt.byStation.get(i)?.centre ?? geo.stations[i].geometry.coordinates;
+        let near = null;
+        for (const part of parts) {
+          for (const p of [part[0], part.at(-1)]) {
+            const d = meters(p, ref);
+            if (d <= BUILDING_R && (!near || d < near.d)) near = { p, d };
+          }
+        }
+        if (!near) continue;
+        if (!endsAt.has(i)) endsAt.set(i, []);
+        endsAt.get(i).push({ p: near.p, d: near.d });
+      }
+    }
+    for (const [i, ends] of endsAt) {
+      if (ends.length < 2) continue;
+      // The largest group of ends within a row's width is the row.
+      const rows = [];
+      for (const t of ends) {
+        const row = rows.find((r) => r.some((q) => meters(q.p, t.p) <= ROW_METERS));
+        if (row) row.push(t);
+        else rows.push([t]);
+      }
+      rows.sort((a, b) => b.length - a.length || Math.min(...a.map((t) => t.d)) - Math.min(...b.map((t) => t.d)));
+      if (rows[0].length < 2) continue;
+      const at = [0, 1].map((c) => rows[0].reduce((s, t) => s + t.p[c], 0) / rows[0].length);
+      const f = geo.stations[i];
+      const lines = new Set(f.properties.lines.split(' '));
+      const on = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), at, SNAP_METERS);
+      if (on && meters(on, at) <= ROW_METERS) f.geometry = { type: 'Point', coordinates: on };
+    }
   }
   // Wider screens open on the routes drawn at full strength from far out,
   // rail and buses every 30 minutes or better, not on the long reach of a few

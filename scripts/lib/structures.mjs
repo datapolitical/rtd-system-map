@@ -215,11 +215,15 @@ export function principalAxis(ring) {
 
 /**
  * Where a line that ends at `point` should run to on its platform: the far
- * end of the platform's long axis, when `point` is on or beside a platform.
- * Null when no platform is near enough, so a line with no platform in OSM is
- * left where RTD's data puts its end.
+ * end of the platform's long axis, measured from `from` (the last point the
+ * line came through), when `point` is on or beside a platform. A train runs
+ * the whole platform it stops at and stops at its head end, so how the line
+ * approaches decides which end that is; several lines ending at one station
+ * from the same side then end together in one row. Null when no platform is
+ * near enough, so a line with no platform in OSM is left where RTD's data
+ * puts its end.
  */
-export function platformEndFor(point, platforms, { reach = 90, longest = 450 } = {}) {
+export function platformEndFor(point, platforms, { reach = 90, longest = 450, from = point } = {}) {
   let best = null;
   for (const ring of platforms) {
     const d = ringDistance(point, ring);
@@ -227,7 +231,7 @@ export function platformEndFor(point, platforms, { reach = 90, longest = 450 } =
   }
   if (!best) return null;
   const axis = principalAxis(best.ring);
-  const far = metres(point, axis[0]) > metres(point, axis[1]) ? axis[0] : axis[1];
+  const far = metres(from, axis[0]) > metres(from, axis[1]) ? axis[0] : axis[1];
   const run = metres(point, far);
   return run >= 8 && run <= longest ? far : null;
 }
@@ -245,7 +249,7 @@ const isStationBuilding = (tags) => tags.building === 'train_station';
  * station's stops is left as it is, so a line with nothing drawn in OSM does
  * not move.
  */
-export function extendLineToPlatforms(paths, ends, stops, byStation, { reach = 200 } = {}) {
+export function extendLineToPlatforms(paths, ends, stops, byStation, { reach = 350 } = {}) {
   return paths.map((path) => {
     const out = [...path];
     const used = new Set();
@@ -258,7 +262,8 @@ export function extendLineToPlatforms(paths, ends, stops, byStation, { reach = 2
       const start = !used.has('start') && (used.has('end') || gap(head) <= gap(tail));
       const end = start ? head : tail;
       if (gap(end) > reach) continue;
-      const tip = platformEndFor(end, plates);
+      const inward = start ? out[1] : out.at(-2);
+      const tip = platformEndFor(end, plates, { from: inward ?? end });
       if (!tip || metres(tip, end) < 8) continue;
       if (start) out.unshift(tip);
       else out.push(tip);

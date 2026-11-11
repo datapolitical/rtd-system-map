@@ -1224,6 +1224,14 @@ or loses draws itself.
   (`extendLineToPlatforms`). At Union Station that fills the train hall with
   A, B, G and N and the light-rail platforms with C, E and W. A station with
   no platform in OSM is left exactly where RTD's data puts it.
+- *Lines that end together end in one row.* A train runs the whole platform it
+  stops at and stops at its head end, so the platform's far end is the one
+  away from the side the line came in on. Lines that end at a station from the
+  same side then end together, in one row, and where two or more line ends
+  stand within 60 m of each other the station's mark is drawn across that row
+  (`ROW_METERS` in the build), not fanned out at whichever end RTD's own route
+  ends happen to fall on. Union Station's A, B, G and N end together at the
+  train hall's southwest end.
 - *The station's point moves to its building.* A station whose OSM has a
   station building takes the platform group nearest that building as its own
   point (`geo.stations`), so its mark, its ring and its one name stand at the
@@ -3680,6 +3688,13 @@ work against the real structure before asking for evaluation.
   are, a faint fill with no outline. (Ported onto the street-graph bus work
   from the union-building batch, #83; that batch's bus terminal text is not
   carried over.)
+- 2026-11-08: Round four, Union Station. A train runs the whole platform it
+  stops at, so a line ends at the platform's far end from the side it came in
+  on, and the lines of a terminal end together in one row with the station's
+  mark drawn across it, not fanned out at whichever end RTD's own route ends
+  happen to fall on (see "The station's real shape"). This is the rail half
+  of that round; its bus-hall changes are not ported, since the street graph
+  draws the halls and the lines that end at them.
 
 ## Sources
 
