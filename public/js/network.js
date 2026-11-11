@@ -83,6 +83,9 @@ const arrowFade = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0, ARROWS_F
 // stand in (the build finds it: scripts/lib/footprints.mjs), from the zoom the
 // old disk appeared at.
 const TERMINAL_FROM = 13;
+// A station's platforms and canopy are detail: they earn their place once the
+// station is bigger than its mark.
+const STRUCTURE_FROM = 14.2;
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -124,7 +127,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'structures', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -263,6 +266,46 @@ export function transitLines(lines) {
       paint: {
         'fill-color': P.under.fill,
         'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.8],
+      },
+    },
+    // A rail station's shapes, from OpenStreetMap at build time
+    // (scripts/lib/structures.mjs; DESIGN.md, "Stations"): its station
+    // building filled like the halls, its platforms in concrete, the canopy
+    // over them as the lightest wash, so a station reads as a place with a
+    // hall, bays and a roof, not as a point. The roofs over the bus halls are
+    // in the same source. Only at the zooms where they are bigger than a
+    // mark.
+    {
+      id: 'station-building',
+      type: 'fill',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'building'],
+      minzoom: TERMINAL_FROM,
+      paint: {
+        'fill-color': P.building,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
+      },
+    },
+    {
+      id: 'station-platform',
+      type: 'fill',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'platform'],
+      minzoom: STRUCTURE_FROM,
+      paint: {
+        'fill-color': P.platform.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], STRUCTURE_FROM, 0, STRUCTURE_FROM + 0.6, 1],
+      },
+    },
+    {
+      id: 'station-canopy',
+      type: 'fill',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'canopy'],
+      minzoom: STRUCTURE_FROM,
+      paint: {
+        'fill-color': P.canopy.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], STRUCTURE_FROM, 0, STRUCTURE_FROM + 0.6, 1],
       },
     },
     // (Beneath the bus lines, so a line that ends at a hall's edge ends on

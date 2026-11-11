@@ -106,22 +106,25 @@ export function placeGroup(group, pieces, paths) {
   const lines = [...new Set(group.flatMap((p) => p.lines))].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   const routes = new Set(lines);
   const mine = pieces.filter((p) => routes.has(p.properties.route));
-  const onTrack = nearestOnTrack(mine, mean(group.map((p) => p.at)), SNAP_METERS) ?? mean(group.map((p) => p.at));
-  // Each line's drawn end nearest this platform, where it is close enough to
-  // be this platform's terminus. Only when every line of the group ends here
-  // is the mark put at their ends: otherwise a line runs through, and the mark
-  // stays on the track at the platform.
-  const ends = lines.map((route) => {
-    let best = null;
-    for (const { path } of paths.get(route) ?? []) {
-      for (const end of [path[0], path.at(-1)]) {
-        const d = meters(end, onTrack);
-        if (d <= END_METERS && (!best || d < best.d)) best = { end, d };
+  const stops = mean(group.map((p) => p.at));
+  const onTrack = nearestOnTrack(mine, stops, SNAP_METERS);
+  // The mark sits on the track beside the platform's stops, where riders
+  // board. Only when the stops are not on the drawn track at all does it go
+  // to the lines' ends, so it never stands in the air.
+  let at = onTrack;
+  if (!at) {
+    const ends = lines.map((route) => {
+      let best = null;
+      for (const { path } of paths.get(route) ?? []) {
+        for (const end of [path[0], path.at(-1)]) {
+          const d = meters(end, stops);
+          if (d <= END_METERS && (!best || d < best.d)) best = { end, d };
+        }
       }
-    }
-    return best?.end ?? null;
-  });
-  const at = ends.every(Boolean) ? mean(ends) : onTrack;
+      return best?.end ?? null;
+    });
+    at = ends.every(Boolean) ? mean(ends) : stops;
+  }
   const { span, bearing } = trackAt(mine, at);
   // Across the lines it spans, unless they part within the tick's length
   // (stationmarks.mjs, "the tick spans its lines where they run together").

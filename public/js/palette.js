@@ -70,6 +70,10 @@ const light = {
   stop: { fill: '#ffffff', edge: '#6f7c89' },
   unserved: { fill: 'rgba(255, 255, 255, 0.7)', edge: '#9aa5b0', label: '#66717e' },
   station: { fill: '#ffffff', edge: '#17222e' },
+  // A rail platform is concrete, a shade off the land; a canopy over it is
+  // the lightest thing on the map, so it reads as cover, not as ground.
+  platform: { fill: '#e2e7ec', edge: '#d2dae1' },
+  canopy: { fill: 'rgba(255, 255, 255, 0.55)', edge: '#c9d2da' },
   bulletRing: '#ffffff',
   sign: { fill: '#ffffff', text: '#17222e', shadow: 'rgba(23, 34, 46, 0.22)' },
   selEnd: { fill: '#ffffff', ring: '#17222e' },
@@ -140,6 +144,10 @@ const dark = {
   stop: { fill: '#1c2229', edge: '#8a97a4' },
   unserved: { fill: 'rgba(22, 27, 33, 0.7)', edge: '#7d8995', label: '#98a4b0' },
   station: { fill: '#0f1317', edge: '#e8edf1' },
+  // A rail platform is a shade above the dark land; a canopy over it is a thin
+  // wash of light, so it reads as cover, not as ground.
+  platform: { fill: '#333d47', edge: '#414d58' },
+  canopy: { fill: 'rgba(255, 255, 255, 0.14)', edge: '#4a5663' },
   bulletRing: '#0b0e12',
   sign: { fill: '#242c35', text: '#e8edf1', shadow: 'rgba(0, 0, 0, 0.55)' },
   selEnd: { fill: '#0f1317', ring: '#e8edf1' },
