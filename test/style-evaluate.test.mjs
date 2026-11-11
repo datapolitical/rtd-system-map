@@ -153,6 +153,17 @@ const EVALUATED = [
     paint: ['fill-opacity?', 'fill-pattern?', 'fill-color?'],
   },
   {
+    layer: 'station-platform',
+    where: 'legend.js drawSymbols() > areaImage() fill',
+    paint: ['fill-opacity?', 'fill-pattern?', 'fill-color?'],
+  },
+  // areaImage(): the roof over the platform, its opacity and its color.
+  {
+    layer: 'station-canopy',
+    where: 'legend.js drawSymbols() > areaImage() over',
+    paint: ['fill-opacity?', 'fill-color?'],
+  },
+  {
     layer: 'flexride-fill',
     where: 'legend.js drawSymbols() > areaImage() fill',
     paint: ['fill-opacity?', 'fill-pattern?', 'fill-color?'],
