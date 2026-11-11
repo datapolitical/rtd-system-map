@@ -79,6 +79,10 @@ const ARROW_SPACING = 300;
 const ARROW_MIN_LEN = 250;
 const arrowSize = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0.62, 16, 0.78];
 const arrowFade = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0, ARROWS_FROM + 0.5, fade(onStreet)];
+// A bus terminal where routes lay over is drawn as the building its bus gates
+// stand in (the build finds it: scripts/lib/footprints.mjs), from the zoom the
+// old disk appeared at.
+const TERMINAL_FROM = 13;
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -120,7 +124,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'facilities', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'facilities', 'terminals', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -189,8 +193,25 @@ const partTime = ['in', ['get', 'tier'], ['literal', PART_TIME]];
 const served = ['==', ['get', 'served'], true];
 
 // Lines and areas, beneath the basemap's place names.
+// A divided road is one line out to MERGED_UNTIL and its two carriageways
+// from there in (scripts/lib/streets.mjs, #81): the build tags those streets
+// `zoom: 'far'` or `'near'`, and every street layer shows each set only on
+// its side of the zoom. A street with no tag shows at every zoom.
+const MERGED_UNTIL = 16;
+const streetZoom = [
+  'any',
+  ['==', ['coalesce', ['get', 'zoom'], ''], ''],
+  ['all', ['==', ['get', 'zoom'], 'far'], ['<', ['zoom'], MERGED_UNTIL]],
+  ['all', ['==', ['get', 'zoom'], 'near'], ['>=', ['zoom'], MERGED_UNTIL]],
+];
+// The street layers draw streets with an all-day route (`n` > 0); a street
+// with only part-time routes (`n` 0) is drawn by the part-time layers.
+const allDayStreet = ['>', ['coalesce', ['get', 'n'], 0], 0];
+const withStreetZooms = (layers) =>
+  layers.map((l) => (l.source === 'streets' ? { ...l, filter: ['all', streetZoom, ...(l.id.startsWith('street') ? [allDayStreet] : []), ...(l.filter ? [l.filter] : [])] } : l));
+
 export function transitLines(lines) {
-  return [
+  return withStreetZooms([
     // FlexRide: a light hatch with a dashed edge, never a green that reads as park.
     // Not until close in: further out, zone outlines are boxes around
     // nothing, and read as city limits.
@@ -214,19 +235,53 @@ export function transitLines(lines) {
       },
     },
 
+    // A bus terminal where routes lay over is the building its bus gates
+    // stand in, drawn as the place it is (DESIGN.md, "Bus routes",
+    // "Terminals"; the build finds the building in scripts/lib/footprints.mjs):
+    // a faint neutral fill and no outline, so it reads as a building and not
+    // as a bus route round the block.
+    {
+      id: 'bus-terminal',
+      type: 'fill',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 0],
+      paint: {
+        'fill-color': P.building,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
+      },
+    },
+    // A hall below ground: the same shape seen through the street above it,
+    // a paler wash with no edge, so a rider can tell it is beneath the plaza
+    // and not a building on it.
+    {
+      id: 'bus-terminal-under',
+      type: 'fill',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 1],
+      paint: {
+        'fill-color': P.under.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.8],
+      },
+    },
+    // (Beneath the bus lines, so a line that ends at a hall's edge ends on
+    // it with its round end whole, not under the hall's wash.)
     {
       id: 'bus-part-time',
       type: 'line',
-      source: 'routes',
-      filter: ['all', bus, partTime, ['!=', ['get', 'tier'], 'limited']],
+      // Part-time streets from the street graph (streets.mjs, `n` 0), so a
+      // part-time line meets the streets it joins.
+      source: 'streets',
+      filter: ['all', bus, ['==', ['coalesce', ['get', 'n'], 0], 0], partTime, ['!=', ['get', 'tier'], 'limited']],
       layout: { 'line-join': 'round' },
       paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn, 'line-dasharray': [3, 2] },
     },
     {
       id: 'bus-limited',
       type: 'line',
-      source: 'routes',
-      filter: ['all', bus, ['==', ['get', 'tier'], 'limited']],
+      source: 'streets',
+      filter: ['all', bus, ['==', ['coalesce', ['get', 'n'], 0], 0], ['==', ['get', 'tier'], 'limited']],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn, 'line-dasharray': [0.1, 2.2] },
     },
@@ -353,7 +408,7 @@ export function transitLines(lines) {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': lines.color, 'line-width': railWidth(), 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
     },
-  ];
+  ]);
 }
 
 // Stations, stops, symbols and our labels, above everything else.
@@ -365,11 +420,29 @@ export function transitMarks(lines) {
       type: 'circle',
       source: 'stops',
       minzoom: STOPS_ZOOM,
+      // A stop inside a terminal's hall is one of its gates, shown from z17
+      // ('stops-gate'); out here the hall stands for them.
+      filter: ['!=', ['coalesce', ['get', 'terminal'], 0], 1],
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 2.4, 18, 5],
         'circle-color': P.stop.fill,
         'circle-stroke-color': P.stop.edge,
         'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 15, 1, 18, 1.6],
+        'circle-opacity': fade(inList('lines')),
+        'circle-stroke-opacity': fade(inList('lines')),
+      },
+    },
+    {
+      id: 'stops-gate',
+      type: 'circle',
+      source: 'stops',
+      minzoom: 17,
+      filter: ['==', ['get', 'gate'], 1],
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 17, 2.4, 18, 5],
+        'circle-color': P.stop.fill,
+        'circle-stroke-color': P.stop.edge,
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 17, 1, 18, 1.6],
         'circle-opacity': fade(inList('lines')),
         'circle-stroke-opacity': fade(inList('lines')),
       },
