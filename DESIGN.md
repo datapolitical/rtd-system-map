@@ -1378,7 +1378,10 @@ streets that no longer met):
 
 - *Divided roads* (`carriagewayCentres`): two lines 4 to 60 m apart,
   parallel within 20 degrees and square across, sharing three-quarters of
-  their all-day routes, along 60% of an edge and 100 m in all, not
+  their all-day routes (or the routes of one all on the other and each
+  measured running both ways on both lines: routes that run up one
+  carriageway only, as the 10, 16 and 20 do on Federal by Colfax, don't make
+  it two roads), along 60% of an edge and 100 m in all, not
   measured running the same way (those are lanes), are one road. Each node
   moves halfway to the other carriageway and the lines are joined again,
   up to three times (a highway drawn as two carriageways and an express
@@ -1423,8 +1426,9 @@ hall, above or below ground; else the `public_transport=platform` +
 else the building holding the most of its stops. A parking structure is
 never the terminal, and at a rail station only a bus hall or bus platforms
 are (the rail station is already the place). A hall above ground is a faint
-fill with no edge (`bus-terminal`), one below ground a paler wash through
-the street above it (`bus-terminal-under`), from z13. A bus that boards in
+fill with no edge (`bus-terminal`), one below ground a quieter fill a shade
+under the land (`bus-terminal-under`; the paler wash it first had could
+not be seen on the light map), from z13. A bus that boards in
 a hall is drawn only as far as its edge: where its line comes to the hall,
 goes away round the block and back (to and from the ramp), the stretch
 between is the approach, not the route, and goes; and no line is drawn
