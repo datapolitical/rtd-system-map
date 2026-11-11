@@ -252,6 +252,23 @@ export function buildLegend(meta, lines) {
       unserved.length ? [circleImage(layers.get('stations-unserved'), at(settled(layers.get('stations-unserved')), { served: false }), 'Gray ring'), 'Closed: no trains this week'] : null,
       counts.facilities ? [icon(layers.get('facilities'), settled(layers.get('facilities')), { spaces: 1 }, 'P sign'), 'Park-n-Ride'] : null,
       counts.facilities ? [symbolImage('transit-center', lines, 'Bus sign', evaluate(layers.get('facilities').layout['icon-size'], at(settled(layers.get('facilities'))))), 'Transit center'] : null,
+      counts.terminals
+        ? [
+            areaImage({ fill: layers.get('bus-terminal') }, lines, at(settled(layers.get('bus-terminal'))), 'A faint building fill'),
+            'Bus terminal: the building its gates stand in',
+          ]
+        : null,
+      counts.terminals_under
+        ? [
+            areaImage(
+              { fill: layers.get('bus-terminal-under') },
+              lines,
+              at(settled(layers.get('bus-terminal-under'))),
+              'A pale hall, no edge',
+            ),
+            'Bus station below the street',
+          ]
+        : null,
       oneWay(layers.get('street-oneway'), layers.get('street')),
       counts.stops ? [circleImage(layers.get('stops'), at(settled(layers.get('stops'))), 'Small dot'), 'Bus stop, when zoomed in close'] : null,
       counts.flexride

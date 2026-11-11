@@ -1364,6 +1364,24 @@ arrowhead-on-a-hairline came in pairs of two sizes on 15th). None on a
 one-way piece under 250 m, where it would sit at a junction. Two-way
 streets have no arrows. The Key has a row for them.
 
+*Terminals* (`footprints.mjs`; `scripts/build-data.mjs`, `shortenAtHall`;
+#82): each of RTD's bus-station facilities (class `BUS` or `STN` in RTD's
+facilities layer) is drawn as the hall its bus gates stand in, from
+OpenStreetMap at build time (`terminalShapeOf`): its `amenity=bus_station`
+hall, above or below ground; else the `public_transport=platform` +
+`bus=yes` platforms at its gates; else the station building holding them;
+else the building holding the most of its stops. A parking structure is
+never the terminal, and at a rail station only a bus hall or bus platforms
+are (the rail station is already the place). A hall above ground is a faint
+fill with no edge (`bus-terminal`), one below ground a paler wash through
+the street above it (`bus-terminal-under`), from z13. A bus that boards in
+a hall is drawn only as far as its edge: where its line comes to the hall,
+goes away round the block and back (to and from the ramp), the stretch
+between is the approach, not the route, and goes; and no line is drawn
+through a hall. Last build's halls stand in for a station OSM doesn't
+answer for. On 2026-11-11: Union Station Transit Center and Civic Center
+(below ground) and Downtown Boulder.
+
 As drawn on the land (`#F4F5F6`), widths at zoom 9, 11, 13 and 16; dark
 mode uses the periwinkles under "Dark mode":
 
@@ -3507,6 +3525,15 @@ work against the real structure before asking for evaluation.
   joined. Built in stages from main: the graph and widths with divided
   roads as two lines (#80), divided roads as one line (#81), then the
   batch's readable-geometry rules as graph operations (#82).
+- 2026-11-11: Bus terminals are RTD's bus-station facilities (class `BUS`
+  or `STN`), drawn as their halls from OpenStreetMap, with the lines that
+  board inside ending at the hall's edge, as round four drew them, now on
+  the street graph (#82). Round four found terminals from where streets
+  dangled, which counted breaks in the lines (#78); RTD's own class for its
+  bus stations names them instead. A divided road is one line out to z16
+  and its two carriageways from there in (#81, Chris's choice), and ramp
+  circles, small loops and terminal loops are drawn as the turn the bus
+  makes or a short end to the place it serves, on the graph (#82).
 
 ## Sources
 

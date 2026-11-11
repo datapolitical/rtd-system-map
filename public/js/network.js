@@ -79,6 +79,10 @@ const ARROW_SPACING = 300;
 const ARROW_MIN_LEN = 250;
 const arrowSize = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0.62, 16, 0.78];
 const arrowFade = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0, ARROWS_FROM + 0.5, fade(onStreet)];
+// A bus terminal where routes lay over is drawn as the building its bus gates
+// stand in (the build finds it: scripts/lib/footprints.mjs), from the zoom the
+// old disk appeared at.
+const TERMINAL_FROM = 13;
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -120,7 +124,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'facilities', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'facilities', 'terminals', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -335,6 +339,36 @@ export function transitLines(lines) {
         'icon-padding': 0,
       },
       paint: { 'icon-opacity': arrowFade },
+    },
+    // A bus terminal where routes lay over is the building its bus gates
+    // stand in, drawn as the place it is (DESIGN.md, "Bus routes",
+    // "Terminals"; the build finds the building in scripts/lib/footprints.mjs):
+    // a faint neutral fill and no outline, so it reads as a building and not
+    // as a bus route round the block.
+    {
+      id: 'bus-terminal',
+      type: 'fill',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 0],
+      paint: {
+        'fill-color': P.building,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
+      },
+    },
+    // A hall below ground: the same shape seen through the street above it,
+    // a paler wash with no edge, so a rider can tell it is beneath the plaza
+    // and not a building on it.
+    {
+      id: 'bus-terminal-under',
+      type: 'fill',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 1],
+      paint: {
+        'fill-color': P.under.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.8],
+      },
     },
     // The open bus route, drawn over its faded neighbours.
     ...selectionLines(),

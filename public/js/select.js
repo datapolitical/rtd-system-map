@@ -626,11 +626,21 @@ async function onTap(e) {
   // A vehicle (Live): its route. live.js answers, when Live is on.
   if (ctx.tapped?.(e.point, pad)) return;
 
-  // A place: station (whichever symbol was hit), then Park-n-Ride, then stop.
+  // A place: station (whichever symbol was hit), then a bus terminal's hall,
+  // then Park-n-Ride, then stop.
   const station = closest(near(e.point, pad, STATION_LAYERS), e.point);
   const facility = closest(near(e.point, pad, ['facilities']), e.point);
   const stop = closest(near(e.point, pad, ['stops']), e.point);
   if (station) return open(stationView(Number(station.properties.id)), false);
+  const terminal = map.getLayer('bus-terminal')
+    ? map.queryRenderedFeatures(e.point, { layers: ['bus-terminal', 'bus-terminal-under'].filter((id) => map.getLayer(id)) })[0]
+    : null;
+  if (terminal) {
+    await loadDirectory().catch(() => {});
+    const where = e.lngLat.toArray();
+    const home = dir?.list.find((s) => metres(s.at, where) <= STATION_RADIUS);
+    return open(home ? stationView(home.id) : placeView(terminal.properties, where), false);
+  }
   if (facility) {
     await loadDirectory().catch(() => {});
     const where = facility.geometry.coordinates;
