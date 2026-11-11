@@ -4,7 +4,7 @@
 // a line under another, a terminus, two directions side by side, a bus line
 // that ends at a terminal's hall, a short end at the place it serves). No
 // browser, no data. Screen px at zoom 17 near the equator: 30 m is about 50
-// px, 40 m about 67 px, 15 m about 25 px.
+// px, 60 m about 100 px, 20 m about 33 px.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { openModel } from '../qa/drawn/model.mjs';
@@ -148,8 +148,9 @@ test('a short end at a park-and-ride or station is not a hook; the same bend bes
   assert.deepEqual(routeFaults(at([bend], [markOf('platforms', 'platforms', P(110, 20), 8)])), []);
   // A bus stop is not such a place.
   assert.deepEqual(kinds(routeFaults(at([bend], [stopMark(P(110, 20))]))), ['hook']);
-  // A facility 100 px (60 m) away is too far.
-  assert.deepEqual(kinds(routeFaults(at([bend], [facilityMark(P(190, 0))]))), ['hook']);
+  // A facility 85 px (51 m) away still is the place it serves; 160 px (96 m) away is too far.
+  assert.deepEqual(routeFaults(at([bend], [facilityMark(P(175, 0))])), []);
+  assert.deepEqual(kinds(routeFaults(at([bend], [facilityMark(P(250, 0))]))), ['hook']);
   // The hall of a terminal is a place too.
   assert.deepEqual(routeFaults(at([bend], [], [hall(100, 10, 140, 50)])), []);
 });
@@ -171,9 +172,14 @@ test('a 10 px stub off a junction is a tick; the same stub ending at a facility 
   assert.deepEqual(routeFaults(at([main, stub], [facilityMark(P(0, -20))])), []);
   assert.deepEqual(routeFaults(at([main, stub], [stationMark('9', P(0, -20))])), []);
   assert.deepEqual(routeFaults(at([main, stub], [], [hall(-10, -40, 10, -20)])), []);
-  // ... or a stop within 15 m (25 px); a stop 60 px away is no help.
+  // ... or a stop within 20 m (33 px); a stop 40 px (24 m) or 80 px away is no help.
   assert.deepEqual(routeFaults(at([main, stub], [stopMark(P(0, -20))])), []);
-  assert.deepEqual(kinds(routeFaults(at([main, stub], [stopMark(P(0, -60))]))), ['tick']);
+  assert.deepEqual(routeFaults(at([main, stub], [stopMark(P(0, -38))])), []);
+  assert.deepEqual(kinds(routeFaults(at([main, stub], [stopMark(P(0, -50))]))), ['tick']);
+  assert.deepEqual(kinds(routeFaults(at([main, stub], [stopMark(P(0, -90))]))), ['tick']);
+  // A Park-n-Ride 85 px (51 m) from the end is the place it serves; one 160 px (96 m) away is not.
+  assert.deepEqual(routeFaults(at([main, stub], [facilityMark(P(0, -95))])), []);
+  assert.deepEqual(kinds(routeFaults(at([main, stub], [facilityMark(P(0, -170))]))), ['tick']);
 });
 
 test('a stub is a tick only while it is short, square on, and free', () => {
@@ -182,6 +188,9 @@ test('a stub is a tick only while it is short, square on, and free', () => {
   assert.deepEqual(routeFaults(at([main, street('9', [[P(0, 0), P(0, -30)]])])), []);
   // 17 px out (14 px beyond the street's edge) is.
   assert.deepEqual(kinds(routeFaults(at([main, street('9', [[P(0, 0), P(0, -17)]])]))), ['tick']);
+  // 4 px out is 1 px beyond the street's edge: nobody can see that. 5.5 px out (2.5 px beyond) can be seen.
+  assert.deepEqual(routeFaults(at([main, street('9', [[P(0, 0), P(0, -4)]])])), []);
+  assert.deepEqual(kinds(routeFaults(at([main, street('9', [[P(0, 0), P(0, -5.5)]])]))), ['tick']);
   // A stub leaving at a slant of 45 degrees is.
   assert.deepEqual(kinds(routeFaults(at([main, street('9', [[P(0, 0), P(8, -8)]])]))), ['tick']);
   // A line that ends 6 px past the end of another, alongside it, is not a stub off a junction.

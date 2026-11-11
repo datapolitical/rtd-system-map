@@ -24,8 +24,9 @@
 //    end, not a hook. A bus stop is not such a place.
 //  - tick: a dangling end with nothing at it (no such place within
 //    `placeReach` m, no stop within `stopReach` m, no line over it) that
-//    stands out less than `tickLen` px from a line it leaves at a real angle:
-//    a stub a rider sees as a stray tick on the street.
+//    stands out at least `tickMin` and less than `tickLen` px from a line it
+//    leaves at a real angle: a stub a rider sees as a stray tick on the street
+//    (under `tickMin` px it cannot be seen).
 //  - overshoot: a rail line's free end that runs past the mark of the
 //    station it ends at; dangling: a rail line's free end with no station of
 //    its line near it.
@@ -175,7 +176,7 @@ function standsOut(part, end, drawn, key, minHw, limit, minSin) {
  */
 export function routeFaults(zoom, {
   maxGap = 30, minLand = 3, pointing = 45, hookTurn = 110, stationReach = 150,
-  hallReach = 3, placeReach = 40, stopReach = 15, tickLen = 15, tickAngle = 30, places = null,
+  hallReach = 3, placeReach = 60, stopReach = 20, tickMin = 2, tickLen = 15, tickAngle = 30, places = null,
 } = {}) {
   const z = zoom.z;
   const faults = [];
@@ -307,7 +308,7 @@ export function routeFaults(zoom, {
         // line it leaves.
         if (dangles && !hooked) {
           const out = standsOut(part, end, drawn, featureKey(l), hideHw, tickLen, Math.sin((tickAngle * Math.PI) / 180));
-          if (out !== null && !placeNear() && !stopMarks.within(E, stopReach / mpp)) {
+          if (out !== null && out >= tickMin && !placeNear() && !stopMarks.within(E, stopReach / mpp)) {
             add('tick', l, stopping, E, `${stopping.join(' ')} on ${l.layer} ends in a tick: it stands out ${out.toFixed(1)} px from the line it leaves, with no stop or place at its end`);
           }
         }

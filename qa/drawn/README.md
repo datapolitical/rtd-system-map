@@ -90,11 +90,11 @@ findings, and `npm run check:recall` (`qa/recall/`) scores them.
   hall on purpose: an end on, or within 3 px of, a `terminals` fill is not a
   gap. A **hook** is a dangling end that turns back
   more than 110 degrees in its last few px, unless it ends at the place it
-  serves: within 40 m of a station, platform or park-and-ride mark or a hall is
+  serves: within 60 m of a station, platform or park-and-ride mark or a hall is
   a short end, not a hook (a bus stop is not such a place). A **tick** is a
-  dangling end with nothing at it (none of those within 40 m, no stop within
-  15 m) that stands out less than 15 px from a line it leaves at a real angle
-  (30 degrees or more): a stub on the street. A rail line's free end that runs
+  dangling end with nothing at it (none of those within 60 m, no stop within
+  20 m) that stands out from 2 px (less cannot be seen) to 15 px from a line it
+  leaves at a real angle (30 degrees or more): a stub on the street. A rail line's free end that runs
   more than 3 px past the mark of its station **overshoots**, and one with no
   station of its line within 150 m **dangles**.
 - `marks.mjs`, `labels.mjs`, `streets.mjs`: stops off their lines, station
