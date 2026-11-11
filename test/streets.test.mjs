@@ -198,3 +198,18 @@ test('a small loop off a line is a turn at the junction; a circulator stays', ()
   const ring = streets([route('5', [[0, 0], [0, 0.1], [0.1, 0.1], [0.1, 0], [0, 0]])]);
   assert.ok(ring.length && ring.reduce((sum, f) => sum + km(f), 0) > 0.39);
 });
+
+test('a terminal loop with a place near becomes a short end to it', () => {
+  // Route 4 laps a 100 m block whose far corner is a Park-n-Ride: the line
+  // ends there, the shorter way round, not round the whole block.
+  const { streets: out } = buildStreets(
+    [route('2', [[0, 0], [1, 0]]), route('4', [[0, 0], [0.5, 0], [0.5, 0.1], [0.6, 0.1], [0.6, 0], [0.5, 0]])],
+    new Map(),
+    { precision: 6, places: [at([0.61, 0.11])] },
+  );
+  const four = out.filter((f) => f.properties.routes === '4');
+  const pts = four.flatMap((f) => f.geometry.coordinates.map(([x, y]) => [x / KM, y / KM]));
+  assert.ok(pts.some(([x, y]) => Math.hypot(x - 0.6, y - 0.1) < 0.002), 'the line reaches the corner by the place');
+  const loopKm = four.reduce((sum, f) => sum + km(f), 0);
+  assert.ok(loopKm < 0.25, `a short end, ${loopKm.toFixed(3)} km, not the 0.4 km lap`);
+});

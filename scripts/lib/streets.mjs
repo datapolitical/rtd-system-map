@@ -124,7 +124,7 @@ class Cells {
  * Returns { nodes: [[x, y]], edges: [{ a, b, stretches: Set }], stretches:
  * [{ route, tier, wk }], parts: [{ stretch, ids }] }, edges with a < b.
  */
-export function streetGraph(features, project, { tolerance = NODE_METERS, close = CLOSE_METERS, merge = true, loops = true, cells = new Map() } = {}) {
+export function streetGraph(features, project, { tolerance = NODE_METERS, close = CLOSE_METERS, merge = true, loops = true, cells = new Map(), places = [] } = {}) {
   // A stretch is a route at one tier and headway: runs are cut where one
   // joins or leaves, so a route that runs less often past a short turn is
   // drawn at its own rate there.
@@ -145,7 +145,7 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
   // Civic Center), and a turn there.
   const tidy = (g) => {
     if (close > 0) closeGaps(g, { close, tolerance });
-    if (loops) simplifyLoops(g);
+    if (loops) simplifyLoops(g, places);
   };
   const plain = nodeParts(lines, stretches, tolerance);
   tidy(plain);
@@ -183,11 +183,19 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
 // - a small loop: a stretch that leaves a junction and comes back to it, no
 //   farther from it than LOOP_REACH, is a turn at that junction, and goes.
 // A stretch shorter than LOOP_MIN is a street corner, and stays; so does a
-// loop that is all there is of its line (a circulator). Changes the graph.
+// loop that is all there is of its line (a circulator). A loop with a
+// station or a Park-n-Ride (`places`, [x, y] in metres) within PLACE_NEAR
+// is the terminal loop that serves it: it becomes a short end, the shorter
+// way round to the loop's point nearest the place, so the line ends there.
+// A loop with none near goes, and the stem it hung from with it when that is
+// shorter than STEM_SHORT, so the line ends on the road, not in a tick off
+// it. Changes the graph.
 const DETOUR = 2.5;
 const LOOP_REACH = 220;
 const LOOP_MIN = 60;
-function simplifyLoops(graph) {
+const PLACE_NEAR = 250;
+const STEM_SHORT = 120;
+function simplifyLoops(graph, places = []) {
   const { nodes, edges, edgeOf } = graph;
   const at = new Map();
   edges.forEach((e, i) => {
@@ -226,6 +234,33 @@ function simplifyLoops(graph) {
     }
     return { ns, es };
   };
+  // The interior node of a stretch nearest a place within PLACE_NEAR that the
+  // stretch reaches out towards (nearer the stretch than the straight line
+  // between its ends, for a detour), or 0.
+  const served = (chain, detour) => {
+    let best = null;
+    const [U, V] = [nodes[chain[0]], nodes[chain.at(-1)]];
+    for (let k = 1; k < chain.length - 1; k++) {
+      for (const q of places) {
+        const d = dist(nodes[chain[k]], q);
+        if (d > PLACE_NEAR || (best && d >= best.d)) continue;
+        if (detour && closest(q, U, V).d <= d) continue;
+        best = { k, d };
+      }
+    }
+    return best ? best.k : 0;
+  };
+  // Keep the shorter way from an end of the stretch to node k; drop the rest.
+  const shortEnd = (chain, chainEdges, k, len) => {
+    let there = 0;
+    for (let m = 1; m <= k; m++) there += dist(nodes[chain[m - 1]], nodes[chain[m]]);
+    // chainEdges[m] joins chain[m] and chain[m + 1].
+    const gone = there <= len - there ? chainEdges.slice(k) : chainEdges.slice(0, k);
+    for (const j of gone) {
+      edgeOf.delete(`${edges[j].a}-${edges[j].b}`);
+      edges[j].stretches = new Set();
+    }
+  };
   const count = edges.length;
   for (let i = 0; i < count; i++) {
     if (done.has(i) || !edges[i].stretches.size) continue;
@@ -234,7 +269,7 @@ function simplifyLoops(graph) {
     const ahead = walk(e.b, i);
     const back = walk(e.a, i);
     const chain = [...back.ns.reverse(), e.a, e.b, ...ahead.ns];
-    const chainEdges = [...back.es, i, ...ahead.es];
+    const chainEdges = [...[...back.es].reverse(), i, ...ahead.es];
     const [u, v] = [chain[0], chain.at(-1)];
     let len = 0;
     for (let k = 1; k < chain.length; k++) len += dist(nodes[chain[k - 1]], nodes[chain[k]]);
@@ -242,14 +277,44 @@ function simplifyLoops(graph) {
     const reach = Math.max(...chain.map((n) => dist(nodes[n], nodes[u])));
     if (reach > LOOP_REACH) continue;
     const set = new Set(e.stretches);
+    const drop = (list) => {
+      for (const j of list) {
+        edgeOf.delete(`${edges[j].a}-${edges[j].b}`);
+        edges[j].stretches = new Set();
+      }
+    };
     if (u === v) {
       // A loop back to where it left: a turn there, if it hangs off a line.
       if (at.get(u).length < 3) continue;
+      // The place it serves, if one is near: a short end to it.
+      const k = served(chain, false);
+      if (k) {
+        shortEnd(chain, chainEdges, k, len);
+        continue;
+      }
+      drop(chainEdges);
+      // The stem it hung from, if short: back to the junction it left.
+      const stem = [];
+      let [node, prev] = [u, null];
+      for (;;) {
+        const live = (at.get(node) ?? []).filter((j) => edges[j].stretches.size && j !== prev);
+        if (live.length !== 1 || (prev !== null && (at.get(node) ?? []).filter((j) => edges[j].stretches.size).length !== 2)) break;
+        const j = live[0];
+        stem.push(j);
+        const f = edges[j];
+        node = f.a === node ? f.b : f.a;
+        prev = j;
+        if ((at.get(node) ?? []).filter((x) => edges[x].stretches.size).length !== 2) break;
+      }
+      const stemLen = stem.reduce((sum, j) => sum + dist(nodes[edges[j].a], nodes[edges[j].b]), 0);
+      if (stem.length && stemLen < STEM_SHORT && (at.get(node) ?? []).filter((x) => edges[x].stretches.size).length > 2) drop(stem);
+      continue;
     } else if (len < DETOUR * dist(nodes[u], nodes[v])) continue;
-    for (const j of chainEdges) {
-      edgeOf.delete(`${edges[j].a}-${edges[j].b}`);
-      edges[j].stretches = new Set();
-    }
+    // A detour out to a place and back (a terminal loop whose way back runs
+    // along the street it left) is a short end to the place, too.
+    const k = served(chain, true);
+    if (k) shortEnd(chain, chainEdges, k, len);
+    else drop(chainEdges);
     add(u, v, set);
   }
   const kept = edges.filter((e) => e.stretches.size);
@@ -582,7 +647,7 @@ const evenly = (wk) => (wk ? Array.from({ length: Math.floor((HOURS * 60) / wk) 
  * the way its buses go. `loads` is busStretches' cells per route. Returns
  * { streets, report }: report counts the graph and its loose ends.
  */
-export function buildStreets(features, loads = new Map(), { precision = 5, simplify: tolerance = 1, classOf = classOfBph, nodeMeters = NODE_METERS } = {}) {
+export function buildStreets(features, loads = new Map(), { precision = 5, simplify: tolerance = 1, classOf = classOfBph, nodeMeters = NODE_METERS, places = [] } = {}) {
   const first = features.find((f) => partsOf(f.geometry).some((p) => p.length));
   if (!first) return { streets: [], report: {} };
   const { project, unproject } = projection(partsOf(first.geometry).find((p) => p.length)[0], precision);
@@ -597,7 +662,7 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
     cellsOf.set(String(route), grid);
   }
 
-  const graph = streetGraph(features, project, { tolerance: nodeMeters, cells: cellsOf });
+  const graph = streetGraph(features, project, { tolerance: nodeMeters, cells: cellsOf, places: places.map(project) });
   // The streets of a graph, each with `moved`: whether it has a node that
   // moved to a divided road's middle line.
   const draw = (graph, isMoved) => {

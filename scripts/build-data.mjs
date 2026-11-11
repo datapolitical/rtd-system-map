@@ -339,7 +339,7 @@ async function main() {
   // drawn once (scripts/lib/streets.mjs, #80). The report says how many
   // loose ends the drawing has, and how many of them have another line of
   // their own route within 30 m: a terminal loop, or a gap in RTD's lines.
-  const built = buildStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION });
+  const built = buildStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION, places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates) });
   geo.streets = built.streets;
   const streetGraph = { nodes: built.report.nodes, edges: built.report.edges, ends: built.report.ends, nearOwn: built.report.nearOwn };
   const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
