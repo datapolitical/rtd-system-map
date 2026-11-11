@@ -1318,7 +1318,10 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   (within 60 degrees of the way it came in), or within 15 m in any
   direction (where the bus turns round), stops short of where its buses
   go: a gap in RTD's lines, or a terminal loop drawn open. A short edge
-  joins it to that line (`closeGaps`). The build reports the loose ends
+  joins it to that line (`closeGaps`). A street is simplified between
+  junctions only, so a node where another line meets it (a branch, a
+  part-time route's dashed line) stays exactly where it is and that line
+  still meets the street. The build reports the loose ends
   left, and those within 30 m of their own route's line (`streetGraph` in
   meta.json); on 2026-11-10, 4 and 2.
 - **Strands.** From zoom 13.5, a hairline a shade off the ink runs along
@@ -1335,7 +1338,9 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   Until the strands have room, a part-time route rides beside the street
   from 14, a dashed hairline a shade off the ink with 2.2 px of land between
   it and the street's edge (so it reads as a second line beside the first,
-  not as the first line's edge); the gap is measured from the street's edge
+  not as the first line's edge), on a street at least 25 m long (on the few
+  metres where a route turns round or two junctions nearly meet, a dash
+  that short is a speck); the gap is measured from the street's edge
   at that zoom and grows with the strand, so the two never touch. Chris, on
   round three: "the dashed part-time strand rides the edge of the solid line
   instead of sitting beside it."

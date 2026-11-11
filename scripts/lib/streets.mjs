@@ -309,7 +309,7 @@ const evenly = (wk) => (wk ? Array.from({ length: Math.floor((HOURS * 60) / wk) 
  * along it, space-separated, in number order), `n` (how many run all day),
  * `pt` (how many part-time), `bph` (buses per hour in the busier direction,
  * to a tenth), `hw` (the rider's wait in minutes, rounded), `cls` (its class,
- * frequency.js), and for a one-way street `oneway` and `len` (metres), drawn
+ * frequency.js), `len` (metres), and for a one-way street `oneway`, drawn
  * the way its buses go. `loads` is busStretches' cells per route. Returns
  * { streets, report }: report counts the graph and its loose ends.
  */
@@ -332,6 +332,10 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
     cellsOf.set(String(route), grid);
   }
 
+  // Nodes where more than two edges meet: a junction, where another line
+  // (a branch, a part-time route, a crossing street) meets this one.
+  const degree = new Map();
+  for (const e of graph.edges) for (const n of [e.a, e.b]) degree.set(n, (degree.get(n) ?? 0) + 1);
   const lines = runs.map((run) => {
     const pts = run.nodes.map((n) => nodes[n]);
     const cum = [0];
@@ -387,7 +391,8 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
     const bph = Math.max(rf, rb);
     const names = [...routes.keys()].sort(byNumber);
     const n = [...routes.values()].filter((r) => r.allDay).length;
-    return { pts, names, routes, n, pt: names.length - n, bph, oneway, total };
+    const keep = run.nodes.map((n, i) => i === 0 || i === run.nodes.length - 1 || degree.get(n) > 2);
+    return { pts, keep, names, routes, n, pt: names.length - n, bph, oneway, total };
   });
 
   // Twins: the other carriageway of a two-way road.
@@ -436,7 +441,18 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
     // own dashed lines.
     if (!l.n) return;
     const pts = l.oneway < 0 ? [...l.pts].reverse() : l.pts;
-    const coords = dedupe(simplify(pts, tolerance).map(unproject));
+    const keep = l.oneway < 0 ? [...l.keep].reverse() : l.keep;
+    // Simplified between junctions only: a node where another line meets
+    // this one stays exactly where it is, so that line still meets it.
+    const kept = [];
+    let from = 0;
+    for (let i = 1; i < pts.length; i++) {
+      if (!keep[i]) continue;
+      const piece = simplify(pts.slice(from, i + 1), tolerance);
+      kept.push(...(kept.length ? piece.slice(1) : piece));
+      from = i;
+    }
+    const coords = dedupe(kept.map(unproject));
     if (coords.length < 2) return;
     const oneway = l.oneway && !twinned[i];
     streets.push({
@@ -450,7 +466,8 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
         bph: Math.round(l.bph * 10) / 10,
         hw: l.bph > 0 ? Math.max(1, Math.round(60 / l.bph)) : null,
         cls: classOf(l.bph),
-        ...(oneway ? { oneway: 1, len: Math.round(length(pts)) } : {}),
+        len: Math.round(length(pts)),
+        ...(oneway ? { oneway: 1 } : {}),
       },
     });
   });
