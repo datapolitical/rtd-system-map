@@ -695,18 +695,22 @@ export function transitMarks(lines) {
     },
     // Rail and the frequent buses take up their own room here (basemap.js),
     // so everything placed after them, which is every name on the map, stays
-    // off them. Above these: only what names a line and so sits on it. The
-    // hub's name is placed between the two (see below).
-    ...lineKeepOut().filter((l) => l.id !== 'keep-out-rail'),
+    // off them. Above these: only what names a line and so sits on it, and
+    // the hub's name, the one exception (see below).
+    ...lineKeepOut(),
     // The hub (Union Station: where the most lines meet, and more end than
     // get a sign) is the one name the metro zooms must have, and the one with
     // the least room beside it: seven lines leave it in four directions, and
     // frequent buses fill the rest. So at every zoom its name is placed
-    // before every other station's and before the frequent
-    // buses claim their room: it stays off rail, may cross a bus line, and
-    // sits as near its ring as any other name sits to its mark. It used to
-    // go up to six ems out, a quarter of a phone's width, where it read as
-    // some other place's.
+    // before every other station's and before rail and the frequent buses
+    // claim their room: it may cross a bus line, and it sits as near its ring
+    // as any other name sits to its mark. It used to go up to six ems out, a
+    // quarter of a phone's width, where it read as some other place's. It is
+    // the one name placed before the rail keep-out too, because at the
+    // station the lines end: they run along the platform to its end, and the
+    // mark and its name stand where they do, so there is no point beside the
+    // mark that is not on rail. A name with a halo on its own station's tracks
+    // reads; a station with no name at all does not.
     {
       id: 'station-labels-hub',
       type: 'symbol',
@@ -723,7 +727,6 @@ export function transitMarks(lines) {
       },
       paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
     },
-    ...lineKeepOut().filter((l) => l.id === 'keep-out-rail'),
     // Rail letters ride along their lines, placed before the bus numbers
     // below. The build says where (scripts/lib/sharedtrack.mjs): lines that
     // share track take turns, so each is named, and a letter sits between

@@ -257,7 +257,17 @@ const CITY_FADE = linear(12.5, 1, 13.5, 0);
 const TOWN_FADE = linear(13.5, 1, 14.5, 0);
 
 // Place, street and water names: above the transit lines, below our stations.
-export function basemapLabels() {
+// The network's stations say their own names, and the basemap names places:
+// a place whose name is a served station's label (the Union Station
+// neighbourhood, the Central Park suburb) would sit beside that station's
+// station's name like a second one. The build's station labels (from
+// stations.geojson, fetched in main.js) are passed in here, and those
+// places are left out. Every place not on the network is named as before.
+//
+// With no labels known (the data didn't come) every place is named: a name
+// repeated is better than one missing.
+export function basemapLabels(served = []) {
+  const repeated = served.length ? ['!', ['in', name, ['literal', served]]] : null;
   const halo = { 'text-halo-color': P.land, 'text-halo-width': 1.4, 'text-halo-blur': 0.4 };
   const labels = [
     omt('water-label', 'water_name', {
@@ -375,7 +385,8 @@ export function basemapLabels() {
     omt('neighborhood-label', 'place', {
       type: 'symbol',
       minzoom: 12,
-      filter: cls('suburb', 'quarter', 'neighbourhood'),
+      // A place that repeats a station's name is left out (see above).
+      filter: repeated ? ['all', cls('suburb', 'quarter', 'neighbourhood'), repeated] : cls('suburb', 'quarter', 'neighbourhood'),
       layout: {
         'text-field': name,
         'text-font': FONT.medium,

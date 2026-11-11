@@ -1054,7 +1054,13 @@ carry the sense of place:
   shield and fade out from 14.5 to 15. US highways have a notched US-route
   shield, so "40" on Colfax doesn't read as a bus tag, and fade out from 13
   to 13.5. State highway numbers are not drawn.
-- **Neighborhood names** in plain sentence case, from zoom 12. **City names**,
+- **Neighborhood names** in plain sentence case, from zoom 12. A place whose
+  name is a served station's label (the Union Station neighbourhood, the
+  Central Park suburb) is left out: the map reads the served stations'
+  own labels from `data/stations.geojson` when it loads and passes them to
+  the basemap's place layer, so a place never reads as a second name for the
+  station (from 2026-11-08; nothing is written down about any one place).
+  **City names**,
   and town names from zoom 11, in
   small, letter-spaced capitals in the same quiet gray, the convention for a
   name that covers an area rather than marks a point, so "DENVER" reads as
@@ -1659,10 +1665,14 @@ draws it at its zoom (see "The key"). Nothing in the key is a second drawing.
     number), and on screen the same letters are 1.4 times as far apart at
     the zoom's far end as at its middle and 0.7 times at its near end: 270
     to 540 px. A phone screen is 844 px tall and 390 wide, so a stretch of
-    line as long as the screen is never lacks a letter, and two letters of
-    one line are never much nearer than a third of its height. (At 700 the
-    far end was 990 px: the W and the T crossed a phone with no letter.) A
-    stretch with no fork is lettered from its middle out; one shorter than
+    line as long as the screen is never lacks a letter. A new place is only
+    added for a full spacing of extra track, not a half one, so a line alone
+    on a stretch shorter than a spacing of track is named once, not twice
+    (2026-11-08: rounding counted half a spacing over as a second place, and
+    Union Station's tails, each a platform short, were named twice: a second
+    B beside its first, with A, G and N between). (At 700
+    the far end was 990 px: the W and the T crossed a phone with no letter.)
+    A stretch with no fork is lettered from its middle out; one shorter than
     60 px gets none of its own. Until 2026-11-06 a place came up every
     100 px and a line alone took every other one, which put three C's,
     three T's or three E's on one phone screen.
@@ -1677,10 +1687,15 @@ draws it at its zoom (see "The key"). Nothing in the key is a second drawing.
     `symbol-sort-key` is the rank, so where the map is short of room the
     first letters are drawn before the second ones. A line's letter claims
     its space before a station's name does (letters are placed before names
-    in `lettersFirst`). A line with a letter of its own within 110 px of a
-    place (on a neighboring stretch, in a knot of short ones) counts as
-    named there, so downtown's second and third B don't take the room of
-    another line's first letter. Letters are kept clear of each other by
+    in `lettersFirst`). A line with a letter of its own within a spacing
+    (380 px) of a place counts as named there, on a neighboring stretch too:
+    where branches bunch at the approach to a station (Union Station's), the
+    same letter shows once, before the next station, and not twice
+    (2026-11-08: the guard keeps its screen distance and gains a floor of
+    200 m in metres, the whole approach a couple of branches bunch at. The
+    screen rule alone, a third of a screen, left two B's 180 m apart with
+    A, G and N between on the hall's approach at 16). Letters are kept
+    clear of each other by
     28 px as the map shows them at the near end of their zoom (where the same
     meters are fewest pixels), not at its middle: at the middle they were 22
     px apart at the near end and the map drew one of two.
@@ -3714,6 +3729,19 @@ work against the real structure before asking for evaluation.
   check (#74, #75). The line is now cut where its
   end station's mark, or its platform group's mark, crosses it (see "The
   station's real shape").
+- 2026-11-08: Round three on the sketch evaluation. A place whose name is a
+  served station's label (the Union Station neighbourhood) is no longer named
+  by the basemap: the served stations' labels are read from stations.geojson
+  when the page loads and passed to the place layer, so the station has the
+  one name it deserves (see "Basemap"). On an approach where branches bunch at
+  one place, a line's letter shows once: the third-of-a-screen guard gains a
+  200 m floor in metres, and a place is only added for a full spacing of extra
+  track, which had rounded a half-over into a second letter on Union
+  Station's platform-short tails (see "Rail bullets"). The hub's name is now
+  placed before rail's keep-out as well as the buses', because at a station
+  the lines end there: every point beside the mark is on a track, and a
+  haloed name on its own station's tracks reads where no name at all does
+  not.
 
 ## Sources
 
