@@ -58,6 +58,11 @@ zoom `z` are screen pixels at zoom `z`):
   `properties`, colour.
 - `areas` — the terminals' polygons.
 
+`places(z, sources)` returns `{ marks, areas }` for these sources only, as the
+style draws them once their layers are on, whatever the zoom: a check that asks
+what a line end is at (`routes.mjs`) cannot depend on whether park-and-ride
+marks (z12.5) or halls (z13) are already drawn at the zoom it looks at.
+
 `frame({ zoom, center, width, height, basemap })` clips all four to a screen
 and moves them to screen pixels, so a check can ask "what is on this phone
 screen"; with `basemap: true` it also reads the tiles under it and returns
@@ -81,8 +86,15 @@ findings, and `npm run check:recall` (`qa/recall/`) scores them.
   dangles (no line at least 60% as wide is drawn over it) while its route
   carries on within 30 m in the direction the end points, across empty land:
   the break a rider sees. A route turning off a street whose line carries on
-  for other routes is no break. A **hook** is a dangling end that turns back
-  more than 110 degrees in its last few px. A rail line's free end that runs
+  for other routes is no break. A bus line ends at the edge of a terminal's
+  hall on purpose: an end on, or within 3 px of, a `terminals` fill is not a
+  gap. A **hook** is a dangling end that turns back
+  more than 110 degrees in its last few px, unless it ends at the place it
+  serves: within 40 m of a station, platform or park-and-ride mark or a hall is
+  a short end, not a hook (a bus stop is not such a place). A **tick** is a
+  dangling end with nothing at it (none of those within 40 m, no stop within
+  15 m) that stands out less than 15 px from a line it leaves at a real angle
+  (30 degrees or more): a stub on the street. A rail line's free end that runs
   more than 3 px past the mark of its station **overshoots**, and one with no
   station of its line within 150 m **dangles**.
 - `marks.mjs`, `labels.mjs`, `streets.mjs`: stops off their lines, station

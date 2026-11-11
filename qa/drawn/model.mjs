@@ -203,12 +203,15 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
     return out;
   }
 
-  function areasAt(z) {
+  // `only` names the sources to read; `anyZoom` ignores a layer's zoom range
+  // (places(), below).
+  function areasAt(z, { only = null, anyZoom = false } = {}) {
     const out = [];
     for (const layer of style.layers) {
       if (layer.type !== 'fill') continue;
+      if (only && !only.includes(layer.source)) continue;
       const list = sourceFor(layer);
-      if (!list || !inZoom(layer, z)) continue;
+      if (!list || !(anyZoom || inZoom(layer, z))) continue;
       const f = filterOf(layer);
       for (const x of features[layer.source]) {
         if (f && !f(z, x.properties)) continue;
@@ -254,11 +257,12 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
     return [box[0] - padding * (anchor.includes('right') ? 2 : anchor.includes('left') ? 0 : 1), box[1] - padding * (anchor.includes('bottom') ? 2 : anchor.includes('top') ? 0 : 1), box[2] + padding * (anchor.includes('left') ? 2 : anchor.includes('right') ? 0 : 1), box[3] + padding * (anchor.includes('top') ? 2 : anchor.includes('bottom') ? 0 : 1)];
   }
 
-  function marksAt(z) {
+  function marksAt(z, { only = null, anyZoom = false } = {}) {
     const out = [];
     for (const layer of style.layers) {
+      if (only && !only.includes(layer.source)) continue;
       const list = sourceFor(layer);
-      if (!list || !inZoom(layer, z)) continue;
+      if (!list || !(anyZoom || inZoom(layer, z))) continue;
       const f = filterOf(layer);
       for (const x of features[layer.source]) {
         if (f && !f(z, x.properties)) continue;
@@ -420,6 +424,15 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
     return model;
   }
 
+  // Where things are, whatever the zoom: the marks and fills of these sources
+  // as the style draws them once their layers are on, at the positions they
+  // have at z. A check that asks what a line end is at (routes.mjs) must not
+  // depend on whether the layer is already drawn at the zoom it looks at
+  // (park-and-ride marks start at z12.5, halls at z13).
+  function places(z, sources) {
+    return { marks: marksAt(z, { only: sources, anyZoom: true }), areas: areasAt(z, { only: sources, anyZoom: true }) };
+  }
+
   // --- the basemap, from tiles -------------------------------------------
 
   let tiles = null;
@@ -533,5 +546,5 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
     for (const z of zooms) yield zoom(z);
   }
 
-  return { root, theme, style, data, zoom, frame, district, ZOOMS, icons: imageSizes };
+  return { root, theme, style, data, zoom, places, frame, district, ZOOMS, icons: imageSizes };
 }

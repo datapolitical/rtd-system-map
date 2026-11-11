@@ -14,17 +14,31 @@
 //    again (15th Street short of Lawrence; a planted cut). An end that sits on
 //    another line, or whose route turns off along a street whose line carries
 //    on, is not a break a rider can see.
+//    A bus line deliberately ends at the edge of a terminal's hall (the
+//    `terminals` fills): an end on or within `hallReach` px of one is where its
+//    buses go into the hall, not a break.
 //  - hook: a dangling end whose last few px turn back on themselves (Union
-//    Station's bus line).
+//    Station's bus line). A route that ends at the place it serves (within
+//    `placeReach` m of a station, platform or park-and-ride mark, or of a
+//    hall) is drawn as a short end turning off the road to it: that is the
+//    end, not a hook. A bus stop is not such a place.
+//  - tick: a dangling end with nothing at it (no such place within
+//    `placeReach` m, no stop within `stopReach` m, no line over it) that
+//    stands out less than `tickLen` px from a line it leaves at a real angle:
+//    a stub a rider sees as a stray tick on the street.
 //  - overshoot: a rail line's free end that runs past the mark of the
 //    station it ends at; dangling: a rail line's free end with no station of
 //    its line near it.
 //
 // Thresholds are screen px at the zoom, as a rider sees them, except the gap
-// reach, which is ground metres so the same data break is judged alike at
-// every zoom. Nothing names a route, layer or place: a route is whatever the
-// build says a feature carries (`route`, or a street's `routes`), and a
-// station is any mark whose feature lists the line among its `lines`.
+// reach and the distances to a place or a stop, which are ground metres so the
+// same data is judged alike at every zoom. Nothing names a route, layer or
+// place: a route is whatever the build says a feature carries (`route`, or a
+// street's `routes`), and a station is any mark whose feature lists the line
+// among its `lines`. The places a line end can be at are read by source
+// (PLACE_SOURCES) from the marks and fills of the page's own layers, at any
+// zoom: pass `places` (model.places(z, PLACE_SOURCES)) so the answer does not
+// depend on whether those layers are already drawn at the zoom looked at.
 
 import { toLonLat } from './mercator.mjs';
 import { capReach } from './strokes.mjs';
@@ -74,6 +88,41 @@ const featureKey = (l) => `${l.source}:${l.index}`;
 const unit = ([x, y]) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
 const angle = (u, v) => (Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1]))) * 180) / Math.PI;
 
+// The sources whose marks and fills are the places a line can end at: stations
+// (a platform's mark is a station's), park-and-rides, terminal halls, and the
+// street stops a line end is not "at" a place for but still has something at.
+export const PLACE_SOURCES = ['stations', 'facilities', 'terminals', 'stops'];
+
+// Points on the same grid as the segments.
+class Points {
+  constructor() { this.g = new Map(); }
+  add(p) {
+    const k = `${Math.floor(p[0] / CELL)},${Math.floor(p[1] / CELL)}`;
+    if (!this.g.has(k)) this.g.set(k, []);
+    this.g.get(k).push(p);
+  }
+  // Is any point within r px of p?
+  within(p, r) {
+    for (let x = Math.floor((p[0] - r) / CELL); x <= Math.floor((p[0] + r) / CELL); x++) {
+      for (let y = Math.floor((p[1] - r) / CELL); y <= Math.floor((p[1] + r) / CELL); y++) {
+        if ((this.g.get(`${x},${y}`) ?? []).some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) <= r)) return true;
+      }
+    }
+    return false;
+  }
+}
+
+// Px from p to a polygon's ring: 0 inside it.
+function ringDist(p, ring) {
+  let inside = false, best = Infinity;
+  for (let i = 1; i < ring.length; i++) {
+    const a = ring[i - 1], b = ring[i];
+    if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < ((b[0] - a[0]) * (p[1] - a[1])) / (b[1] - a[1]) + a[0]) inside = !inside;
+    best = Math.min(best, segDist(p, a, b).d);
+  }
+  return inside ? 0 : best;
+}
+
 // The two ends of a drawn part, each with its outward direction (taken over
 // the last `over` px so a vertex split doesn't swing it).
 function endsOf(part, over = 3) {
@@ -87,14 +136,58 @@ function endsOf(part, over = 3) {
   return out;
 }
 
+// How far a line stands out from the line it leaves: walking back from its end
+// along the part, the distance to the first point under another feature's
+// stroke (drawn at least `minHw` wide) that the line meets at a real angle
+// (not alongside it: sin of the angle at least `minSin`), if that is within
+// `limit` px; otherwise null.
+function standsOut(part, end, drawn, key, minHw, limit, minSin) {
+  let walked = 0, a = part[end.i0];
+  for (let k = end.i0 + end.step; k >= 0 && k < part.length; k += end.step) {
+    const b = part[k];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const d = unit([b[0] - a[0], b[1] - a[1]]);
+    const n = Math.max(1, Math.ceil(len / 0.5));
+    for (let i = 1; i <= n; i++) {
+      const s = walked + (len * i) / n;
+      if (s >= limit) return null;
+      const q = [a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n];
+      const hit = drawn.near(q).some((o) => {
+        if (featureKey(o.line) === key || o.hw < minHw || segDist(q, o.a, o.b).d > o.hw) return false;
+        const v = unit([o.b[0] - o.a[0], o.b[1] - o.a[1]]);
+        return Math.abs(d[0] * v[1] - d[1] * v[0]) >= minSin;
+      });
+      if (hit) return s;
+    }
+    walked += len;
+    a = b;
+  }
+  return null;
+}
+
 /**
  * Route faults at one zoom of the drawn model.
- * @param {{z: number, lines: Array, marks?: Array}} zoom the model's zoom(z) output
+ * @param {{z: number, lines: Array, marks?: Array, areas?: Array}} zoom the model's zoom(z) output
+ * @param {{places?: {marks: Array, areas: Array}}} opts `places`: model.places(z, PLACE_SOURCES),
+ *   the marks and fills a line end can be at whether or not their layers are drawn at this zoom
+ *   (default: the zoom's own marks and areas)
  * @returns {Array<{kind, layer, route, px, msg}>}
  */
-export function routeFaults(zoom, { maxGap = 30, minLand = 3, pointing = 45, hookTurn = 110, stationReach = 150 } = {}) {
+export function routeFaults(zoom, {
+  maxGap = 30, minLand = 3, pointing = 45, hookTurn = 110, stationReach = 150,
+  hallReach = 3, placeReach = 40, stopReach = 15, tickLen = 15, tickAngle = 30, places = null,
+} = {}) {
   const z = zoom.z;
   const faults = [];
+  // The places a line end can be at, and the stops it can have beside it.
+  const there = places ?? { marks: zoom.marks ?? [], areas: zoom.areas ?? [] };
+  const placeMarks = new Points(), stopMarks = new Points();
+  for (const m of there.marks) {
+    if (m.source === 'stations' || m.source === 'facilities' || /platform/i.test(m.layer ?? '')) placeMarks.add(m.at);
+    else if (m.source === 'stops') stopMarks.add(m.at);
+  }
+  const halls = there.areas.filter((a) => a.source === 'terminals').flatMap((a) => a.parts);
+  const hallDist = (p) => halls.reduce((d, ring) => Math.min(d, ringDist(p, ring)), Infinity);
   // Every route line as drawn, any layer: what a rider sees covering a place.
   const drawn = new Segments();
   // One entry per feature, from the first layer that draws it (style order):
@@ -148,13 +241,16 @@ export function routeFaults(zoom, { maxGap = 30, minLand = 3, pointing = 45, hoo
         // A line under it hides the end, if it is drawn about as wide.
         const hideHw = 0.6 * (w / 2);
         const dangles = !drawn.covers(E, new Set([featureKey(l)]), hideHw);
-        const gapPx = maxGap / metresPerPx(toLonLat(E, z)[1], z);
+        const mpp = metresPerPx(toLonLat(E, z)[1], z);
+        const gapPx = maxGap / mpp;
+        // Buses go into a hall at its edge: an end there is not a break.
+        const atHall = dangles && hallDist(E) <= hallReach;
 
         // Gap: a stopping route carries on ahead, across empty land. Only at
         // an end that dangles: an end on another line is no break to a rider.
         const broken = [];
         let land = Infinity;
-        for (const r of dangles ? stopping : []) {
+        for (const r of dangles && !atHall ? stopping : []) {
           let best = null;
           for (const s of byRoute.get(r).near(E, gapPx)) {
             if (s.line === l && s.pi === pi) continue;
@@ -187,9 +283,11 @@ export function routeFaults(zoom, { maxGap = 30, minLand = 3, pointing = 45, hoo
 
         // Hook: the last few px turn back on themselves.
         // Walk back into the piece from its end; `toward` is each segment's
-        // direction of travel towards the end.
+        // direction of travel towards the end. An end at the place it serves
+        // (a short end turning off the road to it) is no hook.
+        const placeNear = () => hallDist(E) <= placeReach / mpp || placeMarks.within(E, placeReach / mpp);
         const span = Math.max(20, 4 * w);
-        let walked = 0;
+        let walked = 0, hooked = false;
         for (let k = 0; dangles && walked < span; k++) {
           const ia = end.i0 + k * end.step, ib = ia + end.step;
           if (ib < 0 || ib >= part.length) break;
@@ -197,8 +295,20 @@ export function routeFaults(zoom, { maxGap = 30, minLand = 3, pointing = 45, hoo
           walked += Math.hypot(b[0] - a[0], b[1] - a[1]);
           const toward = unit([a[0] - b[0], a[1] - b[1]]);
           if (walked > 2 && angle(end.out, toward) > hookTurn) {
-            add('hook', l, stopping, E, `${stopping.join(' ')} on ${l.layer} ends in a hook: it turns back ${angle(end.out, toward).toFixed(0)} degrees in its last ${walked.toFixed(0)} px`);
+            if (!placeNear()) {
+              add('hook', l, stopping, E, `${stopping.join(' ')} on ${l.layer} ends in a hook: it turns back ${angle(end.out, toward).toFixed(0)} degrees in its last ${walked.toFixed(0)} px`);
+              hooked = true;
+            }
             break;
+          }
+        }
+
+        // Tick: a free end with nothing at it, standing out a few px from the
+        // line it leaves.
+        if (dangles && !hooked) {
+          const out = standsOut(part, end, drawn, featureKey(l), hideHw, tickLen, Math.sin((tickAngle * Math.PI) / 180));
+          if (out !== null && !placeNear() && !stopMarks.within(E, stopReach / mpp)) {
+            add('tick', l, stopping, E, `${stopping.join(' ')} on ${l.layer} ends in a tick: it stands out ${out.toFixed(1)} px from the line it leaves, with no stop or place at its end`);
           }
         }
 
