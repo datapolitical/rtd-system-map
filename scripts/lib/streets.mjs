@@ -178,8 +178,9 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
 // routes doing that at one interchange are a knot. On the street graph, once
 // for every route on the street, so the streets still meet:
 // - a detour: a stretch of one set of routes between two junctions that is
-//   DETOUR times longer than the straight line between them, and no wider
-//   than LOOP_REACH, is the turn from one road to the other, drawn straight;
+//   DETOUR times longer than the straight line between them, no more than
+//   DETOUR_CLOSE apart, and no wider than LOOP_REACH, is the turn from one
+//   road to the other, drawn straight;
 // - a small loop: a stretch that leaves a junction and comes back to it, no
 //   farther from it than LOOP_REACH, is a turn at that junction, and goes.
 // A stretch shorter than LOOP_MIN is a street corner, and stays; so does a
@@ -191,6 +192,11 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
 // shorter than STEM_SHORT, so the line ends on the road, not in a tick off
 // it. Changes the graph.
 const DETOUR = 2.5;
+// ...whose ends are no farther apart than this: the turn is drawn straight
+// from one to the other, so a longer straight would cut across the land
+// (a cloverleaf's whole interior); as the batch's laps (generalize.mjs,
+// THROUGH_CLOSE).
+const DETOUR_CLOSE = 100;
 const LOOP_REACH = 220;
 const LOOP_MIN = 60;
 const PLACE_NEAR = 250;
@@ -309,7 +315,7 @@ function simplifyLoops(graph, places = []) {
       const stemLen = stem.reduce((sum, j) => sum + dist(nodes[edges[j].a], nodes[edges[j].b]), 0);
       if (stem.length && stemLen < STEM_SHORT && (at.get(node) ?? []).filter((x) => edges[x].stretches.size).length > 2) drop(stem);
       continue;
-    } else if (len < DETOUR * dist(nodes[u], nodes[v])) continue;
+    } else if (len < DETOUR * dist(nodes[u], nodes[v]) || dist(nodes[u], nodes[v]) > DETOUR_CLOSE) continue;
     // A detour out to a place and back (a terminal loop whose way back runs
     // along the street it left) is a short end to the place, too.
     const k = served(chain, true);
