@@ -159,3 +159,13 @@ test("a line that stops short of its own route's line ahead is joined to it", ()
   const { report: beside } = buildStreets([route('1', [[0, 0], [1, 0]], 15), route('1', [[0.5, 0.02], [1.5, 0.02]], 15)], new Map(), { precision: 6 });
   assert.equal(beside.ends, 4);
 });
+
+test('a street keeps the node where another line meets it, however straight', () => {
+  // Route 2 (rush hours only) leaves route 1 at a vertex half a metre off
+  // route 1's straight line: simplifying route 1's street must not move it.
+  const out = streets([route('1', [[0, 0], [1, 0.0005], [2, 0]], 15), route('2', [[1, 0.0005], [1, 1]], 30, 'peak')]);
+  const one = out.filter((f) => f.properties.routes.split(' ').includes('1'));
+  const junction = at([1, 0.0005]);
+  const nearest = Math.min(...one.flatMap((f) => f.geometry.coordinates.map((p) => Math.hypot(p[0] - junction[0], p[1] - junction[1]) / KM)));
+  assert.ok(nearest * 1000 < 0.1, `the junction is ${(nearest * 1000).toFixed(2)} m from the street`);
+});

@@ -59,6 +59,10 @@ const strandAt = (z) => 0.6 + (Math.min(16, Math.max(STRANDS_FROM, z)) - STRANDS
 // The land between a narrow street's edge and a part-time hairline beside
 // it: wide enough to read as a gap at phone scale, no wider.
 const BESIDE_GAP = 2.2;
+// ...and only along a street at least this long (metres): on the few metres
+// of street where a route turns round or two junctions nearly meet, a
+// dashed piece that short reads as a speck, not a line.
+const BESIDE_MIN_LEN = 25;
 const strandRoom = (zoom) => ['>=', ['/', classMatch((c) => classWidthAt(c.id, zoom)), strands], STRAND_MIN];
 const strandZooms = Array.from({ length: Math.round((18 - STRANDS_FROM) / 0.5) + 1 }, (_, i) => STRANDS_FROM + i / 2);
 const strandFade = ['step', ['zoom'], 0, ...strandZooms.flatMap((z) => [z, ['case', strandRoom(z), fade(onStreet), 0]])];
@@ -274,7 +278,7 @@ export function transitLines(lines) {
       type: 'line',
       source: 'streets',
       minzoom: ARROWS_FROM,
-      filter: ['all', ['>', ['coalesce', ['get', 'pt'], 0], 0], ['<=', strands, STRANDS_MAX]],
+      filter: ['all', ['>', ['coalesce', ['get', 'pt'], 0], 0], ['<=', strands, STRANDS_MAX], ['>=', ['coalesce', ['get', 'len'], 0], BESIDE_MIN_LEN]],
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': P.strand,
