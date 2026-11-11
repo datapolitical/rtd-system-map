@@ -71,6 +71,9 @@ const MERGE_NODE_METERS = 4;
 const CLOSE_METERS = 30;
 const CLOSE_COS = Math.cos((60 * Math.PI) / 180);
 const CLOSE_ANY = 15;
+// A part-time street takes the strongest part-time tier on it: rush hours
+// (dashed) before a few trips (dotted).
+const PART_TIME_ORDER = ['peak', 'limited', 'none', 'unknown'];
 // Tiers that run through the window and so count toward the street.
 const ALL_DAY = new Set(['frequent', 'every30', 'hourly', 'infrequent']);
 const HOURS = (MIDDAY[1] - MIDDAY[0]) / 3600;
@@ -527,7 +530,8 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
       const routes = new Map(); // route -> { allDay, wk }
       for (const s of run.stretches) {
         const { route, tier, wk } = stretches[s];
-        const r = routes.get(route) ?? { allDay: false, wk: null };
+        const r = routes.get(route) ?? { allDay: false, wk: null, tiers: new Set() };
+        r.tiers.add(tier);
         if (ALL_DAY.has(tier)) {
           r.allDay = true;
           r.wk = r.wk == null ? wk : Math.min(r.wk, wk ?? r.wk);
@@ -623,9 +627,11 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
 
     const streets = [];
     lines.forEach((l, i) => {
-      // A street with only part-time routes isn't a street: they keep their
-      // own dashed lines.
-      if (!l.n) return;
+      // A street with only part-time routes has no width of its own: it is
+      // drawn as their dashed (rush hours) or dotted (a few trips) line, from
+      // the street graph like every other, so it meets the streets it joins
+      // and moves with a divided road (`n: 0`, `tier`).
+      const partTime = !l.n ? (PART_TIME_ORDER.find((t) => [...l.routes.values()].some((r) => r.tiers.has(t))) ?? 'unknown') : null;
       const pts = l.oneway < 0 ? [...l.pts].reverse() : l.pts;
       const keep = l.oneway < 0 ? [...l.keep].reverse() : l.keep;
       // Simplified between junctions only: a node where another line meets
@@ -655,21 +661,34 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
           cls: classOf(l.bph),
           len: Math.round(length(pts)),
           ...(oneway ? { oneway: 1 } : {}),
+          ...(partTime ? { tier: partTime } : {}),
         },
       });
     });
     return streets;
   };
   // A divided road is one line out to MERGED_UNTIL and its two carriageways
-  // from there in (#81): the merged graph's streets that moved are drawn
-  // out there (`zoom: 'far'`), the plain graph's that moved in here
-  // (`zoom: 'near'`), and every other street at every zoom, once.
+  // from there in (#81). A street drawn the same in both graphs is drawn at
+  // every zoom, once; every other street of the merged graph is drawn out
+  // there (`zoom: 'far'`) and of the plain graph in here (`zoom: 'near'`),
+  // so each side of the zoom has its whole graph and nothing else: a street
+  // that ends where the merged road's junction is (not where the
+  // carriageway's was) is a different street.
   const tag = (f, zoom) => ({ ...f, properties: { ...f.properties, zoom } });
   const strip = ({ moved, ...f }) => f;
-  const far = draw(graph, (n) => graph.movedNodes?.has(n));
-  const streets = graph === graph.plain
-    ? far.map(strip)
-    : [...far.map((f) => (f.moved ? tag(strip(f), 'far') : strip(f))), ...draw(graph.plain, (n) => graph.movedPlain.has(n)).filter((f) => f.moved).map((f) => tag(strip(f), 'near'))];
+  const same = (f) => {
+    const a = JSON.stringify(f.geometry.coordinates);
+    const b = JSON.stringify([...f.geometry.coordinates].reverse());
+    return a < b ? a : b;
+  };
+  const far = draw(graph, () => false).map(strip);
+  let streets = far;
+  if (graph !== graph.plain) {
+    const near = draw(graph.plain, () => false).map(strip);
+    const inNear = new Set(near.map(same));
+    const inFar = new Set(far.map(same));
+    streets = [...far.map((f) => (inNear.has(same(f)) ? f : tag(f, 'far'))), ...near.filter((f) => !inFar.has(same(f))).map((f) => tag(f, 'near'))];
+  }
   return { streets, report: graphReport(graph) };
 }
 

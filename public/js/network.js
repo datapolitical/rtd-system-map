@@ -200,7 +200,11 @@ const streetZoom = [
   ['all', ['==', ['get', 'zoom'], 'far'], ['<', ['zoom'], MERGED_UNTIL]],
   ['all', ['==', ['get', 'zoom'], 'near'], ['>=', ['zoom'], MERGED_UNTIL]],
 ];
-const withStreetZooms = (layers) => layers.map((l) => (l.source === 'streets' ? { ...l, filter: l.filter ? ['all', streetZoom, l.filter] : streetZoom } : l));
+// The street layers draw streets with an all-day route (`n` > 0); a street
+// with only part-time routes (`n` 0) is drawn by the part-time layers.
+const allDayStreet = ['>', ['coalesce', ['get', 'n'], 0], 0];
+const withStreetZooms = (layers) =>
+  layers.map((l) => (l.source === 'streets' ? { ...l, filter: ['all', streetZoom, ...(l.id.startsWith('street') ? [allDayStreet] : []), ...(l.filter ? [l.filter] : [])] } : l));
 
 export function transitLines(lines) {
   return withStreetZooms([
@@ -230,16 +234,18 @@ export function transitLines(lines) {
     {
       id: 'bus-part-time',
       type: 'line',
-      source: 'routes',
-      filter: ['all', bus, partTime, ['!=', ['get', 'tier'], 'limited']],
+      // Part-time streets from the street graph (streets.mjs, `n` 0), so a
+      // part-time line meets the streets it joins.
+      source: 'streets',
+      filter: ['all', bus, ['==', ['coalesce', ['get', 'n'], 0], 0], partTime, ['!=', ['get', 'tier'], 'limited']],
       layout: { 'line-join': 'round' },
       paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn, 'line-dasharray': [3, 2] },
     },
     {
       id: 'bus-limited',
       type: 'line',
-      source: 'routes',
-      filter: ['all', bus, ['==', ['get', 'tier'], 'limited']],
+      source: 'streets',
+      filter: ['all', bus, ['==', ['coalesce', ['get', 'n'], 0], 0], ['==', ['get', 'tier'], 'limited']],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn, 'line-dasharray': [0.1, 2.2] },
     },
