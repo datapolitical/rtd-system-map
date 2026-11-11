@@ -174,3 +174,27 @@ test('a street keeps the node where another line meets it, however straight', ()
   const nearest = Math.min(...one.flatMap((f) => f.geometry.coordinates.map((p) => Math.hypot(p[0] - junction[0], p[1] - junction[1]) / KM)));
   assert.ok(nearest * 1000 < 0.1, `the junction is ${(nearest * 1000).toFixed(2)} m from the street`);
 });
+
+test('a ramp circle is drawn as the turn from one road to the other', () => {
+  // Road A along y = 0 (route 2), road B along x = 1 km (route 3); route 1
+  // comes along A and takes a loop ramp round onto B, northwards.
+  const out = streets([
+    route('2', [[0, 0], [2, 0]]),
+    route('3', [[1, -1], [1, 1]]),
+    // The loop crosses both roads on bridges: no vertex on either.
+    route('1', [[0, 0], [0.95, 0], [0.98, -0.04], [1.04, -0.04], [1.06, 0.02], [1.03, 0.06], [1, 0.08], [1, 1]]),
+  ]);
+  const one = out.filter((f) => f.properties.routes.split(' ').includes('1'));
+  const xs = one.flatMap((f) => f.geometry.coordinates.map(([x]) => x / KM));
+  assert.ok(Math.max(...xs) < 1.001, `route 1 reaches x = ${Math.max(...xs).toFixed(3)} km: the circle is still drawn`);
+});
+
+test('a small loop off a line is a turn at the junction; a circulator stays', () => {
+  // Route 4 along y = 0, then once round a 100 m block and back.
+  const out = streets([route('2', [[0, 0], [1, 0]]), route('4', [[0, 0], [0.5, 0], [0.5, 0.1], [0.6, 0.1], [0.6, 0], [0.5, 0]])]);
+  const ys = out.filter((f) => f.properties.routes.split(' ').includes('4')).flatMap((f) => f.geometry.coordinates.map(([, y]) => y / KM));
+  assert.ok(Math.max(...ys) < 0.001, 'the lap round the block is gone');
+  // A route that is only a loop round a block keeps it.
+  const ring = streets([route('5', [[0, 0], [0, 0.1], [0.1, 0.1], [0.1, 0], [0, 0]])]);
+  assert.ok(ring.length && ring.reduce((sum, f) => sum + km(f), 0) > 0.39);
+});

@@ -124,7 +124,7 @@ class Cells {
  * Returns { nodes: [[x, y]], edges: [{ a, b, stretches: Set }], stretches:
  * [{ route, tier, wk }], parts: [{ stretch, ids }] }, edges with a < b.
  */
-export function streetGraph(features, project, { tolerance = NODE_METERS, close = CLOSE_METERS, merge = true, cells = new Map() } = {}) {
+export function streetGraph(features, project, { tolerance = NODE_METERS, close = CLOSE_METERS, merge = true, loops = true, cells = new Map() } = {}) {
   // A stretch is a route at one tier and headway: runs are cut where one
   // joins or leaves, so a route that runs less often past a short turn is
   // drawn at its own rate there.
@@ -140,7 +140,15 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
     }
     for (const part of partsOf(f.geometry)) if (part.length >= 2) lines.push({ stretch: stretchOf.get(key), coords: part.map(project) });
   }
+  // Gaps are closed before loops are simplified: a terminal loop RTD draws
+  // open is a loop once its end is joined back to where it began (FreeRide at
+  // Civic Center), and a turn there.
+  const tidy = (g) => {
+    if (close > 0) closeGaps(g, { close, tolerance });
+    if (loops) simplifyLoops(g);
+  };
   const plain = nodeParts(lines, stretches, tolerance);
+  tidy(plain);
   // A divided road's two carriageways, drawn once down the middle (#81):
   // each node of a carriageway moves halfway to the other, and the lines are
   // joined again, so the two become one line and the cross streets, whose
@@ -155,16 +163,99 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
     if (moved.size) {
       const again = plain.parts.map((part) => ({ stretch: part.stretch, coords: part.ids.map((id) => moved.get(id) ?? plain.nodes[id]), moved: part.ids.map((id) => moved.has(id)) }));
       graph = nodeParts(again, stretches, tolerance, MERGE_NODE_METERS);
+      tidy(graph);
     }
-  }
-  if (close > 0) {
-    closeGaps(graph, { close, tolerance });
-    if (graph !== plain) closeGaps(plain, { close, tolerance });
   }
   graph.plain = plain;
   graph.movedPlain = new Set(moved.keys());
   graph.merged = moved.size;
   return graph;
+}
+
+// Ramp circles and small loops, drawn as the turn the bus makes (#82;
+// DESIGN.md, "Readable geometry"). RTD draws each bus as driven: round a
+// cloverleaf's circle, or a lap round a block to turn back, and several
+// routes doing that at one interchange are a knot. On the street graph, once
+// for every route on the street, so the streets still meet:
+// - a detour: a stretch of one set of routes between two junctions that is
+//   DETOUR times longer than the straight line between them, and no wider
+//   than LOOP_REACH, is the turn from one road to the other, drawn straight;
+// - a small loop: a stretch that leaves a junction and comes back to it, no
+//   farther from it than LOOP_REACH, is a turn at that junction, and goes.
+// A stretch shorter than LOOP_MIN is a street corner, and stays; so does a
+// loop that is all there is of its line (a circulator). Changes the graph.
+const DETOUR = 2.5;
+const LOOP_REACH = 220;
+const LOOP_MIN = 60;
+function simplifyLoops(graph) {
+  const { nodes, edges, edgeOf } = graph;
+  const at = new Map();
+  edges.forEach((e, i) => {
+    for (const n of [e.a, e.b]) (at.get(n) ?? at.set(n, []).get(n)).push(i);
+  });
+  const keyOf = edges.map((e) => [...e.stretches].sort((x, y) => x - y).join(','));
+  const done = new Set();
+  const add = (a, b, set) => {
+    if (a === b) return;
+    const [x, y] = a < b ? [a, b] : [b, a];
+    const k = `${x}-${y}`;
+    if (!edgeOf.has(k)) {
+      edgeOf.set(k, edges.length);
+      edges.push({ a: x, b: y, stretches: new Set() });
+    }
+    for (const v of set) edges[edgeOf.get(k)].stretches.add(v);
+  };
+  // From node n along edge i, through nodes of degree 2 where the same set
+  // goes on: the stretch's nodes and edges.
+  const walk = (n, i) => {
+    const ns = [];
+    const es = [];
+    let [node, edge] = [n, i];
+    for (;;) {
+      const here = at.get(node);
+      if (here.length !== 2) break;
+      const next = here.find((j) => j !== edge);
+      if (next === undefined || done.has(next) || keyOf[next] !== keyOf[i]) break;
+      done.add(next);
+      es.push(next);
+      const e = edges[next];
+      node = e.a === node ? e.b : e.a;
+      ns.push(node);
+      edge = next;
+      if (node === n) break;
+    }
+    return { ns, es };
+  };
+  const count = edges.length;
+  for (let i = 0; i < count; i++) {
+    if (done.has(i) || !edges[i].stretches.size) continue;
+    done.add(i);
+    const e = edges[i];
+    const ahead = walk(e.b, i);
+    const back = walk(e.a, i);
+    const chain = [...back.ns.reverse(), e.a, e.b, ...ahead.ns];
+    const chainEdges = [...back.es, i, ...ahead.es];
+    const [u, v] = [chain[0], chain.at(-1)];
+    let len = 0;
+    for (let k = 1; k < chain.length; k++) len += dist(nodes[chain[k - 1]], nodes[chain[k]]);
+    if (len < LOOP_MIN) continue;
+    const reach = Math.max(...chain.map((n) => dist(nodes[n], nodes[u])));
+    if (reach > LOOP_REACH) continue;
+    const set = new Set(e.stretches);
+    if (u === v) {
+      // A loop back to where it left: a turn there, if it hangs off a line.
+      if (at.get(u).length < 3) continue;
+    } else if (len < DETOUR * dist(nodes[u], nodes[v])) continue;
+    for (const j of chainEdges) {
+      edgeOf.delete(`${edges[j].a}-${edges[j].b}`);
+      edges[j].stretches = new Set();
+    }
+    add(u, v, set);
+  }
+  const kept = edges.filter((e) => e.stretches.size);
+  edges.splice(0, edges.length, ...kept);
+  edgeOf.clear();
+  edges.forEach((e, i) => edgeOf.set(`${e.a}-${e.b}`, i));
 }
 
 // Lines ({ stretch, coords, moved? } in metres) joined where they meet:
