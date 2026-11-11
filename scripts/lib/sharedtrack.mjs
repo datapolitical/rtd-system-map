@@ -29,7 +29,7 @@ const RETRACE_METERS = 5;
 // this far along at the latest, and in steps of this part of a line's width.
 const APART_METERS = 250;
 const EASE_METERS = 1500;
-const EASE_STEP = 1 / 16;
+const EASE_STEP = 1 / 32;
 // Lines whose ends are this close, and run within 20 degrees of the same
 // way, end at the same station: their ends are drawn level (see flushEnds).
 const FLUSH_METERS = 150;

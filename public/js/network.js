@@ -472,10 +472,13 @@ export function transitMarks(lines) {
       source: 'platforms',
       filter: ['==', ['get', 'kind'], 'join'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
+      // A row of dots, the walk between the marks: a hairline here read as a
+      // scratch across the blocks, not as part of the station.
       paint: {
         'line-color': P.station.edge,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1, 16, 1.4],
-        'line-opacity': farOpacity(() => 0.55, { until: ZOOMS.at(-1) }),
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.4, 13, 2, 16, 2.6],
+        'line-dasharray': [0.01, 2.1],
+        'line-opacity': farOpacity(() => 0.9, { until: ZOOMS.at(-1) }),
       },
     },
     {
@@ -522,8 +525,10 @@ export function transitMarks(lines) {
       source: 'stops',
       minzoom: STOPS_ZOOM,
       // A stop inside a terminal's hall is one of its gates, shown from z17
-      // ('stops-gate'); out here the hall stands for them.
-      filter: ['!=', ['coalesce', ['get', 'terminal'], 0], 1],
+      // ('stops-gate'); out here the hall stands for them. A stop only
+      // trains call at (`platform`) is its station's, and the station's mark
+      // stands for it: the small dot is a bus stop.
+      filter: ['all', ['!=', ['coalesce', ['get', 'terminal'], 0], 1], ['!=', ['coalesce', ['get', 'platform'], 0], 1]],
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 2.4, 18, 5],
         'circle-color': P.stop.fill,
@@ -693,6 +698,25 @@ export function transitMarks(lines) {
       },
       paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
     },
+    // From HUB_CLEAR_FROM the hub's name stays off rail and the frequent
+    // buses like every other name (see 'station-labels-hub' below for why it
+    // doesn't further out), and is still placed before the other stations'.
+    {
+      id: 'station-labels-hub-near',
+      type: 'symbol',
+      source: 'stations',
+      minzoom: HUB_CLEAR_FROM,
+      filter: ['all', served, isHub],
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-font': FONT.bold,
+        'text-size': ['interpolate', ['linear'], ['zoom'], 10.5, 10.5, 13, 12, 16, 14.5],
+        'text-variable-anchor-offset': HUB_NEAR_BESIDE,
+        'text-justify': 'auto',
+        'text-max-width': 8,
+      },
+      paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
+    },
     // Rail and the frequent buses take up their own room here (basemap.js),
     // so everything placed after them, which is every name on the map, stays
     // off them. Above these: only what names a line and so sits on it, and
@@ -716,6 +740,7 @@ export function transitMarks(lines) {
       type: 'symbol',
       source: 'stations',
       minzoom: NAMES_FROM,
+      maxzoom: HUB_CLEAR_FROM,
       filter: ['all', served, isHub],
       layout: {
         'text-field': ['get', 'label'],
@@ -829,6 +854,12 @@ const BESIDE = beside([0.7, 1.1, 1.4]);
 // The hub's name starts a little further out, clear of its ring (about 0.85
 // em across at the metro zooms), and goes no further than any other's.
 const HUB_BESIDE = beside([1, 1.4]);
+// Closer in the lines end at the hub's mark (they run their platforms'
+// length to it), so there is room beside it that is on no line, and its
+// name takes it: from this zoom the name stays off rail and the frequent
+// buses, with one more ring to find its place in.
+const HUB_CLEAR_FROM = 15;
+const HUB_NEAR_BESIDE = beside([1, 1.4, 1.8]);
 // The hub: where the most lines meet (`meet`), and where more lines end than
 // get a sign (`hub`); the same station on RTD's network.
 const isHub = ['any', ['==', ['get', 'hub'], true], ['==', ['get', 'meet'], true]];

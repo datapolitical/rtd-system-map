@@ -202,6 +202,12 @@ export const lineKeepOut = () => [
       'icon-size': byZoom(RAIL_WIDTH.map((w) => ['+', w + 3 + 2 * KEEP_OUT, ['*', 2 * (w + RAIL_GAP), slot]])),
     },
   }),
+  // The walk between a station's marks (network.js, 'platform-joins'): a
+  // name on its dots hides them.
+  clear('keep-out-walk', 'platforms', {
+    filter: ['==', ['get', 'kind'], 'join'],
+    layout: { ...alongLine, 'icon-size': 3 + 2 * KEEP_OUT },
+  }),
 ];
 
 // Highway numbers stay off every bus line that is drawn, at every zoom: a
@@ -225,6 +231,8 @@ const markKeepOut = () => [
   ...busKeepOut().slice(1),
   clear('keep-out-stops', 'stops', {
     minzoom: 15,
+    // Only the stops that are drawn (network.js, 'stops').
+    filter: ['!=', ['coalesce', ['get', 'platform'], 0], 1],
     layout: { 'icon-size': ['interpolate', ['linear'], ['zoom'], 15, 9, 18, 14] },
   }),
   clear('keep-out-stations', 'stations', {

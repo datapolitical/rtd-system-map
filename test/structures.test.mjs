@@ -5,7 +5,7 @@
 // platform, never a parking structure — not any station's ids.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { extendLineToPlatforms, parseOsmAreas, platformEndFor, ringDistance, shapesFor } from '../scripts/lib/structures.mjs';
+import { extendLineToPlatforms, parseOsmAreas, platformEndFor, platformsToMarks, ringDistance, shapesFor } from '../scripts/lib/structures.mjs';
 import { parseOsm, terminalShapeOf } from '../scripts/lib/footprints.mjs';
 
 // [lon, lat] at Denver, and a little helper to make an OSM XML document from
@@ -105,18 +105,28 @@ test('a line runs along its platform to the platform end nearest it', () => {
   assert.equal(platformEndFor([-105.01, 39.75], rings), null);
 });
 
-test('extending a line stops at the platform, not at the station point', () => {
+test('extending a line runs it straight on beside its platform to the platform end', () => {
   const areas = parseOsmAreas(STATION);
   const stop = [-105.0, 39.7503];
   const shapes = shapesFor([stop], areas, AT);
   const byStation = new Map([[0, shapes]]);
+  // A line coming up from the south, 3 m west of the platform's middle line.
+  const west = -105.0 - 3 / (111320 * Math.cos((39.75 * Math.PI) / 180));
   const path = [
-    [-105.001, 39.7503],
-    [-105.0, 39.7503],
+    [west, 39.749],
+    [west, 39.7503],
   ];
   const [out] = extendLineToPlatforms([path], [0], [[stop]], byStation);
   assert.equal(out.length, path.length + 1);
   assert.ok(out.at(-1)[1] > 39.7510, `ran north along the platform, got ${out.at(-1)[1]}`);
+  // Straight on: it stays on its own line, not bent across to the platform's.
+  assert.ok(Math.abs(out.at(-1)[0] - west) < 1e-7, `bent ${((out.at(-1)[0] - west) * 85000).toFixed(1)} m sideways`);
+  // A line that only crosses the platform is not turned along it.
+  const across = [
+    [-105.001, 39.7503],
+    [-105.0, 39.7503],
+  ];
+  assert.deepEqual(extendLineToPlatforms([across], [0], [[stop]], byStation)[0], across);
   // A line with no platform in OSM is left alone.
   const [same] = extendLineToPlatforms([path], [1], [[[-105.02, 39.75]]], new Map());
   assert.deepEqual(same, path);
@@ -163,4 +173,29 @@ test('the OSM reader keeps a bus station even without a building tag', () => {
   );
   assert.equal(ways.length, 2);
   assert.ok(ways.some((w) => w.tags.amenity === 'bus_station'));
+});
+
+test('a platform and its roof are drawn only as far as the mark their lines end at', () => {
+  const shape = (kind, station, s, n) => ({
+    type: 'Feature',
+    properties: { kind, station },
+    geometry: { type: 'Polygon', coordinates: [[[0, s], [0.0001, s], [0.0001, n], [0, n], [0, s]]] },
+  });
+  // The lines come from the north and end at a mark 66 m up a 111 m platform.
+  const ends = [{ station: 7, at: [0.00005, 0.0006], inward: [0, 1] }];
+  const features = [
+    shape('platform', '7', 0, 0.001),
+    shape('canopy', '7', 0.0002, 0.0009),
+    shape('platform', '7', 0, 0.0004),
+    shape('building', '7', 0, 0.001),
+    shape('platform', '8', 0, 0.001),
+  ];
+  const out = platformsToMarks(features, ends);
+  const south = (f) => Math.min(...f.geometry.coordinates[0].map((p) => p[1]));
+  assert.deepEqual(out.map((f) => `${f.properties.kind} ${f.properties.station}`), ['platform 7', 'canopy 7', 'building 7', 'platform 8'], 'a platform wholly past the mark goes');
+  // Cut 2 m past the mark, so the shape tucks under it.
+  for (const f of out.slice(0, 2)) assert.ok(Math.abs((0.0006 - south(f)) * 110540 - 2) < 0.5, `${f.properties.kind} ends at the mark: ${south(f)}`);
+  assert.equal(south(out[2]), 0, 'the station building is left whole');
+  assert.equal(south(out[3]), 0, "another station's platform is left whole");
+  assert.deepEqual(platformsToMarks(features, []), features, 'no marks, nothing cut');
 });

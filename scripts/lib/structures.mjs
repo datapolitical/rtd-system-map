@@ -232,8 +232,22 @@ export function platformEndFor(point, platforms, { reach = 90, longest = 450, fr
   if (!best) return null;
   const axis = principalAxis(best.ring);
   const far = metres(from, axis[0]) > metres(from, axis[1]) ? axis[0] : axis[1];
-  const run = metres(point, far);
-  return run >= 8 && run <= longest ? far : null;
+  // The line runs straight on, beside its platform, until it is level with
+  // the platform's end: the point on the line's own bearing abreast of that
+  // end. Run to the end of the platform's middle line, a few metres to the
+  // side of the track, it bent there (Union Station's four commuter lines
+  // kinked 40 px before their mark).
+  const kx = 111320 * Math.cos((point[1] * Math.PI) / 180);
+  const ky = 110540;
+  const way = [(point[0] - from[0]) * kx, (point[1] - from[1]) * ky];
+  const wl = Math.hypot(...way);
+  let tip = far;
+  if (wl > 1) {
+    const along = ((far[0] - point[0]) * kx * way[0] + (far[1] - point[1]) * ky * way[1]) / wl;
+    tip = [point[0] + ((way[0] / wl) * along) / kx, point[1] + ((way[1] / wl) * along) / ky];
+  }
+  const run = metres(point, tip);
+  return run >= 8 && run <= longest ? tip : null;
 }
 
 const isRailPlatform = (tags) => tags.railway === 'platform' && tags.public_transport !== 'no';
@@ -249,6 +263,71 @@ const isStationBuilding = (tags) => tags.building === 'train_station';
  * station's stops is left as it is, so a line with nothing drawn in OSM does
  * not move.
  */
+// A platform is drawn only as far as the mark its lines end at reaches.
+const PAST_MARK = 2;
+// A platform belongs to the mark within this of its middle.
+const PLATFORM_OF_MARK = 250;
+
+// A ring cut by the line through `at` squared to `inward` (a unit vector,
+// [east, north]): the part on the inward side, `past` metres beyond the line
+// too. Sutherland-Hodgman, for one straight edge. Null if nothing is left.
+function keepInward(ring, at, inward, past) {
+  const kx = 111320 * Math.cos((at[1] * Math.PI) / 180);
+  const ky = 110540;
+  const side = (p) => (p[0] - at[0]) * kx * inward[0] + (p[1] - at[1]) * ky * inward[1] + past;
+  const open = ring.length > 1 && ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1] ? ring.slice(0, -1) : ring;
+  const out = [];
+  for (let i = 0; i < open.length; i++) {
+    const [a, b] = [open[i], open[(i + 1) % open.length]];
+    const [da, db] = [side(a), side(b)];
+    if (da >= 0) out.push(a);
+    if (da >= 0 !== db >= 0) {
+      const t = da / (da - db);
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+  }
+  return out.length >= 3 ? [...out, out[0]] : null;
+}
+
+/**
+ * The structures with each platform, and the roof over it, drawn only as far
+ * as the mark its lines end at: where every line at a mark ends there
+ * (`ends`: `{ station, at, inward }`, `station` the id the structures carry,
+ * `at` the mark and `inward` the unit vector [east, north] back along the
+ * lines), the part of the station's platforms and canopies past the mark is
+ * not drawn. A line cut at a mark short of its platform's end (a mark in
+ * line with the walk to another platform) left the rest of the platform and
+ * its roof standing past the mark, the ghost of the line. One wholly past
+ * its mark goes; the station building is left as it is.
+ */
+export function platformsToMarks(features, ends, { past = PAST_MARK } = {}) {
+  return features.flatMap((f) => {
+    if (!['platform', 'canopy'].includes(f.properties.kind)) return [f];
+    const polygons = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    const middle = polygonCentre(polygons[0][0]);
+    const mine = ends.filter((e) => String(e.station) === String(f.properties.station) && metres(e.at, middle) <= PLATFORM_OF_MARK);
+    if (!mine.length) return [f];
+    const end = mine.reduce((best, e) => (metres(e.at, middle) < metres(best.at, middle) ? e : best));
+    const kept = polygons.flatMap((rings) => {
+      const outer = keepInward(rings[0], end.at, end.inward, past);
+      return outer ? [[outer]] : [];
+    });
+    if (!kept.length) return [];
+    return [{ ...f, geometry: kept.length === 1 ? { type: 'Polygon', coordinates: kept[0] } : { type: 'MultiPolygon', coordinates: kept } }];
+  });
+}
+
+const BEARING_BACK = 60;
+// The point `back` metres along a path from its first point (or its last).
+function backAlong(path, back) {
+  let walked = 0;
+  for (let k = 1; k < path.length; k++) {
+    walked += metres(path[k - 1], path[k]);
+    if (walked >= back) return path[k];
+  }
+  return path.length > 1 ? path.at(-1) : null;
+}
+
 export function extendLineToPlatforms(paths, ends, stops, byStation, { reach = 350 } = {}) {
   return paths.map((path) => {
     const out = [...path];
@@ -262,7 +341,9 @@ export function extendLineToPlatforms(paths, ends, stops, byStation, { reach = 3
       const start = !used.has('start') && (used.has('end') || gap(head) <= gap(tail));
       const end = start ? head : tail;
       if (gap(end) > reach) continue;
-      const inward = start ? out[1] : out.at(-2);
+      // The way the line comes in, over its last BEARING_BACK metres (its
+      // last vertex pair alone can be a metre of noise).
+      const inward = backAlong(start ? out : [...out].reverse(), BEARING_BACK);
       const tip = platformEndFor(end, plates, { from: inward ?? end });
       if (!tip || metres(tip, end) < 8) continue;
       if (start) out.unshift(tip);

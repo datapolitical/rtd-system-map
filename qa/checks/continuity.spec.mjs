@@ -17,7 +17,7 @@
 // bus line, and under the page's own controls, nothing is judged.
 // The data check reads routes.geojson alone: pieces of a route whose ends
 // miss each other by 0.3 to 30 m, and joined pieces whose slots (signed by
-// each piece's direction) differ by more than a sixteenth of a width.
+// each piece's direction) differ by more than a sixteenth of a width (the build steps a thirty-second).
 // Any finding fails. Captures are attached with each finding circled.
 import { test, expect, siteData, summary as say } from './fixtures.mjs';
 import { routeJoins } from '../lib/detect.mjs';
