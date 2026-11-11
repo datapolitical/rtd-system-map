@@ -189,8 +189,21 @@ const partTime = ['in', ['get', 'tier'], ['literal', PART_TIME]];
 const served = ['==', ['get', 'served'], true];
 
 // Lines and areas, beneath the basemap's place names.
+// A divided road is one line out to MERGED_UNTIL and its two carriageways
+// from there in (scripts/lib/streets.mjs, #81): the build tags those streets
+// `zoom: 'far'` or `'near'`, and every street layer shows each set only on
+// its side of the zoom. A street with no tag shows at every zoom.
+const MERGED_UNTIL = 16;
+const streetZoom = [
+  'any',
+  ['==', ['coalesce', ['get', 'zoom'], ''], ''],
+  ['all', ['==', ['get', 'zoom'], 'far'], ['<', ['zoom'], MERGED_UNTIL]],
+  ['all', ['==', ['get', 'zoom'], 'near'], ['>=', ['zoom'], MERGED_UNTIL]],
+];
+const withStreetZooms = (layers) => layers.map((l) => (l.source === 'streets' ? { ...l, filter: l.filter ? ['all', streetZoom, l.filter] : streetZoom } : l));
+
 export function transitLines(lines) {
-  return [
+  return withStreetZooms([
     // FlexRide: a light hatch with a dashed edge, never a green that reads as park.
     // Not until close in: further out, zone outlines are boxes around
     // nothing, and read as city limits.
@@ -353,7 +366,7 @@ export function transitLines(lines) {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': lines.color, 'line-width': railWidth(), 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
     },
-  ];
+  ]);
 }
 
 // Stations, stops, symbols and our labels, above everything else.

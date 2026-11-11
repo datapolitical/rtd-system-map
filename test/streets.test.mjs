@@ -121,7 +121,7 @@ test('a crossing street does not cut a run', () => {
   assert.equal(out.filter((f) => f.properties.routes === '2').length, 1);
 });
 
-test("a one-way street has arrows; a divided road's carriageways don't", () => {
+test("a one-way street has arrows; a divided road is one two-way line", () => {
   // Route 1 east on one carriageway (y = 0) and west on the other (15 m
   // north); route 2 one way on a street of its own, 500 m north.
   const every = (min) => Array.from({ length: 24 }, (_, i) => 9 * 3600 + i * min * 60);
@@ -133,12 +133,17 @@ test("a one-way street has arrows; a divided road's carriageways don't", () => {
     new Map([['1', cells1], ['2', cells2]]),
     { precision: 6 },
   );
-  // Both carriageways are drawn (their ends, 15 m apart, are joined where
-  // the bus turns round, so they may be one loop).
-  const one = out.filter((f) => f.properties.routes === '1');
-  const drawn = one.reduce((sum, f) => sum + km(f), 0);
-  assert.ok(drawn > 3.9, `the two carriageways, ${drawn} km`);
-  assert.ok(one.every((f) => !f.properties.oneway), 'no arrows on a two-way road');
+  // The divided road is one two-way line down its middle out to z16, and
+  // its two carriageways from there in (#81), with no arrows either way.
+  const far = out.filter((f) => f.properties.routes === '1' && f.properties.zoom === 'far');
+  const near = out.filter((f) => f.properties.routes === '1' && f.properties.zoom === 'near');
+  assert.equal(far.length, 1, `one line out there, not ${far.length}`);
+  assert.ok(out.filter((f) => f.properties.routes === '1').every((f) => !f.properties.oneway), 'no arrows on a two-way road');
+  assert.ok(Math.abs(km(far[0]) - 2) < 0.05, `${km(far[0])} km`);
+  const ys = far[0].geometry.coordinates.map(([, y]) => (y / KM) * 1000);
+  assert.ok(ys.every((y) => y > 5 && y < 10), `down the middle: ${ys.map((y) => y.toFixed(1))} m`);
+  const nearKm = near.reduce((sum, f) => sum + km(f), 0);
+  assert.ok(nearKm > 3.9, `both carriageways close in, ${nearKm} km`);
   const two = out.find((f) => f.properties.routes === '2');
   assert.equal(two.properties.oneway, 1);
   // Drawn the way its buses go (east).
