@@ -696,7 +696,9 @@ and the return on its own.
 On every build:
 
 1. Find GTFS stops served by rail trips and group platforms by their
-   `parent_station`.
+   `parent_station`. Each group keeps its child stops and the lines that call
+   at each, so the map can mark a station at more than one platform (see
+   "Platform groups" under "Stations").
 2. Match each group to the nearest station on RTD's map within 300 m.
 3. For each map station, check the feed's calendar (with its exceptions):
    - **Served:** trains call there in the next seven days. Its lines are the
@@ -1161,6 +1163,40 @@ station, line or split needs no change:
   fill, light edge) read as a light pill. Ticks across lines are 10 px
   before scaling (5 at zoom 10), a dot 8.
 
+**Platform groups.** A station whose lines stop in places too far apart for
+one mark gets a mark at each group, joined to the station's own mark by a thin
+line. Union Station is the one place this happens: its light rail ends on the
+west side and its four commuter lines end 273 m east, where RTD's single point
+for the station cannot stand for them. The build finds the groups from the
+GTFS child stops it already collects under each station (`parent_station`) and
+knows nothing about a station, a platform or a line
+(`scripts/lib/platforms.mjs`, with `test/platforms.test.mjs`):
+
+- *One group or two.* Child stops up to 100 m apart are one place whatever
+  lines call there, since two sides of one platform are one platform. Up to
+  250 m apart they are one place when a line calls at both, since RTD puts a
+  line's two directions' platforms up to 200 m apart along the street. Beyond
+  that, or at that distance with no line in common, they are two. A stop
+  between two others makes one group of all three, so a long platform is not
+  split in two.
+- *Where a group's mark goes.* On the group's lines: at their end where they
+  end there, because a mark is what a line ends on; otherwise on the track
+  beside the platform. It is a station mark like any other — the same image at
+  the same size, turned across its lines, as wide as the lines that stop
+  there — so a group reads as a station, not a new kind of thing.
+- *When it comes.* A group's mark waits until it clears the station's own mark
+  by the same rule as a station's tick (`tickFrom`), so a group a few metres
+  from the station never doubles it, and a group that never clears gets no
+  mark. The station's own mark stands for the group its point is on, if it is
+  on one. At Union Station the second mark arrives at zoom 13.
+- *One station.* A thin line from the station's mark to each group's, in the
+  station's edge ink at 55%, 1 px wide at 11 and 1.4 at 16, says the marks are
+  one place. The name is still drawn once, on the station's own mark.
+
+Only Union Station has more than one group in RTD's feed today. The build
+reports every station it marks at more than one group, so a change in RTD's
+data shows in the build's output instead of going unnoticed.
+
 ### Shared track
 
 Where lines share track (today, for example, C, E and T in the south, and
@@ -1240,9 +1276,11 @@ the four lines are within 0.8 m of one path all the way (they were up to
 20 m apart). `test/sharedtrack.test.mjs` holds these rules on a made-up
 network.
 
-Known limit: the four commuter lines end at Union Station with no station
-mark on them. RTD's data has one point for Union Station, and it sits on the
-light rail end, 250 m away.
+Where a line ends, it ends on a mark: at Union Station the four commuter
+lines end 273 m from RTD's one point for the station, so the build marks their
+platform group and joins it to the station's own mark (see "Platform groups"
+under "Stations"). Nothing in the shared-track work treats the place
+differently.
 
 A new line, a rerouted line, or a new shared corridor is handled with no
 changes. Never fix a corridor by hand-editing data or hiding a line, and
@@ -3581,6 +3619,13 @@ work against the real structure before asking for evaluation.
   and its two carriageways from there in (#81, Chris's choice), and ramp
   circles, small loops and terminal loops are drawn as the turn the bus
   makes or a short end to the place it serves, on the graph (#82).
+- 2026-11-08: A station whose lines stop at platforms too far apart for one
+  mark gets a mark at each platform group, joined to the station's own mark by
+  a thin line (see "Platform groups"). The groups come from the GTFS child
+  stops, clustered by distance and by shared lines, so nothing knows a station
+  or a line, and the rule covers any station RTD splits this way, not the one
+  place it happens today. It replaces the known limit where Union Station's
+  four commuter lines ended with no mark, 273 m from the station's point.
 
 ## Sources
 

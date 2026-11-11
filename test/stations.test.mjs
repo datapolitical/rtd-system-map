@@ -67,7 +67,13 @@ const options = {
   isRailRoute: (r) => r.route_type !== '3',
   lineOf: (r) => r.route_short_name,
 };
-const byName = (result) => Object.fromEntries(stations.map((s, i) => [s.properties.name, result.stations[i]]));
+const byName = (result) =>
+  Object.fromEntries(
+    stations.map((s, i) => {
+      const { platforms, ...rest } = result.stations[i];
+      return [s.properties.name, rest];
+    }),
+  );
 
 test('a station with trains this week is served, with its lines', () => {
   const { Open } = byName(stationService(feed(), stations, options));
@@ -101,6 +107,15 @@ test('service removed by calendar_dates for the whole week does not count', () =
 test('GTFS rail stations far from any map station are reported', () => {
   const far = feed({ extraStopTimes: [['x1', '08:20:00', '08:20:00', 'far', '3']] });
   assert.deepEqual(stationService(far, stations, options).unmatched, ['Far Away Station']);
+});
+
+test('a station reports its platforms: each child stop and the lines that call there', () => {
+  const result = stationService(feed(), stations, options);
+  assert.deepEqual(result.stations[0].platforms, [
+    { at: [0, 0.0002], lines: ['X'] },
+    { at: [0, -0.0002], lines: ['Y'] },
+  ]);
+  assert.deepEqual(result.stations[3].platforms, [], 'a station with no trains has no platforms to group');
 });
 
 test('one-way trains that stop only where other lines stop are not a line', () => {
