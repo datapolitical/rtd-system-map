@@ -62,6 +62,9 @@ const light = {
   // The chevrons inside a one-way street wide enough to hold them: a tint
   // of the ink, quieter than a seam would be at that size.
   arrow: '#aab7c4',
+  // A bus hall below ground: lighter than the land it sits under, with a
+  // dashed edge, so it reads as a place beneath the street.
+  under: { fill: '#fbfcfc', edge: '#3f5266' },
   tagSlow: '#4c5a69', // a slow tier's number, darkened to read on its tag
   tagFill: '#ffffff',
   stop: { fill: '#ffffff', edge: '#6f7c89' },
@@ -129,6 +132,9 @@ const dark = {
   freq: { c3: '#a1bdf9', c5: '#a1bdf9', c10: '#a1bdf9', c15: '#8fa7dd', c30: '#7c92c1', c60: '#667493' },
   strand: '#6d84b8',
   arrow: '#34425f',
+  // A bus hall below ground: a wash of light through the street above it, with
+  // a dashed edge, so it reads as a place beneath the plaza.
+  under: { fill: 'rgba(255, 255, 255, 0.11)', edge: '#a9b7c6' },
   tagSlow: '#a9b7c5',
   tagFill: '#1c2229',
   stop: { fill: '#1c2229', edge: '#8a97a4' },

@@ -1275,9 +1275,9 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   run of edges with one set of stretches (route, tier and headway), through
   every node where that set goes straight on, so a crossing street doesn't
   cut it, and cut where a route joins or leaves (`runsOf`). Each street is
-  drawn once, on RTD's line, so nothing overlaps and nothing darkens. Until
-  stage 2 (#81) a divided road is drawn as its two carriageways, as main
-  draws its routes.
+  drawn once, so nothing overlaps and nothing darkens: on RTD's line, or,
+  for a divided road out to zoom 16, down the middle of its two
+  carriageways (see "Readable geometry, on the street graph").
 - A street's buses per hour are the rider's rate, not a sum: the weekday
   9am–3pm departures of every all-day route on it, merged each way along
   the street, the busier way counting (a one-way street has one). The gaps
@@ -1323,7 +1323,9 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   part-time route's dashed line) stays exactly where it is and that line
   still meets the street. The build reports the loose ends
   left, and those within 30 m of their own route's line (`streetGraph` in
-  meta.json); on 2026-11-10, 4 and 2.
+  meta.json): 4 and 2 before loops were tidied, and about 35 and 25 since
+  (2026-11-11), most of them short ends at the Park-n-Ride or station they
+  serve.
 - **Strands.** From zoom 13.5, a hairline a shade off the ink runs along
   the inside of a shared street between each pair of routes, like the
   strands of a cable, so a reader can see that several routes run there
@@ -1351,11 +1353,12 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
 
 *One-way arrows*: the build marks a street `oneway` where departures one
 way are no more than 15% of the other's, read once for the whole run, and
-draws it the way its buses go (`streets.mjs`). Each carriageway of a
-divided road reads one way, but the road is two way: a one-way run with a
-twin (a one-way run of one of its routes the other way, parallel and
-within 60 m, the widest median the build treats as one road) carries no
-arrows. The page draws chevrons from
+draws it the way its buses go (`streets.mjs`). A divided road drawn as
+one line reads both carriageways' buses, so it is two way. Drawn as its
+two carriageways (from zoom 16, or where the merge leaves a pair alone),
+each reads one way but the road is two way: a one-way run with a twin (a
+one-way run of one of its routes the other way, parallel and within 60 m,
+the widest median the build treats as one road) carries no arrows. The page draws chevrons from
 zoom 14 (`street-oneway` in `network.js`), about 300 px apart: one glyph at
 one size on every street, a light chevron in the arrow tint cased in the
 darkest street ink, so it reads inside a wide line and over a hairline
@@ -1363,6 +1366,80 @@ alike and two arrows never differ (round two's chevron-in-the-line and
 arrowhead-on-a-hairline came in pairs of two sizes on 15th). None on a
 one-way piece under 250 m, where it would sit at a junction. Two-way
 streets have no arrows. The Key has a row for them.
+
+*Readable geometry, on the street graph* (`streets.mjs`; #81, #82). RTD
+draws each bus as driven: both carriageways of a divided road, round a
+cloverleaf's circle, a lap round a block to turn back. Drawn as they are,
+several routes doing that at one place are a knot (Chris, round two: "I
+can't tell which bus goes which direction, where it's making turns"). The
+graph is tidied once for every route on a street, so the streets still
+meet (tidying each route's line alone, as round two did, left shared
+streets that no longer met):
+
+- *Divided roads* (`carriagewayCentres`): two lines 4 to 60 m apart,
+  parallel within 20 degrees and square across, sharing three-quarters of
+  their all-day routes, along 60% of an edge and 100 m in all, not
+  measured running the same way (those are lanes), are one road. Each node
+  moves halfway to the other carriageway and the lines are joined again,
+  up to three times (a highway drawn as two carriageways and an express
+  lane). The road is one two-way line out to zoom 16, smoothed to 8 m, and
+  its two carriageways from 16 in, where one line would sit in the median
+  off both (Chris, 2026-11-11). The build tags each street that differs
+  between the two graphs `zoom: 'far'` or `'near'`; a street the same in
+  both is drawn once at every zoom.
+- *Ramps* (`simplifyLoops`): a stretch of one set of routes between two
+  junctions, 2.5 times longer than the straight line between them, its
+  ends within 100 m and no wider than 220 m, is the turn from one road to
+  the other and is drawn straight. Where riders board on it (a bus stop
+  within 30 m of it and more than 60 m from its ends) it stays as drawn:
+  the bus leaves the street to stop there.
+- *Loops*: a stretch that leaves a junction and comes back to it, no
+  farther from it than 220 m, is a turn there. If riders board on it (a
+  stop on it, or a station or Park-n-Ride within 60 m of it), it is the
+  terminal loop of the station or Park-n-Ride within 250 m and becomes a
+  short end, the shorter way round to its point nearest that place, so the
+  line ends at the place; with no place near, at its stop farthest out. A
+  short end that doubles back on the street it came along within 40 m (a
+  barb) stops at the tip. A loop no rider boards on goes, and a stem under
+  120 m with it. Not a stretch under 60 m (a street corner), nor a loop
+  that is all of its line (a circulator).
+- Every count of the streets at a junction follows the graph as it is
+  tidied (edges are emptied and added as ramps are drawn straight): counted
+  from the graph as it first was, a ramp drawn straight was missed where it
+  ended, and the street beyond it taken for a loop's stem and dropped.
+- Gaps are closed before loops are tidied (a terminal loop RTD draws open
+  is one), and again after, onto a line ahead only (a ramp whose circle
+  went stops short of the road it led onto).
+- A street with only part-time routes is drawn from the graph too, as their
+  dashed or dotted line (`n: 0`, `tier`), so it meets the streets it joins
+  and moves with a divided road.
+
+*Terminals* (`footprints.mjs`; `scripts/build-data.mjs`, `shortenAtHall`;
+#82): each of RTD's bus-station facilities (class `BUS` or `STN` in RTD's
+facilities layer) is drawn as the hall its bus gates stand in, from
+OpenStreetMap at build time (`terminalShapeOf`): its `amenity=bus_station`
+hall, above or below ground; else the `public_transport=platform` +
+`bus=yes` platforms at its gates; else the station building holding them;
+else the building holding the most of its stops. A parking structure is
+never the terminal, and at a rail station only a bus hall or bus platforms
+are (the rail station is already the place). A hall above ground is a faint
+fill with no edge (`bus-terminal`), one below ground a paler wash through
+the street above it (`bus-terminal-under`), from z13. A bus that boards in
+a hall is drawn only as far as its edge: where its line comes to the hall,
+goes away round the block and back (to and from the ramp), the stretch
+between is the approach, not the route, and goes; and no line is drawn
+through a hall. The halls are drawn beneath the bus lines, so a line ends
+on its hall with its round end whole. A stop inside a hall is one of its
+gates, shown from z17 (`stops-gate`); a stop within 80 m of a hall that no
+drawn line comes within 30 m of (it stood on the approach) is shown with
+the hall, not left as a dot beside nothing. Last build's halls stand in
+for a station OSM doesn't answer for, with their stops marked as they
+were: this folder's `terminals.geojson`, or on a fresh checkout (the daily
+build) the published site's. The build says so in capitals and records it
+(`halls` in meta.json: `drawn`, `fellBack`, `lost`), so OpenStreetMap not
+answering never passes for a change in the place. A tap on a gate or a
+stop over a hall opens that stop; elsewhere on the hall, its station. On 2026-11-11: Union Station Transit Center and Civic Center
+(below ground) and Downtown Boulder.
 
 As drawn on the land (`#F4F5F6`), widths at zoom 9, 11, 13 and 16; dark
 mode uses the periwinkles under "Dark mode":
@@ -3507,6 +3584,15 @@ work against the real structure before asking for evaluation.
   joined. Built in stages from main: the graph and widths with divided
   roads as two lines (#80), divided roads as one line (#81), then the
   batch's readable-geometry rules as graph operations (#82).
+- 2026-11-11: Bus terminals are RTD's bus-station facilities (class `BUS`
+  or `STN`), drawn as their halls from OpenStreetMap, with the lines that
+  board inside ending at the hall's edge, as round four drew them, now on
+  the street graph (#82). Round four found terminals from where streets
+  dangled, which counted breaks in the lines (#78); RTD's own class for its
+  bus stations names them instead. A divided road is one line out to z16
+  and its two carriageways from there in (#81, Chris's choice), and ramp
+  circles, small loops and terminal loops are drawn as the turn the bus
+  makes or a short end to the place it serves, on the graph (#82).
 
 ## Sources
 

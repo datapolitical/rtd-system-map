@@ -17,6 +17,8 @@ import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
 import { busStretches } from './lib/stretches.mjs';
 import { buildStreets } from './lib/streets.mjs';
+import { terminalFootprints } from './lib/footprints.mjs';
+import { clipAtHalls, shortenAtHall, stopsOfHalls } from './lib/halls.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
@@ -45,7 +47,14 @@ const ROLES = {
 
 // About a meter, in degrees: plenty for drawing, and it keeps the files the
 // map loads first small. Coordinates are rounded to match (5 decimals).
+// Our own published site: where the last build's halls are, on a fresh
+// checkout, for a station OpenStreetMap doesn't answer for.
+const SITE = (process.env.RTD_SITE_URL ?? 'https://rtd-system-map.pages.dev').replace(/\/$/, '');
 const SIMPLIFY = 0.00001;
+// A stop within this of a terminal's hall (metres) and farther than
+// HALL_STOP_LINE from every bus line drawn is shown with the hall.
+const HALL_STOP_NEAR = 80;
+const HALL_STOP_LINE = 30;
 const PRECISION = 5;
 // A station is moved onto its lines' track when it's at most this far away.
 const SNAP_METERS = 200;
@@ -339,16 +348,62 @@ async function main() {
   // drawn once (scripts/lib/streets.mjs, #80). The report says how many
   // loose ends the drawing has, and how many of them have another line of
   // their own route within 30 m: a terminal loop, or a gap in RTD's lines.
-  const built = buildStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION });
-  geo.streets = built.streets;
-  const streetGraph = { nodes: built.report.nodes, edges: built.report.edges, ends: built.report.ends, nearOwn: built.report.nearOwn };
-  const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
-  const classes = Object.fromEntries(STREET_CLASSES.map((c) => [c.id, { streets: geo.streets.filter((f) => f.properties.cls === c.id).length, km: Math.round(streetKm(c.id) * 10) / 10 }]));
   // Stops name the lines the map draws, families as their map route (FF1 is
   // FF), and which way their buses head.
   const drawnLines = new Set(geo.routes.map((f) => f.properties.route));
   const lineAt = (code) => (drawnLines.has(code) ? code : drawnLines.has(byCode.get(code)) ? byCode.get(code) : null);
   for (const { properties: p } of geo.stops) Object.assign(p, { lines: stopLines(p.routes, lineAt), heading: heading(p.dir) });
+  // Bus stations drawn as their halls (DESIGN.md, "Bus routes", "Terminals";
+  // scripts/lib/footprints.mjs, #82): each of RTD's bus-station facilities
+  // (class BUS or STN) as the hall its gates stand in, from OpenStreetMap,
+  // above ground or below; at a rail station only a bus hall or bus
+  // platforms. A bus that boards in a hall is drawn only as far as its edge:
+  // the way round the block to its ramp is the approach, not the route
+  // (shortenAtHall), and no line is drawn through a hall (scripts/lib/halls.mjs).
+  // Last build's halls stand in for a station OSM doesn't answer for: this
+  // folder's, or on a fresh checkout (the daily build) the published site's.
+  const busStations = geo.facilities.flatMap((f, i) => (['BUS', 'STN'].includes(f.properties.class) ? [i] : []));
+  const nearRail = (q) => geo.stations.some((s) => Math.hypot((s.geometry.coordinates[0] - q[0]) * 85300, (s.geometry.coordinates[1] - q[1]) * 110540) < 100);
+  const hallsBefore =
+    (await readFile(path.join(OUT, 'terminals.geojson'), 'utf8').then((t) => JSON.parse(t).features).catch(() => null)) ??
+    (await fetch(`${SITE}/data/terminals.geojson`, { signal: AbortSignal.timeout(20_000) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.features ?? [])
+      .catch(() => []));
+  const footprints = await terminalFootprints({
+    facilities: geo.facilities,
+    indexes: busStations,
+    stops: geo.stops,
+    previous: hallsBefore,
+    busOnly: new Set(busStations.filter((i) => nearRail(geo.facilities[i].geometry.coordinates))),
+  });
+  geo.terminals = [...footprints.terminals.values()].map((t) => t.feature);
+  const halls = geo.terminals.flatMap((f) => (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).map((rings) => rings[0]));
+  const served = new Set(geo.stops.filter((f) => f.properties.terminal).flatMap((f) => String(f.properties.lines ?? '').split(' ').filter(Boolean)));
+  geo.routes = shortenAtHall(geo.routes, halls, served);
+  console.log(`  bus terminals drawn as their halls: ${geo.terminals.map((f) => `${f.properties.name} (${f.properties.kind}${f.properties.underground ? ', below ground' : ''}, ${f.properties.gates} gates)`).join(', ') || 'none'}`);
+  // Said loudly and recorded (meta.json, `halls`): a hall drawn from the last
+  // build, or lost, is OpenStreetMap not answering, not a change in the place.
+  const hallReport = { drawn: geo.terminals.map((f) => f.properties.name), fellBack: footprints.fellBack, lost: footprints.lost };
+  if (hallReport.fellBack.length) console.log(`  HALLS FROM THE LAST BUILD (OpenStreetMap didn't answer): ${hallReport.fellBack.join(', ')}`);
+  if (hallReport.lost.length) console.log(`  HALLS NOT DRAWN (OpenStreetMap didn't answer, and no last build to draw them from): ${hallReport.lost.join(', ')}`);
+  const built = buildStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, {
+    precision: PRECISION,
+    places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates),
+    stops: geo.stops.map((f) => f.geometry.coordinates),
+  });
+  geo.streets = built.streets;
+  // No line through a hall: each ends where it meets one, where its buses go in.
+  geo.streets = clipAtHalls(geo.streets, halls, { split: true });
+  geo.routes = geo.routes.flatMap((f) => (f.properties.mode === 'bus' ? clipAtHalls([f], halls) : [f]));
+  // A stop by a hall that no line reaches any more (it stood on the way round
+  // to the ramp, which isn't drawn) goes with the hall's own stops. Measured
+  // against the streets, which are the bus lines the page draws.
+  const hallStops = stopsOfHalls(geo.stops, halls, geo.streets.map((f) => f.geometry.coordinates), { near: HALL_STOP_NEAR, line: HALL_STOP_LINE });
+  if (hallStops) console.log(`  stops by a hall with no line left to stand on, shown with the hall: ${hallStops}`);
+  const streetGraph = { nodes: built.report.nodes, edges: built.report.edges, ends: built.report.ends, nearOwn: built.report.nearOwn };
+  const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
+  const classes = Object.fromEntries(STREET_CLASSES.map((c) => [c.id, { streets: geo.streets.filter((f) => f.properties.cls === c.id).length, km: Math.round(streetKm(c.id) * 10) / 10 }]));
   // FlexRide zones link to their page where GTFS has one.
   const urlOf = new Map(gtfsRoutes.flatMap((r) => [r.route_id, r.route_short_name].filter(Boolean).map((c) => [c, r.route_url || null])));
   for (const { properties: p } of geo.flexride) p.url = p.url || urlOf.get(p.route) || null;
@@ -403,6 +458,7 @@ async function main() {
     // How much street is drawn in each frequency class (frequency.js).
     classes,
     streetGraph,
+    halls: hallReport,
     // The Live relay's feeds, and the realtime route ids that belong to a map
     // route under another name (public/js/realtime.js, routeOf).
     live: { feeds: RT_FEEDS, routes: live.routes },
@@ -423,6 +479,8 @@ async function main() {
   }
   counts.busnames = geo.busnames.length;
   counts.streets = geo.streets.length;
+  counts.terminals = geo.terminals.filter((f) => !f.properties.underground).length;
+  counts.terminals_under = geo.terminals.filter((f) => f.properties.underground).length;
 
   // Write to a fresh folder, then swap it in, so a crash mid-write can't leave
   // half a dataset behind.

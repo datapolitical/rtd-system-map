@@ -626,10 +626,13 @@ async function onTap(e) {
   // A vehicle (Live): its route. live.js answers, when Live is on.
   if (ctx.tapped?.(e.point, pad)) return;
 
-  // A place: station (whichever symbol was hit), then Park-n-Ride, then stop.
+  // A place: station (whichever symbol was hit), then Park-n-Ride, then a
+  // stop or a gate, and only then a bus terminal's hall: the hall lies under
+  // its own gates and the stops beside it, and a tap on one of those means
+  // that stop, not the whole station.
   const station = closest(near(e.point, pad, STATION_LAYERS), e.point);
   const facility = closest(near(e.point, pad, ['facilities']), e.point);
-  const stop = closest(near(e.point, pad, ['stops']), e.point);
+  const stop = closest(near(e.point, pad, ['stops', 'stops-gate']), e.point);
   if (station) return open(stationView(Number(station.properties.id)), false);
   if (facility) {
     await loadDirectory().catch(() => {});
@@ -638,6 +641,13 @@ async function onTap(e) {
     return open(home ? stationView(home.id) : placeView(facility.properties, where), false);
   }
   if (stop) return open(stopView(stop.properties, stop.geometry.coordinates), false);
+  const terminal = near(e.point, 0, ['bus-terminal', 'bus-terminal-under'])[0];
+  if (terminal) {
+    await loadDirectory().catch(() => {});
+    const where = e.lngLat.toArray();
+    const home = dir?.list.find((s) => metres(s.at, where) <= STATION_RADIUS);
+    return open(home ? stationView(home.id) : placeView(terminal.properties, where), false);
+  }
 
   // A route's own number or letter, or a sign: that line.
   const tag = near(e.point, coarse.matches ? 14 : 9, TAG_LAYERS)[0];

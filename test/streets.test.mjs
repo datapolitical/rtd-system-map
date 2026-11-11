@@ -121,7 +121,7 @@ test('a crossing street does not cut a run', () => {
   assert.equal(out.filter((f) => f.properties.routes === '2').length, 1);
 });
 
-test("a one-way street has arrows; a divided road's carriageways don't", () => {
+test("a one-way street has arrows; a divided road is one two-way line", () => {
   // Route 1 east on one carriageway (y = 0) and west on the other (15 m
   // north); route 2 one way on a street of its own, 500 m north.
   const every = (min) => Array.from({ length: 24 }, (_, i) => 9 * 3600 + i * min * 60);
@@ -133,12 +133,17 @@ test("a one-way street has arrows; a divided road's carriageways don't", () => {
     new Map([['1', cells1], ['2', cells2]]),
     { precision: 6 },
   );
-  // Both carriageways are drawn (their ends, 15 m apart, are joined where
-  // the bus turns round, so they may be one loop).
-  const one = out.filter((f) => f.properties.routes === '1');
-  const drawn = one.reduce((sum, f) => sum + km(f), 0);
-  assert.ok(drawn > 3.9, `the two carriageways, ${drawn} km`);
-  assert.ok(one.every((f) => !f.properties.oneway), 'no arrows on a two-way road');
+  // The divided road is one two-way line down its middle out to z16, and
+  // its two carriageways from there in (#81), with no arrows either way.
+  const far = out.filter((f) => f.properties.routes === '1' && f.properties.zoom === 'far');
+  const near = out.filter((f) => f.properties.routes === '1' && f.properties.zoom === 'near');
+  assert.equal(far.length, 1, `one line out there, not ${far.length}`);
+  assert.ok(out.filter((f) => f.properties.routes === '1').every((f) => !f.properties.oneway), 'no arrows on a two-way road');
+  assert.ok(Math.abs(km(far[0]) - 2) < 0.05, `${km(far[0])} km`);
+  const ys = far[0].geometry.coordinates.map(([, y]) => (y / KM) * 1000);
+  assert.ok(ys.every((y) => y > 5 && y < 10), `down the middle: ${ys.map((y) => y.toFixed(1))} m`);
+  const nearKm = near.reduce((sum, f) => sum + km(f), 0);
+  assert.ok(nearKm > 3.9, `both carriageways close in, ${nearKm} km`);
   const two = out.find((f) => f.properties.routes === '2');
   assert.equal(two.properties.oneway, 1);
   // Drawn the way its buses go (east).
@@ -168,4 +173,85 @@ test('a street keeps the node where another line meets it, however straight', ()
   const junction = at([1, 0.0005]);
   const nearest = Math.min(...one.flatMap((f) => f.geometry.coordinates.map((p) => Math.hypot(p[0] - junction[0], p[1] - junction[1]) / KM)));
   assert.ok(nearest * 1000 < 0.1, `the junction is ${(nearest * 1000).toFixed(2)} m from the street`);
+});
+
+test('a ramp circle is drawn as the turn from one road to the other', () => {
+  // Road A along y = 0 (route 2), road B along x = 1 km (route 3); route 1
+  // comes along A and takes a loop ramp round onto B, northwards.
+  const out = streets([
+    route('2', [[0, 0], [2, 0]]),
+    route('3', [[1, -1], [1, 1]]),
+    // The loop crosses both roads on bridges: no vertex on either.
+    route('1', [[0, 0], [0.95, 0], [0.98, -0.04], [1.04, -0.04], [1.06, 0.02], [1.03, 0.06], [1, 0.08], [1, 1]]),
+  ]);
+  const one = out.filter((f) => f.properties.routes.split(' ').includes('1'));
+  const xs = one.flatMap((f) => f.geometry.coordinates.map(([x]) => x / KM));
+  assert.ok(Math.max(...xs) < 1.001, `route 1 reaches x = ${Math.max(...xs).toFixed(3)} km: the circle is still drawn`);
+});
+
+test('a small loop off a line is a turn at the junction; a circulator stays', () => {
+  // Route 4 along y = 0, then once round a 100 m block and back.
+  const out = streets([route('2', [[0, 0], [1, 0]]), route('4', [[0, 0], [0.5, 0], [0.5, 0.1], [0.6, 0.1], [0.6, 0], [0.5, 0]])]);
+  const ys = out.filter((f) => f.properties.routes.split(' ').includes('4')).flatMap((f) => f.geometry.coordinates.map(([, y]) => y / KM));
+  assert.ok(Math.max(...ys) < 0.001, 'the lap round the block is gone');
+  // A route that is only a loop round a block keeps it.
+  const ring = streets([route('5', [[0, 0], [0, 0.1], [0.1, 0.1], [0.1, 0], [0, 0]])]);
+  assert.ok(ring.length && ring.reduce((sum, f) => sum + km(f), 0) > 0.39);
+});
+
+test('a terminal loop with a place near becomes a short end to it', () => {
+  // Route 4 laps a 100 m block whose far corner is a Park-n-Ride: the line
+  // ends there, the shorter way round, not round the whole block.
+  const { streets: out } = buildStreets(
+    [route('2', [[0, 0], [1, 0]]), route('4', [[0, 0], [0.5, 0], [0.5, 0.1], [0.6, 0.1], [0.6, 0], [0.5, 0]])],
+    new Map(),
+    { precision: 6, places: [at([0.61, 0.11])] },
+  );
+  const four = out.filter((f) => f.properties.routes === '4');
+  const pts = four.flatMap((f) => f.geometry.coordinates.map(([x, y]) => [x / KM, y / KM]));
+  assert.ok(pts.some(([x, y]) => Math.hypot(x - 0.6, y - 0.1) < 0.002), 'the line reaches the corner by the place');
+  const loopKm = four.reduce((sum, f) => sum + km(f), 0);
+  assert.ok(loopKm < 0.25, `a short end, ${loopKm.toFixed(3)} km, not the 0.4 km lap`);
+});
+
+test('a loop no rider boards on is a turn, even by a station; one with a stop ends at the stop', () => {
+  // Route 4 leaves route 2's street up a 50 m stem to a loop (a diamond 100 m
+  // across) and comes back to the stem.
+  const lap = [route('2', [[0, 0], [1, 0]]), route('4', [[0, 0], [0.5, 0], [0.5, 0.05], [0.45, 0.1], [0.5, 0.15], [0.55, 0.1], [0.5, 0.05]])];
+  const yMax = (out) => Math.max(...out.filter((f) => f.properties.routes === '4').flatMap((f) => f.geometry.coordinates.map(([, y]) => y / KM)), 0);
+  // A station 200 m off, no stop on the loop: a ramp's circle. It goes, and
+  // its short stem with it.
+  const ramp = buildStreets(lap, new Map(), { precision: 6, places: [at([0.5, 0.35])] }).streets;
+  assert.ok(yMax(ramp) < 0.001, `the loop is still drawn, to y = ${yMax(ramp).toFixed(3)} km`);
+  // The same loop with a bus stop at its far side and no place: it ends there.
+  const stop = buildStreets(lap, new Map(), { precision: 6, stops: [at([0.5, 0.151])] }).streets;
+  assert.ok(yMax(stop) > 0.149, 'the line reaches the stop');
+  const four = stop.filter((f) => f.properties.routes === '4').reduce((sum, f) => sum + km(f), 0);
+  assert.ok(four < 0.25, `a short end, ${four.toFixed(3)} km, not the whole loop`);
+});
+
+test('a street is not taken for the stem of a loop when a ramp drawn straight ends where the loop hung', () => {
+  // Route 4 leaves its street at x = 300 m round a ramp back to x = 390 m
+  // (drawn straight), laps a stopless loop there, and goes on 80 m to a
+  // crossing street and beyond. The 80 m is its street, not the loop's stem.
+  // (Route 5 shares the street as far as the ramp, so the ramp starts at a
+  // junction.)
+  const out = streets([
+    route('2', [[0.47, -1], [0.47, 1]]),
+    route('4', [[0, 0], [0.3, 0], [0.3, 0.1], [0.39, 0.1], [0.39, 0], [0.36, -0.06], [0.39, -0.12], [0.42, -0.06], [0.39, 0], [0.47, 0], [1, 0]]),
+    route('5', [[0, 0], [0.3, 0], [0.3, -1]]),
+  ]);
+  const four = out.filter((f) => f.properties.routes.split(' ').includes('4'));
+  const P = at([0.43, 0]);
+  const near = Math.min(
+    ...four.flatMap((f) =>
+      f.geometry.coordinates.slice(1).map((b, i) => {
+        const a = f.geometry.coordinates[i];
+        const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+        const t = Math.max(0, Math.min(1, ((P[0] - a[0]) * dx + (P[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+        return Math.hypot(P[0] - a[0] - t * dx, P[1] - a[1] - t * dy) / KM;
+      }),
+    ),
+  );
+  assert.ok(near * 1000 < 1, `route 4 is ${(near * 1000).toFixed(0)} m from its own street at x = 430 m`);
 });
