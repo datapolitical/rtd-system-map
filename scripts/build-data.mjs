@@ -52,6 +52,9 @@ const ROLES = {
 // Our own published site: where the last build's halls are, on a fresh
 // checkout, for a station OpenStreetMap doesn't answer for.
 const SITE = (process.env.RTD_SITE_URL ?? 'https://rtd-system-map.pages.dev').replace(/\/$/, '');
+// A rail letter stands within this of its line (metres); letters sit up
+// to about 20 m off the drawn track where lines share it.
+const LETTER_ON = 30;
 const SIMPLIFY = 0.00001;
 // A stop within this of a terminal's hall (metres) and farther than
 // HALL_STOP_LINE from every bus line drawn is shown with the hall.
@@ -409,6 +412,15 @@ async function main() {
     const kept = endAtMarks(pieces, marks);
     pieces.splice(0, pieces.length, ...kept);
     geo.routes = [...geo.routes.filter((f) => f.properties.mode !== 'rail'), ...pieces];
+    // A letter names the line it stands on. The letters were placed on the
+    // lines before they were cut: one left past the mark, where its line no
+    // longer runs (W and E beyond Union Station's light-rail mark), goes.
+    const onLine = (f) => nearestOnTrack(pieces.filter((p) => p.properties.route === f.properties.route), f.geometry.coordinates, LETTER_ON) !== null;
+    const stranded = letters.filter((f) => !onLine(f));
+    if (stranded.length) {
+      letters.splice(0, letters.length, ...letters.filter(onLine));
+      console.log(`  rail letters left past a line's end, not drawn: ${stranded.length} (${[...new Set(stranded.map((f) => f.properties.route))].join(', ')})`);
+    }
   }
   // Wider screens open on the routes drawn at full strength from far out,
   // rail and buses every 30 minutes or better, not on the long reach of a few

@@ -1243,7 +1243,8 @@ or loses draws itself.
   of the line: where the mark stands at the platform stops, short of the
   platform's end (one line's terminus, or a platform group's mark), the line
   is cut where the mark crosses it (`endAtMarks` in `sharedtrack.mjs`), so
-  no line runs on past the station it ends at. A piece wholly past the mark
+  no line runs on past the station it ends at. A rail letter left
+  standing past the mark, on the part cut away, is not drawn. A piece wholly past the mark
   goes; an end with no mark of its line within 150 m, or a mark more than
   25 m off its track, is left as it is. Where several lines end in a row, the
   station's mark is drawn across the row (Union Station's train hall), so
