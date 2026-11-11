@@ -235,6 +235,38 @@ export function transitLines(lines) {
       },
     },
 
+    // A bus terminal where routes lay over is the building its bus gates
+    // stand in, drawn as the place it is (DESIGN.md, "Bus routes",
+    // "Terminals"; the build finds the building in scripts/lib/footprints.mjs):
+    // a faint neutral fill and no outline, so it reads as a building and not
+    // as a bus route round the block.
+    {
+      id: 'bus-terminal',
+      type: 'fill',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 0],
+      paint: {
+        'fill-color': P.building,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
+      },
+    },
+    // A hall below ground: the same shape seen through the street above it,
+    // a paler wash with no edge, so a rider can tell it is beneath the plaza
+    // and not a building on it.
+    {
+      id: 'bus-terminal-under',
+      type: 'fill',
+      source: 'terminals',
+      minzoom: TERMINAL_FROM,
+      filter: ['==', ['get', 'underground'], 1],
+      paint: {
+        'fill-color': P.under.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.8],
+      },
+    },
+    // (Beneath the bus lines, so a line that ends at a hall's edge ends on
+    // it with its round end whole, not under the hall's wash.)
     {
       id: 'bus-part-time',
       type: 'line',
@@ -340,36 +372,6 @@ export function transitLines(lines) {
       },
       paint: { 'icon-opacity': arrowFade },
     },
-    // A bus terminal where routes lay over is the building its bus gates
-    // stand in, drawn as the place it is (DESIGN.md, "Bus routes",
-    // "Terminals"; the build finds the building in scripts/lib/footprints.mjs):
-    // a faint neutral fill and no outline, so it reads as a building and not
-    // as a bus route round the block.
-    {
-      id: 'bus-terminal',
-      type: 'fill',
-      source: 'terminals',
-      minzoom: TERMINAL_FROM,
-      filter: ['==', ['get', 'underground'], 0],
-      paint: {
-        'fill-color': P.building,
-        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
-      },
-    },
-    // A hall below ground: the same shape seen through the street above it,
-    // a paler wash with no edge, so a rider can tell it is beneath the plaza
-    // and not a building on it.
-    {
-      id: 'bus-terminal-under',
-      type: 'fill',
-      source: 'terminals',
-      minzoom: TERMINAL_FROM,
-      filter: ['==', ['get', 'underground'], 1],
-      paint: {
-        'fill-color': P.under.fill,
-        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.8],
-      },
-    },
     // The open bus route, drawn over its faded neighbours.
     ...selectionLines(),
 
@@ -418,11 +420,29 @@ export function transitMarks(lines) {
       type: 'circle',
       source: 'stops',
       minzoom: STOPS_ZOOM,
+      // A stop inside a terminal's hall is one of its gates, shown from z17
+      // ('stops-gate'); out here the hall stands for them.
+      filter: ['!=', ['coalesce', ['get', 'terminal'], 0], 1],
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 2.4, 18, 5],
         'circle-color': P.stop.fill,
         'circle-stroke-color': P.stop.edge,
         'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 15, 1, 18, 1.6],
+        'circle-opacity': fade(inList('lines')),
+        'circle-stroke-opacity': fade(inList('lines')),
+      },
+    },
+    {
+      id: 'stops-gate',
+      type: 'circle',
+      source: 'stops',
+      minzoom: 17,
+      filter: ['==', ['get', 'gate'], 1],
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 17, 2.4, 18, 5],
+        'circle-color': P.stop.fill,
+        'circle-stroke-color': P.stop.edge,
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 17, 1, 18, 1.6],
         'circle-opacity': fade(inList('lines')),
         'circle-stroke-opacity': fade(inList('lines')),
       },

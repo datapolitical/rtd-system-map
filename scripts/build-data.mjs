@@ -48,6 +48,10 @@ const ROLES = {
 // About a meter, in degrees: plenty for drawing, and it keeps the files the
 // map loads first small. Coordinates are rounded to match (5 decimals).
 const SIMPLIFY = 0.00001;
+// A stop within this of a terminal's hall (metres) and farther than
+// HALL_STOP_LINE from every bus line drawn is shown with the hall.
+const HALL_STOP_NEAR = 80;
+const HALL_STOP_LINE = 30;
 const PRECISION = 5;
 // A station is moved onto its lines' track when it's at most this far away.
 const SNAP_METERS = 200;
@@ -369,7 +373,11 @@ async function main() {
   const served = new Set(geo.stops.filter((f) => f.properties.terminal).flatMap((f) => String(f.properties.lines ?? '').split(' ').filter(Boolean)));
   geo.routes = shortenAtHall(geo.routes, halls, served);
   console.log(`  bus terminals drawn as their halls: ${geo.terminals.map((f) => `${f.properties.name} (${f.properties.kind}${f.properties.underground ? ', below ground' : ''}, ${f.properties.gates} gates)`).join(', ') || 'none'}`);
-  const built = buildStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, { precision: PRECISION, places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates) });
+  const built = buildStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, {
+    precision: PRECISION,
+    places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates),
+    stops: geo.stops.map((f) => f.geometry.coordinates),
+  });
   geo.streets = built.streets;
   // No line through a hall: each ends where it meets one, where its buses go in.
   const clear = (p) => p.filter((q) => !halls.some((r) => insideRing(q, r)));
@@ -381,6 +389,30 @@ async function main() {
       const parts = outside(f);
       return parts.length ? [{ ...f, geometry: parts.length === 1 ? { type: 'LineString', coordinates: parts[0] } : { type: 'MultiLineString', coordinates: parts } }] : [];
     });
+  }
+  // A stop by a hall that no line reaches any more (the way round to the
+  // ramp, which it stood on, is the approach and isn't drawn) is the hall's:
+  // it goes with the hall's own stops, not left as a dot beside nothing.
+  if (halls.length) {
+    const m = (a, b) => Math.hypot((a[0] - b[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180), (a[1] - b[1]) * 110540);
+    const toSeg = (p, a, b) => {
+      const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+      const l = dx * dx + dy * dy;
+      const t = l ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l)) : 0;
+      return m(p, [a[0] + t * dx, a[1] + t * dy]);
+    };
+    const toLine = (p, line) => line.slice(1).reduce((best, b, n) => Math.min(best, toSeg(p, line[n], b)), Infinity);
+    const drawn = [...geo.streets, ...geo.routes.filter((f) => f.properties.mode === 'bus')].flatMap((f) => partsOf(f.geometry));
+    let taken = 0;
+    for (const stop of geo.stops) {
+      if (stop.properties.terminal) continue;
+      const p = stop.geometry.coordinates;
+      if (!halls.some((ring) => toLine(p, [...ring, ring[0]]) <= HALL_STOP_NEAR)) continue;
+      if (drawn.some((line) => toLine(p, line) <= HALL_STOP_LINE)) continue;
+      stop.properties.terminal = 1;
+      taken += 1;
+    }
+    if (taken) console.log(`  stops by a hall with no line left to stand on, shown with the hall: ${taken}`);
   }
   const streetGraph = { nodes: built.report.nodes, edges: built.report.edges, ends: built.report.ends, nearOwn: built.report.nearOwn };
   const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);

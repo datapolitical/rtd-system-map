@@ -128,7 +128,7 @@ class Cells {
  * Returns { nodes: [[x, y]], edges: [{ a, b, stretches: Set }], stretches:
  * [{ route, tier, wk }], parts: [{ stretch, ids }] }, edges with a < b.
  */
-export function streetGraph(features, project, { tolerance = NODE_METERS, close = CLOSE_METERS, merge = true, loops = true, cells = new Map(), places = [] } = {}) {
+export function streetGraph(features, project, { tolerance = NODE_METERS, close = CLOSE_METERS, merge = true, loops = true, cells = new Map(), places = [], stops = [] } = {}) {
   // A stretch is a route at one tier and headway: runs are cut where one
   // joins or leaves, so a route that runs less often past a short turn is
   // drawn at its own rate there.
@@ -149,7 +149,11 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
   // Civic Center), and a turn there.
   const tidy = (g) => {
     if (close > 0) closeGaps(g, { close, tolerance });
-    if (loops) simplifyLoops(g, places);
+    if (loops) simplifyLoops(g, places, stops);
+    // ...and once more for the ends a loop left: a ramp whose circle went
+    // stops short of the road it led onto. Only onto a line ahead of it, so
+    // a short end to a Park-n-Ride isn't tied back into a loop.
+    if (loops && close > 0) closeGaps(g, { close, tolerance, any: 0 });
   };
   const plain = nodeParts(lines, stretches, tolerance);
   tidy(plain);
@@ -193,13 +197,14 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
 // - a small loop: a stretch that leaves a junction and comes back to it, no
 //   farther from it than LOOP_REACH, is a turn at that junction, and goes.
 // A stretch shorter than LOOP_MIN is a street corner, and stays; so does a
-// loop that is all there is of its line (a circulator). A loop with a
-// station or a Park-n-Ride (`places`, [x, y] in metres) within PLACE_NEAR
-// is the terminal loop that serves it: it becomes a short end, the shorter
-// way round to the loop's point nearest the place, so the line ends there.
-// A loop with none near goes, and the stem it hung from with it when that is
-// shorter than STEM_SHORT, so the line ends on the road, not in a tick off
-// it. Changes the graph.
+// loop that is all there is of its line (a circulator). A loop riders board
+// on (a bus stop on it, `stops`) with a station or a Park-n-Ride (`places`,
+// both [x, y] in metres) within PLACE_NEAR is the terminal loop that serves
+// it: it becomes a short end, the shorter way round to the loop's point
+// nearest the place, so the line ends there; with no place near, to its stop
+// farthest out. A loop with no stop goes (a ramp's circle), and the stem it
+// hung from with it when that is shorter than STEM_SHORT, so the line ends
+// on the road, not in a tick off it. Changes the graph.
 const DETOUR = 2.5;
 // ...whose ends are no farther apart than this: the turn is drawn straight
 // from one to the other, so a longer straight would cut across the land
@@ -209,8 +214,21 @@ const DETOUR_CLOSE = 100;
 const LOOP_REACH = 220;
 const LOOP_MIN = 60;
 const PLACE_NEAR = 250;
+// A loop serves a place only if riders board on it: a bus stop within
+// STOP_ON of the loop, or the place itself within PLACE_ON of it. A ramp's
+// circle by a station serves nothing. A loop with stops and no place near
+// ends at its stop farthest from where it began.
+const STOP_ON = 30;
+const PLACE_ON = 60;
+const MOUTH = 60;
+// A short end that turns back on itself in its last BARB metres (round the
+// loop's tip towards the place) stops at the tip: a barb reads as a hook.
+const BARB = 40;
+const BARB_COS = Math.cos((100 * Math.PI) / 180);
 const STEM_SHORT = 120;
-function simplifyLoops(graph, places = []) {
+function simplifyLoops(graph, places = [], stops = []) {
+  const stopCells = new Cells(STOP_ON * 2);
+  for (const q of stops) stopCells.add(q, q);
   const { nodes, edges, edgeOf } = graph;
   const at = new Map();
   edges.forEach((e, i) => {
@@ -253,25 +271,77 @@ function simplifyLoops(graph, places = []) {
   // stretch reaches out towards (nearer the stretch than the straight line
   // between its ends, for a detour), or 0.
   const served = (chain, detour) => {
-    let best = null;
     const [U, V] = [nodes[chain[0]], nodes[chain.at(-1)]];
+    // The stops on the stretch, each at its interior node nearest it.
+    const boarded = [];
+    for (let k = 1; k < chain.length - 1; k++) {
+      for (const q of stopCells.near(nodes[chain[k]])) {
+        const on = Math.min(closest(q, nodes[chain[k - 1]], nodes[chain[k]]).d, closest(q, nodes[chain[k]], nodes[chain[k + 1]]).d);
+        // (Not a stop at the stretch's mouth: that one is on the street.)
+        if (on <= STOP_ON && Math.min(dist(q, U), dist(q, V)) > MOUTH) boarded.push({ k, away: Math.min(dist(nodes[chain[k]], U), dist(nodes[chain[k]], V)) });
+      }
+    }
+    let best = null;
     for (let k = 1; k < chain.length - 1; k++) {
       for (const q of places) {
         const d = dist(nodes[chain[k]], q);
         if (d > PLACE_NEAR || (best && d >= best.d)) continue;
         if (detour && closest(q, U, V).d <= d) continue;
+        if (!boarded.length && d > PLACE_ON) continue;
         best = { k, d };
       }
     }
-    return best ? best.k : 0;
+    if (best) return best.k;
+    if (!boarded.length) return 0;
+    // No place near, but riders board on it. A detour off the street and
+    // back to it stays as it is drawn (-1): the bus leaves the street to
+    // stop there. A loop ends at its stop farthest out.
+    return detour ? -1 : boarded.reduce((a, b) => (b.away > a.away ? b : a)).k;
   };
   // Keep the shorter way from an end of the stretch to node k; drop the rest.
   const shortEnd = (chain, chainEdges, k, len) => {
     let there = 0;
     for (let m = 1; m <= k; m++) there += dist(nodes[chain[m - 1]], nodes[chain[m]]);
+    // The way kept, from the junction out, as places in the chain.
+    let path = there <= len - there ? Array.from({ length: k + 1 }, (_, m) => m) : Array.from({ length: chain.length - k }, (_, m) => chain.length - 1 - m);
+    // The way the line comes in to where the stretch begins, if one street
+    // leads there: a short end that doubles straight back off it is a barb
+    // too, and the line ends where the stretch began.
+    const start = chain[path[0]];
+    const live = (n) => (at.get(n) ?? []).filter((j) => edges[j].stretches.size && !chainEdges.includes(j));
+    // ...as it runs over the last BARB metres before the stretch (a corner
+    // piece a few metres long at the junction says nothing).
+    let before = null;
+    if (live(start).length === 1) {
+      let [node, edge, walked] = [start, live(start)[0], 0];
+      for (;;) {
+        const f = edges[edge];
+        const next = f.a === node ? f.b : f.a;
+        walked += dist(nodes[node], nodes[next]);
+        before = nodes[next];
+        const on = live(next).filter((j) => j !== edge);
+        if (walked >= BARB || on.length !== 1) break;
+        [node, edge] = [next, on[0]];
+      }
+    }
+    const pts = [...(before ? [before] : []), ...path.map((m) => nodes[chain[m]])];
+    const lead = before ? 1 : 0;
+    for (let i = 1; i < pts.length - 1; i++) {
+      let tail = 0;
+      for (let j = i + 1; j < pts.length; j++) tail += dist(pts[j - 1], pts[j]);
+      if (tail >= BARB) continue;
+      const a = [pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]];
+      const b = [pts.at(-1)[0] - pts[i][0], pts.at(-1)[1] - pts[i][1]];
+      if ((a[0] * b[0] + a[1] * b[1]) / ((Math.hypot(...a) * Math.hypot(...b)) || 1) < BARB_COS) {
+        path = path.slice(0, i + 1 - lead);
+        break;
+      }
+    }
     // chainEdges[m] joins chain[m] and chain[m + 1].
-    const gone = there <= len - there ? chainEdges.slice(k) : chainEdges.slice(0, k);
-    for (const j of gone) {
+    const kept = new Set();
+    for (let i = 1; i < path.length; i++) kept.add(chainEdges[Math.min(path[i - 1], path[i])]);
+    for (const j of chainEdges) {
+      if (kept.has(j)) continue;
       edgeOf.delete(`${edges[j].a}-${edges[j].b}`);
       edges[j].stretches = new Set();
     }
@@ -328,6 +398,7 @@ function simplifyLoops(graph, places = []) {
     // A detour out to a place and back (a terminal loop whose way back runs
     // along the street it left) is a short end to the place, too.
     const k = served(chain, true);
+    if (k < 0) continue;
     if (k) shortEnd(chain, chainEdges, k, len);
     else drop(chainEdges);
     add(u, v, set);
@@ -542,7 +613,7 @@ function carriagewayCentres(graph, cells) {
 // direction) stops short of where its buses go: a gap in RTD's lines, or a
 // terminal loop drawn open. A short edge carrying the loose end's routes
 // joins it to that line, split at the nearest point. Changes the graph.
-function closeGaps(graph, { close, tolerance }) {
+function closeGaps(graph, { close, tolerance, any = CLOSE_ANY }) {
   const { nodes, edges, stretches, edgeOf } = graph;
   const degree = new Map();
   const at = new Map();
@@ -582,7 +653,7 @@ function closeGaps(graph, { close, tolerance }) {
       if (c.d > close) continue;
       const v = [c.q[0] - p[0], c.q[1] - p[1]];
       const cos = (way[0] * v[0] + way[1] * v[1]) / ((Math.hypot(...way) * Math.hypot(...v)) || 1);
-      if (c.d > CLOSE_ANY && cos < CLOSE_COS) continue;
+      if (c.d > any && cos < CLOSE_COS) continue;
       if (!best || c.d < best.c.d) best = { i, c };
     }
     if (!best) continue;
@@ -665,7 +736,7 @@ const evenly = (wk) => (wk ? Array.from({ length: Math.floor((HOURS * 60) / wk) 
  * the way its buses go. `loads` is busStretches' cells per route. Returns
  * { streets, report }: report counts the graph and its loose ends.
  */
-export function buildStreets(features, loads = new Map(), { precision = 5, simplify: tolerance = 1, classOf = classOfBph, nodeMeters = NODE_METERS, places = [] } = {}) {
+export function buildStreets(features, loads = new Map(), { precision = 5, simplify: tolerance = 1, classOf = classOfBph, nodeMeters = NODE_METERS, places = [], stops = [] } = {}) {
   const first = features.find((f) => partsOf(f.geometry).some((p) => p.length));
   if (!first) return { streets: [], report: {} };
   const { project, unproject } = projection(partsOf(first.geometry).find((p) => p.length)[0], precision);
@@ -680,7 +751,7 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
     cellsOf.set(String(route), grid);
   }
 
-  const graph = streetGraph(features, project, { tolerance: nodeMeters, cells: cellsOf, places: places.map(project) });
+  const graph = streetGraph(features, project, { tolerance: nodeMeters, cells: cellsOf, places: places.map(project), stops: stops.map(project) });
   // The streets of a graph, each with `moved`: whether it has a node that
   // moved to a divided road's middle line.
   const draw = (graph, isMoved) => {

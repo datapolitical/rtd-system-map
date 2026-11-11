@@ -1364,6 +1364,49 @@ arrowhead-on-a-hairline came in pairs of two sizes on 15th). None on a
 one-way piece under 250 m, where it would sit at a junction. Two-way
 streets have no arrows. The Key has a row for them.
 
+*Readable geometry, on the street graph* (`streets.mjs`; #81, #82). RTD
+draws each bus as driven: both carriageways of a divided road, round a
+cloverleaf's circle, a lap round a block to turn back. Drawn as they are,
+several routes doing that at one place are a knot (Chris, round two: "I
+can't tell which bus goes which direction, where it's making turns"). The
+graph is tidied once for every route on a street, so the streets still
+meet (tidying each route's line alone, as round two did, left shared
+streets that no longer met):
+
+- *Divided roads* (`carriagewayCentres`): two lines 4 to 60 m apart,
+  parallel within 20 degrees and square across, sharing three-quarters of
+  their all-day routes, along 60% of an edge and 100 m in all, not
+  measured running the same way (those are lanes), are one road. Each node
+  moves halfway to the other carriageway and the lines are joined again,
+  up to three times (a highway drawn as two carriageways and an express
+  lane). The road is one two-way line out to zoom 16, smoothed to 8 m, and
+  its two carriageways from 16 in, where one line would sit in the median
+  off both (Chris, 2026-11-11). The build tags each street that differs
+  between the two graphs `zoom: 'far'` or `'near'`; a street the same in
+  both is drawn once at every zoom.
+- *Ramps* (`simplifyLoops`): a stretch of one set of routes between two
+  junctions, 2.5 times longer than the straight line between them, its
+  ends within 100 m and no wider than 220 m, is the turn from one road to
+  the other and is drawn straight. Where riders board on it (a bus stop
+  within 30 m of it and more than 60 m from its ends) it stays as drawn:
+  the bus leaves the street to stop there.
+- *Loops*: a stretch that leaves a junction and comes back to it, no
+  farther from it than 220 m, is a turn there. If riders board on it (a
+  stop on it, or a station or Park-n-Ride within 60 m of it), it is the
+  terminal loop of the station or Park-n-Ride within 250 m and becomes a
+  short end, the shorter way round to its point nearest that place, so the
+  line ends at the place; with no place near, at its stop farthest out. A
+  short end that doubles back on the street it came along within 40 m (a
+  barb) stops at the tip. A loop no rider boards on goes, and a stem under
+  120 m with it. Not a stretch under 60 m (a street corner), nor a loop
+  that is all of its line (a circulator).
+- Gaps are closed before loops are tidied (a terminal loop RTD draws open
+  is one), and again after, onto a line ahead only (a ramp whose circle
+  went stops short of the road it led onto).
+- A street with only part-time routes is drawn from the graph too, as their
+  dashed or dotted line (`n: 0`, `tier`), so it meets the streets it joins
+  and moves with a divided road.
+
 *Terminals* (`footprints.mjs`; `scripts/build-data.mjs`, `shortenAtHall`;
 #82): each of RTD's bus-station facilities (class `BUS` or `STN` in RTD's
 facilities layer) is drawn as the hall its bus gates stand in, from
@@ -1378,8 +1421,12 @@ the street above it (`bus-terminal-under`), from z13. A bus that boards in
 a hall is drawn only as far as its edge: where its line comes to the hall,
 goes away round the block and back (to and from the ramp), the stretch
 between is the approach, not the route, and goes; and no line is drawn
-through a hall. Last build's halls stand in for a station OSM doesn't
-answer for. On 2026-11-11: Union Station Transit Center and Civic Center
+through a hall. The halls are drawn beneath the bus lines, so a line ends
+on its hall with its round end whole. A stop inside a hall is one of its
+gates, shown from z17 (`stops-gate`); a stop within 80 m of a hall that no
+drawn line comes within 30 m of (it stood on the approach) is shown with
+the hall, not left as a dot beside nothing. Last build's halls stand in
+for a station OSM doesn't answer for. On 2026-11-11: Union Station Transit Center and Civic Center
 (below ground) and Downtown Boulder.
 
 As drawn on the land (`#F4F5F6`), widths at zoom 9, 11, 13 and 16; dark

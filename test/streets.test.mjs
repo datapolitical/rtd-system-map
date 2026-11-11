@@ -213,3 +213,19 @@ test('a terminal loop with a place near becomes a short end to it', () => {
   const loopKm = four.reduce((sum, f) => sum + km(f), 0);
   assert.ok(loopKm < 0.25, `a short end, ${loopKm.toFixed(3)} km, not the 0.4 km lap`);
 });
+
+test('a loop no rider boards on is a turn, even by a station; one with a stop ends at the stop', () => {
+  // Route 4 leaves route 2's street up a 50 m stem to a loop (a diamond 100 m
+  // across) and comes back to the stem.
+  const lap = [route('2', [[0, 0], [1, 0]]), route('4', [[0, 0], [0.5, 0], [0.5, 0.05], [0.45, 0.1], [0.5, 0.15], [0.55, 0.1], [0.5, 0.05]])];
+  const yMax = (out) => Math.max(...out.filter((f) => f.properties.routes === '4').flatMap((f) => f.geometry.coordinates.map(([, y]) => y / KM)), 0);
+  // A station 200 m off, no stop on the loop: a ramp's circle. It goes, and
+  // its short stem with it.
+  const ramp = buildStreets(lap, new Map(), { precision: 6, places: [at([0.5, 0.35])] }).streets;
+  assert.ok(yMax(ramp) < 0.001, `the loop is still drawn, to y = ${yMax(ramp).toFixed(3)} km`);
+  // The same loop with a bus stop at its far side and no place: it ends there.
+  const stop = buildStreets(lap, new Map(), { precision: 6, stops: [at([0.5, 0.151])] }).streets;
+  assert.ok(yMax(stop) > 0.149, 'the line reaches the stop');
+  const four = stop.filter((f) => f.properties.routes === '4').reduce((sum, f) => sum + km(f), 0);
+  assert.ok(four < 0.25, `a short end, ${four.toFixed(3)} km, not the whole loop`);
+});
