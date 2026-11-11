@@ -67,6 +67,10 @@ const ACROSS_COS = Math.cos((60 * Math.PI) / 180);
 const CARRIAGEWAY_MIN = 0.6;
 const CARRIAGEWAY_RUN = 100;
 const MERGE_NODE_METERS = 4;
+const MERGE_PASSES = 3;
+const SAME_ROUTES = 0.75;
+// A merged street is simplified this much (metres) between its junctions.
+const MERGED_SIMPLIFY = 8;
 // ...and joined to it, if that line is ahead of it (closeGaps).
 const CLOSE_METERS = 30;
 const CLOSE_COS = Math.cos((60 * Math.PI) / 180);
@@ -157,18 +161,23 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
   // nodes that moved. A street with a moved node is drawn from the merged
   // graph out to MERGED_UNTIL and from the plain one in from there.
   let graph = plain;
-  let moved = new Map();
+  let merged = 0;
   if (merge) {
-    moved = carriagewayCentres(plain, cells);
-    if (moved.size) {
-      const again = plain.parts.map((part) => ({ stretch: part.stretch, coords: part.ids.map((id) => moved.get(id) ?? plain.nodes[id]), moved: part.ids.map((id) => moved.has(id)) }));
+    // Again on the merged graph, up to MERGE_PASSES times: a highway drawn
+    // as three lines (two carriageways and an express lane) is one pair
+    // merged, then the next.
+    for (let pass = 0; pass < MERGE_PASSES; pass++) {
+      const moved = carriagewayCentres(graph, cells);
+      if (!moved.size) break;
+      merged += moved.size;
+      const from = graph;
+      const again = from.parts.map((part) => ({ stretch: part.stretch, coords: part.ids.map((id) => moved.get(id) ?? from.nodes[id]), moved: part.ids.map((id) => moved.has(id)) }));
       graph = nodeParts(again, stretches, tolerance, MERGE_NODE_METERS);
-      tidy(graph);
     }
+    if (graph !== plain) tidy(graph);
   }
   graph.plain = plain;
-  graph.movedPlain = new Set(moved.keys());
-  graph.merged = moved.size;
+  graph.merged = merged;
   return graph;
 }
 
@@ -466,12 +475,15 @@ function carriagewayCentres(graph, cells) {
       const vl = Math.hypot(...v) || 1;
       const cos = (u[0] * v[0] + u[1] * v[1]) / (ul * vl);
       if (Math.abs(cos) < CARRIAGEWAY_COS) continue;
-      // Two carriageways of one road carry the same all-day routes: a ramp
-      // or a bus lane by a terminal carries some of them. And they don't run
-      // the same way: two lines a route's buses take the same way are lanes.
-      // (A carriageway's cells count the other's trips too, so most read two
-      // way, and the direction can only rule a pair out.)
-      if (routesOf[j].size !== routesOf[i].size || ![...routesOf[j]].every((r) => routesOf[i].has(r))) continue;
+      // Two carriageways of one road carry mostly the same all-day routes (a
+      // route may take another street one way, as the 31 does by Colfax): at
+      // least SAME_ROUTES of the routes on either. A ramp or a bus lane by a
+      // terminal carries a few of them. And they don't run the same way: two
+      // lines a route's buses take the same way are lanes. (A carriageway's
+      // cells count the other's trips too, so most read two way, and the
+      // direction can only rule a pair out.)
+      const shared = [...routesOf[j]].filter((r) => routesOf[i].has(r)).length;
+      if (shared < SAME_ROUTES * new Set([...routesOf[i], ...routesOf[j]]).size) continue;
       if ([...routesOf[i]].some((r) => travel(i, r) && travel(j, r) && cos * travel(i, r) * travel(j, r) > 0)) continue;
       const c = closest(p, C, D);
       if (c.d < MIN_APART || c.d > TWIN_METERS) continue;
@@ -744,7 +756,10 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
       const names = [...routes.keys()].sort(byNumber);
       const n = [...routes.values()].filter((r) => r.allDay).length;
       const keep = run.nodes.map((n, i) => i === 0 || i === run.nodes.length - 1 || degree.get(n) > 2);
-      return { pts, keep, names, routes, n, pt: names.length - n, bph, oneway, total, nodes: run.nodes };
+    // A street that runs down a divided road's middle: its points came from
+    // both carriageways and jitter, so it is drawn smoother (out to z16 only).
+    const merged = run.nodes.some((n) => graph.movedNodes?.has(n));
+      return { pts, keep, names, routes, n, pt: names.length - n, bph, oneway, total, nodes: run.nodes, merged };
     });
 
     // Twins: the other carriageway of a two-way road.
@@ -802,7 +817,7 @@ export function buildStreets(features, loads = new Map(), { precision = 5, simpl
       let from = 0;
       for (let i = 1; i < pts.length; i++) {
         if (!keep[i]) continue;
-        const piece = simplify(pts.slice(from, i + 1), tolerance);
+        const piece = simplify(pts.slice(from, i + 1), l.merged ? MERGED_SIMPLIFY : tolerance);
         kept.push(...(kept.length ? piece.slice(1) : piece));
         from = i;
       }
