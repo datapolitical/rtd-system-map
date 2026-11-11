@@ -141,3 +141,31 @@ test('a terminal holds its gates, leaves a stop outside its hall a street stop, 
   assert.equal(track.properties.terminal, 1);
   assert.ok(!track.properties.gate, 'a track stop is not a gate');
 });
+
+test("when OpenStreetMap doesn't answer, the hall is the last build's, its stops marked, and the build is told", async () => {
+  const hall = rect([-105.0, 39.74], 100, 60);
+  const xml = osmXml([{ ring: hall, tags: { building: 'yes', amenity: 'bus_station' } }]);
+  const mid = [-105.0 + 50 * DEG, 39.74 + 30 * DEG];
+  const stop = (name, c) => ({ type: 'Feature', properties: { name }, geometry: { type: 'Point', coordinates: c } });
+  const stops = () => ({ gate: stop('Test Station Gate 1', [-105.0 + 20 * DEG, 39.74 + 30 * DEG]), street: stop('Test St & 1st', [-105.0 + 124 * DEG, 39.74 + 30 * DEG]) });
+  const facility = { type: 'Feature', properties: { id: '7', name: 'Test Station', class: 'BUS' }, geometry: { type: 'Point', coordinates: mid } };
+  // The build before: OpenStreetMap answers.
+  const first = stops();
+  const before = await terminalFootprints({ facilities: [facility], indexes: [0], stops: Object.values(first), fetchText: async () => xml, log: () => {} });
+  assert.deepEqual([before.fellBack, before.lost], [[], []]);
+  const previous = [before.terminals.get(0).feature];
+  // Today: it doesn't. The hall is yesterday's, and its stops are marked.
+  const down = async () => { throw new Error('timed out'); };
+  const today = stops();
+  const again = await terminalFootprints({ facilities: [facility], indexes: [0], stops: Object.values(today), previous, fetchText: down, log: () => {} });
+  assert.deepEqual(again.terminals.get(0).feature, previous[0]);
+  assert.deepEqual(again.fellBack, ['Test Station']);
+  assert.deepEqual(again.lost, []);
+  assert.equal(today.gate.properties.terminal, 1);
+  assert.equal(today.gate.properties.gate, 1);
+  assert.ok(!today.street.properties.terminal, 'a stop outside the hall is still a street stop');
+  // With no build before either, the hall is lost, and said so.
+  const none = await terminalFootprints({ facilities: [facility], indexes: [0], stops: Object.values(stops()), fetchText: down, log: () => {} });
+  assert.equal(none.terminals.size, 0);
+  assert.deepEqual(none.lost, ['Test Station']);
+});
