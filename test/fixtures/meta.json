@@ -1,0 +1,7 @@
+{
+  "rail": [
+    { "route": "A", "color": "#57C1E9" },
+    { "route": "B", "color": "#4E9D2D" },
+    { "route": "C", "color": "#F79239" }
+  ]
+}
