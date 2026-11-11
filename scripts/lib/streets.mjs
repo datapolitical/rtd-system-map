@@ -234,17 +234,27 @@ function simplifyLoops(graph, places = [], stops = []) {
   edges.forEach((e, i) => {
     for (const n of [e.a, e.b]) (at.get(n) ?? at.set(n, []).get(n)).push(i);
   });
-  const keyOf = edges.map((e) => [...e.stretches].sort((x, y) => x - y).join(','));
+  const keyFor = (e) => [...e.stretches].sort((x, y) => x - y).join(',');
+  const keyOf = edges.map(keyFor);
   const done = new Set();
+  // The edges still drawn at a node. Edges are emptied and added as the
+  // graph is tidied, and every count of a junction's streets must follow:
+  // counted from the edges as they first were, a ramp drawn straight was
+  // missed where it ended, and the street beyond it taken for a loop's stem.
+  const liveAt = (n) => (at.get(n) ?? []).filter((j) => edges[j].stretches.size);
   const add = (a, b, set) => {
     if (a === b) return;
     const [x, y] = a < b ? [a, b] : [b, a];
     const k = `${x}-${y}`;
-    if (!edgeOf.has(k)) {
-      edgeOf.set(k, edges.length);
+    let idx = edgeOf.get(k);
+    if (idx === undefined) {
+      idx = edges.length;
+      edgeOf.set(k, idx);
       edges.push({ a: x, b: y, stretches: new Set() });
+      for (const n of [x, y]) (at.get(n) ?? at.set(n, []).get(n)).push(idx);
     }
-    for (const v of set) edges[edgeOf.get(k)].stretches.add(v);
+    for (const v of set) edges[idx].stretches.add(v);
+    keyOf[idx] = keyFor(edges[idx]);
   };
   // From node n along edge i, through nodes of degree 2 where the same set
   // goes on: the stretch's nodes and edges.
@@ -253,7 +263,7 @@ function simplifyLoops(graph, places = [], stops = []) {
     const es = [];
     let [node, edge] = [n, i];
     for (;;) {
-      const here = at.get(node);
+      const here = liveAt(node);
       if (here.length !== 2) break;
       const next = here.find((j) => j !== edge);
       if (next === undefined || done.has(next) || keyOf[next] !== keyOf[i]) break;
@@ -308,7 +318,7 @@ function simplifyLoops(graph, places = [], stops = []) {
     // leads there: a short end that doubles straight back off it is a barb
     // too, and the line ends where the stretch began.
     const start = chain[path[0]];
-    const live = (n) => (at.get(n) ?? []).filter((j) => edges[j].stretches.size && !chainEdges.includes(j));
+    const live = (n) => liveAt(n).filter((j) => !chainEdges.includes(j));
     // ...as it runs over the last BARB metres before the stretch (a corner
     // piece a few metres long at the junction says nothing).
     let before = null;
@@ -370,7 +380,7 @@ function simplifyLoops(graph, places = [], stops = []) {
     };
     if (u === v) {
       // A loop back to where it left: a turn there, if it hangs off a line.
-      if (at.get(u).length < 3) continue;
+      if (liveAt(u).length < 3) continue;
       // The place it serves, if one is near: a short end to it.
       const k = served(chain, false);
       if (k) {
@@ -381,18 +391,15 @@ function simplifyLoops(graph, places = [], stops = []) {
       // The stem it hung from, if short: back to the junction it left.
       const stem = [];
       let [node, prev] = [u, null];
-      for (;;) {
-        const live = (at.get(node) ?? []).filter((j) => edges[j].stretches.size && j !== prev);
-        if (live.length !== 1 || (prev !== null && (at.get(node) ?? []).filter((j) => edges[j].stretches.size).length !== 2)) break;
-        const j = live[0];
+      while (liveAt(node).length === (prev === null ? 1 : 2)) {
+        const j = liveAt(node).find((x) => x !== prev);
         stem.push(j);
-        const f = edges[j];
-        node = f.a === node ? f.b : f.a;
+        node = edges[j].a === node ? edges[j].b : edges[j].a;
         prev = j;
-        if ((at.get(node) ?? []).filter((x) => edges[x].stretches.size).length !== 2) break;
+        if (node === u) break;
       }
       const stemLen = stem.reduce((sum, j) => sum + dist(nodes[edges[j].a], nodes[edges[j].b]), 0);
-      if (stem.length && stemLen < STEM_SHORT && (at.get(node) ?? []).filter((x) => edges[x].stretches.size).length > 2) drop(stem);
+      if (stem.length && stemLen < STEM_SHORT && liveAt(node).length > 2) drop(stem);
       continue;
     } else if (len < DETOUR * dist(nodes[u], nodes[v]) || dist(nodes[u], nodes[v]) > DETOUR_CLOSE) continue;
     // A detour out to a place and back (a terminal loop whose way back runs
@@ -634,12 +641,17 @@ function closeGaps(graph, { close, tolerance, any = CLOSE_ANY }) {
       edgeOf.set(k, edges.length);
       edges.push({ a: x, b: y, stretches: new Set() });
       segs.addSegment(edges.length - 1, nodes[x], nodes[y]);
+      for (const n of [x, y]) (at.get(n) ?? at.set(n, []).get(n)).push(edges.length - 1);
     }
     for (const v of set) edges[edgeOf.get(k)].stretches.add(v);
   };
+  // The edges still drawn at a node: an edge another end landed on is split
+  // (emptied, its halves added), and an end may have been joined already.
+  const liveAt = (n) => (at.get(n) ?? []).filter((j) => edges[j].stretches.size);
   const loose = [...degree].filter(([, d]) => d === 1).map(([n]) => n);
   for (const n of loose) {
-    const mine = edges[at.get(n)[0]];
+    if (liveAt(n).length !== 1) continue;
+    const mine = edges[liveAt(n)[0]];
     const from = nodes[mine.a === n ? mine.b : mine.a];
     const p = nodes[n];
     const way = [p[0] - from[0], p[1] - from[1]];

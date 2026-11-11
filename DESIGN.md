@@ -1275,9 +1275,9 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   run of edges with one set of stretches (route, tier and headway), through
   every node where that set goes straight on, so a crossing street doesn't
   cut it, and cut where a route joins or leaves (`runsOf`). Each street is
-  drawn once, on RTD's line, so nothing overlaps and nothing darkens. Until
-  stage 2 (#81) a divided road is drawn as its two carriageways, as main
-  draws its routes.
+  drawn once, so nothing overlaps and nothing darkens: on RTD's line, or,
+  for a divided road out to zoom 16, down the middle of its two
+  carriageways (see "Readable geometry, on the street graph").
 - A street's buses per hour are the rider's rate, not a sum: the weekday
   9am–3pm departures of every all-day route on it, merged each way along
   the street, the busier way counting (a one-way street has one). The gaps
@@ -1323,7 +1323,9 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   part-time route's dashed line) stays exactly where it is and that line
   still meets the street. The build reports the loose ends
   left, and those within 30 m of their own route's line (`streetGraph` in
-  meta.json); on 2026-11-10, 4 and 2.
+  meta.json): 4 and 2 before loops were tidied, and about 35 and 25 since
+  (2026-11-11), most of them short ends at the Park-n-Ride or station they
+  serve.
 - **Strands.** From zoom 13.5, a hairline a shade off the ink runs along
   the inside of a shared street between each pair of routes, like the
   strands of a cable, so a reader can see that several routes run there
@@ -1351,11 +1353,12 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
 
 *One-way arrows*: the build marks a street `oneway` where departures one
 way are no more than 15% of the other's, read once for the whole run, and
-draws it the way its buses go (`streets.mjs`). Each carriageway of a
-divided road reads one way, but the road is two way: a one-way run with a
-twin (a one-way run of one of its routes the other way, parallel and
-within 60 m, the widest median the build treats as one road) carries no
-arrows. The page draws chevrons from
+draws it the way its buses go (`streets.mjs`). A divided road drawn as
+one line reads both carriageways' buses, so it is two way. Drawn as its
+two carriageways (from zoom 16, or where the merge leaves a pair alone),
+each reads one way but the road is two way: a one-way run with a twin (a
+one-way run of one of its routes the other way, parallel and within 60 m,
+the widest median the build treats as one road) carries no arrows. The page draws chevrons from
 zoom 14 (`street-oneway` in `network.js`), about 300 px apart: one glyph at
 one size on every street, a light chevron in the arrow tint cased in the
 darkest street ink, so it reads inside a wide line and over a hairline
@@ -1400,6 +1403,10 @@ streets that no longer met):
   barb) stops at the tip. A loop no rider boards on goes, and a stem under
   120 m with it. Not a stretch under 60 m (a street corner), nor a loop
   that is all of its line (a circulator).
+- Every count of the streets at a junction follows the graph as it is
+  tidied (edges are emptied and added as ramps are drawn straight): counted
+  from the graph as it first was, a ramp drawn straight was missed where it
+  ended, and the street beyond it taken for a loop's stem and dropped.
 - Gaps are closed before loops are tidied (a terminal loop RTD draws open
   is one), and again after, onto a line ahead only (a ramp whose circle
   went stops short of the road it led onto).
@@ -1426,7 +1433,12 @@ on its hall with its round end whole. A stop inside a hall is one of its
 gates, shown from z17 (`stops-gate`); a stop within 80 m of a hall that no
 drawn line comes within 30 m of (it stood on the approach) is shown with
 the hall, not left as a dot beside nothing. Last build's halls stand in
-for a station OSM doesn't answer for. On 2026-11-11: Union Station Transit Center and Civic Center
+for a station OSM doesn't answer for, with their stops marked as they
+were: this folder's `terminals.geojson`, or on a fresh checkout (the daily
+build) the published site's. The build says so in capitals and records it
+(`halls` in meta.json: `drawn`, `fellBack`, `lost`), so OpenStreetMap not
+answering never passes for a change in the place. A tap on a gate or a
+stop over a hall opens that stop; elsewhere on the hall, its station. On 2026-11-11: Union Station Transit Center and Civic Center
 (below ground) and Downtown Boulder.
 
 As drawn on the land (`#F4F5F6`), widths at zoom 9, 11, 13 and 16; dark
