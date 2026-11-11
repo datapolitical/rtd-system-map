@@ -62,13 +62,33 @@ function readGlyphs(buf) {
   return glyphs;
 }
 
+// Whether a font's glyph files are vendored: its basic Latin range, which
+// every label in the font starts from.
+export function hasGlyphs(root, fontstack) {
+  return fs.existsSync(path.join(root, 'public', 'vendor', 'glyphs', fontstack, '0-255.pbf'));
+}
+
 export function glyphs(root, fontstack, code) {
   const dir = path.join(root, 'public', 'vendor', 'glyphs', fontstack);
   const start = Math.floor(code / 256) * 256;
   const file = path.join(dir, `${start}-${start + 255}.pbf`);
   const key = `${fontstack}/${start}`;
   if (!cache.has(key)) {
-    cache.set(key, fs.existsSync(file) ? readGlyphs(fs.readFileSync(file)) : new Map());
+    if (fs.existsSync(file)) {
+      cache.set(key, readGlyphs(fs.readFileSync(file)));
+    } else {
+      // A font that was never vendored must not measure as zero wide: a
+      // broken checkout would then pass as a label that fits on one line
+      // (#71). A rare character outside a vendored font's ranges stays an
+      // empty map, so it cannot break the model.
+      if (!hasGlyphs(root, fontstack)) {
+        throw new Error(
+          `Glyph files for "${fontstack}" are missing from ${dir} (no 0-255.pbf). ` +
+            'Run "node scripts/vendor.mjs" from the repo root to draw them (npm ci runs it on install).',
+        );
+      }
+      cache.set(key, new Map());
+    }
   }
   return cache.get(key);
 }
