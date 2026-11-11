@@ -230,6 +230,21 @@ export async function terminalFootprints({ facilities, indexes, stops, previous 
   const before = new Map(previous.map((f) => [String(f.properties.id), f]));
   const terminals = new Map();
   const canopies = [];
+  // The stations OpenStreetMap didn't answer for: drawn from the last build
+  // (`fellBack`), or not at all because there is none to draw from (`lost`).
+  const fellBack = [];
+  const lost = [];
+  // Inside a terminal's shape only its gates are drawn: a track, a street
+  // stop or a second record of a boarding point that falls inside the shape
+  // is not something to board at there.
+  const markIn = (rings) => {
+    for (const g of stops) {
+      if (!g.properties) g.properties = {};
+      if (!rings.some((r) => inRing(g.geometry.coordinates, r) || ringGap(g.geometry.coordinates, r) <= 1)) continue;
+      g.properties.terminal = 1;
+      if (/gate/i.test(g.properties.name ?? '')) g.properties.gate = 1;
+    }
+  };
   for (const i of indexes) {
     const facility = facilities[i];
     const point = facility.geometry.coordinates;
@@ -248,7 +263,16 @@ export async function terminalFootprints({ facilities, indexes, stops, previous 
       log(`  ${facility.properties.name}: no building looked up (${err.message})`);
     }
     if (!areas) {
-      if (before.has(id)) terminals.set(i, { rings: ringsOfFeature(before.get(id)), feature: before.get(id) });
+      // The hall as it was last built, with its stops marked as they were,
+      // so the lines still end at it and nothing about the place flips.
+      if (!before.has(id)) {
+        lost.push(facility.properties.name);
+        continue;
+      }
+      const rings = ringsOfFeature(before.get(id));
+      terminals.set(i, { rings, feature: before.get(id) });
+      fellBack.push(facility.properties.name);
+      if (markStops) markIn(rings);
       continue;
     }
     const shape = terminalShapeOf(areas, point, gates);
@@ -270,17 +294,7 @@ export async function terminalFootprints({ facilities, indexes, stops, previous 
 
     const rows = rings.map((r) => shapeOf({ ring: r }, point));
     const gatesIn = gateStops.filter((f) => rings.some((r) => inRing(f.geometry.coordinates, r) || ringGap(f.geometry.coordinates, r) <= 1));
-    if (markStops) {
-      for (const g of stops) {
-        if (!g.properties) g.properties = {};
-        if (!rings.some((r) => inRing(g.geometry.coordinates, r) || ringGap(g.geometry.coordinates, r) <= 1)) continue;
-        // Inside a terminal's shape only its gates are drawn: a track, a
-        // street stop or a second record of a boarding point that falls
-        // inside the shape is not something to board at there.
-        g.properties.terminal = 1;
-        if (/gate/i.test(g.properties.name ?? '')) g.properties.gate = 1;
-      }
-    }
+    if (markStops) markIn(rings);
     terminals.set(i, {
       rings,
       feature: {
@@ -309,7 +323,7 @@ export async function terminalFootprints({ facilities, indexes, stops, previous 
       });
     }
   }
-  return { terminals, canopies };
+  return { terminals, canopies, fellBack, lost };
 }
 
 // The box to ask OSM for: the place, its gates and a margin for the buildings
