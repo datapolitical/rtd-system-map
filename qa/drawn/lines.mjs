@@ -23,7 +23,7 @@
 import { toLonLat } from './mercator.mjs';
 import { capReach } from './strokes.mjs';
 
-const isCasing = (layer) => /-(casing|edge|outline)$/.test(layer);
+const isCasing = (layer) => /-(casing|edge|outline)(-far)?$/.test(layer);
 
 // A line that carries at least one route: a rail or bus feature with a route
 // name, or a street drawn for the routes that run on it. A bare street is

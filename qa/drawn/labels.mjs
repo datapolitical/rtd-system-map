@@ -81,8 +81,8 @@ export function labelFaults(frame, { layers = null, maxFromMark = 25 } = {}) {
     // part-time routes are drawn after the names, so a name may cross one.
     // Only what the map itself keeps names off can be a fault here.
     const keepOut = (line) =>
-      line.layer === 'rail' || (line.layer === 'street' && /^c(3|5|10|15)$/.test(String(line.properties?.cls ?? '')));
-    const crossed = lineInBox(l.box, frame.lines.filter((line) => keepOut(line) && !/-(casing|edge|outline)$/.test(line.layer)));
+      /^rail(-far)?$/.test(line.layer) || (line.layer === 'street' && /^c(3|5|10|15)$/.test(String(line.properties?.cls ?? '')));
+    const crossed = lineInBox(l.box, frame.lines.filter((line) => keepOut(line) && !/-(casing|edge|outline)(-far)?$/.test(line.layer)));
     // A name sits beside its own station, where the lines it serves converge
     // and there is often no clear side: crossing one of those is the design.
     // Crossing a line the station does not serve is the fault.

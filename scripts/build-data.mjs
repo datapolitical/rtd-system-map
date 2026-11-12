@@ -15,7 +15,7 @@ import { heading, stopLines } from './lib/stops.mjs';
 import { FAR_UNTIL } from '../public/js/sizes.js';
 import { FAR, endAtMarks, nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
 import { stationService } from './lib/stations.mjs';
-import { stationMarks } from './lib/stationmarks.mjs';
+import { SPACING, metersPerPixel, stationMarks, stationScale } from './lib/stationmarks.mjs';
 import { alongWalk, groupPlatforms, groupPoints, meters, platformMarks, walkPoint } from './lib/platforms.mjs';
 import { busStretches } from './lib/stretches.mjs';
 import { buildStreets } from './lib/streets.mjs';
@@ -59,6 +59,9 @@ const LETTER_ON = 30;
 // A station is moved this far at most onto its lines in the far set, which
 // packs tracks a few hundred metres apart (sharedtrack.mjs FAR).
 const FAR_SNAP_METERS = 600;
+// The zoom the far hub tick is fitted to its line ends at: where the phones
+// open (sizes.js NAMES_FROM, about 10).
+const FAR_FIT_ZOOM = 10;
 // ...and not within this of a mark its line ends at, on the far side of it.
 const LETTER_PAST = 150;
 // ...and no nearer than this (px, at the zoom it comes in) to the mark of a
@@ -650,32 +653,54 @@ async function main() {
     stationMarks(far, geo.railfar).forEach((m, i) => Object.assign(far[i].properties, { tick: m.tick, tickBearing: m.tickBearing, tickFrom: m.from, meet: m.meet }));
     // The hub's lines can end in more than one place on the far set: at
     // Union Station the light rail ends a few hundred metres from the
-    // commuter lines, beside them. Its tick then stands between those
-    // places and spans every line that ends there, so it covers them all.
+    // commuter lines, beside them. Its tick then runs from the outermost
+    // line end to the other, measured with the lines' slots at FAR_FIT_ZOOM
+    // (where the phones open), so it covers them all and no more.
     for (const f of far.filter((s) => s.properties.meet)) {
       const lines = new Set(String(f.properties.lines ?? '').split(' '));
-      const key = (c) => c.join(',');
+      const hub = f.geometry.coordinates;
       const seen = new Map();
       for (const p of geo.railfar) {
         if (!lines.has(p.properties.route)) continue;
-        for (const c of [p.geometry.coordinates[0], p.geometry.coordinates.at(-1)]) {
-          const k = `${p.properties.route} ${key(c)}`;
-          seen.set(k, { route: p.properties.route, at: c, n: (seen.get(k)?.n ?? 0) + 1 });
+        const c = p.geometry.coordinates;
+        for (const [at, prev, tail] of [[c[0], c[1], false], [c.at(-1), c.at(-2), true]]) {
+          const k = `${p.properties.route} ${at.join(',')}`;
+          seen.set(k, { at, prev, tail, slot: p.properties.slot ?? 0, n: (seen.get(k)?.n ?? 0) + 1 });
         }
       }
       // A line's end is a piece's end no other piece of that line meets.
-      const ends = [...seen.values()].filter((e) => e.n === 1 && meters(e.at, f.geometry.coordinates) < FAR_SNAP_METERS);
-      const places = [];
+      const ends = [...seen.values()].filter((e) => e.n === 1 && meters(e.at, hub) < FAR_SNAP_METERS);
+      if (new Set(ends.map((e) => e.at.join(','))).size < 2) continue;
+      // Metres east and north of the hub.
+      const kx = meters(hub, [hub[0] + 1e-3, hub[1]]) / 1e-3, ky = meters(hub, [hub[0], hub[1] + 1e-3]) / 1e-3;
+      const local = (c) => [(c[0] - hub[0]) * kx, (c[1] - hub[1]) * ky];
+      // The tick runs across the lines: square to their mean direction, a
+      // line ending from either side counting the same.
+      let [sx, sy] = [0, 0];
       for (const e of ends) {
-        const near = places.find((pl) => meters(pl.at, e.at) < 50);
-        if (near) near.routes.add(e.route);
-        else places.push({ at: e.at, routes: new Set([e.route]) });
+        const [x0, y0] = local(e.prev), [x1, y1] = local(e.at);
+        const a = 2 * Math.atan2(y1 - y0, x1 - x0);
+        sx += Math.cos(a); sy += Math.sin(a);
       }
-      if (places.length < 2) continue;
-      const span = places.reduce((n, pl) => n + pl.routes.size, 0);
-      const at = [0, 1].map((k) => places.reduce((s, pl) => s + pl.at[k], 0) / places.length);
+      const along = Math.atan2(sy, sx) / 2;
+      const u = [-Math.sin(along), Math.cos(along)];
+      const mpp = metersPerPixel(FAR_FIT_ZOOM, hub[1]);
+      const slotPx = SPACING * stationScale(FAR_FIT_ZOOM);
+      const across = ends.map((e) => {
+        // The line is drawn in its coordinates' order, offset to the right.
+        const [x0, y0] = local(e.tail ? e.prev : e.at), [x1, y1] = local(e.tail ? e.at : e.prev);
+        const l = Math.hypot(x1 - x0, y1 - y0) || 1;
+        const right = [(y1 - y0) / l, -(x1 - x0) / l];
+        const [x, y] = local(e.at);
+        return (x * u[0] + y * u[1]) / mpp + e.slot * slotPx * (right[0] * u[0] + right[1] * u[1]);
+      });
+      const [lo, hi] = [Math.min(...across), Math.max(...across)];
+      const span = Math.round(((hi - lo) / slotPx + 1) * 4) / 4;
+      const mid = ((lo + hi) / 2) * mpp;
+      const at = [hub[0] + (u[0] * mid) / kx, hub[1] + (u[1] * mid) / ky];
       Object.assign(f.properties, { tick: span, span });
       f.geometry = { type: 'Point', coordinates: at };
+      console.log(`  ${f.properties.label}: its lines end in ${new Set(ends.map((e) => e.at.join(','))).size} places on the far set; one tick across ${span} lines' width`);
     }
     geo.stationsfar = far.filter((f) => f.properties.served);
   }

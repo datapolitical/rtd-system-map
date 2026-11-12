@@ -239,7 +239,7 @@ function railPieces(zoom) {
     else {
       had.layers.push(l.layer);
       if (w > had.width) { had.width = w; had.drawn = l.drawn ?? l.parts; had.cap = l.cap; }
-      if (l.layer === 'rail') had.layer = 'rail';
+      if (/^rail(-far)?$/.test(l.layer)) had.layer = 'rail';
     }
   }
   return [...pieces.values()];

@@ -617,6 +617,10 @@ function routesNear(features, at) {
   return [...best].map(([code, { props }]) => [code, props ?? stretchAt(code, at) ?? null]);
 }
 
+// How long after a tap a second one makes it a double tap, which zooms the
+// map in (MapLibre's own window).
+const DOUBLE_TAP_MS = 300;
+
 async function onTap(e) {
   ui.rememberOpener(null);
   const pad = coarse.matches ? 16 : 8;
@@ -673,7 +677,28 @@ export function initSelection(theMap, context) {
   map = theMap;
   ctx = context;
 
-  map.on('click', onTap);
+  // A tap waits out the double-tap window: a second touch or click soon
+  // after, or the map starting to zoom, is a double tap zooming the map in,
+  // not a choice, so neither tap opens anything. (MapLibre fires a click for
+  // the first tap and may not for the second.)
+  let pending = null;
+  let quietUntil = 0;
+  const cancel = () => {
+    if (!pending) return;
+    clearTimeout(pending);
+    pending = null;
+    quietUntil = performance.now() + DOUBLE_TAP_MS;
+  };
+  map.getCanvasContainer().addEventListener('touchstart', cancel, { passive: true });
+  map.on('zoomstart', cancel);
+  map.on('click', (e) => {
+    if (pending) return cancel();
+    if (performance.now() < quietUntil) return;
+    pending = setTimeout(() => {
+      pending = null;
+      onTap(e);
+    }, DOUBLE_TAP_MS);
+  });
   for (const id of POINTER_LAYERS) {
     map.on('mouseenter', id, () => (map.getCanvas().style.cursor = 'pointer'));
     map.on('mouseleave', id, () => (map.getCanvas().style.cursor = ''));

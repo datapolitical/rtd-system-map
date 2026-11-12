@@ -58,7 +58,7 @@ export function streetFaults(frame, { maxOff = 12 } = {}) {
   }
   const faults = [];
   for (const line of frame.lines) {
-    if (/-(casing|edge|outline)$/.test(line.layer) || line.source === 'flexride' || !isRoute(line)) continue;
+    if (/-(casing|edge|outline)(-far)?$/.test(line.layer) || line.source === 'flexride' || !isRoute(line)) continue;
     // A train in its own corridor is not on a street; only street-running
     // routes are judged against the street grid.
     if (/^rail|(^|-)rail(-|$)/.test(line.layer)) continue;

@@ -104,7 +104,7 @@ export const PACK_LIMITS = {
   reachSlots: 3.25,
 };
 
-const isCasing = (layer) => /-(casing|edge|outline)$/.test(layer);
+const isCasing = (layer) => /-(casing|edge|outline)(-far)?$/.test(layer);
 const COS = (deg) => Math.cos((deg * Math.PI) / 180);
 
 // Ground metres per screen px at world y.
