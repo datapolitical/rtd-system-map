@@ -38,9 +38,11 @@ in a feature no layer draws is not a fault anyone can see). Each kind has its
 own random stream and its own spacing (1.2 km between its plants, 400 m from
 any find), so changing how one kind is planted never moves another. A rail
 line is carried past its end only at a real terminus, with a station of the
-line within 150 m. The kinds: a 20 m cut in a bus street or a
+line within 150 m. A tick is a 6 m stub of one route square off a straight
+bus street at a vertex, no stop within 40 m and no station, park-and-ride or
+hall within 100 m. The kinds: a 20 m cut in a bus street or a
 rail line, an 80 m stretch moved 5 m sideways, a stray 6 m piece, a rail end
-carried past its station, a hook at a route end, a street pulled off its
+carried past its station, a hook at a route end, a tick off a street, a street pulled off its
 street, a part-time stretch moved off its line, a stop moved away from its
 lines, a station drawn twice, a terminal outline that crosses itself. Each
 kind lists the finding kinds that catch it. A finding counts for a planted

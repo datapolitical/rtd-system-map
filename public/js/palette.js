@@ -62,9 +62,10 @@ const light = {
   // The chevrons inside a one-way street wide enough to hold them: a tint
   // of the ink, quieter than a seam would be at that size.
   arrow: '#aab7c4',
-  // A bus hall below ground: lighter than the land it sits under, with a
-  // dashed edge, so it reads as a place beneath the street.
-  under: { fill: '#fbfcfc', edge: '#3f5266' },
+  // A bus hall below ground: a shade under the land it lies beneath (the
+  // paler wash it had could not be seen on a light map), with no edge, so
+  // it reads as a place under the street, quieter than a building.
+  under: { fill: '#dde3e9', edge: '#3f5266' },
   tagSlow: '#4c5a69', // a slow tier's number, darkened to read on its tag
   tagFill: '#ffffff',
   stop: { fill: '#ffffff', edge: '#6f7c89' },

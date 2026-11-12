@@ -7,8 +7,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { clipLine, toLonLat, toWorld, worldSize } from '../qa/drawn/mercator.mjs';
 import { boxDistance, compareBoxes, compareLines, comparePoints } from '../qa/drawn/compare.mjs';
-import { layout } from '../qa/drawn/glyphs.mjs';
+import { hasGlyphs, layout } from '../qa/drawn/glyphs.mjs';
 import { ROOT } from '../qa/drawn/model.mjs';
+
+// Label text is measured from the vendored glyph files (#71). Without them
+// these tests cannot run, so they skip with this loud reason rather than fail
+// or pass on zero-width text.
+const NO_GLYPHS = hasGlyphs(ROOT, 'Overpass Regular')
+  ? false
+  : 'GLYPHS NOT VENDORED: public/vendor/glyphs/Overpass Regular/0-255.pbf is missing; run "node scripts/vendor.mjs" to run this test';
 
 test('world pixels: 512 at zoom 0, doubling every zoom', () => {
   assert.equal(worldSize(0), 512);
@@ -42,7 +49,14 @@ test('clipping a line to a box keeps what is inside and cuts the rest', () => {
   assert.deepEqual(clipLine([[0, 0], [1, 0]], [5, 5, 15, 15]), []);
 });
 
-test('label text: one line fits, a long name wraps to the same width each line', () => {
+test('label text: an unvendored font throws and names the vendoring command', () => {
+  assert.throws(
+    () => layout(ROOT, 'Union Station', { fontstack: 'No Such Font', size: 12, lineHeight: 1.2, maxWidth: 10 }),
+    /No Such Font[\s\S]*node scripts\/vendor\.mjs/,
+  );
+});
+
+test('label text: one line fits, a long name wraps to the same width each line', { skip: NO_GLYPHS }, () => {
   const one = layout(ROOT, 'Union Station', { fontstack: 'Overpass Regular', size: 12, lineHeight: 1.2, maxWidth: 10 });
   assert.equal(one.lines.length, 1);
   assert.ok(one.width > 40 && one.width < 120, `width ${one.width}`);

@@ -82,6 +82,7 @@ export const KINDS = {
   'stray-piece': { caught_by: ['short', 'stray-piece', 'dangling'], from: 15, radius: 30, about: 'a 6 m piece of a bus street, 25 m away from any line' },
   overshoot: { caught_by: ['overshoot', 'dangling'], from: 14, radius: 40, about: 'a rail line end carried 40 m past where it ended' },
   hook: { caught_by: ['hook', 'kink', 'short'], from: 15, radius: 30, about: 'a 12 m turn back at the end of a bus route' },
+  tick: { caught_by: ['tick'], from: 16, radius: 20, about: 'a 6 m stub of one route square off a bus street at a vertex, away from stops and places' },
   'off-street': { caught_by: ['off-street', 'kink'], from: 15, radius: 40, about: 'the middle of a bus street pulled 25 m off the street' },
   slot: { caught_by: ['slot', 'off-street'], from: 14, radius: 40, about: 'a 100 m stretch of a part-time route moved 30 m off its line' },
   'stray-stop': { caught_by: ['stray-stop', 'stop-off-line'], from: 15, radius: 30, about: 'a stop moved 60 m away from every line of its routes' },
@@ -151,7 +152,7 @@ export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds =
 
   // A build without the source a kind breaks plants none of that kind
   // (main has no street layer, for one); recall.mjs reports what wasn't planted.
-  const NEEDS = { gap: 'streets', step: 'streets', 'off-street': 'streets', 'stray-piece': 'streets', 'rail-gap': 'routes', overshoot: 'routes', hook: 'routes', slot: 'routes', 'stray-stop': 'stops', 'extra-mark': 'stations', 'terminal-shape': 'terminals' };
+  const NEEDS = { gap: 'streets', step: 'streets', 'off-street': 'streets', 'stray-piece': 'streets', 'rail-gap': 'routes', overshoot: 'routes', hook: 'routes', slot: 'routes', 'stray-stop': 'stops', 'extra-mark': 'stations', 'terminal-shape': 'terminals', tick: 'streets' };
   for (const kind of kinds) {
     if (NEEDS[kind] && !out[NEEDS[kind]]?.features?.length) continue;
     random = rng(seed * 1009 + [...kind].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7));
@@ -261,6 +262,35 @@ export async function plant(data, { root, seed = 1, per = 3, avoid = [], kinds =
         const at = move(p, [15 * Math.cos(angle), 15 * Math.sin(angle)]);
         out.stations.features.push({ ...st, properties: { ...st.properties }, geometry: { type: 'Point', coordinates: at } });
         add(kind, [at], `drew station ${st.properties.id} a second time, 15 m away`);
+        n++;
+      } else if (kind === 'tick') {
+        // A short stub of one of the street's routes, square off the street at
+        // an inner vertex: the street runs straight there, nothing else is near
+        // the stub, and no stop, station, park-and-ride or hall is within reach
+        // (a route that ends at a place is a short end, not a fault). Streets
+        // drawn only at the far zooms are left out: the stub is for z16 and up.
+        const f = pick(busStreets().filter((s) => s.properties?.zoom !== 'far'));
+        const c = f.geometry.coordinates;
+        if (c.length < 3) continue;
+        const i = 1 + Math.floor(random() * (c.length - 2));
+        const v = c[i];
+        if (!clear(v) || metres(c[i - 1], v) < 20 || metres(v, c[i + 1]) < 20) continue;
+        const a = toM(c[i - 1], v[1]), b = toM(v, v[1]), d = toM(c[i + 1], v[1]);
+        const u1 = [b[0] - a[0], b[1] - a[1]], u2 = [d[0] - b[0], d[1] - b[1]];
+        const l1 = Math.hypot(...u1), l2 = Math.hypot(...u2);
+        if ((u1[0] * u2[0] + u1[1] * u2[1]) / (l1 * l2) < 0.95) continue;
+        const dir = [u1[0] / l1 + u2[0] / l2, u1[1] / l1 + u2[1] / l2];
+        const dl = Math.hypot(...dir);
+        const tip = move(v, scale(left([dir[0] / dl, dir[1] / dl]), (random() < 0.5 ? 1 : -1) * 6));
+        // Other streets and rail track; a bus route's own line runs along the street.
+        const others = [...out.streets.features.filter((g) => g !== f), ...(out.routes?.features ?? []).filter((g) => g.properties?.mode === 'rail')].flatMap((g) => lines(g.geometry));
+        if (near(tip, others, 20) || near(v, others, 8)) continue;
+        if ((out.stops?.features ?? []).some((q) => metres(q.geometry.coordinates, v) < 40)) continue;
+        if ([...(out.stations?.features ?? []), ...(out.facilities?.features ?? [])].some((q) => metres(q.geometry.coordinates, v) < 100)) continue;
+        if ((out.terminals?.features ?? []).some((t) => lines({ type: 'LineString', coordinates: (t.geometry.type === 'Polygon' ? t.geometry.coordinates[0] : t.geometry.coordinates[0][0]) }).some((ring) => ring.some((q) => metres(q, v) < 100)))) continue;
+        const route = routesOf(f.properties)[0];
+        out.streets.features.push({ type: 'Feature', properties: { ...f.properties, routes: route, n: 1, len: 6 }, geometry: { type: 'LineString', coordinates: [v, tip] } });
+        add(kind, [tip], `a 6 m stub of route ${route} square off a street carrying ${f.properties.routes}`);
         n++;
       } else if (kind === 'terminal-shape') {
         for (const term of out.terminals.features.filter(isDrawn)) {
