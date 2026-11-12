@@ -13,6 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
 import { annotate, contrast, detect, install, jump, measure, pixels } from '../lib/detect.mjs';
+import { stubAnalytics } from '../lib/analytics.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 // The site's own data, as the server under test serves it (CHECK_URL or the
@@ -35,6 +36,7 @@ export const test = base.extend({
     page.on('console', (m) => consoleLog.push({ type: m.type(), text: m.text() }));
     page.on('requestfailed', (r) => failed.push({ url: r.url(), why: r.failure()?.errorText }));
     page.on('response', (r) => { if (r.status() >= 400) failed.push({ url: r.url(), why: `HTTP ${r.status()}` }); });
+    await stubAnalytics(page);
     await page.route('**/js/main.js', async (route) => {
       const res = await route.fetch();
       const body = (await res.text()).replace('loadWhenNeeded(map);', 'window.__map=map;loadWhenNeeded(map);');

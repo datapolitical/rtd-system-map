@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium, devices } from '@playwright/test';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { stubAnalytics } from '../lib/analytics.mjs';
 
 const BASE = (process.env.CHECK_URL || 'http://127.0.0.1:8788').replace(/\/$/, '');
 const outIndex = process.argv.indexOf('--out');
@@ -43,6 +44,7 @@ try {
   for (const theme of ['light', 'dark']) {
     const context = await browser.newContext({ ...phone, colorScheme: theme });
     const page = await context.newPage();
+    await stubAnalytics(page);
     await page.route('**/js/main.js', async (route) => {
       const res = await route.fetch();
       const body = (await res.text()).replace('loadWhenNeeded(map);', 'window.__map=map;loadWhenNeeded(map);');
