@@ -314,7 +314,7 @@ function stationMarks(zoom) {
   const seen = new Set();
   const out = [];
   for (const m of zoom.marks ?? []) {
-    const isStation = m.source === 'stations' || (m.source === 'platforms' && m.properties?.kind === 'mark');
+    const isStation = m.source === 'stations' || m.source === 'stationsfar' || (m.source === 'platforms' && m.properties?.kind === 'mark');
     if (!isStation || !m.properties?.lines) continue;
     const key = `${m.source}:${m.index}`;
     if (seen.has(key)) continue;
@@ -733,7 +733,7 @@ export function walkFits(ctx) {
       }
       return best && best.d < 6 ? best.at : p;
     };
-    const a = nearest(part[0], (m) => m.source === 'stations');
+    const a = nearest(part[0], (m) => m.source === 'stations' || m.source === 'stationsfar');
     const b = nearest(part.at(-1), (m) => m.source === 'platforms' && m.properties?.kind === 'mark');
     if (dist(a, b) < 1) continue;
     const mpp = ctx.mppAt(a);

@@ -92,7 +92,7 @@ const angle = (u, v) => (Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] *
 // The sources whose marks and fills are the places a line can end at: stations
 // (a platform's mark is a station's), park-and-rides, terminal halls, and the
 // street stops a line end is not "at" a place for but still has something at.
-export const PLACE_SOURCES = ['stations', 'facilities', 'terminals', 'stops'];
+export const PLACE_SOURCES = ['stations', 'stationsfar', 'facilities', 'terminals', 'stops'];
 
 // Points on the same grid as the segments.
 class Points {
@@ -184,7 +184,7 @@ export function routeFaults(zoom, {
   const there = places ?? { marks: zoom.marks ?? [], areas: zoom.areas ?? [] };
   const placeMarks = new Points(), stopMarks = new Points();
   for (const m of there.marks) {
-    if (m.source === 'stations' || m.source === 'facilities' || /platform/i.test(m.layer ?? '')) placeMarks.add(m.at);
+    if (m.source === 'stations' || m.source === 'stationsfar' || m.source === 'facilities' || /platform/i.test(m.layer ?? '')) placeMarks.add(m.at);
     else if (m.source === 'stops') stopMarks.add(m.at);
   }
   const halls = there.areas.filter((a) => a.source === 'terminals').flatMap((a) => a.parts);

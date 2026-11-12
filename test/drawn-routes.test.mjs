@@ -203,7 +203,7 @@ test('a stub is a tick only while it is short, square on, and free', () => {
 
 test('the model gives the marks and halls of a source whatever the zoom, which the drawn marks do not', async () => {
   const empty = { type: 'FeatureCollection', features: [] };
-  const sources = JSON.parse(JSON.stringify({ flexride: empty, routes: empty, streets: empty, stations: empty, platforms: empty, structures: empty, facilities: empty, terminals: empty, labels: empty, stops: empty }));
+  const sources = JSON.parse(JSON.stringify({ flexride: empty, routes: empty, railfar: empty, stationsfar: empty, streets: empty, stations: empty, platforms: empty, structures: empty, facilities: empty, terminals: empty, labels: empty, stops: empty }));
   sources.facilities.features.push({ type: 'Feature', properties: { id: 1, name: 'Hall Park-n-Ride', class: 'PNR', spaces: 100 }, geometry: { type: 'Point', coordinates: [-105.0, 39.7] } });
   sources.terminals.features.push({ type: 'Feature', properties: { id: '1', name: 'Hall', class: 'BUS', gates: 2, kind: 'bus_station', underground: 0 }, geometry: { type: 'Polygon', coordinates: [[[-105.0, 39.7], [-104.999, 39.7], [-104.999, 39.701], [-105.0, 39.701], [-105.0, 39.7]]] } });
   const model = await openModel({ theme: 'dark', data: sources, meta: { rail: [] }, tileCache: false });

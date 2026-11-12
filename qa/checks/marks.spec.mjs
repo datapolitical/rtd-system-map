@@ -57,7 +57,7 @@ test('the detector finds a seeded overlap @deep', async ({ mapPage }, testInfo) 
   // Park-n-Ride), its station copied with a new id 4 px east of itself.
   await page.evaluate((d) => {
     const m = window.__map, c = m.project(m.getCenter());
-    const k = window.__qa.marks().filter((k) => k.key.startsWith('stn:') && k.layer !== 'stations-hub').sort((a, b) => Math.hypot(a.px - c.x, a.py - c.y) - Math.hypot(b.px - c.x, b.py - c.y))[0];
+    const k = window.__qa.marks().filter((k) => k.key.startsWith('stn:')).sort((a, b) => Math.hypot(a.px - c.x, a.py - c.y) - Math.hypot(b.px - c.x, b.py - c.y))[0];
     const s = d.features.find((f) => `stn:${f.properties.id}` === k.key);
     const p = m.project(s.geometry.coordinates), ll = m.unproject([p.x + 4, p.y]);
     const copy = { ...s, id: undefined, properties: { ...s.properties, id: `${s.properties.id}-copy`, label: `${s.properties.label} (copy)` }, geometry: { type: 'Point', coordinates: [ll.lng, ll.lat] } };

@@ -2,12 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CLEAR_PX,
-  HUB_FROM,
   STEP,
   TICK_FROM,
   TICK_TO,
   apart,
-  hubDiameter,
   linePaths,
   meetingPlace,
   metersPerPixel,
@@ -57,7 +55,6 @@ test('the map scale and mark sizes follow the rail widths', () => {
   assert.ok(stationScale(10) > 5 / 11 && stationScale(10) < 6 / 11);
   assert.equal(tickLength(1, 16), 8);
   assert.equal(tickLength(3, 16), 32);
-  assert.equal(hubDiameter(3, 16), 34);
   assert.ok(Math.abs(metersPerPixel(10, 0) - 76.437) < 0.01);
 });
 
@@ -86,11 +83,11 @@ test('stations closer than a tick collapse to the strongest until they are clear
   const paths = linePaths(pieces);
   for (const i of [0, 2]) {
     assert.ok(marks[i].from > TICK_FROM && marks[i].from < TICK_TO);
-    // From then it is the larger mark's length from the strongest (the
-    // hub here, its ring), and a quarter zoom before it was not.
+    // From then it is a tick's length from the strongest, and a quarter
+    // zoom before it was not.
     const meters = apart(paths, ['A', 'B'], stations[i].geometry.coordinates, stations[1].geometry.coordinates);
     const px = (z) => meters / metersPerPixel(z, 39.67);
-    const longest = (z) => Math.max(tickLength(2, z), z >= HUB_FROM ? hubDiameter(2, z) : tickLength(2, z)) + CLEAR_PX;
+    const longest = (z) => tickLength(2, z) + CLEAR_PX;
     assert.ok(px(marks[i].from) >= longest(marks[i].from));
     assert.ok(px(marks[i].from - STEP) < longest(marks[i].from - STEP));
   }

@@ -24,11 +24,9 @@ import { RAIL_WIDTH, STATION_SPACING, ZOOMS } from '../../public/js/sizes.js';
 import { nearestOnTrack, trackAt } from './sharedtrack.mjs';
 import {
   CLEAR_PX,
-  HUB_FROM,
   STEP,
   TICK_FROM,
   TICK_TO,
-  hubDiameter,
   linePaths,
   metersPerPixel,
   parallelAt,
@@ -353,15 +351,13 @@ function markLength(span, tick, zoom) {
 /**
  * The first zoom, in the quarters the map fades marks in over, where a group's
  * mark is clear of the station's own mark (the longer mark's length, plus
- * CLEAR_PX), or null if it never is. The hub's ring stands in for the
- * station's mark while it has one.
+ * CLEAR_PX), or null if it never is.
  */
 export function clearFrom(stationPoint, station, group) {
   const apart = meters(stationPoint, group.at);
   for (let z = TICK_FROM; z <= LAST_ZOOM + 1e-9; z += STEP) {
     const zoom = Math.round(z * 100) / 100;
-    const ring = station.meet && zoom >= HUB_FROM && zoom < TICK_TO;
-    const own = ring ? hubDiameter(station.span ?? 1, zoom) : markLength(station.span ?? 1, station.tick ?? 1, zoom);
+    const own = markLength(station.span ?? 1, station.tick ?? 1, zoom);
     const theirs = markLength(group.span, group.tick, zoom);
     if (apart / metersPerPixel(zoom, stationPoint[1]) >= Math.max(own, theirs) + CLEAR_PX) return zoom;
   }

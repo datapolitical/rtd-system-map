@@ -12,7 +12,7 @@ import { FONT, groupKeepOut, lineKeepOut } from './basemap.js';
 import { lightenTo, shade, textOn } from './color.js';
 import { DARK_RAIL_MIN, P, PALETTES } from './palette.js';
 import { CLASS_RANK, DETAIL_FROM, PART_TIME, byZoom, classMatch, classWidth, classWidthAt, classWidthTimes, tierMatch, tierWidth } from './shared.js';
-import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
+import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS, bothRailSets, bothSets } from './sizes.js';
 import { fade, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
 import { edgeLetterLayer } from './edgeletters.js';
 
@@ -127,7 +127,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'structures', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'railfar', 'stationsfar', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'structures', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -141,7 +141,7 @@ const EMPTY = { type: 'FeatureCollection', features: [] };
 export function dataSources() {
   return {
     ...Object.fromEntries(
-      DATA_SOURCES.map((name) => [name, { type: 'geojson', data: LAZY.includes(name) ? EMPTY : `data/${name}.geojson`, ...(name === 'routes' ? { tolerance: 0 } : {}) }]),
+      DATA_SOURCES.map((name) => [name, { type: 'geojson', data: LAZY.includes(name) ? EMPTY : `data/${name}.geojson`, ...(name === 'routes' || name === 'railfar' ? { tolerance: 0 } : {}) }]),
     ),
     // A letter for each rail line on screen that has none (edgeletters.js).
     'rail-edge-letters': { type: 'geojson', data: EMPTY },
@@ -427,37 +427,40 @@ export function transitLines(lines) {
 
     // Rail floats over the buses on a white casing. Part-time rail goes
     // beneath full-service rail, so on shared track the line that runs wins.
-    {
-      id: 'rail-casing',
-      type: 'line',
-      source: 'routes',
-      filter: rail,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': P.casing, 'line-width': railWidth(RAIL_GAP + 1), 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
-    },
-    {
-      id: 'rail-part-time',
-      type: 'line',
-      source: 'routes',
-      filter: ['all', rail, partTime],
-      paint: { 'line-color': lines.color, 'line-width': railWidth(-0.5), 'line-dasharray': [1.5, 1.2], 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
-    },
-    {
-      id: 'rail-edge',
-      type: 'line',
-      source: 'routes',
-      filter: ['all', rail, ['!', partTime]],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': lines.edge, 'line-width': railWidth(1), 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
-    },
-    {
-      id: 'rail',
-      type: 'line',
-      source: 'routes',
-      filter: ['all', rail, ['!', partTime]],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': lines.color, 'line-width': railWidth(), 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
-    },
+    // Below FAR_UNTIL from the far set (sizes.js bothRailSets, #115).
+    ...[
+      {
+        id: 'rail-casing',
+        type: 'line',
+        source: 'routes',
+        filter: rail,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': P.casing, 'line-width': railWidth(RAIL_GAP + 1), 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
+      },
+      {
+        id: 'rail-part-time',
+        type: 'line',
+        source: 'routes',
+        filter: ['all', rail, partTime],
+        paint: { 'line-color': lines.color, 'line-width': railWidth(-0.5), 'line-dasharray': [1.5, 1.2], 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
+      },
+      {
+        id: 'rail-edge',
+        type: 'line',
+        source: 'routes',
+        filter: ['all', rail, ['!', partTime]],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': lines.edge, 'line-width': railWidth(1), 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
+      },
+      {
+        id: 'rail',
+        type: 'line',
+        source: 'routes',
+        filter: ['all', rail, ['!', partTime]],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': lines.color, 'line-width': railWidth(), 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
+      },
+    ].flatMap(bothRailSets),
   ]);
 }
 
@@ -586,7 +589,9 @@ export function transitMarks(lines) {
     // "Stations"): `tick` is the lines it spans (1, a dot, where they part
     // within its length), `tickBearing` the stretch's direction, and
     // `tickFrom` the zoom from which it's clear of a stronger station nearby.
-    // The hub has its own ring from HUB_FROM.
+    // The hub is a tick like any other, across all its lines. Below
+    // FAR_UNTIL the ticks stand on the far set's lines (`stationsfar`, #115).
+    ...bothSets('stationsfar')(
     {
       id: 'stations-dot',
       type: 'symbol',
@@ -603,13 +608,14 @@ export function transitMarks(lines) {
         'icon-ignore-placement': true,
       },
       paint: {
-        'icon-opacity': farOpacity((z) => (z < OVERVIEW_UNTIL + 0.4 ? (z - OVERVIEW_UNTIL) / 0.4 : z <= CAPSULE_FROM ? 1 : Math.max(0, (CAPSULE_TO - z) / (CAPSULE_TO - CAPSULE_FROM))), { hub: false }),
+        'icon-opacity': farOpacity((z) => (z < OVERVIEW_UNTIL + 0.4 ? (z - OVERVIEW_UNTIL) / 0.4 : z <= CAPSULE_FROM ? 1 : Math.max(0, (CAPSULE_TO - z) / (CAPSULE_TO - CAPSULE_FROM)))),
       },
-    },
+    }
+    ),
     // A white capsule across the track, as wide as the lines through it.
     // Until CAPSULE_TO, while it crossfades with the tick, it takes the
     // tick's span and direction, so the two are one mark.
-    {
+    ...bothSets('stationsfar')({
       id: 'stations',
       type: 'symbol',
       source: 'stations',
@@ -624,29 +630,7 @@ export function transitMarks(lines) {
         'icon-ignore-placement': true,
       },
       paint: { 'icon-opacity': farOpacity((z) => Math.min(1, Math.max(0, (z - CAPSULE_FROM) / (CAPSULE_TO - CAPSULE_FROM))), { until: CAPSULE_TO + FAR_STEP }) },
-    },
-    // The place where the most lines meet (Union Station): a ring around the
-    // knot from HUB_FROM, where station marks start, until its capsule takes
-    // over. Nothing else on the map is a ring this size. It is open, so the
-    // lines are seen running into it (#115).
-    {
-      id: 'stations-hub',
-      type: 'symbol',
-      source: 'stations',
-      minzoom: HUB_FROM,
-      maxzoom: CAPSULE_TO,
-      filter: ['all', served, ['==', ['get', 'meet'], true]],
-      layout: {
-        'icon-image': ['concat', 'hub-', ['get', 'span']],
-        'icon-size': stationSize,
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
-      },
-      // Full from the zoom it comes in at: it reads the feature, so the map
-      // works it out at whole zooms and blends between, and a fade-in from
-      // HUB_FROM would leave the hub half marked to the next whole zoom.
-      paint: { 'icon-opacity': ['interpolate', ['linear'], ['zoom'], HUB_FROM, fade(onRoute), CAPSULE_FROM, fade(onRoute), CAPSULE_TO, 0] },
-    },
+    }),
     {
       id: 'facilities',
       type: 'symbol',
@@ -882,25 +866,23 @@ const HUB_NEAR_BESIDE = beside([1, 1.4, 1.8]);
 const isHub = ['any', ['==', ['get', 'hub'], true], ['==', ['get', 'meet'], true]];
 // Closed stations: ring and name from the same zoom.
 const UNSERVED_ZOOM = 13;
-// Stations are ticks until CAPSULE_FROM and capsules from CAPSULE_TO; the
-// hub has its ring from HUB_FROM; a station's tick waits for zoom `tickFrom`,
+// Stations are ticks until CAPSULE_FROM and capsules from CAPSULE_TO; a
+// station's tick waits for zoom `tickFrom`,
 // in steps of FAR_STEP, where a stronger station is too near. All in
 // sizes.js, since the build places the marks by the same zooms.
 //
 // The opacity of a station's far-out mark: `base(zoom)` (its fade in and its
 // crossfade with the capsule) where the station is clear of the stronger one
-// beside it, fading in over the quarter after `tickFrom`. With `hub: false`,
-// the hub's tick gives way to its ring from HUB_FROM. A paint property can
+// beside it, fading in over the quarter after `tickFrom`. A paint property can
 // read the zoom as it is, so this is a stop for every quarter.
-function farOpacity(base, { hub = true, until = CAPSULE_TO } = {}) {
+function farOpacity(base, { until = CAPSULE_TO } = {}) {
   const stops = [];
   for (let z = OVERVIEW_UNTIL; z <= until + 1e-9; z += FAR_STEP / 2) stops.push(Math.round(z * 1000) / 1000);
   return ['interpolate', ['linear'], ['zoom'], ...stops.flatMap((z) => {
     const from = ['coalesce', ['get', 'tickFrom'], OVERVIEW_UNTIL];
     const clear = ['any', ['<=', from, OVERVIEW_UNTIL], ['<=', from, z - FAR_STEP]];
-    const shown = !hub && z >= HUB_FROM ? ['all', clear, ['!=', ['get', 'meet'], true]] : clear;
     const b = Math.round(Math.max(0, Math.min(1, base(z))) * 1000) / 1000;
-    return [z, b ? ['case', shown, ['*', b, fade(onRoute)], 0] : 0];
+    return [z, b ? ['case', clear, ['*', b, fade(onRoute)], 0] : 0];
   })];
 }
 // Which way a symbol sits from its point, on screen, for each icon anchor.

@@ -13,16 +13,13 @@
 // The map's rail and station sizes and the zooms its station marks change
 // at, from the page's own module (public/js/sizes.js), so the two can't
 // disagree: RAIL_WIDTH and RAIL_GAP, the ZOOMS they're given at, the tick's
-// size across the track (TICK, drawn as "dot-" in symbols.js) and the hub
-// ring's extra width (HUB_EXTRA, "hub-"). Spacing is a line's width and gap
+// size across the track (TICK, drawn as "dot-" in symbols.js). Spacing is a line's width and gap
 // at the widest zoom, as the images are drawn there.
-import { CAPSULE_TO, FAR_STEP, HUB_EXTRA, HUB_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, TICK, ZOOMS } from '../../public/js/sizes.js';
+import { CAPSULE_TO, FAR_STEP, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, TICK, ZOOMS } from '../../public/js/sizes.js';
 export const SPACING = STATION_SPACING;
-// Ticks are drawn from TICK_FROM (the end of the overview), the hub's ring
-// from HUB_FROM, both until TICK_TO, where every station has its full mark
-// (the page's CAPSULE_TO).
+// Ticks are drawn from TICK_FROM (the end of the overview) until TICK_TO,
+// where every station has its full mark (the page's CAPSULE_TO).
 export const TICK_FROM = OVERVIEW_UNTIL;
-export { HUB_FROM };
 export const TICK_TO = CAPSULE_TO;
 // Two marks on one track count as clear of each other when they are the
 // longer one's length apart plus this (px): two dots 4 px wide and 5 px apart
@@ -63,11 +60,6 @@ export function stationScale(zoom) {
 /** A tick's length across the track in px at `zoom`, spanning `span` lines. */
 export function tickLength(span, zoom) {
   return ((span - 1) * SPACING + (span > 1 ? TICK.across : TICK.single)) * stationScale(zoom);
-}
-
-/** The hub ring's diameter in px at `zoom`, around `span` lines. */
-export function hubDiameter(span, zoom) {
-  return ((Math.max(span, 1) - 1) * SPACING + HUB_EXTRA) * stationScale(zoom);
 }
 
 /**
@@ -254,6 +246,8 @@ function dist(a, b) {
  * Returns, per station, { tick, tickBearing, from, meet }:
  * - `tick`: how many lines the tick spans, or 1 (a dot) where the lines it
  *   would span part within its own length either way, at any zoom it's drawn.
+ *   The hub always spans its lines: the lines converge there, so they are
+ *   never parallel, and a dot read as a hole in the knot (#115).
  * - `tickBearing`: the track's direction over that length, so the tick is
  *   square to the stretch, not to one bend of it.
  * - `from`: the zoom (in quarters, TICK_FROM to TICK_TO) from which the tick
@@ -278,7 +272,7 @@ export function stationMarks(stations, pieces) {
     const span = p.span ?? 1;
     let tick = span;
     let tickBearing = p.bearing ?? 0;
-    if (span > 1) {
+    if (span > 1 && i !== hub) {
       // Checked at each whole zoom the tick is drawn at: a split close by
       // shows at the near zoom, one further off at the far one.
       const checks = [TICK_FROM, (TICK_FROM + TICK_TO) / 2, TICK_TO].map((zoom) => {
@@ -304,7 +298,7 @@ export function stationMarks(stations, pieces) {
         a - b
       );
     });
-  const size = (i, zoom) => (marks[i].meet && zoom >= HUB_FROM ? hubDiameter(stations[i].properties.span ?? 1, zoom) : tickLength(marks[i].tick, zoom));
+  const size = (i, zoom) => tickLength(marks[i].tick, zoom);
   const placed = [];
   for (const i of order) {
     const f = stations[i];

@@ -37,7 +37,7 @@
 import { segmentDistance } from './mercator.mjs';
 
 export const DRAWN = 0.5;
-export const MARK_SOURCES = ['stations', 'platforms'];
+export const MARK_SOURCES = ['stations', 'stationsfar', 'platforms'];
 
 const CELL = 64;
 const DEG = 180 / Math.PI;

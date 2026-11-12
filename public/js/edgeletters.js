@@ -97,7 +97,7 @@ export function placeEdgeLetters(map) {
   const named = new Set(drawn.filter((f, i) => within(taken[i], area)).map((f) => f.properties.route));
   // Where each unnamed line is on screen, as runs of points inside it.
   const runs = new Map();
-  for (const f of map.queryRenderedFeatures({ layers: ['rail'] })) {
+  for (const f of map.queryRenderedFeatures({ layers: ['rail', 'rail-far'].filter((id) => map.getLayer(id)) })) {
     const { route, slot, tier } = f.properties;
     if (named.has(route)) continue;
     const parts = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates;

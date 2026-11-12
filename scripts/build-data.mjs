@@ -12,7 +12,8 @@ import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { busNames } from './lib/busnames.mjs';
 import { heading, stopLines } from './lib/stops.mjs';
-import { endAtMarks, nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
+import { FAR_UNTIL } from '../public/js/sizes.js';
+import { FAR, endAtMarks, nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
 import { alongWalk, groupPlatforms, groupPoints, meters, platformMarks, walkPoint } from './lib/platforms.mjs';
@@ -55,6 +56,9 @@ const SITE = (process.env.RTD_SITE_URL ?? 'https://rtd-system-map.pages.dev').re
 // A rail letter stands within this of its line (metres); letters sit up
 // to about 20 m off the drawn track where lines share it.
 const LETTER_ON = 30;
+// A station is moved this far at most onto its lines in the far set, which
+// packs tracks a few hundred metres apart (sharedtrack.mjs FAR).
+const FAR_SNAP_METERS = 600;
 // ...and not within this of a mark its line ends at, on the far side of it.
 const LETTER_PAST = 150;
 // ...and no nearer than this (px, at the zoom it comes in) to the mark of a
@@ -330,6 +334,15 @@ async function main() {
     rail,
     geo.stations.map((f) => f.geometry.coordinates),
   );
+  // The far set, drawn below zoom 11 (sharedtrack.mjs FAR): tracks a few
+  // hundred metres apart packed as one, rounded over hundreds of metres, so
+  // lines come into Union Station as one calm pack, not a knot of jogs
+  // (#115). Its letters stand for the near set's below 11.
+  const far = sharedTrack(
+    rail,
+    geo.stations.map((f) => f.geometry.coordinates),
+    FAR,
+  );
   geo.routes = [...geo.routes.filter((f) => f.properties.mode !== 'rail'), ...pieces];
   for (const f of geo.stations) {
     if (!f.properties.served) continue;
@@ -483,6 +496,7 @@ async function main() {
     }
     const kept = endAtMarks(pieces, marks);
     pieces.splice(0, pieces.length, ...kept);
+    geo.railfar = endAtMarks(far.pieces, marks);
     // The way back along a line from the mark it ends at ([east, north], a
     // unit vector): from the line's end there to the point 20 m along it.
     const inwardAt = (routes, at) => {
@@ -570,7 +584,10 @@ async function main() {
   // commuter routes.
   const network = bbox(geo.routes.filter((f) => f.properties.mode === 'rail' || ['frequent', 'every30'].includes(f.properties.tier)));
   const { labels, signBoxes, endNames, hubs } = labelPoints(geo.routes, geo.stations, service.ends, service.headsigns, network);
-  geo.labels = [...labels, ...letters];
+  // Below 11 the letters stand on the far set's lines: the far set's first
+  // set (from the overview to 11), the near set's from 11.
+  const farLetters = far.letters.filter((f) => f.properties.to <= FAR_UNTIL && nearestOnTrack(geo.railfar.filter((p) => p.properties.route === f.properties.route), f.geometry.coordinates, LETTER_ON) !== null);
+  geo.labels = [...labels, ...letters.filter((f) => f.properties.from >= FAR_UNTIL), ...farLetters];
   const endStations = new Set(Object.values(service.ends).flat());
   geo.stations.forEach((f, i) => {
     // `end`: a rail line ends here (Union Station included). From the metro
@@ -620,6 +637,19 @@ async function main() {
   stationMarks(geo.stations, pieces).forEach((m, i) => {
     Object.assign(geo.stations[i].properties, { tick: m.tick, tickBearing: m.tickBearing, tickFrom: m.from, meet: m.meet });
   });
+  // Below FAR_UNTIL the ticks stand on the far set's lines: each served
+  // station moved onto its lines there, with its tick worked out on them.
+  {
+    const far = geo.stations.map((f) => {
+      const lines = new Set(String(f.properties.lines ?? '').split(' '));
+      const own = geo.railfar.filter((p) => lines.has(p.properties.route));
+      const at = f.properties.served ? nearestOnTrack(own, f.geometry.coordinates, FAR_SNAP_METERS) : null;
+      const properties = { ...f.properties, ...(at ? trackAt(geo.railfar, at) : {}) };
+      return { ...f, properties, geometry: at ? { type: 'Point', coordinates: at } : f.geometry };
+    });
+    stationMarks(far, geo.railfar).forEach((m, i) => Object.assign(far[i].properties, { tick: m.tick, tickBearing: m.tickBearing, tickFrom: m.from, meet: m.meet }));
+    geo.stationsfar = far.filter((f) => f.properties.served);
+  }
   // Where a station's lines stop in places too far apart for one mark to
   // stand for them (DESIGN.md, "Stations"): a station mark at each platform
   // group, joined to the station's own mark by a thin line. The groups come

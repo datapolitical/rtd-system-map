@@ -11,12 +11,13 @@
 //    limits sit just outside them.
 // The view is a test input. The Key and map crops are attached to each test.
 import { test, expect, pixels } from './fixtures.mjs';
+import { FAR_UNTIL } from '../../public/js/sizes.js';
 
 const VIEW = { lat: 39.75491, lon: -105.00348 };
 const MAX_MEAN = 8, MIN_WITHIN = 90;
-const layerOf = (m) =>
+const layerOf = (m, zoom) =>
   m.includes('+') ? null // an area drawn from paint, compared by its own layers elsewhere
-  : m.startsWith('dot-') ? 'stations-dot' : m.startsWith('station-') ? 'stations' : m.startsWith('hub-') ? 'stations-hub'
+  : m.startsWith('dot-') ? (zoom < FAR_UNTIL ? 'stations-dot-far' : 'stations-dot') : m.startsWith('station-') ? (zoom < FAR_UNTIL ? 'stations-far' : 'stations')
   : m === 'parking' || m === 'transit-center' ? 'facilities' : m === 'vehicle-bus' ? 'vehicles-bus' : m.startsWith('vehicle-') ? 'vehicles-rail'
   : m === 'stations-unserved' || m === 'stops' ? m : null;
 
@@ -51,7 +52,7 @@ for (const zoom of [8.5, 10, 10.6, 12, 14]) {
 
     // Ids and sizes against the map's layers.
     for (const m of marks) {
-      const layerId = layerOf(m.mark);
+      const layerId = layerOf(m.mark, zoom);
       if (!layerId) continue; // an area drawn from paint, not an image
       const info = await page.evaluate(({ mark, layerId }) => {
         const map = window.__map, L = map.style._layers[layerId];
@@ -92,7 +93,7 @@ for (const zoom of [8.5, 10, 10.6, 12, 14]) {
       for (const l of window.__map.getStyle().layers) if (l.id !== 'land') window.__map.setLayoutProperty(l.id, 'visibility', 'none');
     });
     for (const [k, m] of marks.entries()) {
-      const layerId = layerOf(m.mark);
+      const layerId = layerOf(m.mark, zoom);
       if (!layerId) continue;
       const info = await page.evaluate(({ mark, layerId, n }) => {
         const map = window.__map, layer = map.getLayer(layerId), c = map.getCanvas().getBoundingClientRect();

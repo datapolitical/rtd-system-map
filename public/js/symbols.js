@@ -7,7 +7,7 @@
 // use; sizes shared with the build are in sizes.js.
 
 import { P } from './palette.js';
-import { CHEVRON, HUB_EXTRA, RAIL_WIDTH, STATION_SPACING, TICK } from './sizes.js';
+import { CHEVRON, RAIL_WIDTH, STATION_SPACING, TICK } from './sizes.js';
 
 // Never below 2, so symbols stay sharp when a screen is zoomed.
 export const RATIO = Math.max(2, Math.ceil(devicePixelRatio || 1));
@@ -118,27 +118,6 @@ export function addSymbol(map, id, lines) {
   if (id.startsWith('station-')) {
     const span = Number(id.slice('station-'.length)) || 1;
     return capsule(span, RAIL_WIDTH.at(-1) + 4, 1.5);
-  }
-
-  // The hub, "hub-3": a ring around the lines that meet there, as wide as a
-  // tick across `span` lines plus HUB_EXTRA (sizes.js), so it encloses the
-  // knot. Not turned: lines leave it every way. Ink alone, a heavier edge
-  // than a tick's (about 1.5 px on screen), so it reads as a ring over the
-  // lines. Open: the lines are seen running into it and meeting. Filled, it
-  // hid the knot behind a disc in the station colour, black in the dark
-  // theme; a band of that colour behind the ink hid W's last stretch, which
-  // curves along the ring (#115).
-  if (id.startsWith('hub-')) {
-    const span = Number(id.slice('hub-'.length)) || 1;
-    const d = (span - 1) * STATION_SPACING + HUB_EXTRA;
-    const stroke = 3.2;
-    const ctx = canvas(d + 2, d + 2);
-    ctx.beginPath();
-    ctx.arc(1 + d / 2, 1 + d / 2, (d - stroke) / 2, 0, Math.PI * 2);
-    ctx.lineWidth = stroke;
-    ctx.strokeStyle = P.station.edge;
-    ctx.stroke();
-    return add(ctx);
   }
 
   // Rail bullets: a circle in the line's color, outlined like the line.

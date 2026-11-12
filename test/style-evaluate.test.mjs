@@ -116,14 +116,6 @@ const EVALUATED = [
     paint: OPACITY,
     layout: ['icon-image', 'icon-size?'],
   },
-  // The hub's ring: strengthAt(hubLayer, ...) and icon(hubLayer, ...).
-  {
-    layer: 'stations-hub',
-    where: 'legend.js drawSymbols() strengthAt(hubLayer), icon()',
-    filter: true,
-    paint: OPACITY,
-    layout: ['icon-image', 'icon-size?'],
-  },
   // circleImage(): a circle layer's radius, stroke and color.
   {
     layer: 'stations-unserved',

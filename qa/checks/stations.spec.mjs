@@ -14,7 +14,7 @@
 // capsules 300 m apart touch.
 import { test, expect, siteData } from './fixtures.mjs';
 
-const MARKS = ['stations-dot', 'stations', 'stations-hub'];
+const MARKS = ['stations-dot-far', 'stations-dot', 'stations-far', 'stations'];
 const MAX_NAME_PX = 25;
 
 const count = (f) => f.properties.lines.split(' ').length;

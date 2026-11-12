@@ -69,7 +69,6 @@ function markName(id) {
   const span = Number(id.split('-').at(-1)) || 1;
   if (id.startsWith('dot-')) return span > 1 ? 'Small tick across the lines' : 'Small dot on the line';
   if (id.startsWith('station-')) return span > 1 ? 'Station capsule across the lines' : 'Round station mark';
-  if (id.startsWith('hub-')) return 'Ring around the lines';
   return '';
 }
 
@@ -238,25 +237,22 @@ export function buildLegend(meta, lines) {
     // Stations: the mark the map draws now, for a one-line station and for
     // one across the most lines (from the data), and the hub's ring while it
     // has one. Below the first station marks there is nothing to show.
-    const served = stations.filter((p) => p.served && !p.meet);
+    const served = stations.filter((p) => p.served);
     const earliest = (a, b) => (a.tickFrom ?? 0) - (b.tickFrom ?? 0);
     const one = served.filter((p) => p.span === 1).sort(earliest)[0];
     const many = served.filter((p) => p.span > 1 && (p.tick ?? p.span) === p.span).sort((a, b) => earliest(a, b) || b.span - a.span)[0];
     const marks = (p) => {
-      const drawn = ['stations-dot', 'stations'].map((id) => ({ layer: layers.get(id), s: strengthAt(layers.get(id), zoom, p, KEY_STATE) })).filter((m) => m.s > 0);
+      const drawn = ['stations-dot-far', 'stations-dot', 'stations-far', 'stations'].map((id) => ({ layer: layers.get(id), s: strengthAt(layers.get(id), zoom, p, KEY_STATE) })).filter((m) => m.s > 0);
       const strong = drawn.filter((m) => m.s >= KEY_SHOWN);
       return (strong.length ? strong : drawn.sort((a, b) => b.s - a.s).slice(0, 1)).map((m) => icon(m.layer, zoom, p)).join('');
     };
     const station = [one, many].filter(Boolean).map(marks).filter(Boolean);
-    const hub = stations.find((p) => p.served && p.meet);
-    const hubLayer = layers.get('stations-hub');
     const rows = [
       stations.length
         ? station.length
           ? [`<span class="stack">${station.join('')}</span>`, 'Rail station']
           : ['', 'Rail stations: zoom in to see them']
         : null,
-      hub && strengthAt(hubLayer, zoom, hub, KEY_STATE) >= KEY_SHOWN ? [icon(hubLayer, zoom, hub), `${esc(hub.label ?? hub.name)}, where the most lines meet`] : null,
       unserved.length ? [circleImage(layers.get('stations-unserved'), at(settled(layers.get('stations-unserved')), { served: false }), 'Gray ring'), 'Closed: no trains this week'] : null,
       counts.facilities ? [icon(layers.get('facilities'), settled(layers.get('facilities')), { spaces: 1 }, 'P sign'), 'Park-n-Ride'] : null,
       counts.facilities ? [symbolImage('transit-center', lines, 'Bus sign', evaluate(layers.get('facilities').layout['icon-size'], at(settled(layers.get('facilities'))))), 'Transit center'] : null,

@@ -21,9 +21,6 @@ export const STATION_SPACING = RAIL_WIDTH.at(-1) + RAIL_GAP;
 // The tick (symbols.js, "dot-"): its size across the track, before scaling,
 // across several lines and on one.
 export const TICK = { across: 10, single: 8 };
-// The hub's ring (symbols.js, "hub-"): as wide as a tick across its lines
-// plus this much, so it encloses the knot.
-export const HUB_EXTRA = 12;
 
 // Below this zoom the map is an overview of the whole network: the lines, a
 // letter at each rail line's end, and city names. Station marks, the names
@@ -38,11 +35,21 @@ export const NAMES_FROM = 9.75;
 // Stations are ticks until CAPSULE_FROM and capsules from CAPSULE_TO.
 export const CAPSULE_FROM = 10.25;
 export const CAPSULE_TO = 11;
-// The hub's ring from here: where station marks start, in place of the
-// hub's tick. Until #115 it came at NAMES_FROM, and below that the hub's tick,
-// blended between whole zooms with the ring's zoom, was all but gone: the
-// lines met at nothing.
-export const HUB_FROM = OVERVIEW_UNTIL;
+// Below this the rail is drawn from the far set (the build's sharedtrack.mjs
+// FAR): tracks a few hundred metres apart as one pack, rounded wide, so a
+// knot of tracks smaller than a line's width reads as one calm pack (#115).
+// The station marks below it stand on the far set's lines (`stationsfar`).
+// It ends where capsules have replaced ticks, on a whole zoom so the line
+// letters (one set per whole zoom) switch with it; at 10.25 to 11 the near
+// set still knots at Union. Both phones open below it (9.99 and 10.11).
+export const FAR_UNTIL = CAPSULE_TO;
+// A layer drawn from both sets: from the far source below FAR_UNTIL (its id
+// with "-far") and from its own source from FAR_UNTIL.
+export const bothSets = (far) => (layer) => [
+  { ...layer, id: `${layer.id}-far`, source: far, ...(layer.minzoom != null ? { minzoom: layer.minzoom } : {}), maxzoom: FAR_UNTIL },
+  { ...layer, minzoom: Math.max(layer.minzoom ?? 0, FAR_UNTIL) },
+];
+export const bothRailSets = bothSets('railfar');
 // A station's tick waits for zoom `tickFrom`, in quarter zooms, where a
 // stronger station is too near (the build decides it in these steps).
 export const FAR_STEP = 0.25;

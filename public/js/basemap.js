@@ -7,7 +7,7 @@
 
 import { P } from './palette.js';
 import { DETAIL_FROM, PART_TIME, STREETS, TIERS, classWidth, tierWidth } from './shared.js';
-import { OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, ZOOMS } from './sizes.js';
+import { OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, ZOOMS, bothRailSets } from './sizes.js';
 
 // Overpass, the interface's own face, drawn from glyphs the site makes itself
 // (scripts/glyphs.mjs).
@@ -194,14 +194,14 @@ const busKeepOut = () => [
 // Rail and the strongest bus tier: what station names stay off (network.js).
 export const lineKeepOut = () => [
   busKeepOut()[0],
-  clear('keep-out-rail', 'routes', {
+  ...bothRailSets(clear('keep-out-rail', 'routes', {
     filter: ['==', ['get', 'mode'], 'rail'],
     layout: {
       ...alongLine,
       // Box side: the line, its casing, and the lines beside it, plus the margin.
       'icon-size': byZoom(RAIL_WIDTH.map((w) => ['+', w + 3 + 2 * KEEP_OUT, ['*', 2 * (w + RAIL_GAP), slot]])),
     },
-  }),
+  })),
 ];
 // A station's platform-group marks and the walk between them (network.js,
 // 'platform' and 'platform-joins'), placed before every station's name, the

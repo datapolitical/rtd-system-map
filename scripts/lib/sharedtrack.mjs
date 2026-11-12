@@ -10,13 +10,21 @@
 // designed").
 
 // Lines this close are on the same track (RTD's lines run 0 to 15 m apart).
-const SHARED_METERS = 20;
+// A line's own data is cleaned at this distance whatever the pack's is
+// (TRACK_METERS, TRACK_RUN_METERS); the far set packs wider (FAR).
+const TRACK_METERS = 20;
+let SHARED_METERS = TRACK_METERS;
 // Points are compared this often along each line.
 const STEP_METERS = 20;
 // Shorter changes are noise (a station's platform tracks, a crossing).
-const MIN_RUN_METERS = 200;
+const TRACK_RUN_METERS = 200;
+let MIN_RUN_METERS = TRACK_RUN_METERS;
 // How far past the end of a shared piece to look to see which way a line goes.
-const LOOK_METERS = 1200;
+let LOOK_METERS = 1200;
+// Which points past an end count toward a line's side: those this far round
+// from straight on (cosine). The far set counts a line that leaves at a
+// right angle or curls back (W at Auraria), else it scored as going nowhere.
+let LOOK_COS = 0;
 // A line's end station is at most this far from its track.
 const TRIM_METERS = 300;
 // A path that doubles back over less than this is a kink in the data.
@@ -27,7 +35,7 @@ const RETRACE_METERS = 5;
 // Where a line leaves others it shared track with, it eases from its slot
 // beside them to its slot without them: over this far along at the most, and
 // in steps of this part of a line's width.
-const EASE_METERS = 1500;
+let EASE_METERS = 1500;
 const EASE_STEP = 1 / 32;
 // A line that left a pack within this of an end of its own track ended there.
 const END_HERE_METERS = 40;
@@ -40,11 +48,11 @@ const FLUSH_COS = Math.cos((20 * Math.PI) / 180);
 // SHARED_METERS of another line of the pack, and less and less over this
 // much further. Where a line joins or leaves a pack it swings between its
 // own track and the pack's middle over BLEND_METERS.
-const PACK_FADE_METERS = 20;
-const BLEND_METERS = 300;
+let PACK_FADE_METERS = 20;
+let BLEND_METERS = 300;
 // A line's path is rounded over this far either side of each point, sampled
 // this many times each side (see rounded).
-const ROUND_METERS = 60;
+let ROUND_METERS = 60;
 const ROUND_STEPS = 12;
 // A station's point can be this far from its track (build-data.mjs snaps it
 // on). A station's mark is drawn on the track, so a line is eased before it
@@ -99,7 +107,28 @@ const STATION_CLEAR_PX = 16;
  * `stations` are [lon, lat] points no line is eased past, and letters keep
  * off.
  */
-export function sharedTrack(features, stations = []) {
+// The far set, drawn below FAR_UNTIL (sizes.js), where a pixel is
+// 50 to 120 m: tracks within a line's width there are one pack, and paths
+// are rounded over a kilometre, so a knot of tracks a few hundred
+// metres apart (Union Station's train hall and light-rail platforms) is one
+// calm pack, not jogs smaller than a line (#115).
+export const FAR = { shared: 350, minRun: 1000, packFade: 150, blend: 1500, round: 1000, ease: 3000, look: 3000, lookCos: -0.5 };
+
+/**
+ * `sharedTrack` with the far set's distances (`options` as FAR) or the
+ * near set's (none).
+ */
+export function sharedTrack(features, stations = [], options = null) {
+  const saved = [SHARED_METERS, MIN_RUN_METERS, PACK_FADE_METERS, BLEND_METERS, ROUND_METERS, EASE_METERS, LOOK_METERS, LOOK_COS];
+  if (options) ({ shared: SHARED_METERS, minRun: MIN_RUN_METERS, packFade: PACK_FADE_METERS, blend: BLEND_METERS, round: ROUND_METERS, ease: EASE_METERS, look: LOOK_METERS, lookCos: LOOK_COS } = options);
+  try {
+    return sharedTrackNow(features, stations);
+  } finally {
+    [SHARED_METERS, MIN_RUN_METERS, PACK_FADE_METERS, BLEND_METERS, ROUND_METERS, EASE_METERS, LOOK_METERS, LOOK_COS] = saved;
+  }
+}
+
+function sharedTrackNow(features, stations) {
   const origin = centerOf(features);
   const project = ([lon, lat]) => [(lon - origin[0]) * origin.kx, (lat - origin[1]) * origin.ky];
   const unproject = ([x, y]) => [round(x / origin.kx + origin[0]), round(y / origin.ky + origin[1])];
@@ -113,7 +142,8 @@ export function sharedTrack(features, stations = []) {
 
   // A grid of every line's segments, to find nearby lines quickly.
   const grid = new Map();
-  const cell = (x, y) => `${Math.floor(x / 100)},${Math.floor(y / 100)}`;
+  const size = Math.max(100, SHARED_METERS);
+  const cell = (x, y) => `${Math.floor(x / size)},${Math.floor(y / size)}`;
   for (const line of lines) {
     for (const part of line.parts) {
       for (let i = 1; i < part.length; i++) {
@@ -288,7 +318,12 @@ export function sharedTrack(features, stations = []) {
   const tracks = [
     ...runs.filter((run) => !run.place).map((run) => [run]),
     ...places.map((place) =>
-      place.order.map((route) => place.runs.filter((r) => r.line.route === route).reduce((a, b) => (length(b.points) > length(a.points) ? b : a))),
+      // (In the far set a line can count another as on its track where the
+      // other has no run of that place: it has no stretch of its own here.)
+      place.order
+        .map((route) => place.runs.filter((r) => r.line.route === route))
+        .filter((own) => own.length)
+        .map((own) => own.reduce((a, b) => (length(b.points) > length(a.points) ? b : a))),
     ),
   ];
   const metersPerPixel = (zoom) => (40075017 * Math.cos((origin[1] * Math.PI) / 180)) / (512 * 2 ** zoom);
@@ -584,12 +619,16 @@ function lettersAlong(tracks, marks, metersPerPixel) {
           .map((k) => meters + (k * slack) / 4)
           .filter((m) => m > 0 && m < length(run.points))
           .map((m) => ({ point: pointAlong(run.points, m), at: m }))
-          .reduce((a, b) => (room(b.point) !== room(a.point) ? (room(b.point) > room(a.point) ? b : a) : away(marks, b.point) > away(marks, a.point) + 1 ? b : a));
-      let { point, at } = best(slack ? [-4, -3, -2, -1, 0, 1, 2, 3, 4] : [0]);
+          .reduce((a, b) => (!a ? b : room(b.point) !== room(a.point) ? (room(b.point) > room(a.point) ? b : a) : away(marks, b.point) > away(marks, a.point) + 1 ? b : a), null);
+      // A member shorter than the place it is asked for (the far set packs a
+      // line with others where it has only a sliver of its own) gets none.
+      const first = best(slack ? [-4, -3, -2, -1, 0, 1, 2, 3, 4] : [0]);
+      if (!first) return;
+      let { point, at } = first;
       // Nowhere clear that near: look twice as far each way.
       if (slack && room(point) < 1) {
         const wider = best([-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8]);
-        if (room(wider.point) > room(point)) ({ point, at } = wider);
+        if (wider && room(wider.point) > room(point)) ({ point, at } = wider);
       }
       out.push({ run, zoom, point, meters: at, rank });
       placed.get(run.line.route).push(point);
@@ -752,7 +791,7 @@ function sideScore(line, corridor) {
         const v = [p[0] - at[0], p[1] - at[1]];
         const d = Math.hypot(...v);
         // Past this end, off the shared track.
-        if (d < SHARED_METERS * 2 || d > LOOK_METERS || (v[0] * dir[0] + v[1] * dir[1]) * out <= 0) continue;
+        if (d < SHARED_METERS * 2 || d > LOOK_METERS || (v[0] * dir[0] + v[1] * dir[1]) * out <= LOOK_COS * d) continue;
         // Cross product: positive when the point is to the left.
         sum += (dir[0] * v[1] - dir[1] * v[0]) / d;
         n++;
@@ -789,7 +828,7 @@ function despike(points) {
       const d = out[i + 2];
       const w = d && [d[0] - c[0], d[1] - c[1]];
       const sharp = (p, q) => (p[0] * q[0] + p[1] * q[1]) / (Math.hypot(...p) * Math.hypot(...q) || 1) < 0.5;
-      const sidestep = w && lv < SHARED_METERS && sharp(u, v) && sharp(v, w) && (u[0] * v[1] - u[1] * v[0]) * (v[0] * w[1] - v[1] * w[0]) < 0;
+      const sidestep = w && lv < TRACK_METERS && sharp(u, v) && sharp(v, w) && (u[0] * v[1] - u[1] * v[0]) * (v[0] * w[1] - v[1] * w[0]) < 0;
       if (sidestep || ((u[0] * v[0] + u[1] * v[1]) / (lu * lv || 1) < -0.5 && Math.min(lu, lv) < SPIKE_METERS)) {
         out = [...out.slice(0, i), ...out.slice(i + 1)];
         changed = true;
@@ -813,7 +852,7 @@ function withoutRetrace(points) {
     const [lu, lv] = [Math.hypot(...u), Math.hypot(...v)];
     if ((u[0] * v[0] + u[1] * v[1]) / (lu * lv || 1) >= -0.5 || segmentDistance(c, a, b) > RETRACE_METERS) continue;
     const rest = [...points.slice(0, i), ...points.slice(i + 1)];
-    const alongside = (p) => rest.some((q, j) => j && segmentDistance(p, rest[j - 1], q) <= SHARED_METERS);
+    const alongside = (p) => rest.some((q, j) => j && segmentDistance(p, rest[j - 1], q) <= TRACK_METERS);
     const n = Math.ceil(lv / STEP_METERS);
     const leg = Array.from({ length: n }, (_, k) => [b[0] + (v[0] * k) / n, b[1] + (v[1] * k) / n]);
     if (leg.every(alongside)) return withoutRetrace(rest.filter((p, j) => !j || p[0] !== rest[j - 1][0] || p[1] !== rest[j - 1][1]));
@@ -828,14 +867,14 @@ function ownTrack(parts) {
   const kept = [];
   for (const part of [...parts].sort((a, b) => length(b) - length(a))) {
     const segments = kept.flatMap((k) => k.slice(1).map((b, i) => [k[i], b]));
-    const onKept = (p) => segments.some(([a, b]) => segmentDistance(p, a, b) <= SHARED_METERS);
+    const onKept = (p) => segments.some(([a, b]) => segmentDistance(p, a, b) <= TRACK_METERS);
     const off = part.map((p) => !onKept(p));
     for (let i = 0; i < part.length; i++) {
       if (!off[i]) continue;
       let j = i;
       while (j < part.length && off[j]) j++;
       const stretch = part.slice(Math.max(0, i - 1), Math.min(part.length, j + 1));
-      if (!kept.length || length(stretch) >= MIN_RUN_METERS) kept.push(stretch);
+      if (!kept.length || length(stretch) >= TRACK_RUN_METERS) kept.push(stretch);
       i = j;
     }
   }

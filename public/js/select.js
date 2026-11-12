@@ -20,8 +20,8 @@ import * as ui from './panel.js';
 import { setHighlight, setEnds } from './highlight.js';
 import { TIERS, TIER_RANK, bullet, dayFreq, date, esc, freq, goesText, isPhone, joinDot, middayPhrase, time, weekendOnly } from './shared.js';
 
-const ROUTE_LAYERS = ['street', 'bus-part-time', 'bus-limited', 'rail', 'rail-part-time'];
-const STATION_LAYERS = ['stations', 'stations-dot', 'stations-unserved', 'platform', 'platform-dot'];
+const ROUTE_LAYERS = ['street', 'bus-part-time', 'bus-limited', 'rail', 'rail-part-time', 'rail-far', 'rail-part-time-far'];
+const STATION_LAYERS = ['stations', 'stations-far', 'stations-dot', 'stations-dot-far', 'stations-unserved', 'platform', 'platform-dot'];
 const TAG_LAYERS = ['rail-bullets', 'rail-edge-letters', 'line-signs'];
 const POINTER_LAYERS = [...ROUTE_LAYERS, ...STATION_LAYERS, 'facilities', 'stops', ...TAG_LAYERS, 'flexride-fill', 'vehicles-rail', 'vehicles-bus'];
 
