@@ -106,6 +106,10 @@ export function sheetStyle(theme) {
     const bar = kind('station', ['==', ['get', 'shape'], 'bar']);
     // A station on one line is a dot a little wider than its line, so it reads as a station.
     const mark = ['case', ['get', 'single'], w + 1.4, ['get', 'hub'], w * 0.72 + 2.2, w * 0.72];
+    // Bars of one station held apart are joined by a slimmer link, under them.
+    const link = kind('station', ['==', ['get', 'shape'], 'link']);
+    layer('station-link-edge', 'line', { filter: link, layout: FLAT, paint: { 'line-color': c.markEdge, 'line-width': w * 0.45 + 2.6 } });
+    layer('station-link', 'line', { filter: link, layout: FLAT, paint: { 'line-color': c.mark, 'line-width': w * 0.45 } });
     layer('station-edge', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.markEdge, 'line-width': ['+', mark, 2.6] } });
     layer('station', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.mark, 'line-width': mark } });
 

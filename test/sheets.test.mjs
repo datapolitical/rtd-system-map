@@ -576,7 +576,7 @@ test("a line's tail track past its last station is no part of it: the line ends 
   assert.ok(begin[0] - o4[0] < -899, 'track running on farther than a walk is the line going on: it is kept');
 });
 
-test('lines that end at one bar from either side are set beside each other along it, never head to head', () => {
+test('lines that end at one station coming in from opposite ways get a bar each, held apart and linked, never head to head', () => {
   // A from the west and B from the east both end at Mill.
   const lines = railLines(all([
     line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at(0, 0), at(150, 0)]),
@@ -585,6 +585,14 @@ test('lines that end at one bar from either side are set beside each other along
   const marks = stationMarks(all([point({ id: 1, name: 'Mill', served: true, lines: 'A B', end: true }, at(150, 0))]), lines, sheet);
   const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
   const [a, b] = lines.map((l) => l.paths[0].at(-1));
-  assert.ok(Math.hypot(a[0] - b[0], a[1] - b[1]) >= pitch - 0.01, 'their ends a pitch apart along the bar');
-  assert.ok(marks[0].span >= pitch - 0.01, 'and the bar spans both');
+  assert.ok(b[0] - a[0] >= SIZES.barApart * pitch - 0.01, 'each line stops at its own bar, the two held apart, A on its own side');
+  assert.equal(marks[0].more.length, 1, 'two bars');
+  assert.equal(marks[0].links.length, 1, 'joined by a link');
+  // The same two bars far apart are two platforms of one station: no link, nothing moved.
+  const far = railLines(all([
+    line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at(0, 0), at(130, 0)]),
+    line({ mode: 'rail', route: 'B', color: '#4E9D2D', slot: 0 }, [at(300, 0), at(170, 0)]),
+  ]), sheet);
+  const apart = stationMarks(all([point({ id: 1, name: 'Mill', served: true, lines: 'A B', end: true }, at(150, 0))]), far, sheet);
+  assert.equal(apart[0].links.length, 0);
 });
