@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -381,4 +381,26 @@ test('a street that stops short of a slanted wall carries straight on to it, not
   const tip = drawn.path.at(-1);
   assert.ok(nearest(walls[0].ring, tip).d < 0.5, 'it ends on the wall');
   assert.ok(drawn.path.every((p) => Math.abs(p[1] - origin3[1] + 8) < 0.5), 'without turning to meet it');
+});
+
+test('a street that meets a cross street at two corners a little apart goes straight across at one', () => {
+  // Colfax-like: the west half comes into the cross street at y 0, the east half at y 4, with a
+  // hook into each corner; the cross street's link between them is busier-than-nothing but quiet.
+  const west = st([[-200, 0], [-20, 0], [-6, -3], [0, 0]], { cls: 'c10', routes: '15 16' });
+  const east = st([[0, 4], [6, 7], [20, 4], [200, 4]], { cls: 'c10', routes: '15' });
+  const link = st([[0, 0], [0, 4]], { cls: 'c30', routes: '0' });
+  const north = st([[0, -150], [0, 0]], { cls: 'c30', routes: '0' });
+  const south = st([[0, 4], [0, 150]], { cls: 'c30', routes: '0' });
+  const out = unjogged([west, east, link, north, south], 18);
+  assert.ok(!out.some((s) => s.routes === '0' && length(s.path) < 10), 'the link between the two corners is not drawn');
+  const [w, e] = [out.find((s) => s.routes === '15 16'), out.find((s) => s.routes === '15')];
+  assert.deepEqual(w.path.at(-1), e.path[0], 'both halves meet at one corner');
+  const corner = w.path.at(-1);
+  for (const p of [...w.path.slice(0, -1), ...e.path.slice(1)]) {
+    assert.ok(Math.hypot(p[0] - corner[0], p[1] - corner[1]) > 30, 'and each runs straight into it, no hook left');
+  }
+  const crossing = out.filter((s) => s.routes === '0');
+  assert.equal(crossing.length, 2, 'the cross street stays, in its two pieces');
+  const quiet = unjogged([st([[-200, 0], [0, 0]], { cls: 'c60', routes: '9' }), st([[0, 4], [200, 4]], { cls: 'c60', routes: '9' }), st([[0, 0], [0, 4]], { cls: 'c10', routes: '0' }), north, south], 18);
+  assert.equal(quiet.length, 5, 'but not where the link is busier than the halves');
 });

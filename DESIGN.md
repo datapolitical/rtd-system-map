@@ -2043,7 +2043,12 @@ How it is built:
   block between streets that carry on past it is kept. Of a strip's sides
   the quietest goes, then one no street runs straight through. Two streets
   side by side tied by short links are one street. The same street said
-  twice between two corners is drawn once.
+  twice between two corners is drawn once. Where a street's two halves come
+  into a cross street at corners a few pixels apart (under three slim
+  widths), carry straight on across from each other, share a route and are
+  at least as busy as the cross street between, the corners are one, half
+  way: the link is not drawn and each half runs straight into it, without
+  the hook of its last stretch.
 - **Route numbers are said once, not every block.** A street is cut at every
   corner and each piece's list differs a little from the next. Pieces that
   carry straight on from each other are one street; along it the longest
@@ -4063,6 +4068,10 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets' halls are a shade off the buildings in both themes.
   Reason: in the dark theme a hall was the same tone as the blocks round
   it, and in the light theme nearly so; only its edge showed.
+- 2026-11-12: Sheets draw a street straight across a cross street it met at
+  two corners a little apart. Reason: the two corners drew as a step in
+  the street with a break in its weight where the quieter link showed
+  between them.
 
 ## Sources
 

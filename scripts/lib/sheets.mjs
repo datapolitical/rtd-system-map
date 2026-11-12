@@ -839,6 +839,65 @@ function ledTo(path, end, to) {
   return end ? out : out.reverse();
 }
 
+/**
+ * Streets without jogs. Where one street comes into a cross street at two corners a few pixels
+ * apart (the halves of a street that meet a cross street a little off each other), the drawing
+ * is a step in the street and a break in its weight where the cross street's link shows between
+ * them. The two corners are one: they meet half way, and the link between them is not drawn.
+ * Only where the two halves carry on straight across from each other, share a route, and are at
+ * least as busy as the link. The last stretch of each half into its old corner goes, so both run
+ * straight into the shared one.
+ */
+export function unjogged(streets, most) {
+  const edges = cornered(streets);
+  const at = new Map();
+  for (const e of edges) for (const k of new Set([e.a, e.b])) at.set(k, [...(at.get(k) ?? []), e]);
+  const where = new Map();
+  for (const e of edges) for (const [k, p] of [[e.a, e.st.path[0]], [e.b, e.st.path.at(-1)]]) if (!where.has(k)) where.set(k, p);
+  const leaves = (o, k) => {
+    const path = o.a === k ? o.st.path : [...o.st.path].reverse();
+    const q = pointAlong(path, Math.min(12, o.len));
+    const d = dist(path[0], q) || 1;
+    return [(q[0] - path[0][0]) / d, (q[1] - path[0][1]) / d];
+  };
+  const rank = (o) => CLASS_ORDER.indexOf(o.st.cls);
+  const routes = (o) => new Set(String(o.st.routes).split(' '));
+  const gone = new Set();
+  const moved = new Set();
+  for (const e of [...edges].sort((x, y) => x.len - y.len)) {
+    if (e.a === e.b || e.len > most || moved.has(e.a) || moved.has(e.b)) continue;
+    const [pa, pb] = [where.get(e.a), where.get(e.b)];
+    const d = dist(pa, pb);
+    if (d < 0.5) continue;
+    const link = [(pb[0] - pa[0]) / d, (pb[1] - pa[1]) / d];
+    const others = (k) => at.get(k).filter((o) => o !== e && o.a !== o.b && !gone.has(o));
+    const halves = others(e.a).some((x) => others(e.b).some((y) => {
+      const [u, v] = [leaves(x, e.a), leaves(y, e.b)];
+      return u[0] * v[0] + u[1] * v[1] < -0.9 && Math.abs(u[0] * link[0] + u[1] * link[1]) < 0.5
+        && Math.min(rank(x), rank(y)) >= rank(e) && [...routes(x)].some((r) => routes(y).has(r));
+    }));
+    if (!halves) continue;
+    const mid = lerp(pa, pb, 0.5);
+    gone.add(e);
+    for (const k of [e.a, e.b]) {
+      moved.add(k);
+      for (const o of others(k)) {
+        // The last stretch into the old corner is the hook that made the jog: it is cut off and
+        // the street runs straight from there to the shared corner.
+        const straight = (pts) => {
+          const total = length(pts);
+          return [...partOf(pts, 0, total - Math.min(2 * most, total / 2)), mid];
+        };
+        let path = o.st.path;
+        if (o.a === k) path = straight([...path].reverse()).reverse();
+        if (o.b === k) path = straight(path);
+        o.st = { ...o.st, path };
+      }
+    }
+  }
+  return edges.filter((e) => !gone.has(e) && length(e.st.path) > 0.5).map((e) => e.st);
+}
+
 /** A name with its common words in their usual short forms, still plain to read. */
 const SHORT = { Station: 'Stn', Avenue: 'Ave', Street: 'St', Boulevard: 'Blvd', Parkway: 'Pkwy', Road: 'Rd', Center: 'Ctr', Junction: 'Jct', University: 'Univ', Government: 'Govt' };
 export function shortened(name) {
@@ -1114,7 +1173,7 @@ export function busStreets(streets, sheet, walls = []) {
     .map((e) => ({ cls: CLASS_ORDER[e.rank], routes: e.routes, n: e.n, hw: e.hw, path: simplify(rounded(simplify(e.path, 2), 2), 0.3) }));
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
-  const tidied = (list) => unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck);
+  const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
   return pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls);
 }
 
