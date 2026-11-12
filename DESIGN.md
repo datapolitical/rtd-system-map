@@ -2198,8 +2198,8 @@ A link to the map shows the title "RTD system map", the page's description
 and a picture (`public/og.png`, 1200x630): central Denver at zoom 11 in the
 light theme, with the interface and route letters hidden.
 `node scripts/og-image.mjs` makes it again from the live site; run it when
-the map's look changes. The page's own title stays "Denver transit map
-(unofficial)".
+the map's look changes. The browser tab says "RTD system map" too; the key
+still says the map is unofficial.
 
 ### The key
 
@@ -3905,6 +3905,9 @@ work against the real structure before asking for evaluation.
   live site by `scripts/og-image.mjs` (see "Link preview"). The picture is a
   committed file, so it shows the map as it was when made; the route letters
   are hidden because they stack at Union Station at that size (#114).
+- 2026-11-12: The browser tab says "RTD system map", as the link preview
+  does (was "Denver transit map (unofficial)"). The key's first line still
+  says the map is unofficial.
 
 ## Sources
 
