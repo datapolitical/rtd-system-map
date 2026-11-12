@@ -17,10 +17,10 @@
   const filters = {};
 
   qa.init = async (evaluateSource) => {
-    if (!routes) routes = (await (await fetch('data/routes.geojson')).json()).features;
-    if (!stations) stations = (await (await fetch('data/stations.geojson')).json()).features;
+    if (!routes) routes = (await (await fetch('/data/routes.geojson')).json()).features;
+    if (!stations) stations = (await (await fetch('/data/stations.geojson')).json()).features;
     // Streets by combined bus frequency (the `street` layer), where the site has them.
-    if (!streets.length) { try { const r = await fetch('data/streets.geojson'); if (r.ok) streets = (await r.json()).features; } catch {} }
+    if (!streets.length) { try { const r = await fetch('/data/streets.geojson'); if (r.ok) streets = (await r.json()).features; } catch {} }
     if (evaluateSource && !evaluate) {
       const url = URL.createObjectURL(new Blob([evaluateSource], { type: 'text/javascript' }));
       try { evaluate = (await import(url)).evaluate; } catch { evaluate = null; }

@@ -38,7 +38,8 @@ test('the classic map finds its files from where its scripts are, not from the p
   const dir = path.join(PUBLIC, 'js');
   for (const name of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
     const code = fs.readFileSync(path.join(dir, name), 'utf8');
-    assert.doesNotMatch(code, /fetch\(\s*['"`](?!https?:|\/)|document\.baseURI/, `${name} reads a file beside the page`);
+    // A fetch, or an address handed to the map (a layer's data, the glyphs), that starts at the page.
+    assert.doesNotMatch(code, /fetch\(\s*['"`](?!https?:|\/)|['"`](?:data|vendor|css|js)\/|document\.baseURI/, `${name} reads a file beside the page`);
   }
 });
 
@@ -58,4 +59,9 @@ test('the checks open the map at /classic/ on a site that has it, and at the roo
   assert.equal(await mapPath('http://old'), '/', 'a host that answers a missing page with its front page');
   assert.equal(await mapPath('http://bare'), '/', 'a host that answers a missing page with nothing');
   assert.equal(await mapPath('http://down'), '/');
+});
+
+test("the checks' in-page helpers ask for the site's files from its root, wherever the map's page is", () => {
+  const code = fs.readFileSync(fileURLToPath(new URL('../qa/lib/inpage.js', import.meta.url)), 'utf8');
+  assert.doesNotMatch(code, /(?:fetch|import)\(\s*['"`](?!https?:|\/)/);
 });

@@ -130,13 +130,15 @@ export function lettersFirst(layers) {
 export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'structures', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
+// A data file's address, from where this script is: the map draws wherever its page is served.
+const dataFile = (name) => new URL(`../data/${name}.geojson`, import.meta.url).href;
 const EMPTY = { type: 'FeatureCollection', features: [] };
 
 // By URL, so each file downloads and parses in the map's worker.
 export function dataSources() {
   return {
     ...Object.fromEntries(
-      DATA_SOURCES.map((name) => [name, { type: 'geojson', data: LAZY.includes(name) ? EMPTY : `data/${name}.geojson` }]),
+      DATA_SOURCES.map((name) => [name, { type: 'geojson', data: LAZY.includes(name) ? EMPTY : dataFile(name) }]),
     ),
     // A letter for each rail line on screen that has none (edgeletters.js).
     'rail-edge-letters': { type: 'geojson', data: EMPTY },
@@ -909,7 +911,7 @@ const AWAY = {
 
 // The biggest file loads when the map first gets near the zoom that shows it.
 export function loadWhenNeeded(map) {
-  const load1 = (name) => map.getSource(name).setData(`data/${name}.geojson`);
+  const load1 = (name) => map.getSource(name).setData(dataFile(name));
   const pending = new Map([['stops', STOPS_PRELOAD_ZOOM]]);
   const load = () => {
     for (const [name, zoom] of pending) {
