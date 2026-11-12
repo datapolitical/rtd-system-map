@@ -79,6 +79,8 @@ export const SIZES = {
   hallLetter: 9.5,
   // The sheet from which bus stops are drawn, each a ring.
   stopSheet: 4,
+  // A stop's ring, out to its edge (public/js/sheets/style.js, STOP_RING).
+  stopRing: 3.7,
 };
 
 // --- Screen pixels at a zoom (512-pixel tiles, as MapLibre draws) -----------
@@ -365,7 +367,7 @@ function headingAt(path, far, total = length(path)) {
  * One mark for each station trains stop at: a bar across the lines that stop
  * there, from the first to the last (a dot when there is one line).
  */
-export function stationMarks(stations, lines, sheet) {
+export function stationMarks(stations, lines, sheet, walls = []) {
   const byRoute = new Map(lines.map((l) => [l.route, l]));
   const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
   const marks = [];
@@ -426,7 +428,7 @@ export function stationMarks(stations, lines, sheet) {
       let t = across(g);
       if (gi && allEnd && Math.abs(dot(t, first)) > 0.5) t = first;
       const n = [-t[1], t[0]];
-      const c = [g.reduce((x, h) => x + h.at[0], 0) / g.length, g.reduce((y, h) => y + h.at[1], 0) / g.length];
+      let c = [g.reduce((x, h) => x + h.at[0], 0) / g.length, g.reduce((y, h) => y + h.at[1], 0) / g.length];
       for (const h of g) h.s = dot([h.at[0] - c[0], h.at[1] - c[1]], n);
       // A line that ends here is drawn into the bar square-on and stops at it, whatever the
       // track does in its last few yards; lines ending side by side keep their pitch.
@@ -441,6 +443,14 @@ export function stationMarks(stations, lines, sheet) {
       // centred on it: the bar is drawn fat, with a divider down it, so they don't read as
       // running through.
       g.fat = allEnd && sets.every((set) => set.length);
+      // Lines that end over a bus station's hall end at its wall, not somewhere inside the
+      // room: the bar is drawn where they come in.
+      const room = allEnd && !g.fat && walls.find((w) => within(c, w.ring));
+      if (room) {
+        const side = sets[0].length ? 1 : -1;
+        const out = crossing(c, [t[0] * side, t[1] * side], room.ring);
+        if (out) c = out;
+      }
       const all = enders.reduce((x, h) => x + h.s, 0) / (enders.length || 1);
       for (const [k, side] of [1, -1].entries()) {
         const set = sets[k];
@@ -484,6 +494,39 @@ export function stationMarks(stations, lines, sheet) {
     if (!drawn.some(near)) drawn.push(m);
   }
   return drawn;
+}
+
+/** Whether a point is within `by` of a path's bounding box: a quick no before measuring. */
+const boxes = new WeakMap();
+function boxed(path, p, by) {
+  if (!boxes.has(path)) boxes.set(path, [Math.min(...path.map((q) => q[0])), Math.min(...path.map((q) => q[1])), Math.max(...path.map((q) => q[0])), Math.max(...path.map((q) => q[1]))]);
+  const b = boxes.get(path);
+  return p[0] >= b[0] - by && p[0] <= b[2] + by && p[1] >= b[1] - by && p[1] <= b[3] + by;
+}
+
+/** Whether a point is inside a ring. */
+function within(p, ring) {
+  let inside = false;
+  for (let i = 1; i < ring.length; i++) {
+    const [a, b] = [ring[i - 1], ring[i]];
+    if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < a[0] + ((p[1] - a[1]) / (b[1] - a[1])) * (b[0] - a[0])) inside = !inside;
+  }
+  return inside;
+}
+
+/** Where a ray from a point first crosses a ring. */
+function crossing(p, u, ring) {
+  let best = Infinity;
+  for (let i = 1; i < ring.length; i++) {
+    const [a, b] = [ring[i - 1], ring[i]];
+    const e = [b[0] - a[0], b[1] - a[1]];
+    const den = u[0] * e[1] - u[1] * e[0];
+    if (Math.abs(den) < 1e-9) continue;
+    const far = ((a[0] - p[0]) * e[1] - (a[1] - p[1]) * e[0]) / den;
+    const on = ((a[0] - p[0]) * u[1] - (a[1] - p[1]) * u[0]) / den;
+    if (far > 0 && on >= 0 && on <= 1 && far < best) best = far;
+  }
+  return best < Infinity ? [p[0] + u[0] * best, p[1] + u[1] * best] : null;
 }
 
 /**
@@ -1534,7 +1577,56 @@ export function busStreets(streets, sheet, walls = [], marks = []) {
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
   const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
-  return toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing)), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre, walls);
+  return gathered(onWalls(toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing)), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre, walls), walls, SIZES.hallReach));
+}
+
+/**
+ * A corner beside a hall's wall sits on it. A turnaround that comes back to the hall, or two
+ * streets that meet at its door, are drawn to the wall, not to a point a few pixels off it.
+ */
+export function onWalls(streets, walls, reach) {
+  if (!walls.length) return streets;
+  const moved = (p) => {
+    let best = null;
+    for (const w of walls) {
+      const h = nearest(w.ring, p);
+      if (h.d <= reach && (!best || h.d < best.d)) best = h;
+    }
+    return best && best.d > 0.5 ? best.at : null;
+  };
+  return streets.map((st) => {
+    let path = st.path;
+    for (const end of [0, 1]) {
+      const to = moved(end ? path.at(-1) : path[0]);
+      if (!to) continue;
+      // The last few points go with the end, so the street comes to the wall without a hook.
+      const kept = (end ? path.slice(0, -1) : path.slice(1)).filter((q) => dist(q, to) > 1.5 * reach);
+      if (!kept.length) continue;
+      path = end ? [...kept, to] : [to, ...kept];
+    }
+    return path === st.path ? st : { ...st, path };
+  });
+}
+
+/**
+ * A street that carries every route of a street it meets is drawn no lighter than it: where
+ * streets gather into one, the one they make is at least as heavy as the heaviest of them.
+ */
+export function gathered(streets) {
+  const edges = cornered(streets);
+  const at = new Map();
+  for (const e of edges) for (const k of [e.a, e.b]) at.set(k, [...(at.get(k) ?? []), e]);
+  const sets = new Map(edges.map((e) => [e, new Set(String(e.st.routes).split(' '))]));
+  const now = new Map(edges.map((e) => [e, e.st]));
+  for (let turn = 0, changed = true; changed && turn < 50; turn++) {
+    changed = false;
+    for (const e of edges) for (const k of [e.a, e.b]) for (const o of at.get(k)) {
+      if (o === e || [...sets.get(o)].some((r) => !sets.get(e).has(r))) continue;
+      const [mine, theirs] = [now.get(e), now.get(o)];
+      if (CLASS_ORDER.indexOf(theirs.cls) > CLASS_ORDER.indexOf(mine.cls)) { now.set(e, { ...mine, cls: theirs.cls, hw: theirs.hw }); changed = true; }
+    }
+  }
+  return edges.map((e) => now.get(e));
 }
 
 /**
@@ -2071,8 +2163,8 @@ export function busStops(stops, routes) {
 /** Everything one sheet draws, as a FeatureCollection the page loads. */
 export function drawSheet({ routes, stations, streets, terminals, stops }, sheet) {
   const lines = railLines(routes, sheet);
-  const marks = stationMarks(stations, lines, sheet);
   const walls = halls(terminals, sheet);
+  const marks = stationMarks(stations, lines, sheet, walls);
   const bus = busStreets(streets, sheet, walls, marks);
   const discs = letters(lines, marks, sheet);
   const back = (p) => toLonLat(p, sheet.zoom);
@@ -2123,7 +2215,13 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     for (const b of n.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink }, { type: 'Point', coordinates: back(b.at) }));
   }
   if (sheet.id >= SIZES.stopSheet) {
-    for (const f of busStops(stops, routes)) features.push(feature({ kind: 'stop', id: f.properties.id }, f.geometry));
+    // A ring half under a rail line can't be read as a stop: one that close to a line is not drawn.
+    const clear = SIZES.rail[sheet.id] / 2 + SIZES.stopRing;
+    for (const f of busStops(stops, routes)) {
+      const p = toPx(f.geometry.coordinates, sheet.zoom);
+      if (lines.some((l) => l.paths.some((path) => boxed(path, p, clear) && nearest(path, p).d < clear))) continue;
+      features.push(feature({ kind: 'stop', id: f.properties.id }, f.geometry));
+    }
   }
   const hub = marks.find((m) => m.hub);
   return { type: 'FeatureCollection', hub: hub ? back(lerp(hub.ends[0], hub.ends[1], 0.5)) : null, features };

@@ -671,3 +671,37 @@ test('a long hall says what it is down its length; a place that shares a station
   assert.ok(ids.indexOf('hall-name-4') > ids.indexOf('street-name-4'), 'placed before street names, which give way');
   assert.ok(SIZES.busListed[4] > SIZES.busListed[3]);
 });
+
+test('lines that end over a hall end at its wall; a corner beside a wall sits on it; a street carrying all of a neighbour\'s routes is no lighter', async () => {
+  const { onWalls, gathered } = await import('../scripts/lib/sheets.mjs');
+  // A hall 200 wide and 40 deep; A and B come down from the north and stop in the middle of it.
+  const room = { type: 'Feature', properties: { id: 1, name: 'Hall' }, geometry: { type: 'Polygon', coordinates: [[at3(0, 0), at3(200, 0), at3(200, 40), at3(0, 40), at3(0, 0)]] } };
+  const walls = halls(all([room]), near);
+  const down = (route, color) => line({ mode: 'rail', route, color, slot: 0 }, [at3(100, -400), at3(100, 20)]);
+  const stations = all([point({ id: 1, name: 'Mill', served: true, lines: 'A B', end: true }, at3(100, 20))]);
+  const y = (walled) => {
+    const lines = railLines(all([down('A', '#57C1E9'), down('B', '#4E9D2D')]), near);
+    const [m] = stationMarks(stations, lines, near, walled);
+    return [m.ends[0][1] - origin3[1], Math.max(...lines.flatMap((l) => l.paths.flat().map((p) => p[1]))) - origin3[1]];
+  };
+  assert.ok(y([])[0] > 10, 'with no hall the bar is where the track stops');
+  const [bar, tip] = y(walls);
+  assert.ok(Math.abs(bar) < 1 && tip < 1, 'with one, the bar is on the north wall and no line runs past it');
+  // A corner 6 px off the wall moves onto it, with no hook left behind; a far one stays.
+  const ring = [[0, 0], [200, 0], [200, 40], [0, 40], [0, 0]];
+  const [a, b] = onWalls([st([[50, 46], [51, 50], [50, 120]]), st([[50, 46], [120, 100]]), st([[300, 300], [320, 300]])], [{ ring }], SIZES.hallReach);
+  assert.deepEqual(a.path, [[50, 40], [50, 120]]);
+  assert.deepEqual(b.path[0], [50, 40]);
+  // Two streets gather into one that the data drew lighter: it takes the heavier's weight. One that drops a route keeps its own.
+  const g = gathered([st([[0, 0], [100, 0]], { routes: '1 2', cls: 'c10', hw: 10 }), st([[100, 0], [200, 0]], { routes: '1 2 3', cls: 'c30', hw: 30 }), st([[200, 0], [300, 0]], { routes: '3', cls: 'c60', hw: 60 })]);
+  assert.deepEqual(g.map((s) => s.cls), ['c10', 'c10', 'c60']);
+});
+
+test('a stop whose ring would sit half under a rail line is not ringed', () => {
+  const s = SHEETS[3];
+  const o = toPx([-105, 39.75], s.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s.zoom);
+  const data = { routes: all([line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [ll(0, 0), ll(400, 0)])]), stations: all([]), streets: all([]), terminals: null,
+    stops: all([point({ id: 'under', routes: '15' }, ll(200, 3)), point({ id: 'clear', routes: '15' }, ll(200, 30))]) };
+  assert.deepEqual(drawSheet(data, s).features.filter((f) => f.properties.kind === 'stop').map((f) => f.properties.id), ['clear']);
+});

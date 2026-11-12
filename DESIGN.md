@@ -2009,7 +2009,13 @@ How it is built:
   long enough is lettered down its length with what it is ("Bus concourse"
   where the data says underground, "Bus station" otherwise), and street
   names give way to it. A place the ground map names the same as a station
-  is not lettered twice. The two halves of a divided road are one straight line down the
+  is not lettered twice. Lines that end over a bus station's hall end at the
+  wall they come in through, with their bar on it, not at a point inside the
+  room. A corner of bus streets beside a hall's wall sits on the wall. A
+  street that carries every route of a street it meets is drawn no lighter
+  than it, so streets that gather make a street at least as heavy as the
+  heaviest of them, and one list of routes keeps one weight. A stop whose
+  ring would sit half under a rail line is not ringed. The two halves of a divided road are one straight line down the
   middle. A short break in a bus street between two ends that share a route
   is bridged. A line weight holds for a few blocks: a short stretch takes the
   weight of the longer stretch it runs into, so a street is never dashes of
@@ -4187,6 +4193,14 @@ work against the real structure before asking for evaluation.
   street's own marks had kept them off. Reason: Chris's red-team of Union
   Station on sheet 4: no line letters in view, no name at the light rail
   end, the hall read as a road, no street names, routes hidden behind "+N".
+- 2026-11-12: Sheets end rail at a hall's wall, set corners beside a wall on
+  it, keep a street no lighter than a street whose routes it all carries, and
+  leave out a stop ring half under a rail line. Reason: on sheet 4 at Union
+  Station the commuter lines ended inside the bus hall, the FreeRide loop
+  stopped five pixels short of it, a street carrying eleven routes was drawn
+  lighter than one of the two that fed it, the same "15, 19" was heavy on
+  one side of the hall and faint on the other, and a sliver of a stop ring
+  showed from under the light rail.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.
