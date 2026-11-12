@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -411,4 +411,20 @@ test('a street that meets a cross street at two corners a little apart goes stra
   ], 18);
   assert.equal(ladder.length, 5, 'nor where the two are streets of a ladder that carry on past the rung');
   assert.ok(ladder.every((s) => s.path.every((p) => p[1] === 0 || p[1] === 6 || s.routes === '0')), 'which stay where they are');
+});
+
+test('along a street nothing else meets, a short stretch a class apart takes its neighbour\'s weight; a long one stays', () => {
+  const hub = [[[0, 0], [0, -80]], [[0, 0], [80, 0]]].map((p) => st(p, { cls: 'c10', routes: '5' }));
+  const out = evened([
+    st([[-120, 0], [-14, 0]], { cls: 'c30', routes: '1 6 10' }),
+    st([[-14, 0], [-9, 0]], { cls: 'c15', routes: '1 6 10' }),
+    st([[-9, 0], [0, 0]], { cls: 'c15', routes: '1 6 9 10' }),
+    ...hub,
+  ], 32);
+  assert.ok(out.filter((s) => s.path[0][0] < 0).every((s) => s.cls === 'c30'), 'the tick into the corner is the pale street\'s weight');
+  const real = evened([
+    st([[0, 100], [100, 100]], { cls: 'c10', routes: '2 3' }),
+    st([[100, 100], [200, 100]], { cls: 'c30', routes: '2' }),
+  ], 32);
+  assert.deepEqual(real.map((s) => s.cls), ['c10', 'c30'], 'a change of service over a long stretch is kept');
 });

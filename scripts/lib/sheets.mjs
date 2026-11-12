@@ -902,6 +902,64 @@ export function unjogged(streets, most) {
   return edges.filter((e) => !gone.has(e) && length(e.st.path) > 0.5).map((e) => e.st);
 }
 
+/**
+ * Streets of one weight. A street is cut at every corner and each piece is weighed on its own,
+ * so along a street that nothing else meets, a few pieces can come out a class apart from the
+ * rest: a short dark tick on the end of a pale street. Along such a street, a stretch of one
+ * weight shorter than `most` takes the weight of the longer stretch beside it; a longer one is a
+ * real change of service and stays.
+ */
+export function evened(streets, most) {
+  const edges = cornered(streets);
+  const at = new Map();
+  for (const e of edges) for (const k of [e.a, e.b]) at.set(k, [...(at.get(k) ?? []), e]);
+  const seen = new Set();
+  const onward = (e, k) => {
+    const here = at.get(k);
+    if (here.length !== 2 || e.a === e.b) return null;
+    const next = here.find((o) => o !== e);
+    return next && !seen.has(next) && next.a !== next.b ? next : null;
+  };
+  for (const start of edges) {
+    if (seen.has(start) || start.a === start.b) continue;
+    seen.add(start);
+    const run = [start];
+    for (const [k, add] of [[start.b, (e) => run.push(e)], [start.a, (e) => run.unshift(e)]]) {
+      let [e, corner] = [start, k];
+      for (let next = onward(e, corner); next; next = onward(e, corner)) {
+        seen.add(next);
+        add(next);
+        corner = next.a === corner ? next.b : next.a;
+        e = next;
+      }
+    }
+    if (run.length < 2) continue;
+    const stretches = [];
+    for (const e of run) {
+      if (stretches.at(-1)?.cls === e.st.cls) { stretches.at(-1).edges.push(e); stretches.at(-1).len += e.len; }
+      else stretches.push({ cls: e.st.cls, edges: [e], len: e.len });
+    }
+    while (stretches.length > 1) {
+      const i = stretches.reduce((m, x, j) => (x.len < stretches[m].len ? j : m), 0);
+      if (stretches[i].len >= most) break;
+      const [l, r] = [stretches[i - 1], stretches[i + 1]];
+      const into = !r || (l && l.len >= r.len) ? l : r;
+      into.edges.push(...stretches[i].edges);
+      into.len += stretches[i].len;
+      stretches.splice(i, 1);
+      for (let j = stretches.length - 1; j > 0; j--) {
+        if (stretches[j].cls === stretches[j - 1].cls) {
+          stretches[j - 1].edges.push(...stretches[j].edges);
+          stretches[j - 1].len += stretches[j].len;
+          stretches.splice(j, 1);
+        }
+      }
+    }
+    for (const x of stretches) for (const e of x.edges) if (e.st.cls !== x.cls) e.st = { ...e.st, cls: x.cls };
+  }
+  return edges.map((e) => e.st);
+}
+
 /** A name with its common words in their usual short forms, still plain to read. */
 const SHORT = { Station: 'Stn', Avenue: 'Ave', Street: 'St', Boulevard: 'Blvd', Parkway: 'Pkwy', Road: 'Rd', Center: 'Ctr', Junction: 'Jct', University: 'Univ', Government: 'Govt' };
 export function shortened(name) {
@@ -1178,7 +1236,7 @@ export function busStreets(streets, sheet, walls = []) {
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
   const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
-  return pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls);
+  return evened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busRing);
 }
 
 /**

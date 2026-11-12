@@ -2048,7 +2048,10 @@ How it is built:
   widths), carry straight on across from each other, share a route and are
   at least as busy as the cross street between, the corners are one, half
   way: the link is not drawn and each half runs straight into it, without
-  the hook of its last stretch.
+  the hook of its last stretch. Along a street that nothing else meets, a stretch
+  a class apart from the rest and shorter than a ring (32 pixels) takes the
+  weight of the longer stretch beside it; a longer one is a real change of
+  service and stays.
 - **Route numbers are said once, not every block.** A street is cut at every
   corner and each piece's list differs a little from the next. Pieces that
   carry straight on from each other are one street; along it the longest
@@ -4072,6 +4075,9 @@ work against the real structure before asking for evaluation.
   two corners a little apart. Reason: the two corners drew as a step in
   the street with a break in its weight where the quieter link showed
   between them.
+- 2026-11-12: Sheets keep one weight along a street where nothing else
+  meets it. Reason: pieces weighed apart left a short dark tick on the end
+  of a pale street at the downtown hub on sheet 1.
 
 ## Sources
 
