@@ -126,10 +126,19 @@ findings, and `npm run check:recall` (`qa/recall/`) scores them.
 - **Images are measured by drawing them.** `symbols.js` runs in Node with a
   canvas for `document.createElement` and a map that records `addImage`, so
   an icon's size, anchor and pixel ratio are the page's.
-- **Tiles come from the style.** The vector source's TileJSON is fetched once
-  and its tiles cached under `qa/drawn/.cache/tiles/<version>/` (git ignores
-  the folder), keyed by the folder the TileJSON names, so a new basemap
-  version downloads its own tiles instead of mixing with the old.
+- **Tiles come from the style.** The vector source's TileJSON is cached at
+  `qa/cache/tiles/tilejson.json` and its tiles under
+  `qa/cache/tiles/<version>/` (git ignores the folder), keyed by the folder
+  the TileJSON names, so a new basemap version downloads its own tiles
+  instead of mixing with the old. The TileJSON's URL doesn't change between
+  basemap builds, so it is read again once the cached copy is a day old; a
+  frozen build (`qa/recall/fixtures/<commit>`) keeps the one it was frozen
+  with. A tile that answers 404 is drawn as empty and not saved.
+- **A style expression that fails fails the run.** MapLibre draws a property
+  whose expression throws with the default and only logs a warning. The
+  model counts each failure by layer and property (`styleErrors()` in
+  `expressions.mjs`); the checks (`qa/checks/run.mjs`) and the drift test
+  fail on any.
 
 ## The drift test
 

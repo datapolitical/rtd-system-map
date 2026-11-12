@@ -29,6 +29,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect, siteData } from './fixtures.mjs';
 import { openModel, pageSources } from '../drawn/model.mjs';
+import { styleErrors } from '../drawn/expressions.mjs';
 import { compareBoxes, compareLines, compareLinesBack, compareProbes, comparePoints, lineSamples, modelHitMap, probeLines, signature } from '../drawn/compare.mjs';
 import { offsetParts } from '../drawn/strokes.mjs';
 import { seededViews } from '../lib/views.mjs';
@@ -277,6 +278,7 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
   // with, and every line the model draws must be on the page.
   expect(totalMissing, `line points the model does not have (${missingLayers.join(' ')})`).toBe(0);
   expect(sum((r) => r.back.missing), 'lines the model draws and the page does not').toBe(0);
+  expect(styleErrors(), 'style expressions the model could not evaluate').toEqual([]);
   await expect(detail, 'the model and the browser disagree').toEqual([]);
 });
 

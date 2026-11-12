@@ -9,6 +9,7 @@
 // asks for the places where faults are known or planted, to tell a detector
 // that misses a fault from a run that never looked there).
 import { openModel } from '../drawn/model.mjs';
+import { assertStyleEvaluates } from '../drawn/expressions.mjs';
 import { coveredFaults, mergeCovered } from '../drawn/covered.mjs';
 import { endFaults } from '../drawn/ends.mjs';
 import { packFaults } from '../drawn/packs.mjs';
@@ -129,6 +130,9 @@ export async function runChecks({ data, meta, root, theme, zooms = ZOOMS, views 
       }
     }
   }
+  // A property the model couldn't evaluate is drawn with its default, so
+  // every finding above may be about a map the page doesn't draw (#58).
+  assertStyleEvaluates();
   return findings;
 }
 
