@@ -2403,6 +2403,10 @@ are deferred, not ruled out. See "Open questions".
     Live is on (or a stop panel is open) and the tab is visible.
   - MapLibre and the Overpass font are served from the site itself: no extra
     connections to a CDN or Google before the map can start.
+  - Symbols are drawn on canvases kept in memory, not on the GPU
+    (`willReadFrequently`), because each is read back as pixels for the map
+    and the key, and a read off a GPU canvas waits for the GPU. That wait
+    was over half the page's opening main-thread time (#105).
 - **Offline:** after the first visit, a service worker keeps the page, the
   map data, and the schedule, so the full map, other times, and scheduled
   departures work with no signal (underground at Union Station, say). Live
@@ -3855,6 +3859,16 @@ work against the real structure before asking for evaluation.
   than 20 m apart are separate groups, so A has a mark at Peoria. A stop only
   trains call at is not drawn as a bus stop. The hub's name stays off lines
   from zoom 15. Lines ease between slots in thirty-seconds of a width.
+- 2026-11-12: The symbols' canvases are created with `willReadFrequently`
+  (#105). Profiled in headless Chromium, reading each symbol back off a GPU
+  canvas (`getImageData` for the map, `toDataURL` for the key) took 3 to
+  4.5 s and 1.3 s of the page's opening main-thread work; with the option,
+  about none. At the "Quality floor" profile (170 ms, 9 Mbps, 4x CPU) the
+  main thread was blocked 2.2 to 2.5 s during load instead of 4.8 to 5.8 s.
+  Drawing the symbols at build time into a sprite sheet was the other way;
+  it was not needed once the cost turned out to be the read, not the
+  drawing. The symbols look the same in both themes; only edge pixels'
+  anti-aliasing differs.
 - 2026-11-10: A rail line ends at the mark of the station it ends at, not
   past it. Running each line along its platform to the platform's far end
   while the mark stays at the stops, where riders board, left lines running
