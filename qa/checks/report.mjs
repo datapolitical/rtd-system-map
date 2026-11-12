@@ -13,14 +13,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pageSources } from '../drawn/model.mjs';
-import { mergeFindings, runChecks } from './run.mjs';
+import { ZOOMS as ALL_ZOOMS, mergeFindings, runChecks } from './run.mjs';
 
 const arg = (name, fallback) => {
   const at = process.argv.indexOf(`--${name}`);
   return at > 0 && process.argv[at + 1] ? process.argv[at + 1] : fallback;
 };
 const THEMES = arg('theme', 'dark,light').split(',');
-const ZOOMS = arg('zooms', '12,14,16,17').split(',').map(Number);
+const ZOOMS = arg('zooms', ALL_ZOOMS.join(',')).split(',').map(Number);
 const VIEWS = Number(arg('views', '10'));
 const OUT = arg('out', path.join('qa', 'findings'));
 const SITE = arg('url', process.env.CHECK_URL ?? 'https://drawn-map.rtd-system-map.pages.dev').replace(/\/$/, '');

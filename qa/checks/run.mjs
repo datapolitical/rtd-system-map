@@ -9,6 +9,10 @@
 // asks for the places where faults are known or planted, to tell a detector
 // that misses a fault from a run that never looked there).
 import { openModel } from '../drawn/model.mjs';
+import { coveredFaults, mergeCovered } from '../drawn/covered.mjs';
+import { endFaults } from '../drawn/ends.mjs';
+import { packFaults } from '../drawn/packs.mjs';
+import { shapeFaults } from '../drawn/shapes.mjs';
 import { lineFaults } from '../drawn/lines.mjs';
 import { PLACE_SOURCES, routeFaults } from '../drawn/routes.mjs';
 import { labelFaults } from '../drawn/labels.mjs';
@@ -17,7 +21,26 @@ import { markFaults } from '../drawn/marks.mjs';
 import { streetFaults } from '../drawn/streets.mjs';
 import { seededViews } from '../lib/views.mjs';
 
-export const SEVERITY = { gap: 1, overshoot: 1, dangling: 1, hook: 2, tick: 2, 'off-street': 2, 'stray-stop': 3, duplicate: 4, 'over-line': 5, step: 6, hidden: 7, far: 8, translucent: 9 };
+export const SEVERITY = {
+  gap: 1, overshoot: 1, dangling: 1, 'end-unmarked': 1,
+  hook: 2, tick: 2, 'steep-ease': 2, 'off-street': 2, 'under-rail': 2, 'stop-on-rail': 2, 'bus-in-hall': 2, 'mark-askew': 2, 'marks-not-parallel': 2, 'off-platform': 2, skew: 2, 'past-roof': 2,
+  'stray-stop': 3, drift: 3, 'uneven-gap': 3, swap: 3, 'mark-short': 3, 'ends-uneven': 3, 'past-mark': 3, 'walk-bent': 3, 'rail-only-stop': 3, 'rail-under-bus': 3,
+  duplicate: 4, 'marks-overlap': 4, sliver: 4, 'zig-zag': 4, 'sharp-bend': 4, 'over-line': 5, step: 6, hidden: 7, far: 8, translucent: 9, 'marks-nested': 9, 'platform-covered': 9,
+};
+// Every half zoom the page shows the network at. The checks used to look at
+// 12, 14, 16 and 17 only, and two faults Chris found by eye on 2026-11-11
+// were at 11 and 13. A theme takes about 15 seconds at all fifteen.
+export const ZOOMS = [10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 15.5, 16, 16.5, 17];
+// `dangling` measures in metres (no mark within 150 m), which is under 3 px
+// below zoom 12, where the outer lines of a pack are drawn hundreds of metres
+// from their station: every find there was a line ending inside its mark.
+// `end-unmarked` (ends.mjs) is the rule at every zoom; this one is kept from
+// 12 for the finds it is scored on.
+const DANGLING_FROM = 12;
+// A platform mostly under the lines drawn over it (shapes.mjs) is two thirds
+// of all platforms at zoom 16: a question for the design, not a fault list.
+// Ask for it with `leads: true`.
+const LEADS = new Set(['platform-covered']);
 export const FRAME = { width: 390, height: 664 };
 // The zooms a place is looked at when the caller names none; marks and street
 // alignment need the basemap, read from z16.
@@ -44,7 +67,7 @@ export function defaultPlaces(data, { views = 10 } = {}) {
 /**
  * @returns {Promise<Array>} findings, one per detector hit, unmerged
  */
-export async function runChecks({ data, meta, root, theme, zooms = [12, 14, 16, 17], views = 10, site = '', extraPlaces = [], defaults = true }) {
+export async function runChecks({ data, meta, root, theme, zooms = ZOOMS, views = 10, site = '', extraPlaces = [], defaults = true, leads = false }) {
   const model = await openModel({ ...(root ? { root } : {}), theme, data, meta });
   const findings = [];
   const nameLayers = model.style.layers.filter((l) => l.type === 'symbol'
@@ -52,14 +75,35 @@ export async function runChecks({ data, meta, root, theme, zooms = [12, 14, 16, 
     && l.layout?.['icon-image'] === undefined
     && l.layout?.['symbol-placement'] !== 'line' && model.data[l.source]).map((l) => l.id);
 
+  const covered = [];
   for (const zoom of zooms) {
     const at = model.zoom(zoom);
     // Where a line end can be at, as the page draws those marks and halls
     // once their layers are on, so the answer is the same at every zoom.
     const places = model.places(zoom, PLACE_SOURCES);
-    for (const fault of [...lineFaults(at), ...routeFaults(at, { places })]) {
+    const push = (fault, check) => {
       const [lon, lat] = toLonLat(fault.px, zoom);
-      findings.push({ theme, check: 'lines', kind: fault.kind, layer: fault.layer, route: fault.route ?? null, zoom, lat, lon, msg: fault.msg, link: linkTo(site, zoom, lat, lon), where: 'district' });
+      findings.push({ theme, check, kind: fault.kind, layer: fault.layer, route: fault.route ?? null, zoom, lat, lon, msg: fault.msg, link: linkTo(site, zoom, lat, lon), where: 'district' });
+    };
+    for (const fault of [...lineFaults(at), ...routeFaults(at, { places })]) {
+      if (fault.kind === 'dangling' && zoom < DANGLING_FROM) continue;
+      push(fault, 'lines');
+    }
+    // Rail ends and station marks (ends.mjs), and lines against platforms,
+    // roofs and walks (shapes.mjs).
+    for (const fault of endFaults(at)) push(fault, 'ends');
+    // Lines sharing track (packs.mjs): even gaps, no drift, no steep ease.
+    for (const fault of packFaults(at)) push(fault, 'packs');
+    for (const fault of shapeFaults(at, { data: model.data })) if (leads || !LEADS.has(fault.kind)) push(fault, 'shapes');
+    // Bus lines and stops under rail (covered.mjs), kept with their zoom to
+    // be merged below: a stretch is not the same length at every zoom.
+    for (const fault of coveredFaults(at, { places })) covered.push({ ...fault, zoom });
+  }
+  // One row per stretch or stop, at the point the merge gives it, once for
+  // each zoom it was seen at (mergeFindings then makes it one finding).
+  for (const row of mergeCovered(covered)) {
+    for (const zoom of row.zooms) {
+      findings.push({ theme, check: 'covered', kind: row.kind, layer: row.layer ?? null, route: row.route ?? null, zoom, lat: row.lat, lon: row.lon, msg: row.msg, link: linkTo(site, Math.max(...row.zooms), row.lat, row.lon), where: 'district' });
     }
   }
 
