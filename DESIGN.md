@@ -2047,6 +2047,9 @@ How it is built:
   pieces are labelled, none closer than a sheet's spacing (170, 240 and 320
   pixels on sheets 2 to 4). A street with more than four routes lists three
   and a count; a tap gives them all.
+  The numbers are set just beside their street, a pixel and a half clear of
+  its ink, never on it: on the line, the street shows between the figures
+  and a comma reads as a dash.
 - **Lines change place gently.** Where a line joins or leaves a pack, the
   others slide to their new places over about 26 pixels each side, so the
   lines beside one that ends do not jog at its last station.
@@ -4051,6 +4054,9 @@ work against the real structure before asking for evaluation.
   that touched without a shared corner, or from a surveyed shape drawn
   true. The stub rule's old bound (half a percent of route length) is no
   longer claimed; it was measured for single pieces.
+- 2026-11-12: Sheets set route numbers beside their street, not on it.
+  Reason: in the dark theme especially, the street showed through the
+  gaps between figures, so "0, 6, 10" read as "0-6-10".
 
 ## Sources
 

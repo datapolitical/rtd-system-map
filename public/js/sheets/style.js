@@ -31,12 +31,17 @@ export const PALETTES = {
 };
 
 // Bus street widths by class, per sheet.
-const BUS_WIDTH = {
+export const BUS_WIDTH = {
   1: { c60: 0.8, c30: 1, c15: 1.4, c10: 1.8, c5: 2.1, c3: 2.1 },
   2: { c60: 0.9, c30: 1.2, c15: 1.8, c10: 2.4, c5: 3.1, c3: 3.1 },
   3: { c60: 1.4, c30: 1.8, c15: 2.4, c10: 3, c5: 3.6, c3: 3.6 },
   4: { c60: 2.2, c30: 2.8, c15: 3.6, c10: 4.4, c5: 5.2, c3: 5.2 },
 };
+
+// Route number size per sheet, and how far off its street's middle a number is set, in ems:
+// the street's half width, a pixel and a half of air, and half the figures' height.
+export const NUMBER_SIZE = { 1: 0, 2: 8.5, 3: 10, 4: 11.5 };
+export const numberOffset = (n, width) => -((width / 2 + 1.5) / NUMBER_SIZE[n] + 0.36);
 
 // Station name size per sheet (SIZES.name in the build).
 const NAME_SIZE = { 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 };
@@ -115,7 +120,10 @@ export function sheetStyle(theme) {
     layer('keep-off-bus', 'symbol', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]]), ...unseen });
     // Route numbers along each bus street, from the second sheet.
     if (n >= 2) layer('bus-number', 'symbol', { filter: kind('bus'),
-      layout: { 'symbol-placement': 'line', 'symbol-spacing': [0, 200, 260, 320][i], 'text-field': ['get', 'label'], 'text-font': FONT.semibold, 'text-size': [0, 8.5, 10, 11.5][i], 'text-max-angle': 25, 'text-padding': 4,
+      // Set just beside the street, not on it: on it, the line shows between the figures and a
+      // comma reads as a dash. The offset is the street's half width and a little air, in ems.
+      layout: { 'symbol-placement': 'line', 'symbol-spacing': [0, 200, 260, 320][i], 'text-field': ['get', 'label'], 'text-font': FONT.semibold, 'text-size': NUMBER_SIZE[n], 'text-max-angle': 25, 'text-padding': 4,
+        'text-offset': byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w)]]]))),
         'text-letter-spacing': 0.02, 'symbol-sort-key': ['-', 0, ['get', 'n']] },
       paint: { 'text-color': c.number, 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).

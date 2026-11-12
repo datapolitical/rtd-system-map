@@ -344,3 +344,18 @@ test('a knot gathered to a point beside a street going through does not bend tha
   assert.equal(quiet.length, 1, 'the turnaround is a point');
   assert.ok(Math.min(...[quiet[0].path[0], quiet[0].path.at(-1)].map((p) => Math.hypot(p[0] - origin3[0], p[1] - origin3[1]))) < 1, 'on the street, where the quiet street now ends');
 });
+
+test('route numbers are set beside their street, clear of its ink, on every sheet that has them', async () => {
+  const { sheetStyle, BUS_WIDTH, NUMBER_SIZE, numberOffset } = await import('../public/js/sheets/style.js');
+  for (const theme of ['light', 'dark']) {
+    const layers = sheetStyle(theme).layers.filter((l) => l.id.includes('bus-number'));
+    assert.equal(layers.length, 3, 'sheets 2 to 4 number their streets');
+    for (const l of layers) assert.ok(l.layout['text-offset'], 'each sets its numbers off the line');
+  }
+  for (const n of [2, 3, 4]) for (const [cls, width] of Object.entries(BUS_WIDTH[n])) {
+    // Half the figures' height is about a third of the type size; the rest must clear the line.
+    const clear = -numberOffset(n, width) * NUMBER_SIZE[n] - 0.36 * NUMBER_SIZE[n];
+    assert.ok(clear >= width / 2 + 1, `sheet ${n} ${cls}: the figures clear the street by a pixel`);
+  }
+});
+
