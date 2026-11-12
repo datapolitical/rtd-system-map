@@ -61,13 +61,19 @@ F3 Non-rail things in rail-like hues.
 G1 Bus (or basemap) visually as strong as or stronger than rail at a zoom
    (measured as area x contrast in a view, not width alone).
 G2 Level order wrong: quieter classes drawn louder than busier ones.
-G3 Basemap competing: roads, water, labels louder than the network.
+G3 Basemap competing: roads, water, parks, terrain louder than the network.
+G4 No hierarchy where there is no rail: in a bus-only area the busiest
+   corridor (e.g. US 36 to Boulder) isn't clearly the strongest line, and its
+   stations aren't marked.
 
 ## H. Bus streets as streets
 H1 Geometry that no street has: boxes, squares, circuit-board jogs, wedges.
 H2 Dangling ends that aren't terminals.
 H3 Bus line off its street.
 H4 Width/class steps with no junction.
+H5 Fragments: pieces of a route that connect to nothing at a zoom (floating
+   stubs, a lone 'L' or hook), because the rest is filtered out or thinned.
+H6 Closed loops that read as enclosures (a route's turnaround drawn as a ring).
 
 ## I. Labels
 I1 Collisions: label on a line, mark, other label.
