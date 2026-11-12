@@ -1208,7 +1208,11 @@ knows nothing about a station, a platform or a line
   one at the north end of the light-rail platform and one at the south end
   of the train hall, and the walk between them ran at an angle across the
   hall: "you would never draw it that way if you were just drawing this by
-  hand". (2) At the lines' end, where every line of the group ends there, so
+  hand". A mark on the walk lies along it, not exactly across its own lines,
+  when the two are within 25 degrees (`alongWalk`), so the marks at the two
+  ends of the walk are parallel and in one line with it; the light rail
+  comes in 14 degrees off square to the concourse, and its mark was tilted
+  that much against the other. (2) At the lines' end, where every line of the group ends there, so
   each runs the length of its platform and ends at the mark. (3) Abreast of
   the station's own mark, where the platform reaches that far (within 40 m of
   one of the group's stops), so two marks of one station stand side by side
@@ -1218,11 +1222,20 @@ knows nothing about a station, a platform or a line
   (`endAtMarks`), never past it. It is a station mark like any other, the
   same image at the same size, turned across its lines, as wide as the lines
   that stop there, so a group reads as a station, not a new kind of thing.
-- *When it comes.* A group's mark waits until it clears the station's own mark
-  by the same rule as a station's tick (`tickFrom`), so a group a few metres
-  from the station never doubles it, and a group that never clears gets no
-  mark. The station's own mark stands for the group its point is on, if it is
-  on one. At Union Station the second mark arrives at zoom 13.
+- *When it comes.* A group whose lines run on through waits until its mark
+  clears the station's own (`clearFrom`), so a group a few metres from the
+  station never doubles it, and a group that never clears gets no mark. A
+  group its lines end at does not wait: the lines end at its mark, and with
+  the mark held back they ended at nothing (the light rail at Union Station
+  at zoom 13). It is marked from zoom 11, where stations become capsules, and
+  overlaps the station's own mark until it is clear of it; further out the
+  hub's ring stands for both. `tickFrom` is a whole zoom, and the map shows
+  the mark by a filter on it: a paint property that reads both the zoom and
+  the feature is worked out at whole zooms and blended between, so a mark
+  due at 13 was nothing at 13 and a ghost until 14. The mark and the walk
+  take their room before any station's name, the hub's included, which sat
+  on the second mark. The station's own mark stands for the group its point
+  is on, if it is on one.
 - *One station.* A row of dots from the station's mark to each group's, in
   the station's edge ink (dots 1.4 px across at zoom 10, 2 at 13 and 2.6 at
   16, a little over two dots apart), says the marks are one place and the way
@@ -1257,9 +1270,22 @@ or loses draws itself.
   (`extendLineToPlatforms`). At Union Station that fills the train hall with
   A, B, G and N and the light-rail platforms with C, E and W. A station with
   no platform in OSM is left exactly where RTD's data puts it.
-  The line runs straight on along its own bearing to abreast of the
-  platform's far end (`platformEndFor`); bent toward the platform's middle
-  line it kinked just before its mark.
+  The line runs on parallel to its platform, from where it meets it, to
+  abreast of the platform's far end (`platformEndFor`). Bent toward the
+  platform's middle line it kinked just before its mark; carried straight on
+  along its own bearing it drifted across the platform, where RTD's line
+  comes in a few degrees off it (the airport, 4 degrees over 120 m: "not
+  parallel with the platform which is obviously wrong"). A line that only
+  crosses a platform (more than 30 degrees off it) is not turned along it.
+- *Under the roof.* A roof at least 10 m wide and 600 m2 is a hall, not the
+  awning along a platform: it is drawn like the station building (kind
+  `hall`), whole, and where one stands over the end of the platform (its
+  middle abreast of a point 5 to 60 m short of the lines' end) the station's
+  mark is on the track abreast of the roof's middle and the lines end there.
+  The airport's A line ends under its canopy, 15 m short of the buffers; run
+  to the platform's very end it came out past the canopy's tip. The pale
+  wash a canopy gets made a hall's roof paler than the building the basemap
+  draws there, so it looked as if the roof had been taken away.
 - *The mark is at the end of the line.* A train runs the whole platform it
   stops at and stops at its head end, so the platform's far end is the one
   away from the side the line came in on. A station a line ends at is marked
@@ -1370,7 +1396,27 @@ The build works this out from the geometry every time
    1.5 km, finishing before the next
    station. Only the piece with fewer lines moves; lines still together stay
    put. So a line never steps sideways at a junction, and isn't drawn over
-   another while their tracks are still close.
+   another while their tracks are still close. The one exception is where
+   the line that leaves does so by ending: a station's mark lies across the
+   pack at that very place, so the lines that run on take their own places
+   abreast of the end (`atLineEnds`), under the mark, and are straight on
+   both sides of it. Eased over the next few hundred metres they bent away
+   from the mark for no reason a reader could see (E and R south of Lincoln,
+   C and E north of Alameda, where T ends: "they don't look straight",
+   "jerky rather than clean and hand drawn"). The join check
+   (`routeJoins`) allows a step abreast of another line's end.
+
+9. Put the lines of a pack on one path (`aligned`). Steps 6 and 7 leave them
+   up to a metre apart, most where one of them ends, and a metre is a pixel
+   at zoom 16: one gap in a pack came out wider than the next (T beside E and
+   R at Lincoln). Each line is moved onto the path of the lines before it, in
+   the order of their names, where it shares their track: all the way within
+   1 m, less and less out to 2.5 m. The lines are written to six decimals
+   (0.1 m) and keep every point more than 0.1 m off the straight line past
+   it; at five decimals and 0.5 m each line was rounded and thinned its own
+   way. On RTD's network 2026-11-11 the mean distance between two lines'
+   paths where they share track went from 0.36 m to 0.06 m, for 64 KB more
+   rail data.
 
 Checked on RTD's network 2026-11-06: no two joined pieces of a line differ by
 more than a sixteenth of a width, and no two lines within 20 m of each other
@@ -3774,6 +3820,17 @@ work against the real structure before asking for evaluation.
   happen to fall on (see "The station's real shape"). This is the rail half
   of that round; its bus-hall changes are not ported, since the street graph
   draws the halls and the lines that end at them.
+- 2026-11-11: Chris's review of the stations the evening they went out.
+  The light rail had no mark at its end at Union Station at zoom 13: a
+  platform group its lines end at is now marked from zoom 11 without waiting
+  to clear the station's own mark, by a filter on a whole zoom. The two
+  marks at Union Station are parallel, both along the walk. The gap between
+  T and E at Lincoln was wider than between E and R: lines sharing track are
+  put on one path and written to 0.1 m ("Shared track", step 9). Where a
+  line of a pack ends, the others take their places under its end mark
+  instead of easing afterwards (step 8). A line runs on parallel to its
+  platform, and ends under a hall's roof where there is one (the airport);
+  hall roofs are drawn like station buildings.
 - 2026-11-11: Stations, after looking at each terminus at a phone's size
   (#83). A station a line ends at is marked at the line's end, and the line
   runs straight along its platform to it; this replaces the cut at the stops

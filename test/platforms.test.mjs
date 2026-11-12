@@ -5,6 +5,7 @@ import {
   SAME_LINE_METERS,
   SAME_PLACE_METERS,
   clearFrom,
+  alongWalk,
   groupPlatforms,
   longAxis,
   meters,
@@ -13,7 +14,7 @@ import {
   splitByTrack,
   walkPoint,
 } from '../scripts/lib/platforms.mjs';
-import { TICK_FROM, linePaths } from '../scripts/lib/stationmarks.mjs';
+import { TICK_FROM, TICK_TO, linePaths } from '../scripts/lib/stationmarks.mjs';
 
 // A made-up network: two single-track lines run north to south, 44 m apart,
 // each ending at its own platform group.
@@ -146,6 +147,9 @@ test('a line that passes a station on its own track is marked abreast of the sta
   const [mark, join] = features;
   assert.equal(mark.properties.lines, 'A');
   assert.ok(meters(mark.geometry.coordinates, [LINE_A, B_END]) < 3, `abreast of the station, not at A's stop: ${mark.geometry.coordinates}`);
+  // A line that runs on through waits until its mark is clear of the
+  // station's, from a whole zoom (the map shows a mark from a whole zoom).
+  assert.ok(Number.isInteger(mark.properties.tickFrom) && mark.properties.tickFrom > TICK_TO, `from ${mark.properties.tickFrom}`);
   assert.deepEqual(join.geometry.coordinates, [here, mark.geometry.coordinates]);
 });
 
@@ -182,8 +186,23 @@ test('the marks of two platform groups stand in line with the hall between them'
   const moved = { ...f, geometry: { type: 'Point', coordinates: own } };
   const [mark, join] = platformMarks([moved], [platforms], two, ending, [hall]);
   assert.ok(meters(mark.geometry.coordinates, [FAR, AXIS]) < 2, `B's mark on the axis: ${mark.geometry.coordinates}`);
+  // The walk runs east to west, so both marks lie along it: drawn across
+  // lines that run north to south, as they were (bearing 0 or 180).
+  assert.equal(Math.abs(mark.properties.bearing) % 180, 0);
+  // B ends at its mark, so the mark doesn't wait to be clear of the
+  // station's: with it held back the line ended at nothing.
+  assert.equal(mark.properties.tickFrom, TICK_TO);
+  assert.equal(join.properties.tickFrom, TICK_TO);
   assert.ok(Math.abs(join.geometry.coordinates[0][1] - join.geometry.coordinates[1][1]) < 2e-5, 'the walk runs straight along the hall');
   // A hall that crosses only one group's track moves nothing.
   const short = [[LON + 0.0003, AXIS - 0.00012], [LON + 0.0015, AXIS - 0.00012], [LON + 0.0015, AXIS + 0.00012], [LON + 0.0003, AXIS + 0.00012], [LON + 0.0003, AXIS - 0.00012]];
   assert.equal(walkPoint(f, platforms, two, ending(), [short]), null);
+});
+
+test('a mark on a walk lies along it when its lines come in nearly square to it', () => {
+  // A walk running east to west: marks across lines that run north to south.
+  const walk = [[LON, 39.7], [LON + 0.003, 39.7]];
+  assert.equal(alongWalk(14, walk), 0, 'lines 14 degrees off square: the mark is turned to lie along the walk');
+  assert.equal(alongWalk(-166, walk), -180, 'the same mark, its lines drawn the other way');
+  assert.equal(alongWalk(40, walk), 40, 'too far off square to turn: it would not cover its lines');
 });

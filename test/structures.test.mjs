@@ -105,22 +105,25 @@ test('a line runs along its platform to the platform end nearest it', () => {
   assert.equal(platformEndFor([-105.01, 39.75], rings), null);
 });
 
-test('extending a line runs it straight on beside its platform to the platform end', () => {
+test('extending a line runs it on beside its platform, parallel to it, to the platform end', () => {
   const areas = parseOsmAreas(STATION);
   const stop = [-105.0, 39.7503];
   const shapes = shapesFor([stop], areas, AT);
   const byStation = new Map([[0, shapes]]);
-  // A line coming up from the south, 3 m west of the platform's middle line.
-  const west = -105.0 - 3 / (111320 * Math.cos((39.75 * Math.PI) / 180));
+  // A line coming up from the south to 3 m west of the platform's middle
+  // line, 3 degrees off the platform's own direction.
+  const metre = 1 / (111320 * Math.cos((39.75 * Math.PI) / 180));
+  const west = -105.0 - 3 * metre;
   const path = [
-    [west, 39.749],
+    [west - 7.5 * metre, 39.749],
     [west, 39.7503],
   ];
   const [out] = extendLineToPlatforms([path], [0], [[stop]], byStation);
   assert.equal(out.length, path.length + 1);
   assert.ok(out.at(-1)[1] > 39.7510, `ran north along the platform, got ${out.at(-1)[1]}`);
-  // Straight on: it stays on its own line, not bent across to the platform's.
-  assert.ok(Math.abs(out.at(-1)[0] - west) < 1e-7, `bent ${((out.at(-1)[0] - west) * 85000).toFixed(1)} m sideways`);
+  // Parallel to the platform from where it met it: not bent across to the
+  // platform's middle line, and not carried on along its own slant.
+  assert.ok(Math.abs(out.at(-1)[0] - west) < 1e-7, `ended ${((out.at(-1)[0] - west) / metre).toFixed(1)} m to the side`);
   // A line that only crosses the platform is not turned along it.
   const across = [
     [-105.001, 39.7503],

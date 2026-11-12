@@ -202,11 +202,20 @@ export const lineKeepOut = () => [
       'icon-size': byZoom(RAIL_WIDTH.map((w) => ['+', w + 3 + 2 * KEEP_OUT, ['*', 2 * (w + RAIL_GAP), slot]])),
     },
   }),
-  // The walk between a station's marks (network.js, 'platform-joins'): a
-  // name on its dots hides them.
+];
+// A station's platform-group marks and the walk between them (network.js,
+// 'platform' and 'platform-joins'), placed before every station's name, the
+// hub's too: a name on the dots hides them, and the hub's name, which is
+// placed before the lines claim their room, sat on its own second mark.
+export const groupKeepOut = () => [
   clear('keep-out-walk', 'platforms', {
-    filter: ['==', ['get', 'kind'], 'join'],
+    filter: ['all', ['==', ['get', 'kind'], 'join'], ['<=', ['coalesce', ['get', 'tickFrom'], 0], ['zoom']]],
     layout: { ...alongLine, 'icon-size': 3 + 2 * KEEP_OUT },
+  }),
+  clear('keep-out-group-marks', 'platforms', {
+    minzoom: OVERVIEW_UNTIL,
+    filter: ['all', ['==', ['get', 'kind'], 'mark'], ['<=', ['coalesce', ['get', 'tickFrom'], 0], ['zoom']]],
+    layout: { 'icon-size': stationBox },
   }),
 ];
 
@@ -241,7 +250,7 @@ const markKeepOut = () => [
   }),
   clear('keep-out-platforms', 'platforms', {
     minzoom: OVERVIEW_UNTIL,
-    filter: ['==', ['get', 'kind'], 'mark'],
+    filter: ['all', ['==', ['get', 'kind'], 'mark'], ['<=', ['coalesce', ['get', 'tickFrom'], 0], ['zoom']]],
     layout: { 'icon-size': stationBox },
   }),
 ];

@@ -275,3 +275,49 @@ test("a line is not cut at another line's mark, nor at a mark off its track or f
   const short = endAtMarks(pieces(), new Map([['A', [[1040 * M, 0]]]]))[0].geometry.coordinates;
   assert.ok(metresFrom(short.at(-1), [1000, 0]) < 0.5);
 });
+
+test('lines that share track are drawn on one path, so the gaps in a pack are even', () => {
+  // Y is drawn 0.6 m east of X round a bend, and ends where X runs on: each
+  // line's own rounding left them up to a metre apart toward Y's end.
+  const { pieces } = sharedTrack([
+    line('X', [[0, 0], [0, 4], [1, 8], [1, 20]]),
+    line('Y', [[0.0006, 0], [0.0006, 4], [1.0006, 8], [1.0006, 10]]),
+  ]);
+  const x = of(pieces, 'X').flatMap((p) => p.geometry.coordinates.map(km).slice(1).map((b, i) => [km(p.geometry.coordinates[i]), b]));
+  const off = (q) =>
+    Math.min(
+      ...x.map(([a, b]) => {
+        const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+        const t = Math.max(0, Math.min(1, ((q[0] - a[0]) * dx + (q[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+        return Math.hypot(q[0] - a[0] - t * dx, q[1] - a[1] - t * dy) * 1000;
+      }),
+    );
+  // Every 50 m along Y, corners or not: lines on one path can keep different
+  // points of it.
+  const ys = of(pieces, 'Y').flatMap((p) => {
+    const points = p.geometry.coordinates.map(km);
+    return points.slice(1).flatMap((b, i) => {
+      const a = points[i];
+      const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.05));
+      return Array.from({ length: n + 1 }, (_, k) => [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
+    });
+  });
+  assert.ok(ys.length > 150, 'Y is drawn');
+  const worst = Math.max(...ys.map(off));
+  assert.ok(worst < 0.2, `Y is on X's path: ${worst.toFixed(2)} m off at worst`);
+});
+
+test('where a line of a pack ends, the lines that run on take their places abreast of its end', () => {
+  // X and Y share track from the south; Y ends 10 km up and X runs on.
+  const { pieces } = sharedTrack([line('X', [[0, 0], [0, 20]]), line('Y', [[0, 0], [0, 10]])]);
+  const x = of(pieces, 'X');
+  // Two places only, beside Y and alone: no easing between them, which bent
+  // the line away from the mark Y's end is marked with.
+  assert.deepEqual([...new Set(x.map((p) => Math.abs(p.properties.slot)))].sort(), [0, 0.5]);
+  // The change is abreast of Y's end, where that mark hides it: not 20 m on,
+  // where Y's end stops counting as near.
+  const alone = x.filter((p) => p.properties.slot === 0);
+  const from = Math.min(...alone.flatMap((p) => p.geometry.coordinates.map((c) => km(c)[1])));
+  assert.ok(Math.abs(from - 10) < 0.002, `X is alone from ${from.toFixed(4)} km up`);
+  // A line that leaves by turning away is still eased (the test above).
+});

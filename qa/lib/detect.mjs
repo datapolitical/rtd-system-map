@@ -320,6 +320,16 @@ export function routeJoins(geojson, { step = 1 / 16 } = {}) {
     if (!byRoute.has(f.properties.route)) byRoute.set(f.properties.route, []);
     byRoute.get(f.properties.route).push(f);
   }
+  // Where each line ends: an end of one of its pieces that no other of its
+  // pieces carries on from. A pack changes width there under the line's end
+  // mark, so the lines that run on step to their new places at that point
+  // (scripts/lib/sharedtrack.mjs, `eased`): not a fault.
+  const lineEnds = [];
+  for (const [route, fs] of byRoute) {
+    const ends = fs.flatMap((f, i) => [{ i, p: f.geometry.coordinates[0] }, { i, p: f.geometry.coordinates.at(-1) }]);
+    for (const a of ends) if (!ends.some((b) => b.i !== a.i && m(a.p, b.p) < 30)) lineEnds.push({ route, p: a.p });
+  }
+  const atAnEnd = (route, p) => lineEnds.some((e) => e.route !== route && m(e.p, p) <= 40);
   for (const [route, fs] of byRoute) {
     const ends = fs.flatMap((f, i) => [{ i, e: 0, p: f.geometry.coordinates[0], slot: f.properties.slot ?? 0 }, { i, e: 1, p: f.geometry.coordinates.at(-1), slot: f.properties.slot ?? 0 }]);
     for (const a of ends) {
@@ -330,7 +340,7 @@ export function routeJoins(geojson, { step = 1 / 16 } = {}) {
         if (a.i > best.b.i) continue; // each join once
         // End-to-start keeps direction; start-to-start or end-to-end flips it, and the slot's sign with it.
         const sb = a.e !== best.b.e ? best.b.slot : -best.b.slot;
-        if (Math.abs(a.slot - sb) > step + 1e-6) out.push({ kind: 'slot-jump', route, at: a.p, slots: [a.slot, sb], msg: `line ${route}: joined pieces at ${a.p.map((v) => v.toFixed(5)).join(', ')} are in slots ${a.slot} and ${sb} (more than one easing step apart)` });
+        if (Math.abs(a.slot - sb) > step + 1e-6 && !atAnEnd(route, a.p)) out.push({ kind: 'slot-jump', route, at: a.p, slots: [a.slot, sb], msg: `line ${route}: joined pieces at ${a.p.map((v) => v.toFixed(5)).join(', ')} are in slots ${a.slot} and ${sb} (more than one easing step apart)` });
       } else if (best.d < 30) {
         out.push({ kind: 'near-miss', route, at: a.p, metres: +best.d.toFixed(1), msg: `line ${route}: a piece ends ${best.d.toFixed(1)} m from the next piece's end instead of on it, at ${a.p.map((v) => v.toFixed(5)).join(', ')}` });
       }
