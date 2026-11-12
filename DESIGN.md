@@ -2102,6 +2102,8 @@ Without a card or a caption, the first screen answers:
 
 ### One tap model
 
+- A double tap zooms in and opens nothing: a tap waits 300 ms (MapLibre's
+  double-tap window) before it opens anything.
 - Tap a vehicle (Live): vehicle details.
 - Tap a station: the station, trains first. When it's closed, "Closed: no
   trains this week" (or the return date) comes first. Then buses, then
@@ -3915,6 +3917,10 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: The browser tab says "RTD system map", as the link preview
   does (was "Denver transit map (unofficial)"). The key's first line still
   says the map is unofficial.
+- 2026-11-12: A double tap zooms in and opens nothing ("A quick double tap
+  should zoom in, not select a particular line", Chris). MapLibre fires a
+  click for the first tap of a double tap, so a tap now waits 300 ms and
+  opens nothing if another touch or a zoom starts in that time.
 
 ## Sources
 

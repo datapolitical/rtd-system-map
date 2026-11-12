@@ -111,7 +111,7 @@ const PINS = [
   { ...REVIEW, id: '103-alameda-jerky', latest: 'gone: C and E take their places under the mark', place: 'Alameda', view: 'alameda', at: [[-104.99400, 39.70970]],
     said: 'the rail lines look jerky rather than clean and hand drawn.', kind: 'drift', caught_by: ['drift', 'steep-ease', 'step'], confidence: 'clear', radius: 40 },
   { ...REVIEW, id: '103-broadway-break', latest: 'gone: C eases over 1.4 km', place: 'I-25 / Broadway', view: 'broadway', at: [[-104.98990, 39.69910]],
-    said: 'The rail line breaks at I-25 and Broadway', kind: 'steep-ease', caught_by: ['steep-ease', 'step', 'gap'], confidence: 'clear', radius: 12 },
+    said: 'The rail line breaks at I-25 and Broadway', kind: 'steep-ease', caught_by: ['steep-ease', 'step', 'gap', 'break'], confidence: 'clear', radius: 12 },
 ];
 
 // The picture point (CSS px in a phone capture of `view`) of a ground point.

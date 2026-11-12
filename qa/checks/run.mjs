@@ -23,15 +23,18 @@ import { streetFaults } from '../drawn/streets.mjs';
 import { seededViews } from '../lib/views.mjs';
 
 export const SEVERITY = {
-  gap: 1, overshoot: 1, dangling: 1, 'end-unmarked': 1,
+  gap: 1, break: 1, 'end-hidden': 1, overshoot: 1, dangling: 1, 'end-unmarked': 1,
   hook: 2, tick: 2, 'steep-ease': 2, 'off-street': 2, 'under-rail': 2, 'stop-on-rail': 2, 'bus-in-hall': 2, 'mark-askew': 2, 'marks-not-parallel': 2, 'off-platform': 2, skew: 2, 'past-roof': 2,
   'stray-stop': 3, drift: 3, 'uneven-gap': 3, swap: 3, 'mark-short': 3, 'ends-uneven': 3, 'past-mark': 3, 'walk-bent': 3, 'rail-only-stop': 3, 'rail-under-bus': 3,
   duplicate: 4, 'marks-overlap': 4, sliver: 4, 'zig-zag': 4, 'sharp-bend': 4, 'over-line': 5, step: 6, hidden: 7, far: 8, translucent: 9, 'marks-nested': 9, 'platform-covered': 9,
 };
 // Every half zoom the page shows the network at. The checks used to look at
 // 12, 14, 16 and 17 only, and two faults Chris found by eye on 2026-11-11
-// were at 11 and 13. A theme takes about 15 seconds at all fifteen.
-export const ZOOMS = [10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 15.5, 16, 16.5, 17];
+// were at 11 and 13. A theme takes about 15 seconds at all fifteen. From 9
+// to 10.5 by quarters: phones open at about 10 (9.99 on a 402x655 screen,
+// 10.11 on 390x844), and below 10 the page's tiles are cut at zoom 9, so
+// two phones a hair apart were two different maps (#115).
+export const ZOOMS = [9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 15.5, 16, 16.5, 17];
 // `dangling` measures in metres (no mark within 150 m), which is under 3 px
 // below zoom 12, where the outer lines of a pack are drawn hundreds of metres
 // from their station: every find there was a line ending inside its mark.
@@ -92,7 +95,7 @@ export async function runChecks({ data, meta, root, theme, zooms = ZOOMS, views 
     }
     // Rail ends and station marks (ends.mjs), and lines against platforms,
     // roofs and walks (shapes.mjs).
-    for (const fault of endFaults(at)) push(fault, 'ends');
+    for (const fault of endFaults(at, { alpha: (id, xy) => model.icons.alpha(id, xy) })) push(fault, 'ends');
     // Lines sharing track (packs.mjs): even gaps, no drift, no steep ease.
     for (const fault of packFaults(at)) push(fault, 'packs');
     for (const fault of shapeFaults(at, { data: model.data })) if (leads || !LEADS.has(fault.kind)) push(fault, 'shapes');

@@ -3,7 +3,7 @@
 // geometry in screen px at zoom 17. No browser, no data.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DRAWN, endFaults, freeEnds, notParallel, overlappingMarks, railPieces, squareMarks, stationMarks, unevenEnds, unmarkedEnds } from '../qa/drawn/ends.mjs';
+import { DRAWN, brokenLines, endFaults, freeEnds, hiddenEnds, notParallel, overlappingMarks, railPieces, squareMarks, stationMarks, unevenEnds, unmarkedEnds } from '../qa/drawn/ends.mjs';
 
 const O = 2 ** 25; // the middle of the world at zoom 17
 const P = (x, y) => [O + x, O + y];
@@ -218,4 +218,44 @@ test('stationMarks leaves out the invisible marks that keep names off, and marks
   const stop = { ...mark({ at: [0, 0] }), source: 'stops' };
   assert.deepEqual(stationMarks(at([], [clear, unserved, stop])), []);
   assert.equal(stationMarks(at([], [mark({ at: [0, 0] })])).length, 1);
+});
+
+// #115: the build eases a line between slots in slivers a fraction of a pixel
+// long, and the page's tiles drop some of them below zoom 10.
+test('freeEnds: a chain of slivers that stops short is a free end; one that carries on is not', () => {
+  const sliver = (y0) => rail('C', [[P(0, y0), P(0, y0 + 0.4)]], { width: 3.4 });
+  const whole = [rail('C', [[P(0, -100), P(0, 0)]], { width: 3.4 }), ...[0, 0.4, 0.8, 1.2].map(sliver), rail('C', [[P(0, 1.6), P(0, 100)]], { width: 3.4 })];
+  assert.deepEqual(freeEnds(railPieces(at(whole))).map((e) => Math.round(e.E[1] - O)).sort((a, b) => a - b), [-100, 100]);
+  // The slivers after the first are gone, and the line picks up 10 px on.
+  const cut = [rail('C', [[P(0, -100), P(0, 0)]], { width: 3.4 }), sliver(0), rail('C', [[P(0, 10.4), P(0, 100)]], { width: 3.4 })];
+  assert.deepEqual(freeEnds(railPieces(at(cut))).map((e) => Math.round(e.E[1] - O)).sort((a, b) => a - b), [-100, 0, 10, 100]);
+});
+
+test('brokenLines: a line that stops and starts again a few widths on; not two lines that each end', () => {
+  const cut = [rail('C', [[P(0, -100), P(0, 0)]], { width: 3.4 }), rail('C', [[P(0, 10), P(0, 100)]], { width: 3.4 })];
+  const faults = brokenLines(at(cut));
+  assert.deepEqual(kinds(faults), ['break']);
+  assert.match(faults[0].msg, /cut in two/);
+  assert.deepEqual(kinds(endFaults(at(cut, [mark({ lines: 'C', at: [0, -100] }), mark({ lines: 'C', at: [0, 100] })]))).filter((k) => k !== 'marks-overlap'), ['break']);
+  // Far apart, or another route: no break.
+  assert.deepEqual(brokenLines(at([rail('C', [[P(0, -100), P(0, 0)]], { width: 3.4 }), rail('C', [[P(0, 200), P(0, 300)]], { width: 3.4 })])), []);
+  assert.deepEqual(brokenLines(at([rail('C', [[P(0, -100), P(0, 0)]], { width: 3.4 }), rail('E', [[P(0, 10), P(0, 100)]], { width: 3.4 })])), []);
+});
+
+test('hiddenEnds: lines ending under a filled disc are hidden; under an open ring or a capsule across them, not', () => {
+  // Pictures 40 px across: a filled disc, a ring 2 px wide, a capsule 40 by 12.
+  const alpha = (id, [x, y]) => {
+    const r = Math.hypot(x - 20, y - 20);
+    if (id === 'disc') return r <= 19 ? 1 : 0;
+    if (id === 'ring') return Math.abs(r - 18) <= 1 ? 1 : 0;
+    return x >= 0 && x <= 40 && y >= 14 && y <= 26 ? 1 : 0;
+  };
+  const lines = pack();
+  const hub = (image) => mark({ at: [0, 0], w: 40, h: 40, image, layer: 'stations-hub' });
+  const top = mark({ at: [0, -400] });
+  const disc = hiddenEnds(at(lines, [top, hub('disc')]), { alpha });
+  assert.deepEqual(kinds(disc), ['end-hidden', 'end-hidden', 'end-hidden']);
+  assert.match(disc[0].msg, /hidden under the stations-hub/);
+  assert.deepEqual(hiddenEnds(at(lines, [top, hub('ring')]), { alpha }), []);
+  assert.deepEqual(hiddenEnds(at(lines, [top, mark({ at: [0, 0], image: 'station-3' })]), { alpha }), []);
 });

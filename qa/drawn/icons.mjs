@@ -36,7 +36,7 @@ export async function icons(theme = 'dark', root = path.resolve(path.dirname(new
   const map = {
     hasImage: (id) => sizes.has(id),
     addImage: (id, data, options = {}) => {
-      sizes.set(id, { width: data.width, height: data.height, pixelRatio: options.pixelRatio ?? 1 });
+      sizes.set(id, { width: data.width, height: data.height, pixelRatio: options.pixelRatio ?? 1, pixels: data.data ?? null });
     },
   };
   // Rail bullets are sized the same for every line; the colour of one comes
@@ -50,6 +50,15 @@ export async function icons(theme = 'dark', root = path.resolve(path.dirname(new
       const s = sizes.get(id);
       if (!s) throw new Error(`no image ${id}`);
       return { width: s.width / s.pixelRatio, height: s.height / s.pixelRatio, ratio: s.pixelRatio };
+    },
+    // An image's opacity (0 to 1) at [x, y] CSS px from its top left, 0
+    // outside it or where the page handed no pixels.
+    alpha(id, [x, y]) {
+      this.size(id);
+      const s = sizes.get(id);
+      const [i, j] = [Math.floor(x * s.pixelRatio), Math.floor(y * s.pixelRatio)];
+      if (!s.pixels || i < 0 || j < 0 || i >= s.width || j >= s.height) return 0;
+      return s.pixels[(j * s.width + i) * 4 + 3] / 255;
     },
   };
   return booted;
