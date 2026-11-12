@@ -15,11 +15,16 @@ export const RATIO = Math.max(2, Math.ceil(devicePixelRatio || 1));
 // A live bus arrow's ring, in px outside its edge (addSymbol).
 const BUS_RING = 2.5;
 
+// Every symbol is read back as pixels (getImageData) to hand to the map, so
+// its canvas is kept in memory rather than on the GPU (willReadFrequently).
+// On a GPU canvas each read waits for the GPU: measured 2026-11-12, that
+// was 3 to 4.5 s of the page's opening work in Chromium, and about none
+// with this ("Quality floor"). Browsers without the option ignore it.
 export function canvas(width, height) {
   const c = document.createElement('canvas');
   c.width = width * RATIO;
   c.height = height * RATIO;
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.scale(RATIO, RATIO);
   return ctx;
 }

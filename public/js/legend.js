@@ -50,7 +50,8 @@ function imgOf(data, width, height, alt, mark, size = 1) {
   const c = document.createElement('canvas');
   c.width = data.width;
   c.height = data.height;
-  c.getContext('2d').putImageData(data, 0, 0);
+  // Kept in memory, as in symbols.js's canvas(): toDataURL reads it back.
+  c.getContext('2d', { willReadFrequently: true }).putImageData(data, 0, 0);
   const r = (v) => Math.round(v * 1000) / 1000;
   return `<img src="${c.toDataURL()}" width="${r(width)}" height="${r(height)}" alt="${esc(alt)}" data-mark="${esc(mark)}" data-size="${r(size)}" />`;
 }
@@ -108,7 +109,7 @@ function areaImage({ fill, over, edge }, lines, at, alt) {
     const tile = document.createElement('canvas');
     tile.width = pattern.width;
     tile.height = pattern.height;
-    tile.getContext('2d').putImageData(pattern, 0, 0);
+    tile.getContext('2d', { willReadFrequently: true }).putImageData(pattern, 0, 0);
     const paint = ctx.createPattern(tile, 'repeat');
     paint.setTransform(new DOMMatrix().scale(1 / RATIO));
     ctx.fillStyle = paint;
