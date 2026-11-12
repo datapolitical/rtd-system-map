@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -515,4 +515,33 @@ test('a street that stops a short walk from a rail station, heading for it, is l
   const end = (s) => [s.path[0], s.path.at(-1)].sort((a, b) => a[1] - b[1])[0];
   assert.ok(Math.hypot(end(one)[0] - origin3[0], end(one)[1] - origin3[1] + 12) < 0.5, 'the street ends on the mark');
   assert.ok(Math.abs(end(two)[1] - origin3[1]) < 0.5, 'a station behind the end is not reached back to');
+});
+
+test('route numbers go on the side of their street with room: not on a street that runs close beside it', async () => {
+  // A street running up the screen has its upright figures read bottom to top: the side above them is its left.
+  const right = st([[107, 300], [107, 0]]);
+  const left = st([[100, 300], [100, 0]]);
+  const far = st([[300, 300], [300, 0]]);
+  assert.equal(labelSide(far, [far, left, right], 8.5), 1, 'with room above its figures, they go there');
+  assert.equal(labelSide(right, [far, left, right], 8.5), -1, 'with a street close above, they go below');
+  const squeezed = st([[114, 300], [114, 0]]);
+  assert.equal(labelSide(right, [left, right, squeezed], 8.5), 0, 'with streets close both sides, the block is not labelled');
+  // A street drawn straight down is read top to bottom (the page turns figures over only when a line runs leftward):
+  // the side above its figures is its right, clear of the street on its left.
+  assert.equal(labelSide(st([[107, 0], [107, 300]]), [left], 8.5), 1);
+  const { sheetStyle } = await import('../public/js/sheets/style.js');
+  const numbers = sheetStyle('dark').layers.find((l) => l.id === 'bus-number-2');
+  const [, test, below, above] = numbers.layout['text-offset'];
+  assert.deepEqual(test, ['==', ['get', 'side'], -1]);
+  assert.equal(JSON.stringify(below).replace(/-/g, ''), JSON.stringify(above).replace(/-/g, ''), 'the same distance off the street either side');
+});
+
+test('a block too short for its numbers and some air before its cross streets is not labelled', () => {
+  const street = (routes, coords) => line({ mode: 'bus', cls: 'c15', routes, n: 1, hw: 15, zoom: 'near' }, coords);
+  const data = { routes: all([]), stations: all([]), terminals: null, streets: all([
+    street('1', [at3(0, 0), at3(0, 400)]), street('2', [at3(9, 0), at3(9, 400)]), street('3', [at3(0, 200), at3(9, 200)]),
+  ]) };
+  const drawn = drawSheet(data, near).features.filter((f) => f.properties.kind === 'bus');
+  assert.ok(drawn.some((f) => f.properties.routes === '3'), 'the rung is drawn');
+  assert.ok(!drawn.some((f) => f.properties.routes === '3' && f.properties.label), 'but its number would overrun the streets at its ends');
 });

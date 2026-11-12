@@ -128,7 +128,10 @@ export function sheetStyle(theme) {
       // Set just beside the street, not on it: on it, the line shows between the figures and a
       // comma reads as a dash. The offset is the street's half width and a little air, in ems.
       layout: { 'symbol-placement': 'line', 'symbol-spacing': [0, 200, 260, 320][i], 'text-field': ['get', 'label'], 'text-font': FONT.semibold, 'text-size': NUMBER_SIZE[n], 'text-max-angle': 25, 'text-padding': 4,
-        'text-offset': byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w)]]]))),
+        // The build says which side has room (`side` -1: below the figures, where a street runs close above).
+        'text-offset': ['case', ['==', ['get', 'side'], -1],
+          byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n, w)]]]))),
+          byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w)]]])))],
         'text-letter-spacing': 0.02, 'symbol-sort-key': ['-', 0, ['get', 'n']] },
       paint: { 'text-color': c.number, 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).

@@ -64,6 +64,8 @@ export const SIZES = {
   // Along one street, the blocks that carry its label are at least this far apart.
   busLabelEvery: { 1: 150, 2: 170, 3: 240, 4: 320 },
   busLabelSize: { 1: 8.5, 2: 8.5, 3: 10, 4: 11.5 },
+  // Clear air at each end of a labelled block: the figures' halo and a little more, so they stop short of the cross streets.
+  busLabelAir: 4,
   // A bus station's hall is drawn where it is at least this wide; a street that ends this near its wall ends on it.
   hallWide: 5,
   hallReach: 10,
@@ -1844,6 +1846,45 @@ export function labelled(streets, every, room = () => 0) {
   return picked;
 }
 
+/**
+ * Which side of its street a block's route numbers go on: 1 for the side above the upright
+ * figures (as the page sets them by default), -1 for the side below, 0 where neither has room.
+ * A side is crowded where another street runs within the figures' reach of the street along
+ * a quarter or more of the block (a parallel street, the other half of a one-way pair): there
+ * the numbers would sit on that street. The page sets figures upright, so which side is above
+ * them follows the way the block runs across the screen.
+ */
+export function labelSide(street, streets, size) {
+  const len = length(street.path);
+  // Near its corners a block meets its cross streets; a short block is judged at its middle.
+  const margin = Math.min(size + 2, len / 2);
+  const a = street.path[0];
+  const b = street.path.at(-1);
+  // Upright: figures run left to right, so a block running leftward is read from its far end.
+  const run = a[0] > b[0] ? [a[0] - b[0], a[1] - b[1]] : [b[0] - a[0], b[1] - a[1]];
+  const l = Math.hypot(...run) || 1;
+  const up = [run[1] / l, -run[0] / l];
+  const reach = [2.5, 2.5 + 0.72 * size + 2];
+  const box = street.path.reduce((m, p) => [Math.min(m[0], p[0]), Math.min(m[1], p[1]), Math.max(m[2], p[0]), Math.max(m[3], p[1])], [Infinity, Infinity, -Infinity, -Infinity]);
+  const pad = reach[1] + 2;
+  const others = streets.filter((o) => o !== street && o.path.some((p) => p[0] > box[0] - pad && p[0] < box[2] + pad && p[1] > box[1] - pad && p[1] < box[3] + pad));
+  const crowded = (sign) => {
+    let hits = 0;
+    let probes = 0;
+    for (let at = margin; at <= len - margin; at += 3) {
+      const p = pointAlong(street.path, at);
+      probes++;
+      if ([reach[0], (reach[0] + reach[1]) / 2, reach[1]].some((r) => {
+        const q = [p[0] + sign * up[0] * r, p[1] + sign * up[1] * r];
+        return others.some((o) => nearest(o.path, q).d < 1.5);
+      })) hits++;
+    }
+    return probes && hits / probes >= 0.25;
+  };
+  if (!crowded(1)) return 1;
+  return crowded(-1) ? 0 : -1;
+}
+
 // --- One sheet, as GeoJSON -------------------------------------------------------
 
 /** Everything one sheet draws, as a FeatureCollection the page loads. */
@@ -1862,10 +1903,15 @@ export function drawSheet({ routes, stations, streets, terminals }, sheet) {
     const list = String(s.routes).split(' ');
     return list.length > SIZES.busListed ? `${list.slice(0, SIZES.busListed - 1).join(', ')} +${list.length - SIZES.busListed + 1}` : list.join(', ');
   };
-  const lettered = labelled(bus, SIZES.busLabelEvery[sheet.id], (s) => listed(s).length * SIZES.busLabelSize[sheet.id] * 0.5);
+  const size = SIZES.busLabelSize[sheet.id];
+  const sides = new Map();
+  const side = (s) => { if (!sides.has(s)) sides.set(s, labelSide(s, bus, size)); return sides.get(s); };
+  // A block with no room either side for its numbers is not labelled; another block of the street is.
+  // Nor one too short for its figures and their halo with air before the cross streets at its ends.
+  const lettered = labelled(bus, SIZES.busLabelEvery[sheet.id], (s) => (side(s) ? listed(s).length * size * 0.5 + 2 * SIZES.busLabelAir : Infinity));
   for (const s of bus) {
     const properties = { kind: 'bus', cls: s.cls, routes: String(s.routes).split(' ').join(', '), n: s.n, hw: s.hw };
-    if (lettered.has(s)) properties.label = listed(s);
+    if (lettered.has(s)) { properties.label = listed(s); if (side(s) < 0) properties.side = -1; }
     features.push(feature(properties, { type: 'LineString', coordinates: s.path.map(back) }));
   }
   for (const l of lines) {

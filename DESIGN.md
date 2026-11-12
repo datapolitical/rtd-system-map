@@ -2078,6 +2078,12 @@ How it is built:
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
   Nor on a stop: on sheet 4 each stop's ring keeps lettering off it.
+  Nor on the street beside it: where another street runs within the
+  figures' reach on one side (the other half of a one-way pair), they go on
+  the other side, and a block crowded both sides leaves its label to another
+  block of the street. A block is labelled only if it is longer than its
+  figures and four pixels of air at each end, so a number never overruns
+  the cross streets at its ends.
 - **Lines change place gently.** Where a line joins or leaves a pack, the
   others slide to their new places over about 26 pixels each side, so the
   lines beside one that ends do not jog at its last station.
@@ -4112,6 +4118,10 @@ work against the real structure before asking for evaluation.
   south of the station on sheet 4; their loop is drawn as one street out to
   its far end, after the rules that join loose ends to other streets run,
   and those rules only look for streets, never stations.
+- 2026-11-12: Sheets set a street's numbers on the side with room, and only on
+  blocks long enough for them. Reason: south of downtown on sheet 2 the
+  numbers of one half of a one-way pair sat on the other half, and a
+  number on the short rung between them overran both.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
 
