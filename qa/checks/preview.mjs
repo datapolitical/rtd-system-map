@@ -1,15 +1,15 @@
 // Waits for Cloudflare Pages' check run on this commit, then prints the
-// branch's preview URL as a step output (`url`). Cloudflare creates one check
-// run per push that changes the site, named "Cloudflare Pages", whose summary
-// carries the branch preview's address; the branch alias
+// address of this commit's build as a step output (`url`). Cloudflare creates
+// one check run per push that changes the site, named "Cloudflare Pages",
+// whose summary carries the build's own address; the branch alias
 // `<branch>.rtd-system-map.pages.dev` is the fallback. A build that fails
 // fails this step, so the checks never run against the previous deployment.
 //
 // A push that only changes files outside the site (this workflow, qa/, docs)
-// gets no build: Cloudflare's watch paths skip it. Then the branch alias, if
-// it answers from an earlier push, is still that branch's preview and is
-// used; if there is none, `url` is left empty and the workflow skips the
-// checks with a notice rather than waiting forever.
+// gets no build: Cloudflare's watch paths skip it. Then the newest earlier
+// build on the branch (or the branch alias, if it answers) is still that
+// branch's preview and is used; if there is none, `url` is left empty and the
+// workflow skips the checks with a notice rather than waiting forever.
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
@@ -31,10 +31,16 @@ const output = (url) => {
 // each time it is asked for: Cloudflare replaces its check run when a build
 // ends (a new id, already completed), so one held by id stays "in progress"
 // for ever and the wait below would run out against a build that was done.
-const pagesRun = () => {
-  const all = api(`repos/${repo}/commits/${sha}/check-runs?per_page=100`).check_runs.filter((r) => r.name === 'Cloudflare Pages');
+const pagesRun = (of = sha) => {
+  const all = api(`repos/${repo}/commits/${of}/check-runs?per_page=100`).check_runs.filter((r) => r.name === 'Cloudflare Pages');
   return all.find((r) => r.status === 'completed') || all[0];
 };
+
+// The address of one build, from Cloudflare's summary: the first row titled "Preview URL"
+// is that build's own address (<hash>.rtd-system-map.pages.dev), which always opens the
+// main map. The branch's alias, in the row after it, opens another page on a branch named
+// after one (functions/index.js), and moves on to the next push while these checks run.
+const own = (r) => (r?.output?.summary || '').match(/Preview URL:[\s\S]*?href='([^']+)'/)?.[1]?.replace(/\/$/, '');
 
 // How long Cloudflare may take to notice the push and start a build.
 const START_BY = Date.now() + 8 * 60_000;
@@ -55,7 +61,19 @@ while (Date.now() < START_BY) {
 if (!run) {
   // No build: the push did not change the site. An earlier deployment of
   // this branch is still this branch's preview.
-  const alias = `https://${branch}.rtd-system-map.pages.dev`;
+  // The newest earlier build on this branch, by its own address; the branch's alias if none is found.
+  let alias = `https://${branch}.rtd-system-map.pages.dev`;
+  try {
+    for (const c of api(`repos/${repo}/commits?sha=${sha}&per_page=20`).slice(1)) {
+      const built = pagesRun(c.sha);
+      if (built?.conclusion === 'success' && own(built)) {
+        alias = own(built);
+        break;
+      }
+    }
+  } catch (e) {
+    console.log(`no earlier build found: ${String(e.message).split('\n')[0]}`);
+  }
   for (let i = 0; i < 6; i++) {
     try {
       if ((await fetch(`${alias}/js/main.js`)).ok) {
@@ -90,11 +108,8 @@ if (run.conclusion !== 'success') {
   process.exit(1);
 }
 
-// Cloudflare's summary names the address in a row titled "Preview URL" (it
-// said "Branch Preview URL" when this was written; both are read).
-const summary = run.output?.summary || '';
-const match = summary.match(/Branch Preview URL:[\s\S]*?href='([^']+)'/) || summary.match(/Preview URL:[\s\S]*?href='([^']+)'/);
-const url = (match?.[1] || `https://${branch}.rtd-system-map.pages.dev`).replace(/\/$/, '');
+// This build's own address; the branch's alias only if the summary names none.
+const url = own(run) || `https://${branch}.rtd-system-map.pages.dev`;
 
 // The deployment answers a moment after the check run turns green.
 let up = false;

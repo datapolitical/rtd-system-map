@@ -4320,6 +4320,16 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.
+- 2026-11-12: Only a page of the preview's own name moves its root, and
+  the checks open each build's own address. Reason: the site has no 404
+  page, so Cloudflare answers every path with the main map and "the page
+  exists" was true of any name: each build's own address
+  (`<hash>.rtd-system-map.pages.dev`) was sent to `/<hash>/`, a broken copy
+  of the main map. And the checks opened the `sheets` alias, were sent to
+  the sheets, and timed out waiting for the main map (the first finished run
+  on the branch, on 1688fd1). The page must now differ from the main map,
+  and `qa/checks/preview.mjs` reads the build's own address from
+  Cloudflare's summary.
 - 2026-11-12: Sheets ring only stops a bus street serves: not a bus
   station's gates, nor stops only trains call at. Reason: Union Station's
   bus gates and rail tracks were scattered as rings over its hall and round

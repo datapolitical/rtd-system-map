@@ -7,8 +7,11 @@ export async function onRequest({ request, env, next }) {
   // <branch>.<project>.pages.dev: a preview. <project>.pages.dev and custom domains are not.
   const preview = url.hostname.endsWith('.pages.dev') && rest.length === 3;
   if (preview && url.pathname === '/' && /^[a-z0-9-]+$/.test(alias)) {
-    const page = await env.ASSETS.fetch(new URL(`/${alias}/`, url));
-    if (page.ok) return Response.redirect(new URL(`/${alias}/${url.search}`, url).href, 302);
+    // The site has no 404 page, so every path answers with the main map: a page of the
+    // preview's name is one that answers with something else. (Each build also has an
+    // address of its own, <hash>.<project>.pages.dev, which must stay the main map.)
+    const [page, home] = await Promise.all([`/${alias}/`, '/'].map((path) => env.ASSETS.fetch(new URL(path, url))));
+    if (page.ok && (await page.text()) !== (await home.text())) return Response.redirect(new URL(`/${alias}/${url.search}`, url).href, 302);
   }
   return next();
 }
