@@ -144,6 +144,8 @@ export function splitByTrack(group, pieces, { apart = TRACK_APART_METERS } = {})
 // hall counts as long when it is this many times longer than it is wide.
 export const WALK_REACH_METERS = 80;
 const LONG_HALL = 2;
+// A track that ends within this of the walk's line crosses it.
+const TOUCH_METERS = 2;
 // A mark on the walk's line lies along it, not exactly across its own lines,
 // when the two are within this many degrees: the marks at the two ends of the
 // walk are then parallel, in one line with it, as they would be drawn by
@@ -235,7 +237,10 @@ export function crossingOnTrack(mine, axis, near) {
         if (Math.abs(den) < 1e-9) continue;
         const t = (ax * sy - ay * sx) / den;
         const u = (ax * ry - ay * rx) / den;
-        if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+        // A line that ends on the axis crosses it: once the lines are cut at
+        // their marks they end there, a rounding short of it or past it.
+        const slack = TOUCH_METERS / Math.max(1e-9, Math.hypot(sx, sy));
+        if (t < 0 || t > 1 || u < -slack || u > 1 + slack) continue;
         hits.push([p[0] + (rx * t) / k, p[1] + (ry * t) / KY]);
       }
     }

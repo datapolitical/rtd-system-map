@@ -1394,8 +1394,12 @@ The build works this out from the geometry every time
    thirty-second of a line's width (a sixteenth until 2026-11-11: at a phone's
    pixel density each step showed as a notch in the line's edge), over up to
    1.5 km, finishing before the next
-   station. Only the piece with fewer lines moves; lines still together stay
-   put. So a line never steps sideways at a junction, and isn't drawn over
+   station, and over all of that room: the move used to finish as soon as
+   the other lines were 250 m away, which at a junction where they turn
+   sharply aside is within 300 m, and a slot sideways in 300 m is a kink at
+   zoom 11 (10 px along, 6 across) that read as the line breaking (C south
+   of I-25 / Broadway, where E and T turn east). Only the piece with fewer
+   lines moves; lines still together stay put. So a line never steps sideways at a junction, and isn't drawn over
    another while their tracks are still close. The one exception is where
    the line that leaves does so by ending: a station's mark lies across the
    pack at that very place, so the lines that run on take their own places
@@ -3820,6 +3824,14 @@ work against the real structure before asking for evaluation.
   happen to fall on (see "The station's real shape"). This is the rail half
   of that round; its bus-hall changes are not ported, since the street graph
   draws the halls and the lines that end at them.
+- 2026-11-11: "The rail line breaks at I-25 and Broadway" (a screenshot at
+  zoom 11). A line that leaves a pack eases to its own track over all the
+  room it has, up to 1.5 km, not within the 300 m it takes the other lines
+  to be 250 m away ("Shared track", step 8). And the two marks at Union
+  Station were still 12 degrees apart on the live map: once the lines were
+  cut at their marks they ended on the walk's line instead of crossing it,
+  and the mark was not turned; a track that ends within 2 m of the walk's
+  line now counts as crossing it.
 - 2026-11-11: Chris's review of the stations the evening they went out.
   The light rail had no mark at its end at Union Station at zoom 13: a
   platform group its lines end at is now marked from zoom 11 without waiting

@@ -189,6 +189,15 @@ test('the marks of two platform groups stand in line with the hall between them'
   // The walk runs east to west, so both marks lie along it: drawn across
   // lines that run north to south, as they were (bearing 0 or 180).
   assert.equal(Math.abs(mark.properties.bearing) % 180, 0);
+  // Once the lines are cut at their marks they end on the walk's line: the
+  // marks are placed the same, and still lie along the walk.
+  // (B comes in 14 degrees off square to the walk here, so its mark has to
+  // be turned to lie along it.)
+  const aslant = Array.from({ length: 316 }, (_, i) => [FAR + 0.0098 * (1 - i / 315), 39.67 + ((AXIS - 0.000004 - 39.67) * i) / 315]);
+  const cut = [piece('A', 0, south(LINE_A, 39.73, AXIS + 0.000004, 305)), piece('B', 0, aslant)];
+  const [after] = platformMarks([moved], [platforms], cut, ending, [hall]);
+  assert.ok(meters(after.geometry.coordinates, [FAR, AXIS]) < 2, `B's mark after the cut: ${after.geometry.coordinates}`);
+  assert.equal(Math.abs(after.properties.bearing) % 180, 0, `B's mark lies along the walk: bearing ${after.properties.bearing}`);
   // B ends at its mark, so the mark doesn't wait to be clear of the
   // station's: with it held back the line ended at nothing.
   assert.equal(mark.properties.tickFrom, TICK_TO);
