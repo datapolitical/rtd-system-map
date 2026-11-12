@@ -2020,7 +2020,7 @@ How it is built:
   line that reads against it, under the streets and stops. Its shape is a squared room:
   the tightest rectangle round the surveyed outline, along its own lie,
   brought in until it covers the same ground. A street whose loose end is
-  within ten pixels of a hall's wall is drawn onto the wall, square, without
+  within ten pixels of a hall's wall is drawn onto the wall without
   the wander or gentle hook of its last few yards: it carries straight on
   to the wall, or turns square onto it, whichever bends it less. No street
   is drawn inside a hall:
