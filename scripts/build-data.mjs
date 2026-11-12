@@ -3,6 +3,7 @@
 // map and GTFS on every run, and a build that fails its checks writes nothing.
 
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { writeSheets } from './sheets.mjs';
 import path from 'node:path';
 import { discoverLayers, downloadLayer } from './lib/arcgis.mjs';
 import { clock, csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, riderNames, routeFrequency, tierOf } from './lib/gtfs.mjs';
@@ -792,6 +793,8 @@ async function main() {
   }
   await writeFile(path.join(next, 'meta.json'), JSON.stringify(meta, null, 2));
   await writeFile(path.join(next, 'directory.json'), JSON.stringify(index));
+  // The four sheets are drawn from the files just written (DESIGN.md, "Four sheets").
+  await writeSheets(next);
   await rm(OUT, { recursive: true, force: true });
   await rename(next, OUT);
 

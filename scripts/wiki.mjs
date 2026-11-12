@@ -17,7 +17,7 @@ import { pathToFileURL } from 'node:url';
 const GROUPS = [
   ['What the map is for', ['Principles', 'Objective', 'Who it is for', 'Why', 'Non goals',
     'What people can do in priority order']],
-  ['How it is built', ['Zero maintenance', 'Data', 'Map design', 'Interface',
+  ['How it is built', ['Zero maintenance', 'Data', 'Map design', 'Four sheets', 'Interface',
     'Installed on a phone', 'Voice', 'Architecture', 'Unattended work']],
   ['How it is checked', ['Quality floor', 'Design review rubric', 'Validation']],
   ['Plans and decisions', ['Milestones', 'Open questions', 'Decision log']],

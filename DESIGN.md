@@ -1957,6 +1957,40 @@ the map and interface re-color in place and the map stays where it was.
   20% fade is unchanged.
 - `color-scheme` and `theme-color` metas cover both themes.
 
+## Four sheets
+
+A second way of drawing the same data, at `/sheets/`, built to be finished
+before it is clever. Think of four printed maps of the district, each drawn
+for one scale on a phone, each complete: every rail line and every bus route
+is on every sheet. The page rests only on a sheet; a pinch settles on the
+nearest one. Issue #117 holds the work.
+
+| Sheet | Zoom | What it adds |
+|---|---|---|
+| 1 | 10 | The network: rail lines whole, every bus street by how often a bus comes, the hub and line ends named. Tap a line for its routes. |
+| 2 | 12 | Every station named, route numbers along bus streets. |
+| 3 | 14 | One-way pairs on their own streets, street names, a hint of stops. |
+| 4 | 16 | Every stop, buildings, platforms apart from each other. |
+
+How it is built:
+
+- **One procedure, run once per sheet.** `scripts/lib/sheets.mjs` draws a
+  sheet from the build's own files (`routes`, `streets`, `stations`) and
+  writes `sheet-<n>.geojson`. Its rules are sizes in phone pixels, so the same
+  rule gives a different drawing at each scale. No rule names a place, a
+  line or a sheet.
+- **The build decides where things go; the page only inks them.** Rail pieces
+  are joined into whole lines and set side by side; a station is one white bar
+  across the lines that stop there; each line's letter sits where the line
+  runs alone; each station's name goes on the clearest side of its mark.
+  `public/js/sheets/style.js` is a table of colours and widths per sheet.
+- **Every route is drawn.** A bus street too short to read at a sheet's scale
+  takes the weight of the street it joins; none is dropped for tidiness.
+  `test/sheets.test.mjs` holds the rules.
+- **Made for continuous zoom later.** Each sheet's layers show for a band of
+  zooms around its own, so drawing between two sheets is a later step that
+  changes the page, not the build.
+
 ## Interface
 
 **Clean, at the quality of the best product design,** in this site's own
@@ -3915,6 +3949,13 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: The browser tab says "RTD system map", as the link preview
   does (was "Denver transit map (unofficial)"). The key's first line still
   says the map is unofficial.
+- 2026-11-12: Four sheets (#117). Alongside the continuous map, the same data
+  is drawn as four finished phone maps at zooms 10, 12, 14 and 16, served at
+  `/sheets/`. Each sheet shows every route. The build places lines, station
+  marks, letters and names for each sheet's scale; the page holds only
+  colours and widths. Reason: the continuous map kept gaining per-zoom special
+  cases and was never finished at any one zoom. Continuous zoom comes back
+  later as drawing between sheets.
 
 ## Sources
 
