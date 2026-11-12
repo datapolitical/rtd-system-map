@@ -1962,8 +1962,14 @@ the map and interface re-color in place and the map stays where it was.
 A second way of drawing the same data, at `/sheets/`, built to be finished
 before it is clever. Think of four printed maps of the district, each drawn
 for one scale on a phone, each complete: every rail line and every bus route
-is on every sheet. The page rests only on a sheet; a pinch settles on the
-nearest one. Issue #117 holds the work.
+is on every sheet. The page rests only on a sheet. A scroll or a pinch goes
+to the next sheet the way it was heading, however short it was (a tenth of
+a zoom level by wheel, a quarter by pinch, so two fingers dragging the map
+do not change it); carried more than a third of the way past that sheet it
+goes on to the one after. The move is counted from where the reader's zoom
+began, not from the sheet shown, so a second scroll that catches the map on
+its way to a sheet carries on to that sheet and never sends it back. Issue
+#117 holds the work.
 
 The root of a branch preview named after one of the site's pages opens on
 that page (`functions/index.js`): the `sheets` preview opens on the sheets.
@@ -1992,7 +1998,8 @@ How it is built:
   set beside it so a pack turns as one, and a line ends square at its last
   station. Track that runs on past a station no farther than a walk (600 m),
   with none of the line's stations beyond it, is tail track: the line ends
-  at that station's bar. On the first sheet the hub and line ends are named large and other
+  at that station's bar. A line never ends at a station while another of
+  its stations lies beyond, however little track is left. On the first sheet the hub and line ends are named large and other
   stations small, where a name has open ground.
 - **Drawn, not traced.** Where the true position of a thing makes an ugly
   drawing, the drawing wins by a few pixels. A station bar is square across
@@ -2012,14 +2019,22 @@ How it is built:
   is not lettered twice. Lines that end over a bus station's hall end at the
   wall they come in through, with their bar on it, not at a point inside the
   room. A corner of bus streets beside a hall's wall sits on the wall. A
-  street that carries every route of a street it meets is drawn no lighter
-  than it, so streets that gather make a street at least as heavy as the
-  heaviest of them, and one list of routes keeps one weight. A stop whose
+  street's weight is its own buses'. Where streets gather into one (a
+  street with more routes than a street it meets, every one of that
+  street's among them, when those buses have no other street to take at
+  the corner), the one they make is no lighter than any of them; each is
+  judged by its own weight, so a weight is never handed on down a route
+  from street to street. A stop whose
   ring would sit half under a rail line is not ringed. The two halves of a divided road are one straight line down the
   middle. A short break in a bus street between two ends that share a route
   is bridged. A line weight holds for a few blocks: a short stretch takes the
-  weight of the longer stretch it runs into, so a street is never dashes of
-  different weights. A short end that leads nowhere (under 25 px from its
+  weight of the longer stretch of the same routes it runs into, so one
+  service is never dashes of different weights. Where the list of routes
+  changes the service does, and a short stretch is never drawn heavier than
+  its own buses by a street of other routes: a heavy street does not run on
+  past the corner its routes turn at. (A tick a few pixels long may lose
+  its weight to the pale street it ends, and a blip between two stretches
+  that agree takes theirs.) A short end that leads nowhere (under 25 px from its
   loose end to the first corner where streets part, however many pieces it
   is in) is left off; this is the one thing not drawn.
   A turnaround loop too small to read as a ring is drawn as the point where
@@ -2037,7 +2052,11 @@ How it is built:
   A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
   Where a full name would sit on lines or stand off from its mark, common
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
-  shorter name sits better; a name with room is written out.
+  shorter name sits better; a name with room is written out. A name beside
+  its bar is level with it, the letters of lines that end there hanging
+  below. A name is never nearer another station's bar than its own: it
+  moves, is set in one row, or (where not every station is named) is left
+  off.
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
   The quietest bus street reads clearly in both themes (in the dark, where
   a hairline of light reads faint, more so), and each busier class stands a
@@ -2125,8 +2144,10 @@ How it is built:
   longest first, none closer than a sheet's spacing (170, 240 and 320
   pixels on sheets 2 to 4); the label sits within one block where a block
   holds it and runs on across cross streets only where none does. A run too
-  short for its list is not labelled on that sheet; a tap gives the list
-  anywhere.
+  short for its list in one row has it in two, stacked beside the street
+  and turned the way it runs, where the street is straight for their
+  length; one too short for that is not labelled on that sheet, and a tap
+  gives the list anywhere.
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
@@ -4234,6 +4255,27 @@ work against the real structure before asking for evaluation.
   wall; one loop read "FreeRide, 15" and "15, FreeRide". A tapped stop or
   street on the sheets also showed "undefined": the tap now reads what the
   sheet holds.
+- 2026-11-12: Sheets: bus street weights follow the buses. Chris: "the
+  street grid lines in downtown don't make sense in terms of how thick they
+  are and where". Three rules handed a weight from one street to another
+  whatever routes each carried: an hourly street north of Colfax and
+  Broadway was drawn at the heaviest weight, and one short heavy piece of
+  route 28 made hundreds of pixels of it heavy. On sheet 2, streets drawn
+  heavier than their own measured service fell from 3,143 px to 270 px; on
+  sheet 4 from 223,931 px to 990 px.
+- 2026-11-12: Sheets: a scroll goes to the next sheet. Chris: "scrolling
+  just bounces you back out ... unless you scroll wheel in quite a lot".
+  The page judged a zoom against the sheet shown and needed a third of the
+  way; and MapLibre does not mark a single wheel notch as the reader's, so
+  one notch left the map between sheets. Checked in Chromium with real
+  wheel notches and pinches.
+- 2026-11-12: Sheets: two rows of route numbers where one does not fit
+  (Chris: "you can stack routes into two rows above a street").
+- 2026-11-12: Sheets: a line does not end at a station while another of its
+  stations lies beyond, and a name is never nearer another station's bar
+  than its own. On sheet 1 the E line was said to end at Lone Tree City
+  Center, and "RidgeGate Parkway" and "Lone Tree City Center" each sat
+  beside the other's bar (Chris: "this looks ugly and inaccurate").
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.

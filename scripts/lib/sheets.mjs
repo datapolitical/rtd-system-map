@@ -70,6 +70,8 @@ export const SIZES = {
   busLabelSize: { 1: 8.5, 2: 8.5, 3: 10, 4: 11.5 },
   // Clear air at each end of a labelled block: the figures' halo and a little more, so they stop short of the cross streets.
   busLabelAir: 4,
+  // A list too long for its stretch in one row is stacked in two, this far apart (in ems).
+  busRowHeight: 1.15,
   // A bus station's hall is drawn where it is at least this wide; a street that ends this near its wall ends on it.
   hallWide: 5,
   hallReach: 10,
@@ -406,8 +408,10 @@ export function stationMarks(stations, lines, sheet, walls = []) {
       const others = (stopsOf.get(h.line.route) ?? []).filter((o) => o !== f)
         .map((o) => nearest(path, o.px)).filter((o) => o.d <= walk).map((o) => o.along);
       const open = (side) => !others.some((a) => (side ? a > h.along + pitch : a < h.along - pitch));
-      h.end = h.along < 3 * pitch ? 0 : h.total - h.along < 3 * pitch ? 1
-        : h.total - h.along <= walk && open(1) ? 1 : h.along <= walk && open(0) ? 0 : null;
+      // Never while another of its stations lies beyond: on a wide sheet a few pitches is
+      // farther than the last two stations are apart.
+      const near = (left) => left < 3 * pitch || left <= walk;
+      h.end = near(h.along) && open(0) ? 0 : near(h.total - h.along) && open(1) ? 1 : null;
     }
     // Platforms apart from each other get a bar each; the bar with the most lines carries the name.
     const groups = [];
@@ -618,6 +622,10 @@ export function names(marks, lines, discs, sheet, streets = []) {
   ];
   const set = [];
   const rank = (m) => (m.hub ? 0 : m.end ? 1 : 2) * 100 - m.count;
+  // A name belongs to the bar it is nearest: one nearer another station's bar than its own
+  // names that station to the eye, which is worse than no name.
+  const bars = marks.map((m) => ({ m, pts: [m.ends, ...m.more].flatMap((bar) => [bar[0], lerp(bar[0], bar[1], 0.5), bar[1]]) }));
+  const gap = (box, pts) => Math.min(...pts.map((p) => Math.hypot(Math.max(box[0] - p[0], 0, p[0] - box[2]), Math.max(box[1] - p[1], 0, p[1] - box[3]))));
   const r = SIZES.nameLetter[sheet.id];
   for (const m of [...marks].sort((a, b) => rank(a) - rank(b) || a.id - b.id)) for (const [bi, bar] of (m.bars ?? [{ ends: m.ends, ending: [] }]).entries()) {
     const mid = lerp(bar.ends[0], bar.ends[1], 0.5);
@@ -646,11 +654,15 @@ export function names(marks, lines, discs, sheet, streets = []) {
           const off = (rail / 2 + 5 + Math.abs((half[0] * dx + half[1] * dy) / n)) * reach;
           const at = [c[0] + (dx / n) * off, c[1] + (dy / n) * off];
           const x0 = at[0] + (dx > 0 ? 0 : dx < 0 ? -w : -w / 2);
-          const y0 = at[1] + (dy > 0 ? 0 : dy < 0 ? -h : -h / 2);
+          // Beside its bar the name is level with it, and the row of letters hangs below.
+          const y0 = at[1] + (dy > 0 ? 0 : dy < 0 ? -h : -tall / 2);
           const box = [x0, y0, x0 + w, y0 + h];
           // The name keeps its own anchor: where the row makes the box taller, the text sits at its top.
           const ty = dy > 0 ? at[1] : dy < 0 ? y0 + tall : y0 + tall / 2;
-          const hits = set.filter((o) => touch(box, o.box)).length;
+          const lettering = [x0, y0, x0 + w, y0 + tall];
+          const own = gap(lettering, bars.find((o) => o.m === m).pts);
+          const strays = bars.some((o) => o.m !== m && gap(lettering, o.pts) < own);
+          const hits = set.filter((o) => touch(box, o.box)).length + (strays ? 1 : 0);
           const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2;
           if (!best || score < best.score) best = { text, score, hits, box, anchor, tall, offset: [(at[0] - c[0]) / size, (ty - c[1]) / size] };
         }
@@ -659,11 +671,12 @@ export function names(marks, lines, discs, sheet, streets = []) {
     };
     // A name is written out where it has room; where it would sit on lines or stand off from
     // its mark, the shortened name is used if that sits better.
+    // Between stations too close for two rows, it is set in one.
     let best = placed(wrapped(m.name));
-    const brief = wrapped(shortened(m.name));
-    if (brief !== best.text && best.score >= SIZES.nameShorten) {
-      const other = placed(brief);
-      if (other.score < best.score - 1) best = other;
+    for (const other of [wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')]) {
+      if (other === best.text || best.score < SIZES.nameShorten) continue;
+      const tried = placed(other);
+      if (tried.score < best.score - 1) best = tried;
     }
     const text = best.text;
     // Where every station is named, a name gives way only to another name; where they are
@@ -1254,7 +1267,10 @@ export function toStations(streets, marks, reach, walls = []) {
  * so along a street that nothing else meets, a few pieces can come out a class apart from the
  * rest: a short dark tick on the end of a pale street. Along such a street, a stretch of one
  * weight shorter than `most` takes the weight of the longer stretch beside it; a longer one is a
- * real change of service and stays.
+ * real change of service and stays. A short stretch is made heavier only by a stretch of the
+ * same routes: one with other routes may lose a tick to the pale street it ends, but is never
+ * drawn heavier than its own buses make it, or a heavy street would run on past the corner
+ * its routes turn at.
  */
 export function evened(streets, most) {
   const edges = cornered(streets);
@@ -1283,21 +1299,32 @@ export function evened(streets, most) {
     if (run.length < 2) continue;
     const stretches = [];
     for (const e of run) {
-      if (stretches.at(-1)?.cls === e.st.cls) { stretches.at(-1).edges.push(e); stretches.at(-1).len += e.len; }
-      else stretches.push({ cls: e.st.cls, edges: [e], len: e.len });
+      if (stretches.at(-1)?.cls === e.st.cls) { stretches.at(-1).edges.push(e); stretches.at(-1).len += e.len; stretches.at(-1).lists.add(e.st.routes); }
+      else stretches.push({ cls: e.st.cls, edges: [e], len: e.len, lists: new Set([e.st.routes]) });
     }
+    const rank = (x) => CLASS_ORDER.indexOf(x.cls);
+    // x may take y's weight: a lighter one always, a heavier one only from the same routes.
+    const may = (x, y) => y && (rank(y) < rank(x) || (x.lists.size === 1 && y.lists.size === 1 && y.lists.has([...x.lists][0])));
+    const kept = new Set();
     while (stretches.length > 1) {
-      const i = stretches.reduce((m, x, j) => (x.len < stretches[m].len ? j : m), 0);
-      if (stretches[i].len >= most) break;
+      const open = stretches.filter((x) => !kept.has(x));
+      if (!open.length) break;
+      const x = open.reduce((m, y) => (y.len < m.len ? y : m));
+      if (x.len >= most) break;
+      const i = stretches.indexOf(x);
       const [l, r] = [stretches[i - 1], stretches[i + 1]];
-      const into = !r || (l && l.len >= r.len) ? l : r;
-      into.edges.push(...stretches[i].edges);
-      into.len += stretches[i].len;
+      const into = [!r || (l && l.len >= r.len) ? l : r, l, r].find((y) => may(x, y));
+      if (!into) { kept.add(x); continue; }
+      into.edges.push(...x.edges);
+      into.len += x.len;
+      for (const list of x.lists) into.lists.add(list);
       stretches.splice(i, 1);
       for (let j = stretches.length - 1; j > 0; j--) {
         if (stretches[j].cls === stretches[j - 1].cls) {
           stretches[j - 1].edges.push(...stretches[j].edges);
           stretches[j - 1].len += stretches[j].len;
+          for (const list of stretches[j].lists) stretches[j - 1].lists.add(list);
+          kept.delete(stretches[j - 1]);
           stretches.splice(j, 1);
         }
       }
@@ -1430,8 +1457,10 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
     }
   }
   // A line weight holds for a few blocks: a short stretch takes the class of the longest stretch
-  // it carries on into (straight ahead, or round a corner where only the two meet), so a street
-  // is not drawn as dashes of different weights where routes join and leave every half block.
+  // of the same routes it carries on into (straight ahead, or round a corner where only the two
+  // meet), so one service is not drawn as dashes of different weights. Never from a stretch with
+  // other routes: where the list changes the service does, and a heavy street that ran on past
+  // the corner its buses turn at would say they carry on.
   const next = (e, end) => {
     const straight = onward(e, end);
     if (straight) return straight;
@@ -1444,11 +1473,12 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
     for (const e of [...edges].sort((a, b) => a.len - b.len)) {
       if (e.len >= run) continue;
       // Of the two it runs into, the busier one if that is longer than this stretch, else the longer.
-      const into = [next(e, 0), next(e, 1)].filter(Boolean);
+      const ways = [next(e, 0), next(e, 1)].filter(Boolean);
+      const into = ways.filter((o) => o.routes === e.routes);
       let longest = into.filter((o) => o.len > e.len).sort((a, b) => b.rank - a.rank || b.len - a.len)[0] ?? into.sort((a, b) => b.len - a.len)[0];
       // A scrap a few pixels long with no way straight on takes the weight of the longest street it touches,
       // so the corner of a transfer centre is not a heavy blot.
-      if (!longest && e.len < 1.5 * SIZES.busSpeck) {
+      if (!ways.length && e.len < 1.5 * SIZES.busSpeck) {
         longest = [e.path[0], e.path.at(-1)].flatMap((q) => nodes.get(key(q)) ?? []).filter((o) => o !== e).sort((a, b) => b.len - a.len)[0];
       }
       if (longest && longest.len > e.len && longest.rank !== e.rank) e.rank = longest.rank;
@@ -1618,24 +1648,27 @@ export function onWalls(streets, walls, reach) {
 }
 
 /**
- * A street that carries every route of a street it meets is drawn no lighter than it: where
- * streets gather into one, the one they make is at least as heavy as the heaviest of them.
+ * Where streets gather into one, the one they make is no lighter than any of them: a street
+ * with more routes than a street it meets, every one of that street's among them, when those
+ * buses have no other street to take at the corner. Each street is judged by its own weight as
+ * it came in, so a weight is never handed on down a route from street to street.
  */
 export function gathered(streets) {
   const edges = cornered(streets);
   const at = new Map();
   for (const e of edges) for (const k of [e.a, e.b]) at.set(k, [...(at.get(k) ?? []), e]);
   const sets = new Map(edges.map((e) => [e, new Set(String(e.st.routes).split(' '))]));
-  const now = new Map(edges.map((e) => [e, e.st]));
-  for (let turn = 0, changed = true; changed && turn < 50; turn++) {
-    changed = false;
-    for (const e of edges) for (const k of [e.a, e.b]) for (const o of at.get(k)) {
-      if (o === e || [...sets.get(o)].some((r) => !sets.get(e).has(r))) continue;
-      const [mine, theirs] = [now.get(e), now.get(o)];
-      if (CLASS_ORDER.indexOf(theirs.cls) > CLASS_ORDER.indexOf(mine.cls)) { now.set(e, { ...mine, cls: theirs.cls, hw: theirs.hw }); changed = true; }
+  return edges.map((e) => {
+    let st = e.st;
+    for (const k of new Set([e.a, e.b])) for (const o of at.get(k)) {
+      if (o === e || sets.get(o).size >= sets.get(e).size) continue;
+      const theirs = [...sets.get(o)];
+      if (theirs.some((r) => !sets.get(e).has(r))) continue;
+      if (at.get(k).some((x) => x !== e && x !== o && theirs.some((r) => sets.get(x).has(r)))) continue;
+      if (CLASS_ORDER.indexOf(o.st.cls) > CLASS_ORDER.indexOf(st.cls)) st = { ...st, cls: o.st.cls, hw: o.st.hw };
     }
-  }
-  return edges.map((e) => now.get(e));
+    return st;
+  });
 }
 
 /**
@@ -2065,7 +2098,8 @@ export function hallAxis(ring) {
  * neighbours with the same list are one run. A run long enough for its list is labelled, the
  * longest first, no two labels of a street closer than `every`. A label sits within one block
  * where a block holds it, and runs on across cross streets only where none does. Returns
- * `{ path, routes, cls, n }` for each; `ok(path)` can turn a stretch down (no room beside it).
+ * `{ path, rows, routes, cls, n }` for each; `width(street, rows)` is the room a list needs in
+ * one row or stacked in two, and `ok(path, rows)` can turn a stretch down (no room beside it).
  */
 export function labelRuns(streets, every, width = () => 0, ok = () => true) {
   const key = (p) => `${Math.round(p[0])},${Math.round(p[1])}`;
@@ -2129,8 +2163,10 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true) {
     const set = [];
     for (const run of runs.sort((a, b) => b.len - a.len)) {
       const top = run.of.reduce((a, b) => (CLASS_ORDER.indexOf(b.cls) > CLASS_ORDER.indexOf(a.cls) ? b : a));
-      const need = width(top);
-      if (run.len < need) continue;
+      // In one row where the run holds the list that way; in two, stacked, where it holds only that.
+      const rows = [1, 2].find((r) => run.len >= width(top, r));
+      if (!rows) continue;
+      const need = width(top, rows);
       const count = Math.max(1, Math.floor(run.len / every));
       // A little slack past the figures, so the page's own measure of them still fits.
       const span = Math.min(run.len, need * 1.15);
@@ -2140,10 +2176,16 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true) {
         const [lo, hi] = blocks.length ? [blocks[0].from, blocks[0].from + blocks[0].len] : [0, run.len];
         mid = Math.min(hi - span / 2, Math.max(lo + span / 2, mid));
         if (set.some((o) => Math.abs(o - (run.at + mid)) < every)) continue;
-        const path = partOf(run.path, mid - span / 2, mid + span / 2);
-        if (path.length < 2 || !ok(path)) continue;
+        let path = partOf(run.path, mid - span / 2, mid + span / 2);
+        if (path.length < 2) continue;
+        // Read left to right; a stretch straight up the sheet, bottom to top.
+        const [a, b] = [path[0], path.at(-1)];
+        if (a[0] > b[0] + 1e-6 || (Math.abs(a[0] - b[0]) <= 1e-6 && a[1] < b[1])) path = [...path].reverse();
+        // Stacked rows are set straight, so they go only where the street is.
+        if (rows > 1 && path.some((q) => toSegment(q, path[0], path.at(-1)).d > 2)) continue;
+        if (!ok(path, rows)) continue;
         set.push(run.at + mid);
-        out.push({ path, routes: run.list, cls: top.cls, n: Math.max(...run.of.map((o) => o.n ?? 0)) });
+        out.push({ path, rows, routes: run.list, cls: top.cls, n: Math.max(...run.of.map((o) => o.n ?? 0)) });
       }
     }
   });
@@ -2158,7 +2200,7 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true) {
  * the numbers would sit on that street. The page sets figures upright, so which side is above
  * them follows the way the block runs across the screen.
  */
-export function labelSide(street, streets, size) {
+export function labelSide(street, streets, size, rows = 1) {
   const len = length(street.path);
   // Near its corners a block meets its cross streets; a short block is judged at its middle.
   const margin = Math.min(size + 2, len / 2);
@@ -2168,7 +2210,8 @@ export function labelSide(street, streets, size) {
   const run = a[0] > b[0] ? [a[0] - b[0], a[1] - b[1]] : [b[0] - a[0], b[1] - a[1]];
   const l = Math.hypot(...run) || 1;
   const up = [run[1] / l, -run[0] / l];
-  const reach = [2.5, 2.5 + 0.72 * size + 2];
+  // The figures' height off the street: one row, or two stacked.
+  const reach = [2.5, 2.5 + (0.72 + SIZES.busRowHeight * (rows - 1)) * size + 2];
   const box = street.path.reduce((m, p) => [Math.min(m[0], p[0]), Math.min(m[1], p[1]), Math.max(m[2], p[0]), Math.max(m[3], p[1])], [Infinity, Infinity, -Infinity, -Infinity]);
   const pad = reach[1] + 2;
   const others = streets.filter((o) => o !== street && o.path.some((p) => p[0] > box[0] - pad && p[0] < box[2] + pad && p[1] > box[1] - pad && p[1] < box[3] + pad));
@@ -2201,6 +2244,16 @@ export function busStops(stops, routes) {
     const served = String(q.lines ?? q.routes ?? '').split(/[ ,]+/).filter(Boolean);
     return !q.terminal && !(served.length && served.every((r) => rail.has(r)));
   });
+}
+
+/** A route list in two rows of about the same length, the first ending in its comma. */
+export function stacked(routes) {
+  const list = inOrder(String(routes).split(' '));
+  if (list.length < 2) return [list.join(', ')];
+  const rows = (k) => [`${list.slice(0, k).join(', ')},`, list.slice(k).join(', ')];
+  let best = 1;
+  for (let k = 2; k < list.length; k++) if (Math.max(...rows(k).map((r) => r.length)) < Math.max(...rows(best).map((r) => r.length))) best = k;
+  return rows(best);
 }
 
 /** Routes in one order everywhere: numbers by their value, then names by the alphabet. */
@@ -2278,11 +2331,19 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const listed = (routes) => inOrder(String(routes).split(' ')).join(', ');
   for (const s of bus) features.push(feature({ kind: 'bus', cls: s.cls, routes: listed(s.routes), n: s.n, hw: s.hw }, { type: 'LineString', coordinates: s.path.map(back) }));
   // The figures and their halo, with clear air at each end so they stop short of a cross street.
-  const width = (s) => listed(s.routes).length * size * 0.5 + 2 * SIZES.busLabelAir;
+  const width = (s, rows = 1) => Math.max(...(rows > 1 ? stacked(s.routes) : [listed(s.routes)]).map((row) => row.length)) * size * 0.5 + 2 * SIZES.busLabelAir;
   const sides = new Map();
-  const side = (path) => { if (!sides.has(path)) sides.set(path, labelSide({ path }, bus, size)); return sides.get(path); };
-  for (const run of labelRuns(bus, SIZES.busLabelEvery[sheet.id], width, (path) => side(path) !== 0)) {
-    features.push(feature({ kind: 'bus-label', cls: run.cls, label: listed(run.routes), n: run.n, ...(side(run.path) < 0 ? { side: -1 } : {}) }, { type: 'LineString', coordinates: run.path.map(back) }));
+  const side = (path, rows) => { if (!sides.has(path)) sides.set(path, labelSide({ path }, bus, size, rows)); return sides.get(path); };
+  for (const run of labelRuns(bus, SIZES.busLabelEvery[sheet.id], width, (path, rows) => side(path, rows) !== 0)) {
+    const below = side(run.path, run.rows) < 0 ? { side: -1 } : {};
+    if (run.rows === 1) {
+      features.push(feature({ kind: 'bus-label', cls: run.cls, label: listed(run.routes), n: run.n, ...below }, { type: 'LineString', coordinates: run.path.map(back) }));
+      continue;
+    }
+    // Two rows stacked beside the street: one piece of lettering, turned the way the street runs.
+    const [a, b] = [run.path[0], run.path.at(-1)];
+    features.push(feature({ kind: 'bus-stack', cls: run.cls, label: stacked(run.routes).join('\n'), n: run.n, angle: Math.round((Math.atan2(b[1] - a[1], b[0] - a[0]) * 1800) / Math.PI) / 10, ...below },
+      { type: 'Point', coordinates: back(pointAlong(run.path, length(run.path) / 2)) }));
   }
   for (const l of lines) {
     features.push(feature({ kind: 'rail', route: l.route, color: l.color }, { type: 'MultiLineString', coordinates: l.paths.map((p) => p.map(back)) }));

@@ -45,6 +45,8 @@ export const numberOffset = (n, width) => -((width / 2 + 1.5) / NUMBER_SIZE[n] +
 
 // A stop's ring: radius and stroke on sheet 4, and the type size of the unseen mark that keeps
 // lettering off it (a letter's box is about as tall as its size: the ring's width and some air).
+// Stacked rows of route numbers are this far apart, in ems (scripts/lib/sheets.mjs, SIZES.busRowHeight).
+export const ROW_HEIGHT = 1.15;
 export const STOP_RING = { radius: 3, stroke: 1.4 };
 export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 
@@ -140,6 +142,16 @@ export function sheetStyle(theme, stations = []) {
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n, w)]]]))),
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w)]]])))],
         'text-letter-spacing': 0.02, 'symbol-sort-key': ['-', 0, ['get', 'n']] },
+      paint: { 'text-color': c.number, 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
+    // A list too long for its stretch in one row is stacked in two (scripts/lib/sheets.mjs, labelRuns): one piece
+    // of lettering turned the way its street runs, so both rows show or neither does. Its middle sits half a row
+    // farther off the street than a single row's, so the nearer row is where a single row would be.
+    if (n >= 2) layer('bus-stack', 'symbol', { filter: kind('bus-stack'),
+      layout: { 'text-field': ['get', 'label'], 'text-font': FONT.semibold, 'text-size': NUMBER_SIZE[n], 'text-max-width': 100, 'text-line-height': ROW_HEIGHT, 'text-justify': 'center', 'text-padding': 2,
+        'text-rotate': ['get', 'angle'], 'text-rotation-alignment': 'map', 'text-letter-spacing': 0.02, 'symbol-sort-key': ['-', 0, ['get', 'n']],
+        'text-offset': ['case', ['==', ['get', 'side'], -1],
+          byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n, w) + ROW_HEIGHT / 2]]]))),
+          byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w) - ROW_HEIGHT / 2]]])))] },
       paint: { 'text-color': c.number, 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
     layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name']),

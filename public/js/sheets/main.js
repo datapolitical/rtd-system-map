@@ -1,7 +1,8 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
-// Pinch or scroll and it settles on the nearest sheet; the buttons step.
+// Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { SHEETS, sheetStyle } from './style.js';
+import { settle } from './settle.js';
 
 const scheme = matchMedia('(prefers-color-scheme: dark)');
 const forced = new URLSearchParams(location.search).get('theme');
@@ -40,20 +41,29 @@ function nearest(zoom) {
 }
 function show(index, around) {
   sheet = Math.max(0, Math.min(zooms.length - 1, index));
-  map.easeTo({ zoom: zooms[sheet], around, duration: 380 });
+  map.easeTo({ zoom: zooms[sheet], around, duration: 380 }, { settling: true });
   for (const [i, dot] of [...document.querySelectorAll('#sheets i')].entries()) dot.classList.toggle('on', i === sheet);
   document.querySelector('#out').disabled = sheet === 0;
   document.querySelector('#in').disabled = sheet === zooms.length - 1;
 }
-// After a pinch or a scroll: a third of the way to the next sheet is enough to go there.
-let settling = false;
+// After a pinch or a scroll: on to the next sheet the way it was heading (settle.js). The
+// page's own move to a sheet is marked, and every other zoom is the reader's: MapLibre does
+// not say whose a zoom is on a single notch of a scroll wheel. A pinch has to be a little
+// firmer than a scroll, so two fingers dragging the map do not change it.
+let input = {};
+map.getContainer().addEventListener('wheel', (e) => { input = { wheel: [e.clientX, e.clientY] }; }, { passive: true, capture: true });
+map.getContainer().addEventListener('touchstart', () => { input = { touch: true }; }, { passive: true, capture: true });
+let last = map.getZoom();
+let began = null;
+map.on('zoomstart', (e) => { if (!e.settling && began === null) began = last; });
+map.on('zoom', () => { last = map.getZoom(); });
 map.on('zoomend', (e) => {
-  if (settling || !e.originalEvent) return;
-  const off = map.getZoom() - zooms[sheet];
-  const step = (zooms[1] - zooms[0]) / 3;
-  settling = true;
-  show(Math.abs(off) < step ? sheet : nearest(map.getZoom() + Math.sign(off) * step));
-  map.once('moveend', () => { settling = false; });
+  if (e.settling || began === null) return;
+  const to = settle(zooms, sheet, began, map.getZoom(), { least: input.touch ? 0.25 : 0.1 });
+  began = null;
+  // A scroll zooms about the pointer, and so does the rest of the way.
+  const box = map.getContainer().getBoundingClientRect();
+  show(to, input.wheel ? map.unproject([input.wheel[0] - box.left, input.wheel[1] - box.top]) : undefined);
 });
 map.doubleClickZoom.disable();
 map.on('dblclick', (e) => show(sheet + 1, e.lngLat));

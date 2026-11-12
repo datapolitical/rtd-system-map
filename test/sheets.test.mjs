@@ -770,3 +770,93 @@ test("a turnaround's bow is drawn tighter where it would run against rail, and a
     assert.ok(end[0] - l.paths[0].at(-17)[0] > 13 * pitch, 'a long, gentle lead-in');
   }
 });
+
+test('a heavy street does not run on past the corner its routes turn at', () => {
+  const street = (cls, routes, hw, coords) => line({ mode: 'bus', cls, routes, n: 1, hw, zoom: 'far' }, coords);
+  // The trunk comes in from the west and turns south; an hourly street carries straight on for 20 px.
+  const drawn = busStreets(all([
+    street('c5', '1 2 3', 5, [at(0, 0), at(200, 0)]),
+    street('c5', '1 2 3', 5, [at(200, 0), at(200, 150)]),
+    street('c60', '8', 60, [at(200, 0), at(220, 0)]),
+    street('c60', '8 9', 60, [at(220, 0), at(220, -150)]),
+  ]), sheet);
+  assert.equal(drawn.find((s) => s.routes === '8').cls, 'c60', 'the short hourly street keeps its own weight');
+  assert.ok(drawn.filter((s) => s.routes === '1 2 3').every((s) => s.cls === 'c5'));
+});
+
+test('a short stretch is made heavier only by a stretch of the same routes', () => {
+  const corner = (x) => [[[x, 0], [x, -80]], [[x, 0], [x, 80]]].map((p) => st(p, { cls: 'c10', routes: '5' }));
+  // Other routes: the 12 px hourly stretch after the heavy one is not drawn as heavy.
+  const stub = evened([st([[0, 0], [100, 0]], { cls: 'c5', routes: '1 2 3' }), st([[100, 0], [112, 0]], { cls: 'c60', routes: '8' }), ...corner(112)], 32);
+  assert.equal(stub.find((s) => s.routes === '8').cls, 'c60');
+  // The same routes: a short stretch weighed a class apart is the measure's noise, either way.
+  const same = evened([st([[0, 100], [100, 100]], { cls: 'c15', routes: '8' }), st([[100, 100], [112, 100]], { cls: 'c60', routes: '8' }), ...corner(112).map((s) => ({ ...s, path: s.path.map(([x, y]) => [x, y + 100]) }))], 32);
+  assert.ok(same.filter((s) => s.routes === '8').every((s) => s.cls === 'c15'));
+});
+
+test('a weight gathered at a corner is not handed on down a route, and not taken from buses with another street to take', async () => {
+  const { gathered } = await import('../scripts/lib/sheets.mjs');
+  // One short heavy piece of a route does not make the rest of that route heavy.
+  const route = gathered([st([[0, 0], [20, 0]], { routes: '28', cls: 'c15' }), st([[20, 0], [200, 0]], { routes: '28', cls: 'c60' }), st([[200, 0], [400, 0]], { routes: '28', cls: 'c60' })]);
+  assert.deepEqual(route.map((s) => s.cls), ['c15', 'c60', 'c60']);
+  // Each street is judged by the weight it came in with: the third takes the second's own, not the first's.
+  const chain = gathered([st([[0, 50], [100, 50]], { routes: '1', cls: 'c5' }), st([[100, 50], [200, 50]], { routes: '1 2', cls: 'c30' }), st([[200, 50], [300, 50]], { routes: '1 2 3', cls: 'c60' })]);
+  assert.deepEqual(chain.map((s) => s.cls), ['c5', 'c5', 'c30']);
+  // Routes 1 and 2 meet a street with both and one more, but route 2 can also turn off: the wider street keeps its weight.
+  const split = gathered([st([[0, 100], [100, 100]], { routes: '1 2', cls: 'c10' }), st([[100, 100], [200, 100]], { routes: '1 2 3', cls: 'c30' }), st([[100, 100], [100, 200]], { routes: '2 9', cls: 'c60' })]);
+  assert.equal(split.find((s) => s.routes === '1 2 3').cls, 'c30');
+});
+
+test('a scroll or a pinch goes to the next sheet the way it was heading, and never back the way it came', async () => {
+  const { settle } = await import('../public/js/sheets/settle.js');
+  const zooms = SHEETS.map((s) => s.zoom);
+  const [a, b, c, d] = zooms;
+  assert.equal(settle(zooms, 0, a, a + 0.15), 1, 'one notch of a wheel is enough');
+  assert.equal(settle(zooms, 1, b, b - 0.15), 0, 'and one notch back');
+  assert.equal(settle(zooms, 0, a, a + 0.05), 0, 'a slip changes nothing');
+  assert.equal(settle(zooms, 0, a, a + 0.2, { least: 0.25 }), 0, 'a pinch has to be firmer');
+  assert.equal(settle(zooms, 1, a + 0.9, a + 1.1), 1, 'caught on its way to a sheet, a scroll the same way carries on to it');
+  assert.equal(settle(zooms, 1, a + 0.9, a + 0.7), 0, 'and a scroll the other way turns back');
+  assert.equal(settle(zooms, 2, c - 0.05, c - 0.2), 1, 'a map all but arrived has arrived');
+  assert.equal(settle(zooms, 0, a, b + 0.3), 1, 'a little past a sheet rests on it');
+  assert.equal(settle(zooms, 0, a, b + 0.8), 2, 'well past, it goes on to the next');
+  assert.equal(settle(zooms, 0, a, a - 0.4), 0);
+  assert.equal(settle(zooms, 3, d, d + 0.4), 3);
+});
+
+test('a list too long for one row is stacked in two beside a straight street, turned the way the street runs', async () => {
+  const { stacked } = await import('../scripts/lib/sheets.mjs');
+  const { sheetStyle } = await import('../public/js/sheets/style.js');
+  assert.deepEqual(stacked('1 2 3 4 15L 83'), ['1, 2, 3,', '4, 15L, 83']);
+  assert.deepEqual(stacked('7'), ['7']);
+  const one = { routes: '1 2 3 4 5 6', cls: 'c15', n: 6, path: [[0, 0], [70, 0]] };
+  const width = (s, rows = 1) => (rows > 1 ? 60 : 110);
+  const [run] = labelRuns([one], 200, width);
+  assert.equal(run.rows, 2, 'one row needs 110 and the street is 70 long: two rows');
+  assert.equal(labelRuns([{ ...one, path: [[0, 0], [50, 0]] }], 200, width).length, 0, 'too short for two rows as well: no label');
+  assert.equal(labelRuns([{ ...one, path: [[0, 0], [150, 0]] }], 200, width)[0].rows, 1, 'one row where it fits');
+  // On a bend the rows would leave the street: no stacked label there.
+  assert.equal(labelRuns([{ ...one, path: [[0, 0], [35, 12], [70, 0]] }], 200, width).length, 0);
+  for (const theme of ['light', 'dark']) {
+    const layer = sheetStyle(theme).layers.find((l) => l.id === 'bus-stack-2');
+    assert.equal(layer.layout['symbol-placement'] ?? 'point', 'point');
+    assert.deepEqual(layer.layout['text-rotate'], ['get', 'angle']);
+    assert.equal(layer.layout['text-rotation-alignment'], 'map');
+  }
+});
+
+test('a line does not end at a station while another of its stations lies beyond, however near the end of the track', () => {
+  // The widest sheet: the last two stations are 12 px apart, nearer than three pitches.
+  const s1 = SHEETS[0];
+  const o1 = toPx([-105, 39.75], s1.zoom);
+  const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
+  const two = (route, color) => line({ mode: 'rail', route, color, slot: 0 }, [at1(-300, 0), at1(40, 0)]);
+  const lines = railLines(all([two('E', '#552683'), two('R', '#C4D600')]), s1);
+  const marks = stationMarks(all([
+    point({ id: 1, name: 'City', served: true, lines: 'E R' }, at1(28, 0)),
+    point({ id: 2, name: 'Gate', served: true, lines: 'E R', end: true }, at1(40, 0)),
+  ]), lines, s1);
+  const ending = (name) => marks.find((m) => m.name === name).bars.flatMap((b) => b.ending ?? []).map((e) => e.route).sort();
+  assert.deepEqual(ending('City'), [], 'nothing ends at the station before the last');
+  assert.deepEqual(ending('Gate'), ['E', 'R']);
+});
