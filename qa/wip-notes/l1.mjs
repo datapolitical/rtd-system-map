@@ -1,0 +1,11 @@
+import { openModel } from '../drawn/model.mjs';
+import path from 'node:path';
+const root = path.resolve('qa/recall/fixtures/3e38acb');
+const m = await openModel({ root, theme: 'dark' });
+const z = m.zoom(14);
+const lab = z.labels.filter((l) => l.layer === 'rail-bullets').slice(0, 3);
+console.log(JSON.stringify(lab.map((l) => ({ ...l, block: undefined, color: undefined })), null, 1).slice(0, 1800));
+const mk = z.marks.filter((l) => l.layer === 'rail-bullets').slice(0, 2);
+console.log(JSON.stringify(mk, null, 1).slice(0, 1500));
+const sl = z.labels.filter((l) => l.layer === 'station-labels-hub');
+console.log(JSON.stringify(sl.map((l) => ({ text: l.text, at: l.at, n: l.candidates.length, c0: l.candidates[0], size: l.size })), null, 1).slice(0, 1200));

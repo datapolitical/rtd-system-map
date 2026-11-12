@@ -1,0 +1,13 @@
+import { openModel } from '../drawn/model.mjs';
+import path from 'node:path';
+const root = path.resolve(process.argv[2] ?? 'qa/recall/fixtures/3e38acb');
+const z = Number(process.argv[3] ?? 14);
+const m = await openModel({ root, theme: 'dark' });
+console.time('names');
+const n = await m.names(z);
+console.timeEnd('names');
+const by = {};
+for (const e of n) by[`${e.layer}/${e.kind}`] = (by[`${e.layer}/${e.kind}`] || 0) + 1;
+console.log(by);
+console.log(JSON.stringify(n.find((e) => e.kind === 'line-text'), (k, v) => (k === 'parts' ? `[${v.length} parts, ${v[0].length} pts]` : v)).slice(0, 900));
+const b = m.linePlaced(z); const bb = {}; for (const e of b) bb[e.layer] = (bb[e.layer] || 0) + 1; console.log(bb, b[0]?.half);
