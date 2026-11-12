@@ -2104,13 +2104,29 @@ How it is built:
   past the other (a turnaround, out one way and back the other), the bow is
   drawn as one smooth curve that leaves each corner the way the street does
   and reaches as far out as it did: the route data along it bulges and
-  pinches.
+  pinches. The bow gives way to rail: where it would run against a line or a
+  station's bar it is drawn tighter, down to half its reach, until it stands
+  a line's width clear.
+- **A stop's ring sits on its street.** The streets are drawn, not traced,
+  so a stop at its true place can sit beside its line or between two. Each
+  ring is moved to the nearest point of the nearest street, within two
+  merge-widths, that carries one of its routes; stops that land ring on ring
+  (the two sides of one street) are one ring with the routes of both.
+- **A line's curve into its last bar starts from the station**, fourteen
+  pitches back along the line, not from the end of any tail track.
+- **A hall is drawn over the streets that end on it**, so each ends flat on
+  the wall.
 - **Route numbers are said once, not every block.** A street is cut at every
   corner and each piece's list differs a little from the next. Pieces that
-  carry straight on from each other are one street; along it the longest
-  pieces are labelled, none closer than a sheet's spacing (170, 240 and 320
-  pixels on sheets 2 to 4). A street with more than four routes lists three
-  and a count; a tap gives them all.
+  carry straight on from each other are one street, and along it neighbours
+  with the same list are one run. A label is the run's whole list, in one
+  order everywhere (numbers by value, then names): never part of a list and
+  a count of the rest. A run long enough for its list is labelled, the
+  longest first, none closer than a sheet's spacing (170, 240 and 320
+  pixels on sheets 2 to 4); the label sits within one block where a block
+  holds it and runs on across cross streets only where none does. A run too
+  short for its list is not labelled on that sheet; a tap gives the list
+  anywhere.
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
@@ -4201,6 +4217,23 @@ work against the real structure before asking for evaluation.
   lighter than one of the two that fed it, the same "15, 19" was heavy on
   one side of the hall and faint on the other, and a sliver of a stop ring
   showed from under the light rail.
+- 2026-11-12: Sheets list every route on a street's label, or leave the
+  stretch unlabelled: no "+N". Reason: Chris, "it's absurd to have that on a
+  map". This replaces the three-routes-and-a-count rule and the seven-route
+  limit on sheet 4 from earlier the same day. Labels became their own
+  features along a run of blocks with one list, and the sheets' tiles are
+  drawn one zoom out with a wide margin so a label's stretch is whole in
+  the tile that places it.
+- 2026-11-12: Sheets put stop rings on their streets, keep a turnaround's
+  bow clear of rail, start a line's lead-in from its station, draw halls
+  over street ends, and give route lists one order. Reason: Chris's
+  red-team of Union Station on sheet 4: rings floated beside or between
+  streets; the FreeRide bow ran against the light rail and its bar; the
+  light rail wiggled just before its bar, because the lead-in was measured
+  from the tail track's end; streets ended in round blobs across the hall's
+  wall; one loop read "FreeRide, 15" and "15, FreeRide". A tapped stop or
+  street on the sheets also showed "undefined": the tap now reads what the
+  sheet holds.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.

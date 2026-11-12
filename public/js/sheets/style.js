@@ -85,9 +85,6 @@ export function sheetStyle(theme, stations = []) {
         'line-width': ['match', ['get', 'class'], 'motorway', [2.2, 3, 5, 12][i], ['trunk', 'primary'], [0, 1.2, 4, 10][i], [0, 0, 2.4, 7][i]] } });
     if (n === 4) layers.push({ id: 'buildings-4', type: 'fill', source: 'ground', 'source-layer': 'building', ...band, paint: { 'fill-color': c.building } });
 
-    // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses end on.
-    layer('hall', 'fill', { filter: kind('hall'), paint: { 'fill-color': c.hall } });
-    layer('hall-edge', 'line', { filter: kind('hall'), layout: ROUND, paint: { 'line-color': c.hallEdge, 'line-width': [0, 1, 1.2, 1.6][i] } });
 
     // Bus streets, quietest first so the busiest are on top; the busiest get a rim of ground to sit clear.
     const order = ['c60', 'c30', 'c15', 'c10', 'c5', 'c3'];
@@ -95,6 +92,11 @@ export function sheetStyle(theme, stations = []) {
       paint: { 'line-color': c.ground, 'line-width': ['+', byClass(BUS_WIDTH[n]), 1.6] } });
     layer('bus', 'line', { filter: kind('bus'), layout: { ...ROUND, 'line-sort-key': ['match', ['get', 'cls'], ...order.flatMap((k, j) => [k, j]), 0] },
       paint: { 'line-color': byClass(c.bus), 'line-width': byClass(BUS_WIDTH[n]) } });
+
+    // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses
+    // end on. It is drawn over them, so a street ends flat on the wall, not in a round blob across it.
+    layer('hall', 'fill', { filter: kind('hall'), paint: { 'fill-color': c.hall } });
+    layer('hall-edge', 'line', { filter: kind('hall'), layout: ROUND, paint: { 'line-color': c.hallEdge, 'line-width': [0, 1, 1.2, 1.6][i] } });
 
     // Bus stops: each one a ring, on the closest sheet.
     if (n >= 4) layers.push({ id: `stop-${n}`, type: 'circle', source: `sheet-${n}`, filter: ['==', ['get', 'kind'], 'stop'], ...band,
@@ -129,7 +131,7 @@ export function sheetStyle(theme, stations = []) {
     const unseen = { layout: { 'symbol-placement': 'line', 'symbol-spacing': 6, 'text-field': 'o', 'text-font': FONT.medium, 'text-size': 7, 'text-allow-overlap': true, 'text-padding': 0, 'text-rotation-alignment': 'viewport' }, paint: { 'text-opacity': 0 } };
     layer('keep-off-bus', 'symbol', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]]), ...unseen });
     // Route numbers along each bus street, from the second sheet.
-    if (n >= 2) layer('bus-number', 'symbol', { filter: kind('bus'),
+    if (n >= 2) layer('bus-number', 'symbol', { filter: kind('bus-label'),
       // Set just beside the street, not on it: on it, the line shows between the figures and a
       // comma reads as a dash. The offset is the street's half width and a little air, in ems.
       layout: { 'symbol-placement': 'line', 'symbol-spacing': [0, 200, 260, 320][i], 'text-field': ['get', 'label'], 'text-font': FONT.semibold, 'text-size': NUMBER_SIZE[n], 'text-max-angle': 25, 'text-padding': 4,
@@ -171,7 +173,9 @@ export function sheetStyle(theme, stations = []) {
     glyphs: new URL('../../vendor/glyphs/{fontstack}/{range}.pbf', import.meta.url).href.replace(/%7B/g, '{').replace(/%7D/g, '}'),
     sources: {
       ground: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
-      ...Object.fromEntries(SHEETS.map((s) => [`sheet-${s.id}`, { type: 'geojson', data: new URL(`../../data/sheet-${s.id}.geojson`, import.meta.url).href, tolerance: 0.1 }])),
+      ...Object.fromEntries(SHEETS.map((s) => [`sheet-${s.id}`, { type: 'geojson', data: new URL(`../../data/sheet-${s.id}.geojson`, import.meta.url).href, tolerance: 0.1,
+        // Big tiles with a wide margin, so a label's stretch of street is whole in the tile that places it.
+        maxzoom: s.zoom - 1, buffer: 256 }])),
     },
     layers,
   };

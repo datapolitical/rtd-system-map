@@ -86,7 +86,7 @@ map.on('click', (e) => {
   const bus = hit(['bus']).sort((a, b) => b.properties.n - a.properties.n)[0];
   if (bus) {
     const q = bus.properties;
-    return tell(`${q.n > 1 ? 'Routes' : 'Route'} ${esc(q.label)}`, q.hw ? `A bus about every ${Math.round(q.hw)} minutes on this street, weekday midday` : 'Bus');
+    return tell(`${q.n > 1 ? 'Routes' : 'Route'} ${esc(q.routes)}`, q.hw ? `A bus about every ${Math.round(q.hw)} minutes on this street, weekday midday` : 'Bus');
   }
   card.hidden = true;
 });

@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -230,13 +230,28 @@ test('two ways round a strip too thin to see into are drawn as one street with t
   assert.deepEqual(middle.routes.split(' ').sort(), ['1', '2']);
 });
 
-test('along one street only blocks well apart carry its label; another street has its own', () => {
-  const st = (x0, x1, y = 0) => ({ routes: '1', path: [[x0, y], [x1, y]] });
-  const streets = [st(0, 100), st(100, 220), st(220, 300), st(300, 420), st(0, 90, 50)];
-  const picked = labelled(streets, 200);
-  assert.deepEqual(streets.map((s) => picked.has(s)), [false, true, false, true, true]);
-  // A block too short to hold its label gives its turn to one that can.
-  assert.deepEqual(streets.map((s) => labelled(streets.slice(0, 2), 200, () => 110).has(s)), [false, true, false, false, false]);
+test('a street is labelled with its whole list, only where the list fits, and labels of one street stand well apart', () => {
+  const st = (x0, x1, routes = '1', y = 0) => ({ routes, cls: 'c15', n: 1, path: [[x0, y], [x1, y]] });
+  const ends = (runs) => runs.map((r) => [Math.round(Math.min(r.path[0][0], r.path.at(-1)[0])), Math.round(Math.max(r.path[0][0], r.path.at(-1)[0]))]);
+  // Four blocks with one list are one run 420 long: two labels 200 apart, each inside one block. Another street has its own.
+  const streets = [st(0, 100), st(100, 220), st(220, 300), st(300, 420), st(0, 90, '1', 50)];
+  const runs = labelRuns(streets, 200, () => 60);
+  assert.equal(runs.length, 3);
+  const [a, b] = ends(runs.filter((r) => r.path[0][1] === 0)).sort((x, y) => x[0] - y[0]);
+  const blocks = [[0, 100], [100, 220], [220, 300], [300, 420]];
+  for (const w of [a, b]) assert.ok(blocks.some(([lo, hi]) => w[0] >= lo && w[1] <= hi), 'each within a block, clear of the cross streets');
+  assert.ok(b[0] - a[0] >= 200, 'and well apart');
+  // A list no block can hold runs on across the corners of its run; it is never cut short.
+  const long = labelRuns(streets.slice(0, 4), 500, () => 300);
+  assert.equal(long.length, 1);
+  assert.ok(ends(long)[0][1] - ends(long)[0][0] >= 300);
+  assert.equal(long[0].routes, '1');
+  // Where the list changes the run ends: a list longer than its run is not labelled at all.
+  const mixed = [st(0, 100, '1 2'), st(100, 220, '2 1'), st(220, 300, '1 2 3'), st(300, 420, '1')];
+  assert.deepEqual(labelRuns(mixed, 100, () => 150).map((r) => r.routes), ['1 2']);
+  // A stretch with no room beside it gives its turn to another.
+  assert.equal(labelRuns(streets.slice(0, 4), 200, () => 60, (path) => path[0][0] > 250).length, 1);
+  assert.deepEqual(inOrder(['FreeRide', '15L', '120X', '9', '15', 'FF']), ['9', '15', '15L', '120X', 'FF', 'FreeRide']);
 });
 
 const st = (path, more = {}) => ({ cls: 'c15', routes: '1', n: 1, hw: 15, path, ...more });
@@ -547,9 +562,11 @@ test('a block too short for its numbers and some air before its cross streets is
   const data = { routes: all([]), stations: all([]), terminals: null, streets: all([
     street('1', [at3(0, 0), at3(0, 400)]), street('2', [at3(9, 0), at3(9, 400)]), street('3', [at3(0, 200), at3(9, 200)]),
   ]) };
-  const drawn = drawSheet(data, near).features.filter((f) => f.properties.kind === 'bus');
-  assert.ok(drawn.some((f) => f.properties.routes === '3'), 'the rung is drawn');
-  assert.ok(!drawn.some((f) => f.properties.routes === '3' && f.properties.label), 'but its number would overrun the streets at its ends');
+  const drawn = drawSheet(data, near).features;
+  assert.ok(drawn.some((f) => f.properties.kind === 'bus' && f.properties.routes === '3'), 'the rung is drawn');
+  const labels = drawn.filter((f) => f.properties.kind === 'bus-label').map((f) => f.properties.label);
+  assert.ok(labels.includes('1') && labels.includes('2'), 'the long streets are labelled');
+  assert.ok(!labels.includes('3'), 'but its number would overrun the streets at its ends');
 });
 
 test("a stop the build counted as a bus station's, or one only trains call at, is not ringed: the hall and the bar stand for it", async () => {
@@ -655,7 +672,7 @@ test("where lines end together at a bar its name carries their letters, and a st
   assert.equal(once[0].letters.map((l) => l.route).join(''), 'ABEW');
 });
 
-test('a long hall says what it is down its length; a place that shares a station\'s name is not lettered twice; the closest sheet lists more routes', async () => {
+test('a long hall says what it is down its length; a place that shares a station\'s name is not lettered twice; a label is never a list cut short', async () => {
   const data = { routes: all([]), stations: all([]), streets: all([]), stops: null };
   const room = (w, more) => ({ type: 'Feature', properties: { id: 1, name: 'Hall', ...more }, geometry: { type: 'Polygon', coordinates: [[at3(0, 0), at3(w, 0), at3(w, 20), at3(0, 20), at3(0, 0)]] } });
   const label = (w, more) => drawSheet({ ...data, terminals: all([room(w, more)]) }, near).features.find((f) => f.properties.kind === 'hall-name');
@@ -669,7 +686,6 @@ test('a long hall says what it is down its length; a place that shares a station
   assert.ok(JSON.stringify(style.layers.find((l) => l.id === 'place-4').filter).includes('UNION STATION'));
   const ids = style.layers.map((l) => l.id);
   assert.ok(ids.indexOf('hall-name-4') > ids.indexOf('street-name-4'), 'placed before street names, which give way');
-  assert.ok(SIZES.busListed[4] > SIZES.busListed[3]);
 });
 
 test('lines that end over a hall end at its wall; a corner beside a wall sits on it; a street carrying all of a neighbour\'s routes is no lighter', async () => {
@@ -704,4 +720,53 @@ test('a stop whose ring would sit half under a rail line is not ringed', () => {
   const data = { routes: all([line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [ll(0, 0), ll(400, 0)])]), stations: all([]), streets: all([]), terminals: null,
     stops: all([point({ id: 'under', routes: '15' }, ll(200, 3)), point({ id: 'clear', routes: '15' }, ll(200, 30))]) };
   assert.deepEqual(drawSheet(data, s).features.filter((f) => f.properties.kind === 'stop').map((f) => f.properties.id), ['clear']);
+});
+
+test('a street with many routes is labelled with all of them, or not at all: never a count of the rest', () => {
+  const street = (routes, coords) => line({ mode: 'bus', cls: 'c15', routes, n: routes.split(' ').length, hw: 15, zoom: 'near' }, coords);
+  const many = '0 3L 9 10 52 83 120X FF';
+  const draw = (len) => drawSheet({ routes: all([]), stations: all([]), terminals: null, streets: all([street(many, [at3(0, 0), at3(len, 0)])]) }, near).features;
+  const labels = draw(600).filter((f) => f.properties.kind === 'bus-label').map((f) => f.properties.label);
+  assert.ok(labels.length && labels.every((l) => l === '0, 3L, 9, 10, 52, 83, 120X, FF'));
+  assert.equal(draw(60).filter((f) => f.properties.kind === 'bus-label').length, 0, 'too short for the list: no label');
+  assert.equal(draw(60).find((f) => f.properties.kind === 'bus').properties.routes, '0, 3L, 9, 10, 52, 83, 120X, FF', 'a tap still gives it');
+});
+
+test("a stop's ring sits on the street its buses are drawn on, and the two sides of a street are one ring", () => {
+  const s4 = SHEETS[3];
+  const o = toPx([-105, 39.75], s4.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
+  const stop = (id, routes, x, y, heading) => point({ id, name: `Stop ${id}`, lines: routes, heading }, ll(x, y));
+  const streets = [{ routes: '15 19', cls: 'c15', path: [[o[0], o[1]], [o[0] + 400, o[1]]] }, { routes: '7', cls: 'c30', path: [[o[0], o[1] + 12], [o[0] + 400, o[1] + 12]] }];
+  const rings = stopRings([stop('a', '15', 100, -9, 'Eastbound'), stop('b', '19', 102, 8, 'Westbound'), stop('c', '15', 300, 9, 'Eastbound'), stop('d', '99', 200, 5)], streets, s4);
+  const rel = (r) => [Math.round(r.at[0] - o[0]), Math.round(r.at[1] - o[1])];
+  assert.deepEqual(rings.map((r) => r.id), ['a', 'c', 'd']);
+  assert.deepEqual(rel(rings[0]), [100, 0], 'on its own street, not the nearer one of another route');
+  assert.deepEqual(rings[0].routes, ['15', '19']);
+  assert.equal(rings[0].heading, '', 'two ways, so no one heading');
+  assert.deepEqual(rel(rings[1]), [300, 0]);
+  assert.deepEqual(rel(rings[2]), [200, 5], 'a stop with no street of its own drawn near stays where it is');
+});
+
+test("a turnaround's bow is drawn tighter where it would run against rail, and a line's lead-in starts from its station, not its tail track's end", () => {
+  // A bow from (0,0) round to (0,100) that reaches 120 out; rail runs down x = 125.
+  const loop = [st([[0, 0], [60, -10], [120, 50], [60, 110], [0, 100]]), st([[0, 0], [0, 100]])];
+  const reach = (list) => Math.max(...list[0].path.map((p) => p[0]));
+  const free = reach(arced(loop));
+  const held = reach(arced(loop, (p) => Math.abs(125 - p[0]), 30));
+  assert.ok(free > 100 && held <= 96 && held > 50, `drawn in from ${free} to ${held}`);
+  // The track runs 60 px past the last station. The line bends over a long lead-in, not in the last few pixels.
+  const s4 = SHEETS[3];
+  const o = toPx([-105, 39.75], s4.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
+  const track = (route, color) => line({ mode: 'rail', route, color, slot: 0 }, [ll(-900, 0), ll(520, 0), ll(580, 0)]);
+  const lines = railLines(all([track('A', '#57C1E9'), track('B', '#4E9D2D')]), s4);
+  stationMarks(all([point({ id: 1, name: 'First', served: true, lines: 'A B' }, ll(-880, 0)), point({ id: 2, name: 'Last', served: true, lines: 'A B', end: true }, ll(520, 0))]), lines, s4);
+  for (const l of lines) {
+    const end = l.paths[0].at(-1);
+    assert.ok(Math.abs(end[0] - o[0] - 520) < 2, 'ends at the bar');
+    // The curve into the bar is as long as at any line's end (fourteen pitches), not squeezed into what the tail left of it.
+    const pitch = SIZES.rail[4] + SIZES.gap[4];
+    assert.ok(end[0] - l.paths[0].at(-17)[0] > 13 * pitch, 'a long, gentle lead-in');
+  }
 });
