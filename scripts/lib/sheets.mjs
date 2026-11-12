@@ -741,7 +741,12 @@ export function busStreets(streets, sheet) {
   for (let pass = 0; pass < 3; pass++) {
     for (const e of [...edges].sort((a, b) => a.len - b.len)) {
       if (e.len >= run) continue;
-      const longest = [next(e, 0), next(e, 1)].filter(Boolean).sort((a, b) => b.len - a.len)[0];
+      let longest = [next(e, 0), next(e, 1)].filter(Boolean).sort((a, b) => b.len - a.len)[0];
+      // A scrap a few pixels long with no way straight on takes the weight of the longest street it touches,
+      // so the corner of a transfer centre is not a heavy blot.
+      if (!longest && e.len < 1.5 * SIZES.busSpeck) {
+        longest = [e.path[0], e.path.at(-1)].flatMap((q) => nodes.get(key(q)) ?? []).filter((o) => o !== e).sort((a, b) => b.len - a.len)[0];
+      }
       if (longest && longest.len > e.len && longest.rank !== e.rank) e.rank = longest.rank;
     }
   }
