@@ -255,3 +255,21 @@ test('a street is not taken for the stem of a loop when a ramp drawn straight en
   );
   assert.ok(near * 1000 < 1, `route 4 is ${(near * 1000).toFixed(0)} m from its own street at x = 430 m`);
 });
+
+test('a divided road is one road though some routes run up one carriageway only', () => {
+  // Route 30 runs both carriageways (15 m apart) and is read both ways on
+  // each; routes 10 and 16 make a one-way circuit up the east one only.
+  const every = (min) => Array.from({ length: 24 }, (_, i) => 9 * 3600 + i * min * 60);
+  const both = (y) => ({ at: at([1, y]), dir: [1, 0], tier: 'frequent', with: every(15), against: every(15) });
+  const oneWay = (y) => ({ at: at([1, y]), dir: [1, 0], tier: 'frequent', with: every(15), against: [] });
+  const lines = [route('30', [[0, 0], [2, 0]]), route('30', [[2, 0.015], [0, 0.015]]), route('10', [[0, 0], [2, 0]]), route('16', [[0, 0], [2, 0]])];
+  const loads = new Map([['30', [both(0), both(0.015)]], ['10', [oneWay(0)]], ['16', [oneWay(0)]]]);
+  const { streets: out } = buildStreets(lines, loads, { precision: 6 });
+  const far = out.filter((f) => f.properties.zoom === 'far');
+  assert.ok(far.length >= 1, `not merged: ${out.map((f) => `${f.properties.routes}/${f.properties.zoom ?? 'all'}`).join(' | ')}`);
+  assert.ok(far.some((f) => f.properties.routes === '10 16 30'), 'the one line carries every route on the road');
+  // With route 30 not measured both ways on both, sharing 1 of 3 routes is
+  // not enough: two streets, as before.
+  const { streets: apart } = buildStreets(lines, new Map([['10', [oneWay(0)]], ['16', [oneWay(0)]]]), { precision: 6 });
+  assert.ok(apart.every((f) => !f.properties.zoom), 'unmeasured: left as two lines');
+});

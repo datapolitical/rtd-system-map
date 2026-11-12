@@ -529,10 +529,16 @@ function carriagewayCentres(graph, cells) {
       const [w, a] = [best.c.with.length, best.c.against.length];
       if (w > 0 && a <= ONE_WAY * w) t = best.sense;
       else if (a > 0 && w <= ONE_WAY * a) t = -best.sense;
+      // Measured, and buses pass both ways.
+      else if (w > 0 && a > 0) bothWays.add(key);
     }
     travelCache.set(key, t);
     return t;
   };
+  // Route r is measured on edge i with buses both ways: on a divided road a
+  // carriageway's cell counts the other carriageway's trips too.
+  const bothWays = new Set();
+  const readsBothWays = (i, r) => travel(i, r) === 0 && bothWays.has(`${i}\u0000${r}`);
   const segs = new Cells(TWIN_METERS);
   edges.forEach((e, i) => segs.addSegment(i, nodes[e.a], nodes[e.b]));
   // The other carriageway at point p on edge i: the nearest point, on a
@@ -560,8 +566,12 @@ function carriagewayCentres(graph, cells) {
       // lines a route's buses take the same way are lanes. (A carriageway's
       // cells count the other's trips too, so most read two way, and the
       // direction can only rule a pair out.)
-      const shared = [...routesOf[j]].filter((r) => routesOf[i].has(r)).length;
-      if (shared < SAME_ROUTES * new Set([...routesOf[i], ...routesOf[j]]).size) continue;
+      // Or the routes of one are all on the other, each read both ways on
+      // both lines: routes that run up one carriageway only (the 10, 16 and
+      // 20's one-way circuit up Federal by Colfax) don't make it two roads.
+      const shared = [...routesOf[j]].filter((r) => routesOf[i].has(r));
+      const within = shared.length === Math.min(routesOf[i].size, routesOf[j].size) && shared.every((r) => readsBothWays(i, r) && readsBothWays(j, r));
+      if (shared.length < SAME_ROUTES * new Set([...routesOf[i], ...routesOf[j]]).size && !within) continue;
       if ([...routesOf[i]].some((r) => travel(i, r) && travel(j, r) && cos * travel(i, r) * travel(j, r) > 0)) continue;
       const c = closest(p, C, D);
       if (c.d < MIN_APART || c.d > TWIN_METERS) continue;
