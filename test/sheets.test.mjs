@@ -359,3 +359,16 @@ test('route numbers are set beside their street, clear of its ink, on every shee
   }
 });
 
+test('in the dark a hall stands off the ground and the buildings round it', async () => {
+  const { PALETTES } = await import('../public/js/sheets/style.js');
+  const lum = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  for (const theme of ['light', 'dark']) {
+    const c = PALETTES[theme];
+    assert.ok(ratio(c.hall, c.building) >= 1.15 && ratio(c.hall, c.ground) >= 1.15, `${theme}: the hall reads as a room`);
+    assert.ok(ratio(c.hallEdge, c.hall) >= 1.8, `${theme}: its wall reads`);
+  }
+});

@@ -2015,8 +2015,9 @@ How it is built:
   `test/sheets.test.mjs` holds the rules.
 - **Bus stations are rooms.** Where buses go indoors (the halls in
   `terminals.geojson`) RTD's route lines stop at the door. A hall at least
-  five pixels wide on a sheet is drawn as a quiet filled shape, edged like a
-  quiet street, under the streets and stops. Its shape is a squared room:
+  five pixels wide on a sheet is drawn as a quiet filled shape, a shade off
+  both the ground and the buildings round it in either theme, edged in a
+  line that reads against it, under the streets and stops. Its shape is a squared room:
   the tightest rectangle round the surveyed outline, along its own lie,
   brought in until it covers the same ground. A street whose loose end is
   within ten pixels of a hall's wall is drawn onto the wall, square, without
@@ -4057,6 +4058,9 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets set route numbers beside their street, not on it.
   Reason: in the dark theme especially, the street showed through the
   gaps between figures, so "0, 6, 10" read as "0-6-10".
+- 2026-11-12: Sheets' halls are a shade off the buildings in both themes.
+  Reason: in the dark theme a hall was the same tone as the blocks round
+  it, and in the light theme nearly so; only its edge showed.
 
 ## Sources
 
