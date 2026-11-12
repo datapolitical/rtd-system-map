@@ -158,6 +158,27 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
     return out;
   };
 
+  // The parts of a line the page's tiles keep. MapLibre cuts a GeoJSON source
+  // into tiles at whole zooms (a 512 px source: floor(z)), and below the
+  // source's maxzoom drops every part shorter than its `tolerance` (0.375 px
+  // unless the style says) at the tile's zoom (geojson-vt, `addLine`). A
+  // part dropped there leaves a gap the page draws at every zoom up to the
+  // next whole one (#115: the build's short eased pieces at the hub, gone
+  // below 10).
+  const tiled = (name, parts, z) => {
+    const source = style.sources[name];
+    const maxzoom = source.maxzoom ?? 18;
+    const tz = Math.min(Math.floor(z), maxzoom);
+    const tolerance = source.tolerance ?? 0.375;
+    if (tz >= maxzoom || !(tolerance > 0)) return parts;
+    const min = tolerance * 2 ** (z - tz);
+    return parts.filter((part) => {
+      let length = 0;
+      for (let i = 1; i < part.length && length < min; i++) length += Math.hypot(part[i][0] - part[i - 1][0], part[i][1] - part[i - 1][1]);
+      return length >= min;
+    });
+  };
+
   function linesAt(z) {
     const out = [];
     for (const layer of style.layers) {
@@ -172,7 +193,8 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
         const opacity = property(layer, 'line-opacity', 'paint', z, x.properties, 1);
         const offset = property(layer, 'line-offset', 'paint', z, x.properties, 0);
         const gapWidth = property(layer, 'line-gap-width', 'paint', z, x.properties, 0);
-        const parts = project(x, z);
+        const parts = tiled(layer.source, project(x, z), z);
+        if (!parts.length) continue;
         out.push({
           layer: layer.id,
           source: layer.source,

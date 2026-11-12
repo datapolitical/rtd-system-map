@@ -38,8 +38,11 @@ export const NAMES_FROM = 9.75;
 // Stations are ticks until CAPSULE_FROM and capsules from CAPSULE_TO.
 export const CAPSULE_FROM = 10.25;
 export const CAPSULE_TO = 11;
-// The hub's ring from here.
-export const HUB_FROM = NAMES_FROM;
+// The hub's ring from here: where station marks start, in place of the
+// hub's tick. Until #115 it came at NAMES_FROM, and below that the hub's tick,
+// blended between whole zooms with the ring's zoom, was all but gone: the
+// lines met at nothing.
+export const HUB_FROM = OVERVIEW_UNTIL;
 // A station's tick waits for zoom `tickFrom`, in quarter zooms, where a
 // stronger station is too near (the build decides it in these steps).
 export const FAR_STEP = 0.25;

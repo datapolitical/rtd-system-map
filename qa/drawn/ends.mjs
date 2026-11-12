@@ -209,25 +209,150 @@ function endsOf(part, over = 3) {
 // its route touches (the route stops there). Strokes touch when the end's cap
 // reaches the other stroke: where a line changes slot at a station its two
 // pieces are a jog apart, and the line is not cut for that.
-export function freeEnds(pieces, { tolerance = 0.25 } = {}) {
+//
+// Parts that meet end to end (within `join` px) are one chain, and an end
+// that meets another part's end is not an end. A chain's own parts don't
+// count as touching its ends: the build eases a line between slots in parts
+// a fraction of a pixel long, and where the page's tiles drop some of them
+// (#115, model.mjs `tiled`) the chain stops short with its own last slivers
+// right beside its end, which would otherwise say the line goes on.
+export function freeEnds(pieces, { tolerance = 0.25, join = 0.75 } = {}) {
   const byRoute = new Map();
+  const ends = new Map(); // route -> Grid of part ends
+  const parent = new Map();
+  const find = (k) => { while (parent.get(k) !== k) { parent.set(k, parent.get(parent.get(k))); k = parent.get(k); } return k; };
   pieces.forEach((l, li) => l.drawn.forEach((part, pi) => {
+    if (part.length < 2) return;
     const hw = (l.drawnWidth ?? l.width ?? 0) / 2;
     const r = String(l.route);
-    if (!byRoute.has(r)) byRoute.set(r, new Grid());
-    for (let i = 1; i < part.length; i++) byRoute.get(r).add({ key: `${li}:${pi}`, a: part[i - 1], b: part[i], hw });
+    const key = `${li}:${pi}`;
+    parent.set(key, key);
+    if (!byRoute.has(r)) { byRoute.set(r, new Grid()); ends.set(r, new Grid()); }
+    for (let i = 1; i < part.length; i++) byRoute.get(r).add({ key, a: part[i - 1], b: part[i], hw });
+    for (const [n, E] of [[0, part[0]], [1, part.at(-1)]]) ends.get(r).add({ key, n, a: E, b: E, hw: 0 });
   }));
+  // Chains, and which ends meet another part's end: pairs of ends of two
+  // parts within `join`, nearest first, each end used once. A sliver shorter
+  // than `join` has the next part's end near both of its own, and meets it
+  // at one only.
+  const pairs = [];
+  pieces.forEach((l, li) => l.drawn.forEach((part, pi) => {
+    if (part.length < 2) return;
+    const key = `${li}:${pi}`;
+    for (const [n, E] of [[0, part[0]], [1, part.at(-1)]]) {
+      for (const s of ends.get(String(l.route)).near(E, join)) {
+        const d = Math.hypot(s.a[0] - E[0], s.a[1] - E[1]);
+        if (s.key > key && d <= join) pairs.push({ d, a: `${key}:${n}`, b: `${s.key}:${s.n}`, ka: key, kb: s.key });
+      }
+    }
+  }));
+  pairs.sort((x, y) => x.d - y.d);
+  const joined = new Set();
+  for (const p of pairs) {
+    if (joined.has(p.a) || joined.has(p.b)) continue;
+    joined.add(p.a).add(p.b);
+    const [x, y] = [find(p.ka), find(p.kb)];
+    if (x !== y) parent.set(x, y);
+  }
   const out = [];
   pieces.forEach((l, li) => l.drawn.forEach((part, pi) => {
     if (part.length < 2) return;
     const route = String(l.route);
+    const key = `${li}:${pi}`;
+    const chain = find(key);
     const hw = (l.drawnWidth ?? l.width ?? 0) / 2;
-    for (const end of endsOf(part)) {
-      const covered = byRoute.get(route).near(end.E, 2 * hw).some((s) => s.key !== `${li}:${pi}` && segmentDistance(end.E, s.a, s.b).d <= s.hw + hw + tolerance);
-      if (!covered) out.push({ route, E: end.E, out: end.out, layer: l.layer, hw, width: l.drawnWidth ?? l.width ?? 0 });
-    }
+    // endsOf gives the last end first.
+    endsOf(part).forEach((end, i) => {
+      if (joined.has(`${key}:${i === 0 ? 1 : 0}`)) return;
+      const covered = byRoute.get(route).near(end.E, 2 * hw).some((s) => find(s.key) !== chain && segmentDistance(end.E, s.a, s.b).d <= s.hw + hw + tolerance);
+      if (!covered) out.push({ route, chain, E: end.E, out: end.out, layer: l.layer, hw, width: l.drawnWidth ?? l.width ?? 0 });
+    });
   }));
   return out;
+}
+
+// --- Breaks -----------------------------------------------------------------------
+
+/**
+ * A rail line cut in two: a free end facing a free end of another chain of the
+ * same route a short way ahead, the line stopping and starting again (#115).
+ * @param {{reach?: number}} opts `reach`: the longest break, in line widths
+ */
+export function brokenLines(zoom, { reach = 12, pieces = railPieces(zoom), ends = freeEnds(pieces) } = {}) {
+  const faults = [];
+  const used = new Set();
+  for (const e of ends) {
+    if (used.has(e)) continue;
+    let best = null;
+    for (const f of ends) {
+      if (f === e || f.route !== e.route || f.chain === e.chain || used.has(f)) continue;
+      const d = [f.E[0] - e.E[0], f.E[1] - e.E[1]];
+      const gap = Math.hypot(d[0], d[1]);
+      if (gap > reach * Math.max(e.width, 1)) continue;
+      // Facing: f lies ahead of e, or e ahead of f. One is enough: the end
+      // of a part a fraction of a pixel long points any way.
+      if (gap > 0.5 && d[0] * e.out[0] + d[1] * e.out[1] <= 0 && d[0] * f.out[0] + d[1] * f.out[1] >= 0) continue;
+      if (!best || gap < best.gap) best = { f, gap };
+    }
+    if (!best) continue;
+    used.add(e).add(best.f);
+    const px = [round1((e.E[0] + best.f.E[0]) / 2), round1((e.E[1] + best.f.E[1]) / 2)];
+    faults.push({ kind: 'break', layer: e.layer, route: e.route, px, ends: [e, best.f], msg: `${e.route} on ${e.layer} is cut in two: it stops and starts again ${best.gap.toFixed(1)} px on` });
+  }
+  return faults;
+}
+
+// --- Hidden ends ------------------------------------------------------------------
+
+/**
+ * A rail line whose end is hidden under a station mark: walking in from the
+ * end, more than `widths` line widths and `edge` px lie under the mark's
+ * opaque pixels (`edge`: a mark's own rim past the line's end). A
+ * tick or capsule laid across a line's end hides well under one width of it;
+ * a disc over the place where lines meet hid each line's last two to three
+ * widths, so the lines seemed to stop short of the station (#115: the hub's
+ * filled ring, black in the dark theme).
+ * @param {{alpha: (id: string, xy: number[]) => number, widths?: number}} opts
+ *   `alpha`: the model's image opacity (model.icons.alpha)
+ */
+export function hiddenEnds(zoom, { alpha, widths = 1.5, edge = 2, step = 0.5, pieces = railPieces(zoom), ends = freeEnds(pieces), marks = stationMarks(zoom) } = {}) {
+  if (!alpha) return [];
+  const faults = [];
+  const parts = new Map();
+  for (const l of pieces) for (const part of l.drawn) for (const E of [part[0], part.at(-1)]) parts.set(E, part);
+  // The mark's opacity at a screen point: its image's, times the layer's.
+  const opacityAt = (m, [x, y]) => {
+    if ((m.anchor ?? 'center') !== 'center' || !(m.size > 0)) return 0;
+    const t = (-(m.rot ?? 0) * Math.PI) / 180;
+    const [dx, dy] = [x - m.at[0] - (m.offset?.[0] ?? 0), y - m.at[1] - (m.offset?.[1] ?? 0)];
+    const [u, v] = [(dx * Math.cos(t) - dy * Math.sin(t)) / m.size, (dx * Math.sin(t) + dy * Math.cos(t)) / m.size];
+    const [w, h] = [m.w / m.boxSize, m.h / m.boxSize];
+    return alpha(m.image, [u + w / 2, v + h / 2]) * m.opacity;
+  };
+  for (const e of ends) {
+    const part = parts.get(e.E);
+    if (!part) continue;
+    const path = part[0] === e.E ? part : [...part].reverse();
+    const over = marks.filter((m) => m.drawn && outside(m.quad, e.E) <= 0);
+    for (const m of over) {
+      // Walk in from the end while the mark covers the line.
+      let hidden = 0;
+      walk: for (let i = 1; i < path.length; i++) {
+        const [a, b] = [path[i - 1], path[i]];
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        for (let s = 0; s < L; s += step) {
+          const p = [a[0] + ((b[0] - a[0]) * s) / L, a[1] + ((b[1] - a[1]) * s) / L];
+          if (opacityAt(m, p) < 0.5) break walk;
+          hidden += Math.min(step, L - s);
+        }
+      }
+      if (hidden > widths * e.width + edge) {
+        faults.push({ kind: 'end-hidden', layer: e.layer, route: e.route, px: [round1(e.E[0]), round1(e.E[1])], msg: `${e.route} on ${e.layer}: its last ${hidden.toFixed(1)} px (${(hidden / e.width).toFixed(1)} widths) are hidden under the ${describe(m)}` });
+        break;
+      }
+    }
+  }
+  return faults;
 }
 
 // --- SM08 -----------------------------------------------------------------------
@@ -498,9 +623,14 @@ export function endFaults(zoom, opts = {}) {
   const pieces = railPieces(zoom);
   const ends = freeEnds(pieces);
   const marks = stationMarks(zoom);
+  const breaks = brokenLines(zoom, { pieces, ends, reach: opts.breakReach });
+  // An end at a break is reported as the break, not as an unmarked end.
+  const atBreak = new Set(breaks.flatMap((b) => b.ends));
   const shared = { pieces, ends, marks };
   return [
-    ...unmarkedEnds(zoom, { ...shared, reach: opts.reach }),
+    ...breaks.map(({ ends: _, ...b }) => b),
+    ...hiddenEnds(zoom, { ...shared, alpha: opts.alpha }),
+    ...unmarkedEnds(zoom, { ...shared, ends: ends.filter((e) => !atBreak.has(e)), reach: opts.reach }),
     ...notParallel(zoom, { ...shared, parallel: opts.parallel }),
     ...squareMarks(zoom, { ...shared, from: opts.from, square: opts.square, walkSquare: opts.walkSquare, parallel: opts.parallel, slack: opts.slack, window: opts.window }),
     ...unevenEnds(zoom, { ...shared, flush: opts.flush, heading: opts.heading, reach: opts.reach }),

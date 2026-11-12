@@ -1129,7 +1129,7 @@ screen in V2 step 3.
 
 | State | How it's drawn |
 |---|---|
-| Served | no mark below zoom 9 (stations a few pixels apart read as noise); from 9 to 10.25 a small tick across the track, or a dot (see "From far out"); from 11 a white capsule with an ink edge laid across the track, as wide as the lines it serves and turned to the track's direction (a circle where one line stops), crossfading with the tick from 10.25 to 11. The hub has a ring from 9.75 |
+| Served | no mark below zoom 9 (stations a few pixels apart read as noise); from 9 to 10.25 a small tick across the track, or a dot (see "From far out"); from 11 a white capsule with an ink edge laid across the track, as wide as the lines it serves and turned to the track's direction (a circle where one line stops), crossfading with the tick from 10.25 to 11. The hub has an open ring from 9 |
 | Returning | hollow gray ring and gray label, both from zoom 13. Panel: "Trains return Nov 23" |
 | No current service | hollow gray ring and gray label, both from zoom 13. Panel: "No train service right now" |
 
@@ -1162,11 +1162,13 @@ station, line or split needs no change:
   so no line loses its mark where it stops alone or where it ends. Every
   station has its mark again from 11, with the capsules.
 - *The hub has a ring.* The place where the most lines meet (`meet`; Union
-  Station) is found from the data, not named. From 9.75, where its name and
-  the lines' letters arrive, it is drawn as a ring as wide as a tick across
-  its lines plus 12 px of the widest zoom (about 17 px at 10), not turned,
-  since lines leave it every way. Nothing else is a ring that size. It
-  crossfades into its capsule from 10.25 to 11, as ticks do.
+  Station) is found from the data, not named. From 9, where station marks
+  start, it is drawn as a ring as wide as a tick across its lines plus 12 px
+  of the widest zoom (about 17 px at 10), not turned, since lines leave it
+  every way. Nothing else is a ring that size. It is open, an ink ring with
+  no fill, so the lines are seen running in and meeting inside it. It is at
+  full strength from the zoom it comes in at and crossfades into its capsule
+  from 10.25 to 11, as ticks do.
 - *Edges are drawn for the size they're seen at.* Station marks are drawn at
   the widest zoom's spacing and scaled with the lines, to under half size at
   9. A tick's edge is 1.1 px before scaling (about half a pixel at 9 to 11),
@@ -1716,7 +1718,7 @@ Each bus tier fades in over about a zoom level rather than popping on.
 | Zoom | Shows | Also in Live |
 |---|---|---|
 | Below 9 (the overview: a phone's "Whole network") | Relief. Rail, with each line's letter at both ends and nothing else on it. Bus streets with a bus every 15 minutes or better, with no numbers. City names where they clear the lines. Main Interstate shields. No station marks, no FlexRide zones. | Alert marks on rail |
-| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-16-to-30 streets from 9, fading in. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Streets with a bus every 31 minutes or more from 10.5. Stations are small ticks (or dots, where lines part) to 10.25, one per cluster; capsules from 11. The hub's ring from 9.75 to 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 9.75, closed stations |
+| 9–11.5 (phones open at about 10, laptops at about 9.4) | Station ticks from 9. The letter at each rail line's end stays until 9.75. Every-16-to-30 streets from 9, fading in. From 9.75: rail letters along the lines, in place of the ones at the ends, and the names of the stations where lines end. Streets with a bus every 31 minutes or more from 10.5. Stations are small ticks (or dots, where lines part) to 10.25, one per cluster; capsules from 11. The hub's open ring from 9 to 11. From 11: every station's name, town names, FlexRide zones, Interstate spur and US highway shields, and part-time buses. | Train positions from 9.75, closed stations |
 | 11.5–13 | Names keep off every bus line, not only the frequent ones. Main street names from 12, beside the street, where no line crosses them. Park-n-Rides and transit centers from 12.5. No bus numbers (see "Numbers"). | |
 | 13–14.5 | Most main streets named from about 13.5. Closed stations, ring and name together, from 13. Landmarks from 14. City names are gone by 13.5, towns by 14.5. | Bus positions, alert marks on bus routes |
 | 14.5 and up | Smaller streets. Bus stops are loaded from zoom 14, when first needed, and drawn from 15. | Buses' route numbers, closed stops crossed out |
@@ -3915,6 +3917,23 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: The browser tab says "RTD system map", as the link preview
   does (was "Denver transit map (unofficial)"). The key's first line still
   says the map is unofficial.
+
+- 2026-11-12: Below zoom 10 the rail lines broke where they ease between
+  slots and the hub was a disc (#115). The routes source is tiled with no
+  simplification (`tolerance: 0`): MapLibre drops every part of a line shorter
+  than its tolerance (0.375 px) at the tile's whole zoom, and the build eases
+  a line in parts a fraction of a pixel long, so at tile zoom 9 G, B and A
+  stopped short of Union Station, W broke near Auraria West and C at I-25 /
+  Broadway; a 402x655 phone opens at 9.99 and a 390x844 at 10.11, so the two
+  saw different maps. The hub's ring comes at 9 with the ticks, not 9.75: its
+  tick and ring read the feature, so the map worked their opacity out at whole
+  zooms and blended, and between 9 and 10 Union Station had next to no mark.
+  The ring is open: filled with the station colour it hid the knot, white in
+  light and black in dark. A fill band behind the ink ring was tried and hid
+  W's last stretch, which curves along the ring, so the ring is ink alone, a
+  little heavier (3.2 px before scaling). The checks now run from 9 by
+  quarters and model the tiles' dropped parts, and report a line cut in two
+  (`break`) and a line end hidden under a mark (`end-hidden`).
 
 ## Sources
 

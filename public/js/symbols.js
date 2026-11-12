@@ -122,17 +122,19 @@ export function addSymbol(map, id, lines) {
 
   // The hub, "hub-3": a ring around the lines that meet there, as wide as a
   // tick across `span` lines plus HUB_EXTRA (sizes.js), so it encloses the
-  // knot. Not turned: lines leave it every way. A heavier edge than a tick's,
-  // about 1.2 px on screen, so it reads as a ring.
+  // knot. Not turned: lines leave it every way. Ink alone, a heavier edge
+  // than a tick's (about 1.5 px on screen), so it reads as a ring over the
+  // lines. Open: the lines are seen running into it and meeting. Filled, it
+  // hid the knot behind a disc in the station colour, black in the dark
+  // theme; a band of that colour behind the ink hid W's last stretch, which
+  // curves along the ring (#115).
   if (id.startsWith('hub-')) {
     const span = Number(id.slice('hub-'.length)) || 1;
     const d = (span - 1) * STATION_SPACING + HUB_EXTRA;
-    const stroke = 2.6;
+    const stroke = 3.2;
     const ctx = canvas(d + 2, d + 2);
     ctx.beginPath();
     ctx.arc(1 + d / 2, 1 + d / 2, (d - stroke) / 2, 0, Math.PI * 2);
-    ctx.fillStyle = P.station.fill;
-    ctx.fill();
     ctx.lineWidth = stroke;
     ctx.strokeStyle = P.station.edge;
     ctx.stroke();

@@ -70,6 +70,8 @@ are Chris's finds of 2026-11-11, pinned on the frozen build he saw them on
 | 21 | Branches leave without a kink and not at a tiny angle | | JN-01, JN-02 | tangent jump at a node; smallest angle at least 15 degrees (suggested) | no |
 | 22 | No zig-zag and no bend at a station | | LN-03, LN-04, LN-06 | inflections per 10 line widths; turning across a mark | part: `zig-zag`, `sharp-bend`, quiet on the live build; no real case pinned |
 | 23 | Width says the class: one class one width, classes visibly apart | CW rows | KD-04, LN-08 | same class within 0.25 px; neighbouring classes at least 1.6 px apart (Ledermann 2022) | part |
+| 24 | A line is not cut: no gap mid-line, at any zoom from 9 (#115) | | LN-01 | two facing free ends of one route within 12 line widths | yes: `break`, with tiling's sliver drop modelled (geojson-vt tolerance) |
+| 25 | No line end hidden under a mark that covers it (#115) | | LN-01 | length of a free end under an opaque mark, read from the mark's pixels, at most 1.5 widths + 2 px | yes: `end-hidden` |
 
 Rows 20 to 23 come from the literature and are not in DESIGN.md. A check for
 one of them is a proposal: its findings are leads until the rule is written

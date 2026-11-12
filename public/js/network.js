@@ -132,11 +132,16 @@ export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platf
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
 
-// By URL, so each file downloads and parses in the map's worker.
+// By URL, so each file downloads and parses in the map's worker. The routes
+// are tiled with no simplification: MapLibre drops every part of a line
+// shorter than `tolerance` px at the tile's whole zoom, and the build eases a
+// line between slots in parts a fraction of a pixel long, so with the default
+// (0.375) the lines broke wherever they eased, below zoom 10 and in places
+// to 12 (#115).
 export function dataSources() {
   return {
     ...Object.fromEntries(
-      DATA_SOURCES.map((name) => [name, { type: 'geojson', data: LAZY.includes(name) ? EMPTY : `data/${name}.geojson` }]),
+      DATA_SOURCES.map((name) => [name, { type: 'geojson', data: LAZY.includes(name) ? EMPTY : `data/${name}.geojson`, ...(name === 'routes' ? { tolerance: 0 } : {}) }]),
     ),
     // A letter for each rail line on screen that has none (edgeletters.js).
     'rail-edge-letters': { type: 'geojson', data: EMPTY },
@@ -621,8 +626,9 @@ export function transitMarks(lines) {
       paint: { 'icon-opacity': farOpacity((z) => Math.min(1, Math.max(0, (z - CAPSULE_FROM) / (CAPSULE_TO - CAPSULE_FROM))), { until: CAPSULE_TO + FAR_STEP }) },
     },
     // The place where the most lines meet (Union Station): a ring around the
-    // knot from HUB_FROM, where its name and the lines' letters arrive, until
-    // its capsule takes over. Nothing else on the map is a ring this size.
+    // knot from HUB_FROM, where station marks start, until its capsule takes
+    // over. Nothing else on the map is a ring this size. It is open, so the
+    // lines are seen running into it (#115).
     {
       id: 'stations-hub',
       type: 'symbol',
@@ -636,7 +642,10 @@ export function transitMarks(lines) {
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
       },
-      paint: { 'icon-opacity': ['interpolate', ['linear'], ['zoom'], HUB_FROM, 0, HUB_FROM + 0.15, fade(onRoute), CAPSULE_FROM, fade(onRoute), CAPSULE_TO, 0] },
+      // Full from the zoom it comes in at: it reads the feature, so the map
+      // works it out at whole zooms and blends between, and a fade-in from
+      // HUB_FROM would leave the hub half marked to the next whole zoom.
+      paint: { 'icon-opacity': ['interpolate', ['linear'], ['zoom'], HUB_FROM, fade(onRoute), CAPSULE_FROM, fade(onRoute), CAPSULE_TO, 0] },
     },
     {
       id: 'facilities',
