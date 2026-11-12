@@ -564,8 +564,10 @@ export function stationMarks(stations, lines, sheet, walls = []) {
         });
       }
       const ss = g.map((h) => h.s);
-      // Each side's lines together, in the order a reader meets them at the bar, left to right.
-      g.ending = sets.flatMap((set) => set.filter((h) => h.at).sort((x, y) => x.at[0] - y.at[0] || x.at[1] - y.at[1])).map((h) => ({ route: h.line.route, color: h.line.color }));
+      // Each side's lines together, by letter, the way a list is read; the side with the first letter leads.
+      const byLetter = (x, y) => x.line.route.localeCompare(y.line.route, 'en', { numeric: true });
+      g.ending = sets.map((set) => set.filter((h) => h.at).sort(byLetter)).filter((set) => set.length).sort((x, y) => byLetter(x[0], y[0]))
+        .flat().map((h) => ({ route: h.line.route, color: h.line.color }));
       return [Math.min(...ss), Math.max(...ss)].map((v) => [c[0] + n[0] * v, c[1] + n[1] * v]);
     });
     const ends = bars[0];

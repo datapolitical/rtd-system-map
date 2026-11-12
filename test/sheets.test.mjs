@@ -608,6 +608,14 @@ test('lines that end at one bar coming in from either side meet back to back at 
   assert.equal(marks[0].more.length, 0, 'one bar');
   assert.ok(marks[0].fat, 'drawn fat');
   assert.ok(marks[0].span < 0.5, 'no longer than the widest set: here one line each, so a round mark');
+  // The letters under the name list each side's lines together, by letter, the side with the
+  // first letter leading: not in the order the lines happen to lie across the bar.
+  const many = railLines(all([
+    ...[['W', 2], ['C', 1], ['E', 0]].map(([route, slot]) => line({ mode: 'rail', route, color: '#57C1E9', slot }, [at(0, 0), at(150, 0)])),
+    ...[['G', 3], ['B', 2], ['N', 1], ['A', 0]].map(([route, slot]) => line({ mode: 'rail', route, color: '#4E9D2D', slot }, [at(300, 0), at(150, 0)])),
+  ]), sheet);
+  const hall = stationMarks(all([point({ id: 1, name: 'Mill', served: true, lines: 'A B C E G N W', end: true }, at(150, 0))]), many, sheet);
+  assert.equal(hall[0].bars.flatMap((bar) => bar.ending).map((e) => e.route).join(''), 'ABGNCEW');
   // Lines ending from one side only keep a plain bar.
   const one = railLines(all([line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at(0, 0), at(150, 0)])]), sheet);
   assert.ok(!stationMarks(all([point({ id: 1, name: 'Mill', served: true, lines: 'A', end: true }, at(150, 0))]), one, sheet)[0].fat);

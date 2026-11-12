@@ -2033,8 +2033,9 @@ How it is built:
   with a thin divider down its middle, so the sets read as one station's two
   platforms and not as lines running through. Where two or more lines end
   together at a bar, no letter can sit on a line near it, so the station's
-  name carries their letters in a small row beneath it, in the order the
-  lines meet the bar; a bar far from the station's first is named again with
+  name carries their letters in a small row beneath it: each side's lines
+  together, by letter, the side with the first letter leading (a list, read
+  as one, not the order the lines lie across the bar); a bar far from the station's first is named again with
   its own lines, and a near one puts its letters on the first name. A hall
   long enough is lettered down its length with what it is ("Bus concourse"
   where the data says underground, "Bus station" otherwise), and street
@@ -4367,6 +4368,10 @@ work against the real structure before asking for evaluation.
   `<base>` tag would have sent it to the root. The checks still read the
   classic map and find it on each site, so they also run on builds from
   before the move.
+- 2026-11-12: The row of letters under a station's name lists each side's
+  lines by letter. Reason: Chris: "The order of the lines should be ABGNCEW
+  when you list them at Union Station like that". The row read G B N A W C E,
+  the order the lines lie across the bar, which reads as no order at all.
 - 2026-11-12: Sheets ring only stops a bus street serves: not a bus
   station's gates, nor stops only trains call at. Reason: Union Station's
   bus gates and rail tracks were scattered as rings over its hall and round
