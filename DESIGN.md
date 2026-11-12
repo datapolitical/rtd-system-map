@@ -2031,8 +2031,9 @@ How it is built:
   the wander or gentle hook of its last few yards: it carries straight on
   to the wall, or turns square onto it, whichever bends it less. No street
   is drawn inside a hall:
-  one that runs in stops at the wall. A street that crosses above a hall in
-  a straight line and carries on stays as it is.
+  one that runs in stops at the wall, and one that runs on through the room
+  is cut at both walls, so the room reads whole. A street that only clips a
+  corner or edge of a hall (less than ten pixels of it inside) stays as it is.
 - **More fudges for a clean bus drawing.** A loose end with a street of the
   same route a short walk away (110 m) is led to it, so a turnaround is a
   closed shape. Where two ways between the same corners enclose a strip
@@ -4100,6 +4101,9 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets draw a street straight where it strays only a pixel or
   two from a straight line. Reason: Colfax kept two gentle bends either side
   of Lincoln on sheet 3, left by the divided road's middle found block by block.
+- 2026-11-12: Sheets cut a street that runs through a hall at both walls.
+  Reason: a quiet street across Union Station's hall read as a notch in the
+  room; streets crossing a hall had been left whole.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
 

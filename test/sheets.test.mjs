@@ -322,12 +322,19 @@ test("a hall is drawn as a squared room over the same ground, and no street is d
   const terminals = all([hall(1, [at3(100, -10), at3(160, -10), at3(160, 10), at3(100, 10)])]);
   const walls = halls(terminals, near);
   const street = (routes, coords) => line({ mode: 'bus', cls: 'c15', routes, n: 1, hw: 15, zoom: 'near' }, coords);
-  // Two streets meet inside the hall; a third crosses above it and carries on.
+  // Two streets meet inside the hall; a third runs on through it.
   const drawn = busStreets(all([street('1', [at3(0, 0), at3(130, 0)]), street('2', [at3(130, -80), at3(130, 0)]), street('3', [at3(150, -80), at3(150, 80)])]), near, walls);
   const inside = (p) => p[0] - origin3[0] > 101 && p[0] - origin3[0] < 159 && Math.abs(p[1] - origin3[1]) < 9;
   assert.ok(!drawn.filter((s) => s.routes !== '3').some((s) => resample(s.path, 1).some(inside)), 'streets that go indoors stop at the walls');
   assert.equal(drawn.filter((s) => s.routes !== '3' && [s.path[0], s.path.at(-1)].some((p) => nearest(walls[0].ring, p).d < 0.5)).length, 2, 'each on the side it comes from');
-  assert.ok(drawn.some((s) => s.routes === '3' && Math.abs(length(s.path) - 160) < 1), 'the street that crosses is whole');
+  const through = drawn.filter((s) => s.routes === '3');
+  assert.equal(through.length, 2, 'the street that runs through is cut at both walls');
+  assert.ok(!through.some((s) => resample(s.path, 1).some(inside)), 'and nothing of it is drawn in the room');
+  assert.ok(through.every((s) => [s.path[0], s.path.at(-1)].some((p) => nearest(walls[0].ring, p).d < 0.5)), 'each half ends on its wall');
+  // One that only clips a corner of the room is left whole.
+  const clip = busStreets(all([street('4', [at3(175, 7), at3(140, -28)])]), near, walls);
+  assert.equal(clip.length, 1);
+  assert.ok(Math.abs(length(clip[0].path) - 35 * Math.SQRT2) < 1, 'a street over a corner is whole');
 });
 
 test('a knot gathered to a point beside a street going through does not bend that street', () => {

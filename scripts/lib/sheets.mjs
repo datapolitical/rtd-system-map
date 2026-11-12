@@ -1644,8 +1644,8 @@ function walled(streets, walls) {
     const turn = (q) => { const l = dist(tip, q); return l < 0.5 ? 0 : 1 - ((q[0] - tip[0]) * u[0] + (q[1] - tip[1]) * u[1]) / l; };
     return turn(near.at) <= turn(ahead) ? near.at : ahead;
   };
-  // No street is drawn inside a hall: one that runs in stops at the wall it meets. One that
-  // crosses above a hall in a straight line and carries on is left as it is.
+  // No street is drawn inside a hall: one that runs in stops at the wall it meets, and one that
+  // runs through is two streets, each ending on its wall.
   const inside = (p, ring) => {
     let on = false;
     for (let i = 1; i < ring.length; i++) {
@@ -1661,7 +1661,9 @@ function walled(streets, walls) {
     if (!ring) { outside.push(st); continue; }
     const within = pts.map((p) => inside(p, ring));
     const [first, last] = [within.indexOf(true), within.lastIndexOf(true)];
-    const across = !within[0] && !within.at(-1) && within.slice(first, last + 1).every(Boolean) && dist(pts[first], pts[last]) >= 0.95 * (last - first);
+    // A street that only clips a hall's edge or corner is left as it is; one that runs on
+    // through the room is cut at both walls, so the room reads whole.
+    const across = !within[0] && !within.at(-1) && within.slice(first, last + 1).every(Boolean) && last - first < SIZES.hallReach;
     if (across) { outside.push(st); continue; }
     let run = [];
     const done = () => { if (run.length > 1 && length(run) > 1) outside.push({ ...st, path: simplify(run, 0.3) }); run = []; };
