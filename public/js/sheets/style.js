@@ -19,11 +19,13 @@ export const PALETTES = {
     ground: '#0e141d', water: '#15202f', park: '#101a1c', freeway: '#1b2535', road: '#131a25', street: '#151d2a', building: '#121924',
     // Bus streets, quietest to busiest: one family, brighter as buses come more often.
     bus: { c60: '#39465e', c30: '#51617f', c15: '#8291ae', c10: '#aab5cb', c5: '#ccd4e3', c3: '#ccd4e3' },
+    hall: '#1a2434', hallEdge: '#51617f',
     mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', streetName: '#4b566b', number: '#c9d2e4', stop: '#aab6cf',
   },
   light: {
     ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
     bus: { c60: '#c6c8cd', c30: '#adb0b7', c15: '#868a93', c10: '#5f636c', c5: '#3c4048', c3: '#3c4048' },
+    hall: '#e6e3dc', hallEdge: '#adb0b7',
     mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', streetName: '#a3a6ad', number: '#3a4560', stop: '#566179',
   },
 };
@@ -70,6 +72,10 @@ export function sheetStyle(theme) {
       paint: { 'line-color': ['match', ['get', 'class'], 'motorway', n <= 2 ? c.freeway : c.road, ['trunk', 'primary'], c.road, c.street],
         'line-width': ['match', ['get', 'class'], 'motorway', [2.2, 3, 5, 12][i], ['trunk', 'primary'], [0, 1.2, 4, 10][i], [0, 0, 2.4, 7][i]] } });
     if (n === 4) layers.push({ id: 'buildings-4', type: 'fill', source: 'ground', 'source-layer': 'building', ...band, paint: { 'fill-color': c.building } });
+
+    // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses end on.
+    layer('hall', 'fill', { filter: kind('hall'), paint: { 'fill-color': c.hall } });
+    layer('hall-edge', 'line', { filter: kind('hall'), layout: ROUND, paint: { 'line-color': c.hallEdge, 'line-width': [0, 1, 1.2, 1.6][i] } });
 
     // Bus streets, quietest first so the busiest are on top; the busiest get a rim of ground to sit clear.
     const order = ['c60', 'c30', 'c15', 'c10', 'c5', 'c3'];

@@ -7,7 +7,8 @@ import { SHEETS, drawSheet } from './lib/sheets.mjs';
 
 export async function writeSheets(dir) {
   const read = async (name) => JSON.parse(await readFile(path.join(dir, `${name}.geojson`), 'utf8'));
-  const data = { routes: await read('routes'), stations: await read('stations'), streets: await read('streets') };
+  // Bus stations' halls are drawn where the build found them; a build without them draws none.
+  const data = { routes: await read('routes'), stations: await read('stations'), streets: await read('streets'), terminals: await read('terminals').catch(() => null) };
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
     // Where the page opens: on the hub.

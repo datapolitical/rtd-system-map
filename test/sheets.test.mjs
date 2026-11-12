@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, drawSheet, inkOn, shortened } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -171,4 +171,67 @@ test('a turnaround too small to read as a ring is drawn as the point its streets
   ]), sheet);
   assert.equal(drawn.length, 1, 'only the street that led to the ring is left');
   assert.ok(length(drawn[0].path) > 195, 'and it is still whole');
+});
+
+// The same, on the third sheet, where a short walk is many pixels.
+const near = SHEETS[2];
+const origin3 = toPx([-105, 39.75], near.zoom);
+const at3 = (x, y) => toLonLat([origin3[0] + x, origin3[1] + y], near.zoom);
+const hall = (id, corners) => ({ type: 'Feature', properties: { id, name: `Hall ${id}` }, geometry: { type: 'Polygon', coordinates: [[...corners, corners[0]]] } });
+
+test("a bus station's hall is drawn where it is wide enough to see, and a street that stops at its wall ends on it", () => {
+  const terminals = all([
+    hall(1, [at3(100, -10), at3(160, -10), at3(160, 10), at3(100, 10)]),
+    hall(2, [at3(300, -1), at3(360, -1), at3(360, 1), at3(300, 1)]),
+  ]);
+  const walls = halls(terminals, near);
+  assert.deepEqual(walls.map((w) => w.id), [1], 'the sliver of a hall is left for a closer sheet');
+  // The street's data stops four pixels short of the wall and hooks aside in its last yards.
+  const street = line({ mode: 'bus', cls: 'c15', routes: '1', n: 1, hw: 15, zoom: 'near' }, [at3(0, 0), at3(90, 0), at3(96, 4)]);
+  const [drawn] = busStreets(all([street]), near, walls);
+  const tip = drawn.path.at(-1);
+  assert.ok(nearest(walls[0].ring, tip).d < 0.5, 'the street ends on the wall');
+  assert.ok(Math.abs(tip[1] - drawn.path.at(-2)[1]) < 0.5 && Math.abs(tip[1] - origin3[1]) < 3, 'and arrives square to it, without its hook');
+  const sheet3 = drawSheet({ routes: all([]), stations: all([]), streets: all([street]), terminals }, near);
+  assert.equal(sheet3.features.filter((f) => f.properties.kind === 'hall').length, 1);
+});
+
+test('a turnaround whose data stops short of the street it leaves from is drawn closed', () => {
+  const street = (routes, coords) => line({ mode: 'bus', cls: 'c15', routes, n: 1, hw: 15, zoom: 'near' }, coords);
+  const drawn = busStreets(all([
+    street('1', [at3(0, 0), at3(300, 0)]),
+    // A loop of the same route off to one side, each end a short walk from the street.
+    street('1', [at3(100, -15), at3(100, -60), at3(160, -60), at3(160, -15)]),
+    // Another route's stub as near to the street is left alone.
+    street('2', [at3(240, -15), at3(240, -80)]),
+  ]), near);
+  const main = drawn.find((s) => length(s.path) > 250).path;
+  const loop = drawn.find((s) => s.routes === '1' && s.path.some((p) => p[1] - origin3[1] < -50));
+  for (const end of [loop.path[0], loop.path.at(-1)]) assert.ok(nearest(main, end).d < 1, 'the loop reaches the street');
+  const stub = drawn.find((s) => s.routes === '2');
+  assert.ok(Math.min(...[stub.path[0], stub.path.at(-1)].map((p) => nearest(main, p).d)) > 10, 'the other route is not joined on');
+});
+
+test('two ways round a strip too thin to see into are drawn as one street with the routes of both', () => {
+  const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  const drawn = busStreets(all([
+    street('c15', '1', [at(0, 0), at(100, 0)]),
+    street('c15', '1', [at(100, 0), at(130, 0)]),
+    street('c15', '1', [at(130, 0), at(230, 0)]),
+    // Route 2 leaves the street and comes back to it a block later, nine pixels to one side at most.
+    street('c60', '2', [at(100, 0), at(115, -9)]),
+    street('c60', '2', [at(115, -9), at(130, 0)]),
+  ]), sheet);
+  assert.ok(drawn.every((s) => s.path.every((p) => Math.abs(p[1] - origin[1]) < 1)), 'no notch is left beside the street');
+  const middle = drawn.find((s) => length(s.path) < 40);
+  assert.deepEqual(middle.routes.split(' ').sort(), ['1', '2']);
+});
+
+test('along one street only blocks well apart carry its label; another street has its own', () => {
+  const st = (x0, x1, y = 0) => ({ routes: '1', path: [[x0, y], [x1, y]] });
+  const streets = [st(0, 100), st(100, 220), st(220, 300), st(300, 420), st(0, 90, 50)];
+  const picked = labelled(streets, 200);
+  assert.deepEqual(streets.map((s) => picked.has(s)), [false, true, false, true, true]);
+  // A block too short to hold its label gives its turn to one that can.
+  assert.deepEqual(streets.map((s) => labelled(streets.slice(0, 2), 200, () => 110).has(s)), [false, true, false, false, false]);
 });

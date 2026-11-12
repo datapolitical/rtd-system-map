@@ -24,7 +24,7 @@ export const SIZES = {
   // A line's path is rounded over this far, so it reads as drawn by hand.
   round: { 1: 2.5, 2: 3, 3: 3, 4: 3 },
   // Where a line changes its place beside others, it slides across over about this far each side.
-  ease: 9,
+  ease: 26,
   // Station marks this close would run together: the lesser one is left off the sheet.
   markRoom: 8.5,
   // A line within this many metres of a station stops there.
@@ -51,10 +51,18 @@ export const SIZES = {
   busBridgeMetres: 110,
   busRunMetres: 220,
   busSpeck: 10,
+  // Two ways round that enclose a strip thinner than this are drawn as one street.
+  busSlim: 6,
   // Bus streets closer together than this can't be told apart: they are drawn as one.
   busMerge: { 1: 4, 2: 7, 3: 7, 4: 24 },
-  // A street's label lists this many routes, then how many more.
+  // A street's label lists this many routes; a street with more lists one fewer, then how many more.
   busListed: 4,
+  // Along one street, the blocks that carry its label are at least this far apart.
+  busLabelEvery: { 1: 150, 2: 170, 3: 240, 4: 320 },
+  busLabelSize: { 1: 8.5, 2: 8.5, 3: 10, 4: 11.5 },
+  // A bus station's hall is drawn where it is at least this wide; a street that ends this near its wall ends on it.
+  hallWide: 5,
+  hallReach: 10,
 };
 
 // --- Screen pixels at a zoom (512-pixel tiles, as MapLibre draws) -----------
@@ -575,18 +583,7 @@ export function names(marks, lines, discs, sheet, streets = []) {
  * drawn true it is a knot of hooks. The streets that led into the ring now meet at its middle.
  */
 function unringed(streets, most) {
-  // Ends within a pixel and a half of each other are one corner.
-  const seen = new Map();
-  const key = (p) => {
-    const [x, y] = [Math.round(p[0] / 2), Math.round(p[1] / 2)];
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-      for (const q of seen.get(`${x + dx},${y + dy}`) ?? []) if (dist(q.p, p) <= 1.5) return q.id;
-    }
-    const id = `${p[0].toFixed(1)},${p[1].toFixed(1)}`;
-    seen.set(`${x},${y}`, [...(seen.get(`${x},${y}`) ?? []), { p, id }]);
-    return id;
-  };
-  const edges = streets.map((st) => ({ st, a: key(st.path[0]), b: key(st.path.at(-1)), len: length(st.path) }));
+  const edges = cornered(streets);
   const small = edges.filter((e) => e.len < most && e.a !== e.b);
   const at = new Map();
   for (const e of small) for (const k of [e.a, e.b]) at.set(k, [...(at.get(k) ?? []), e]);
@@ -626,6 +623,76 @@ function unringed(streets, most) {
   return out;
 }
 
+/** Each street with the corners its two ends are at. */
+function cornered(streets) {
+  // Ends within a pixel and a half of each other are one corner.
+  const seen = new Map();
+  const key = (p) => {
+    const [x, y] = [Math.round(p[0] / 2), Math.round(p[1] / 2)];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      for (const q of seen.get(`${x + dx},${y + dy}`) ?? []) if (dist(q.p, p) <= 1.5) return q.id;
+    }
+    const id = `${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+    seen.set(`${x},${y}`, [...(seen.get(`${x},${y}`) ?? []), { p, id }]);
+    return id;
+  };
+  return streets.map((st) => ({ st, a: key(st.path[0]), b: key(st.path.at(-1)), len: length(st.path) }));
+}
+
+/**
+ * Streets without slivers. Where two ways between the same two corners enclose a strip too
+ * thin to see into (a route that leaves a street and comes back to it a block later), the
+ * drawing is a notch or a hook on the street. The quietest side of the strip is not drawn;
+ * the sides that are carry its routes.
+ */
+function unslivered(streets, most, slim) {
+  const edges = cornered(streets);
+  const at = new Map();
+  for (const e of edges) for (const k of new Set([e.a, e.b])) at.set(k, [...(at.get(k) ?? []), e]);
+  const gone = new Set();
+  const order = (st) => CLASS_ORDER.indexOf(st.cls);
+  for (const e of [...edges].sort((x, y) => x.len - y.len)) {
+    if (gone.has(e) || e.a === e.b || e.len >= most) continue;
+    // The shortest way round from one end of this street to the other without using it.
+    const far = new Map([[e.a, { d: 0, by: [] }]]);
+    const open = [e.a];
+    while (open.length) {
+      const k = open.sort((x, y) => far.get(y).d - far.get(x).d).pop();
+      for (const o of at.get(k) ?? []) {
+        if (o === e || gone.has(o) || o.a === o.b) continue;
+        const to = o.a === k ? o.b : o.a;
+        const d = far.get(k).d + o.len;
+        if (d + e.len < most && (!far.has(to) || d < far.get(to).d)) { far.set(to, { d, by: [...far.get(k).by, { o, from: k }] }); open.push(to); }
+      }
+    }
+    if (!far.has(e.b)) continue;
+    const ring = [{ o: e, from: e.b }, ...far.get(e.b).by];
+    const round = ring.reduce((n, r) => n + r.o.len, 0);
+    const pts = ring.flatMap((r) => (r.o.a === r.from ? r.o.st.path : [...r.o.st.path].reverse()));
+    let area = 0;
+    for (let i = 0; i < pts.length; i++) { const [p, q] = [pts[i], pts[(i + 1) % pts.length]]; area += p[0] * q[1] - q[0] * p[1]; }
+    // The shoelace sum is twice the area; a strip's area over half the way round it is its width.
+    if (Math.abs(area) / round >= slim) continue;
+    // The ring is a few sides, each from one corner where another street joins it to the next.
+    const live = (k) => (at.get(k) ?? []).filter((o) => !gone.has(o)).length;
+    const joins = ring.map((r, i) => i).filter((i) => live(ring[i].from) > 2);
+    if (joins.length < 2) continue;
+    const sides = joins.map((from, n) => (n + 1 < joins.length ? ring.slice(from, joins[n + 1]) : [...ring.slice(from), ...ring.slice(0, joins[0])]));
+    // The quietest side (then the one with fewest routes, then the longest) is the one not drawn.
+    const busy = (side) => Math.max(...side.map((r) => order(r.o.st)));
+    const count = (side) => Math.max(...side.map((r) => String(r.o.st.routes).split(' ').length));
+    const long = (side) => side.reduce((n, r) => n + r.o.len, 0);
+    sides.sort((x, y) => busy(x) - busy(y) || count(x) - count(y) || long(y) - long(x));
+    const routes = new Set(sides[0].flatMap((r) => String(r.o.st.routes).split(' ')));
+    for (const r of sides.slice(1).flat()) {
+      const all = [...new Set([...String(r.o.st.routes).split(' '), ...routes])];
+      r.o.st = { ...r.o.st, routes: all.join(' '), n: Math.max(r.o.st.n ?? 0, all.length) };
+    }
+    for (const r of sides[0]) gone.add(r.o);
+  }
+  return edges.filter((e) => !gone.has(e)).map((e) => e.st);
+}
+
 /** A name with its common words in their usual short forms, still plain to read. */
 const SHORT = { Station: 'Stn', Avenue: 'Ave', Street: 'St', Boulevard: 'Blvd', Parkway: 'Pkwy', Road: 'Rd', Center: 'Ctr', Junction: 'Jct', University: 'Univ', Government: 'Govt' };
 export function shortened(name) {
@@ -660,7 +727,7 @@ const CLASS_ORDER = ['c60', 'c30', 'c15', 'c10', 'c5', 'c3'];
  * read takes the class of the stretches it joins (a street doesn't blink
  * between weights), and loops and stubs smaller than a few pixels go.
  */
-export function busStreets(streets, sheet) {
+export function busStreets(streets, sheet, walls = []) {
   const edges = streets.features
     // A stretch marked for one set of sheets is drawn only on those; one with no mark is the same on all.
     .filter((f) => (f.properties.zoom ?? sheet.streets) === sheet.streets && f.geometry.type === 'LineString')
@@ -691,6 +758,27 @@ export function busStreets(streets, sheet) {
     joined.add(a).add(b);
     if (a.end) a.e.path.push(b.p); else a.e.path.unshift(b.p);
     a.e.len = length(a.e.path);
+  }
+  // A loose end left over, with a street that shares a route a short walk away (and not one this
+  // street already meets), is led to the nearest point of it: a turnaround whose data stops short
+  // of the street it leaves from is drawn closed.
+  const walkTo = SIZES.busBridgeMetres * perMetre;
+  if (walkTo >= SIZES.busMerge[sheet.id]) {
+    for (const x of loose) {
+      if (joined.has(x) || x.e.len < SIZES.busSpeck) continue;
+      const mine = new Set(x.e.routes.split(' '));
+      const ends = [x.e.path[0], x.e.path.at(-1)];
+      let best = null;
+      for (const o of edges) {
+        if (o === x.e || !o.routes.split(' ').some((r) => mine.has(r))) continue;
+        if ([o.path[0], o.path.at(-1)].some((q) => ends.some((p) => dist(p, q) < 1))) continue;
+        const hit = nearest(o.path, x.p);
+        if (hit.d <= walkTo && (!best || hit.d < best.d)) best = hit;
+      }
+      if (!best) continue;
+      if (x.end) x.e.path.push(best.at); else x.e.path.unshift(best.at);
+      x.e.len = length(x.e.path);
+    }
   }
   const nodes = new Map();
   for (const e of edges) for (const end of [e.path[0], e.path.at(-1)]) {
@@ -741,7 +829,9 @@ export function busStreets(streets, sheet) {
   for (let pass = 0; pass < 3; pass++) {
     for (const e of [...edges].sort((a, b) => a.len - b.len)) {
       if (e.len >= run) continue;
-      let longest = [next(e, 0), next(e, 1)].filter(Boolean).sort((a, b) => b.len - a.len)[0];
+      // Of the two it runs into, the busier one if that is longer than this stretch, else the longer.
+      const into = [next(e, 0), next(e, 1)].filter(Boolean);
+      let longest = into.filter((o) => o.len > e.len).sort((a, b) => b.rank - a.rank || b.len - a.len)[0] ?? into.sort((a, b) => b.len - a.len)[0];
       // A scrap a few pixels long with no way straight on takes the weight of the longest street it touches,
       // so the corner of a transfer centre is not a heavy blot.
       if (!longest && e.len < 1.5 * SIZES.busSpeck) {
@@ -867,7 +957,7 @@ export function busStreets(streets, sheet) {
     e.path = rounded(path, cell);
     e.len = length(e.path);
   }
-  return unringed(kept
+  const drawn = unslivered(unringed(kept
     .filter((e) => {
       const closed = dist(e.path[0], e.path.at(-1)) < 1;
       const reachOf = Math.max(...e.path.map((p) => dist(p, e.path[0])));
@@ -875,25 +965,138 @@ export function busStreets(streets, sheet) {
       // A short spur off a street reads as a barb, not a route.
       return !(e.free && e.len < 2.5 * SIZES.busSpeck);
     })
-    .map((e) => ({ cls: CLASS_ORDER[e.rank], routes: e.routes, n: e.n, hw: e.hw, path: simplify(rounded(simplify(e.path, 2), 2), 0.3) })), SIZES.busRing);
+    .map((e) => ({ cls: CLASS_ORDER[e.rank], routes: e.routes, n: e.n, hw: e.hw, path: simplify(rounded(simplify(e.path, 2), 2), 0.3) })), SIZES.busRing), 3 * SIZES.busRing, SIZES.busSlim);
+  return walled(drawn, walls);
+}
+
+/**
+ * Streets with each loose end that stops at a bus station's wall drawn onto the wall, square:
+ * route data stops where buses go indoors, and the last few yards of it wander.
+ */
+function walled(streets, walls) {
+  if (!walls.length) return streets;
+  const key = (p) => `${Math.round(p[0])},${Math.round(p[1])}`;
+  const met = new Map();
+  for (const st of streets) for (const p of [st.path[0], st.path.at(-1)]) met.set(key(p), (met.get(key(p)) ?? 0) + 1);
+  const reach = SIZES.hallReach;
+  return streets.map((st) => {
+    let path = st.path;
+    for (const end of [0, 1]) {
+      const tip = end ? path.at(-1) : path[0];
+      if (met.get(key(tip)) > 1) continue;
+      const wall = walls.map((w) => w.ring).sort((a, b) => nearest(a, tip).d - nearest(b, tip).d)[0];
+      if (nearest(wall, tip).d > reach) continue;
+      // Back along the street to where it is clear of the wall, then straight to the wall.
+      const pts = resample(end ? path : [...path].reverse(), 2);
+      while (pts.length > 2 && nearest(wall, pts.at(-1)).d <= reach) pts.pop();
+      if (nearest(wall, pts.at(-1)).d > 3 * reach) continue;
+      pts.push(nearest(wall, pts.at(-1)).at);
+      path = simplify(end ? pts : pts.reverse(), 0.3);
+    }
+    return path === st.path ? st : { ...st, path };
+  });
+}
+
+/**
+ * The halls of bus stations wide enough to draw on this sheet, `{ id, name, ring }` in pixels
+ * (the ring closed). Streets end on a hall's wall: it is where their buses go.
+ */
+export function halls(terminals, sheet) {
+  const out = [];
+  for (const f of terminals?.features ?? []) {
+    const polygons = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [];
+    for (const rings of polygons) {
+      const ring = rings[0].map((c) => toPx(c, sheet.zoom));
+      if (dist(ring[0], ring.at(-1)) > 1e-6) ring.push(ring[0]);
+      let area = 0;
+      for (let i = 1; i < ring.length; i++) area += ring[i - 1][0] * ring[i][1] - ring[i][0] * ring[i - 1][1];
+      // How wide it is: its area over its longest reach.
+      const far = Math.max(...ring.map((p) => Math.max(...ring.map((q) => dist(p, q)))));
+      if (Math.abs(area) / 2 / (far || 1) >= SIZES.hallWide) out.push({ id: f.properties.id, name: f.properties.name, ring });
+    }
+  }
+  return out;
+}
+
+/**
+ * Which streets carry their label. A street is cut into a piece at every corner, and each
+ * piece's list of routes differs a little from the next, so labelling every piece repeats
+ * nearly the same list block after block. Pieces that carry straight on from each other are
+ * one street: along it the longest pieces are labelled, no two closer than `every`.
+ */
+export function labelled(streets, every, room = () => 0) {
+  const key = (p) => `${Math.round(p[0])},${Math.round(p[1])}`;
+  const at = new Map();
+  streets.forEach((st, i) => { for (const end of [0, 1]) { const k = key(end ? st.path.at(-1) : st.path[0]); at.set(k, [...(at.get(k) ?? []), { i, end }]); } });
+  const away = (st, end) => {
+    const [a, b] = end ? [st.path.at(-1), pointAlong([...st.path].reverse(), 6)] : [st.path[0], pointAlong(st.path, 6)];
+    const d = dist(a, b) || 1;
+    return [(b[0] - a[0]) / d, (b[1] - a[1]) / d];
+  };
+  // At each corner the pieces pair off with the one most nearly straight ahead.
+  const on = new Map();
+  for (const meet of at.values()) {
+    const pairs = [];
+    for (let a = 0; a < meet.length; a++) for (let b = a + 1; b < meet.length; b++) {
+      if (meet[a].i === meet[b].i) continue;
+      const [u, v] = [away(streets[meet[a].i], meet[a].end), away(streets[meet[b].i], meet[b].end)];
+      const straight = -(u[0] * v[0] + u[1] * v[1]);
+      if (straight > 0.8) pairs.push({ a: meet[a], b: meet[b], straight });
+    }
+    const used = new Set();
+    for (const { a, b } of pairs.sort((x, y) => y.straight - x.straight)) {
+      const [ka, kb] = [`${a.i}/${a.end}`, `${b.i}/${b.end}`];
+      if (used.has(ka) || used.has(kb)) continue;
+      used.add(ka).add(kb);
+      on.set(ka, b);
+      on.set(kb, a);
+    }
+  }
+  const seen = new Set();
+  const picked = new Set();
+  const walk = (i, end, out) => {
+    // From piece `i`, leaving by its `end`: the pieces after it, in order.
+    for (let next = on.get(`${i}/${end}`); next && !seen.has(next.i); next = on.get(`${next.i}/${next.end ? 0 : 1}`)) { seen.add(next.i); out.push(next.i); }
+    return out;
+  };
+  streets.forEach((_, i) => {
+    if (seen.has(i)) return;
+    seen.add(i);
+    const chain = [...walk(i, 0, []).reverse(), i, ...walk(i, 1, [])];
+    let run = 0;
+    const pieces = chain.map((j) => { const len = length(streets[j].path); run += len; return { j, len, mid: run - len / 2 }; });
+    const set = [];
+    for (const p of pieces.filter((q) => q.len >= room(streets[q.j])).sort((a, b) => b.len - a.len)) {
+      if (set.every((o) => Math.abs(o.mid - p.mid) >= every)) set.push(p);
+    }
+    for (const p of set) picked.add(streets[p.j]);
+  });
+  return picked;
 }
 
 // --- One sheet, as GeoJSON -------------------------------------------------------
 
 /** Everything one sheet draws, as a FeatureCollection the page loads. */
-export function drawSheet({ routes, stations, streets }, sheet) {
+export function drawSheet({ routes, stations, streets, terminals }, sheet) {
   const lines = railLines(routes, sheet);
   const marks = stationMarks(stations, lines, sheet);
-  const bus = busStreets(streets, sheet);
+  const walls = halls(terminals, sheet);
+  const bus = busStreets(streets, sheet, walls);
   const discs = letters(lines, marks, sheet);
   const back = (p) => toLonLat(p, sheet.zoom);
   const feature = (properties, geometry) => ({ type: 'Feature', properties, geometry });
   const features = [];
-  for (const s of bus) {
-    // Along the street: its first few routes; a tap gives them all.
+  for (const h of walls) features.push(feature({ kind: 'hall', id: h.id, name: h.name }, { type: 'Polygon', coordinates: [h.ring.map(back)] }));
+  // Along the street: its first few routes; a tap gives them all.
+  const listed = (s) => {
     const list = String(s.routes).split(' ');
-    const label = list.length > SIZES.busListed ? `${list.slice(0, SIZES.busListed).join(', ')} +${list.length - SIZES.busListed}` : list.join(', ');
-    features.push(feature({ kind: 'bus', cls: s.cls, routes: list.join(', '), n: s.n, hw: s.hw, label }, { type: 'LineString', coordinates: s.path.map(back) }));
+    return list.length > SIZES.busListed ? `${list.slice(0, SIZES.busListed - 1).join(', ')} +${list.length - SIZES.busListed + 1}` : list.join(', ');
+  };
+  const lettered = labelled(bus, SIZES.busLabelEvery[sheet.id], (s) => listed(s).length * SIZES.busLabelSize[sheet.id] * 0.5);
+  for (const s of bus) {
+    const properties = { kind: 'bus', cls: s.cls, routes: String(s.routes).split(' ').join(', '), n: s.n, hw: s.hw };
+    if (lettered.has(s)) properties.label = listed(s);
+    features.push(feature(properties, { type: 'LineString', coordinates: s.path.map(back) }));
   }
   for (const l of lines) {
     features.push(feature({ kind: 'rail', route: l.route, color: l.color }, { type: 'MultiLineString', coordinates: l.paths.map((p) => p.map(back)) }));

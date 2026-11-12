@@ -2011,6 +2011,29 @@ How it is built:
   Streets too close to tell apart at a sheet's scale are drawn as one street
   that carries the routes of both.
   `test/sheets.test.mjs` holds the rules.
+- **Bus stations are rooms.** Where buses go indoors (the halls in
+  `terminals.geojson`) RTD's route lines stop at the door. A hall at least
+  five pixels wide on a sheet is drawn as a quiet filled shape, edged like a
+  quiet street, under the streets and stops. A street whose loose end is
+  within ten pixels of a hall's wall is drawn onto the wall, square, without
+  the wander of its last few yards. Streets that cross above a hall below
+  ground stay as they are.
+- **More fudges for a clean bus drawing.** A loose end with a street of the
+  same route a short walk away (110 m) is led to it, so a turnaround is a
+  closed shape. Where two ways between the same corners enclose a strip
+  under six pixels wide, the quietest side is not drawn and the others carry
+  its routes: a route that leaves a street and rejoins it a block later is
+  no longer a notch. A short stretch takes the weight of the busier longer
+  street it runs into, not merely the longer one.
+- **Route numbers are said once, not every block.** A street is cut at every
+  corner and each piece's list differs a little from the next. Pieces that
+  carry straight on from each other are one street; along it the longest
+  pieces are labelled, none closer than a sheet's spacing (170, 240 and 320
+  pixels on sheets 2 to 4). A street with more than four routes lists three
+  and a count; a tap gives them all.
+- **Lines change place gently.** Where a line joins or leaves a pack, the
+  others slide to their new places over about 26 pixels each side, so the
+  lines beside one that ends do not jog at its last station.
 - **Made for continuous zoom later.** Each sheet's layers show for a band of
   zooms around its own, so drawing between two sheets is a later step that
   changes the page, not the build.
@@ -3988,6 +4011,18 @@ work against the real structure before asking for evaluation.
   main streets. Reason: Chris's phone review found each view had things that
   were true to the ground and not beautiful; he asked for small fudges of
   place and shape where they make the drawing clean.
+- 2026-11-12: Sheets draw bus stations' halls, and four more "drawn, not
+  traced" rules (#117). A hall wide enough to see on a sheet is a quiet room
+  that its buses' streets end on, square to the wall. A turnaround whose data
+  stops short of the street it leaves from is closed. Two ways round a strip
+  too thin to see into are one street. Along one street only blocks well
+  apart carry the route list, and a long list is three routes and a count.
+  A short stretch takes the weight of the busier street it runs into. Where
+  a rail line joins or leaves a pack, the others slide over about three times
+  as far as before. Reason: at Union Station and Civic Center bus streets
+  ended in mid-air where buses go indoors, turnarounds read as scraps, the
+  same long list repeated block after block downtown, and lines beside one
+  that ended jogged at its last station.
 
 ## Sources
 
