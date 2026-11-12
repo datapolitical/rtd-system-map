@@ -64,15 +64,19 @@ class WholeNetwork {
   }
   onAdd() {
     this.el = document.createElement('div');
-    this.el.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    this.el.className = 'maplibregl-ctrl maplibregl-ctrl-group ctrl-network-group';
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'ctrl-network';
     button.title = 'Zoom out to the whole network';
+    button.setAttribute('aria-label', 'Whole network');
     button.innerHTML =
       '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 8 3.5 3.5M3.5 7.5v-4h4M12 8l4.5-4.5M12.5 3.5h4v4M12 12l4.5 4.5M16.5 12.5v4h-4M8 12l-4.5 4.5M7.5 16.5h-4v-4" /></svg><span>Whole network</span>';
     button.addEventListener('click', this.onClick);
     this.el.append(button);
+    // The words say what the arrows mean on arrival, then fold away to the
+    // icon so the corner stays clear.
+    setTimeout(() => this.el.classList.add('compact'), 5000);
     return this.el;
   }
   onRemove() {
@@ -176,8 +180,9 @@ async function main() {
   });
   map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
-  // Locate me, then the whole network above it, then zoom buttons (only where
-  // there's no pinch). Controls stack upward, so the thumb's button goes first.
+  // Locate me in the corner, the whole network to its left on the same row,
+  // then zoom buttons above (only where there's no pinch). Controls stack
+  // upward, so the thumb's button goes first.
   const locate = new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: false });
   map.addControl(locate, 'bottom-right');
   const network = new WholeNetwork(() => {

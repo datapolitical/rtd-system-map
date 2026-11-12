@@ -1981,11 +1981,13 @@ The controls:
   a blue dot with a white ring. If it finds you outside RTD's area, the map
   stays where it was and says "You're outside RTD's area, so the map stayed
   here."
-- **Whole network** is a button with the map controls, with the words on
-  it and four arrows pointing out, that zooms out to all of the network. On
-  a phone it is the way to Boulder and Longmont from the opening view, so
-  it is labelled, not an icon alone. It hides while the whole network is
-  on screen, where it would do nothing.
+- **Whole network** is a button on the bottom row, to the left of Locate
+  me, with four arrows pointing out, that zooms out to all of the network.
+  On a phone it is the way to Boulder and Longmont from the opening view, so
+  it opens with its words beside the arrows, then after five seconds folds
+  to the arrows alone (its name stays for screen readers), leaving the
+  corner clear. It hides while the whole network is on screen, where it
+  would do nothing.
 - **North up, flat.** The map can't be rotated or tilted, by drag, touch or
   keyboard, and a bearing or pitch in a link's hash is dropped. A rotated map
   had no way back, because there is no compass.
@@ -3653,6 +3655,11 @@ work against the real structure before asking for evaluation.
   trains (open whether to cap them). Part-time routes keep their own dashed
   and dotted lines and add no width.
 
+- 2026-11-08: "Whole network" moves to the bottom row, left of Locate me,
+  and folds from words to its icon after five seconds. Chris: "let's move
+  that to the bottom row to the left of the arrow rather than above it. and
+  let's have it start out with the label and then shrink after like five
+  seconds down to the icon."
 - 2026-11-07: No native iOS app. A native build needs a Mac, 99 USD a year and
   App Review for every change, and it trades away the shareable links the
   secondary audience needs. WebKit already draws the whole network in 1.6 to
