@@ -1014,6 +1014,38 @@ export function straightened(streets, tol) {
 }
 
 /**
+ * Streets that end at a station. A route that turns round at a rail station has its loop drawn
+ * as one street out to its far end, and the bays it serves are a short walk from the station's
+ * mark: the street stops in the open. A loose end (nothing meets it) within `reach` of a
+ * station's mark, with the mark ahead of it rather than behind, is led straight on to the mark.
+ */
+export function toStations(streets, marks, reach) {
+  if (!marks.length) return streets;
+  const edges = cornered(streets);
+  const count = new Map();
+  for (const e of edges) for (const k of [e.a, e.b]) count.set(k, (count.get(k) ?? 0) + 1);
+  const bars = marks.flatMap((m) => [m.ends, ...(m.more ?? [])]);
+  return edges.map((e) => {
+    let path = e.st.path;
+    if (e.a === e.b) return e.st;
+    for (const [end, k] of [[0, e.a], [1, e.b]]) {
+      if (count.get(k) > 1) continue;
+      const v = end ? path : [...path].reverse();
+      const tip = v.at(-1);
+      if (streets.some((o) => o !== e.st && nearest(o.path, tip).d < 1.5)) continue;
+      const hit = bars.map((b) => nearest(b, tip)).sort((x, y) => x.d - y.d)[0];
+      if (!hit || hit.d > reach || hit.d < 0.5) continue;
+      const back = pointAlong([...v].reverse(), Math.min(12, length(v)));
+      const d = dist(back, tip) || 1;
+      const ahead = ((tip[0] - back[0]) * (hit.at[0] - tip[0]) + (tip[1] - back[1]) * (hit.at[1] - tip[1])) / d / hit.d;
+      if (ahead < 0.5) continue;
+      path = end ? [...path, hit.at] : [hit.at, ...path];
+    }
+    return path === e.st.path ? e.st : { ...e.st, path };
+  });
+}
+
+/**
  * Streets of one weight. A street is cut at every corner and each piece is weighed on its own,
  * so along a street that nothing else meets, a few pieces can come out a class apart from the
  * rest: a short dark tick on the end of a pale street. Along such a street, a stretch of one
@@ -1105,7 +1137,7 @@ const CLASS_ORDER = ['c60', 'c30', 'c15', 'c10', 'c5', 'c3'];
  * read takes the class of the stretches it joins (a street doesn't blink
  * between weights), and loops and stubs smaller than a few pixels go.
  */
-export function busStreets(streets, sheet, walls = []) {
+export function busStreets(streets, sheet, walls = [], marks = []) {
   const edges = streets.features
     // A stretch marked for one set of sheets is drawn only on those; one with no mark is the same on all.
     .filter((f) => (f.properties.zoom ?? sheet.streets) === sheet.streets && f.geometry.type === 'LineString')
@@ -1347,7 +1379,7 @@ export function busStreets(streets, sheet, walls = []) {
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
   const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
-  return evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing);
+  return toStations(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing), marks, SIZES.busBridgeMetres * perMetre);
 }
 
 /**
@@ -1819,7 +1851,7 @@ export function drawSheet({ routes, stations, streets, terminals }, sheet) {
   const lines = railLines(routes, sheet);
   const marks = stationMarks(stations, lines, sheet);
   const walls = halls(terminals, sheet);
-  const bus = busStreets(streets, sheet, walls);
+  const bus = busStreets(streets, sheet, walls, marks);
   const discs = letters(lines, marks, sheet);
   const back = (p) => toLonLat(p, sheet.zoom);
   const feature = (properties, geometry) => ({ type: 'Feature', properties, geometry });

@@ -2007,6 +2007,9 @@ How it is built:
   back that wanders a little longer still lies on the way out; the loop
   opens only where the two lie six pixels apart for more than eighteen, and
   a shorter bulge is drawn through.
+  A street whose loose end stops a short walk (110 m) from a rail
+  station's mark, heading for it, is led on to the mark: a route that turns
+  round at a station ends at the station, not in the open beside it.
   A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
   Where a full name would sit on lines or stand off from its mark, common
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
@@ -4104,6 +4107,11 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets cut a street that runs through a hall at both walls.
   Reason: a quiet street across Union Station's hall read as a notch in the
   room; streets crossing a hall had been left whole.
+- 2026-11-12: Sheets lead a street's loose end on to a rail station a short
+  walk ahead. Reason: the routes that turn round at Peoria ended in the open
+  south of the station on sheet 4; their loop is drawn as one street out to
+  its far end, after the rules that join loose ends to other streets run,
+  and those rules only look for streets, never stations.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
 

@@ -503,3 +503,16 @@ test('a street that drifts a pixel or two through its corners is drawn straight,
   const bend = straightened([st([[0, 0], [50, 0]], colfax), st([[50, 0], [100, 8]], colfax), st([[100, 8], [150, 8]], colfax)], SIZES.busStraight);
   assert.deepEqual(bend[1].path, [[50, 0], [100, 8]], 'a real bend is kept');
 });
+
+test('a street that stops a short walk from a rail station, heading for it, is led on to the station', () => {
+  const street = (routes, coords) => line({ mode: 'bus', cls: 'c15', routes, n: 1, hw: 15, zoom: 'near' }, coords);
+  const px = (x, y) => [origin3[0] + x, origin3[1] + y];
+  // A mark 12 px past the end of a street that runs at it, and another well behind a second street's end.
+  const marks = [{ ends: [px(-4, -12), px(4, -12)], more: [] }, { ends: [px(296, 40), px(304, 40)], more: [] }];
+  const drawn = busStreets(all([street('1', [at3(0, 200), at3(0, 0)]), street('2', [at3(300, 200), at3(300, 0)])]), near, [], marks);
+  const one = drawn.find((s) => s.routes === '1');
+  const two = drawn.find((s) => s.routes === '2');
+  const end = (s) => [s.path[0], s.path.at(-1)].sort((a, b) => a[1] - b[1])[0];
+  assert.ok(Math.hypot(end(one)[0] - origin3[0], end(one)[1] - origin3[1] + 12) < 0.5, 'the street ends on the mark');
+  assert.ok(Math.abs(end(two)[1] - origin3[1]) < 0.5, 'a station behind the end is not reached back to');
+});
