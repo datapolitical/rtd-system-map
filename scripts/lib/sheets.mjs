@@ -1145,7 +1145,7 @@ export function straightened(streets, tol) {
  * mark: the street stops in the open. A loose end (nothing meets it) within `reach` of a
  * station's mark, with the mark ahead of it rather than behind, is led straight on to the mark.
  */
-export function toStations(streets, marks, reach) {
+export function toStations(streets, marks, reach, walls = []) {
   if (!marks.length) return streets;
   const edges = cornered(streets);
   const count = new Map();
@@ -1159,6 +1159,8 @@ export function toStations(streets, marks, reach) {
       const v = end ? path : [...path].reverse();
       const tip = v.at(-1);
       if (streets.some((o) => o !== e.st && nearest(o.path, tip).d < 1.5)) continue;
+      // An end at a bus station's hall is where its buses go: it is not led on to a rail station.
+      if (walls.some((w) => nearest(w.ring, tip).d <= SIZES.hallReach)) continue;
       const hit = bars.map((b) => nearest(b, tip)).sort((x, y) => x.d - y.d)[0];
       if (!hit || hit.d > reach || hit.d < 0.5) continue;
       const back = pointAlong([...v].reverse(), Math.min(12, length(v)));
@@ -1505,7 +1507,7 @@ export function busStreets(streets, sheet, walls = [], marks = []) {
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
   const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
-  return toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing)), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre);
+  return toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing)), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre, walls);
 }
 
 /**

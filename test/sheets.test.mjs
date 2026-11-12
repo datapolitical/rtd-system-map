@@ -517,6 +517,10 @@ test('a street that stops a short walk from a rail station, heading for it, is l
   const end = (s) => [s.path[0], s.path.at(-1)].sort((a, b) => a[1] - b[1])[0];
   assert.ok(Math.hypot(end(one)[0] - origin3[0], end(one)[1] - origin3[1] + 12) < 0.5, 'the street ends on the mark');
   assert.ok(Math.abs(end(two)[1] - origin3[1]) < 0.5, 'a station behind the end is not reached back to');
+  // The same street ending on a bus station's hall stays there: that is where its buses go.
+  const hall = { id: 'h', ring: [px(-20, 0), px(20, 0), px(20, 6), px(-20, 6), px(-20, 0)] };
+  const kept = busStreets(all([street('1', [at3(0, 200), at3(0, 0)])]), near, [hall], marks)[0];
+  assert.ok(Math.min(...[kept.path[0], kept.path.at(-1)].map((p) => p[1] - origin3[1])) > -1, 'not led past the hall to the rail station');
 });
 
 test('route numbers go on the side of their street with room: not on a street that runs close beside it', async () => {

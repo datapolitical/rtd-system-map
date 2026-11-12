@@ -2019,6 +2019,7 @@ How it is built:
   A street whose loose end stops a short walk (110 m) from a rail
   station's mark, heading for it, is led on to the mark: a route that turns
   round at a station ends at the station, not in the open beside it.
+  An end at a bus station's hall is not led on: that is where its buses go.
   A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
   Where a full name would sit on lines or stand off from its mark, common
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
@@ -4164,6 +4165,10 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets draw a turnaround's bow in one sweep. Reason: rounding
   corners left the FreeRide loop by Union Station with a bulge and a pinch
   from the route data; Chris saw a bend that made no sense.
+- 2026-11-12: Sheets don't lead a street that ends at a bus station's hall
+  on to a rail station. Reason: route 15's few trips out of Union Station's
+  hall were drawn back across to the light rail bar, a line that isn't
+  there, beside the FreeRide loop on sheet 4.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.
