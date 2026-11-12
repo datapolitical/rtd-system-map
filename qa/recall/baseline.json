@@ -149,6 +149,54 @@
       "pipeline": 0,
       "looking": 0,
       "of": 5
+    },
+    "find e2bae25 103-union-end-unmarked": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find e2bae25 103-union-marks-parallel": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find e2bae25 103-union-bus-on-rail": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find e2bae25 103-lincoln-gap": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find e2bae25 103-lincoln-drift": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find e2bae25 103-airport-skew": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find e2bae25 103-airport-past-roof": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find e2bae25 103-alameda-bus-on-rail": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find e2bae25 103-alameda-jerky": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find e2bae25 103-broadway-break": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find 3e38acb 103-union-bus-on-rail": {
+      "pipeline": true,
+      "looking": true
+    },
+    "find 3e38acb 103-alameda-bus-on-rail": {
+      "pipeline": true,
+      "looking": true
     }
   }
 }

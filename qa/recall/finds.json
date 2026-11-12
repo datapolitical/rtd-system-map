@@ -828,6 +828,466 @@
       "found_by": "Chris, on a phone, dark mode, the union-building preview, 2026-11-08 (issue #42)",
       "pinned_by": "Claude, from a capture of the build (qa/recall/capture.mjs), 2026-11-10",
       "confidence": "clear"
+    },
+    {
+      "id": "103-union-end-unmarked",
+      "issue": 103,
+      "place": "Union Station",
+      "said": "The Light rail lacks a terminal marker.",
+      "kind": "end-unmarked",
+      "caught_by": [
+        "end-unmarked",
+        "dangling",
+        "mark-short"
+      ],
+      "seen_on": [
+        "e2bae25"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "gone: the light rail's mark is drawn from zoom 11"
+      },
+      "theme": "dark",
+      "zoom": 13,
+      "points": [
+        [
+          -105.00303,
+          39.75542
+        ]
+      ],
+      "radius_px": 12,
+      "capture": {
+        "view": "13/39.75450/-105.00180",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            187,
+            423
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "clear"
+    },
+    {
+      "id": "103-union-marks-parallel",
+      "issue": 103,
+      "place": "Union Station",
+      "said": "would it look better if the two station markers were parallel? the light rail is angled",
+      "kind": "marks-not-parallel",
+      "caught_by": [
+        "marks-not-parallel",
+        "mark-askew"
+      ],
+      "seen_on": [
+        "e2bae25"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "gone: both marks lie along the walk"
+      },
+      "theme": "dark",
+      "zoom": 15,
+      "points": [
+        [
+          -105.00303,
+          39.75542
+        ]
+      ],
+      "radius_px": 15,
+      "capture": {
+        "view": "15/39.75450/-105.00180",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            144,
+            381
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "clear"
+    },
+    {
+      "id": "103-union-bus-on-rail",
+      "issue": 103,
+      "place": "Union Station",
+      "said": "it overlaps the bus routes in a way that a hand drawn map wouldn't",
+      "kind": "under-rail",
+      "caught_by": [
+        "under-rail",
+        "stop-on-rail"
+      ],
+      "seen_on": [
+        "e2bae25",
+        "3e38acb"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "still there"
+      },
+      "theme": "dark",
+      "zoom": 15,
+      "points": [
+        [
+          -105.00326,
+          39.75481
+        ]
+      ],
+      "radius_px": 40,
+      "capture": {
+        "view": "15/39.75450/-105.00180",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            133,
+            418
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "approximate: which bus line he meant is a reading of the picture"
+    },
+    {
+      "id": "103-lincoln-gap",
+      "issue": 103,
+      "place": "Lincoln",
+      "said": "There's an unnecessary gap between the light rail lines",
+      "kind": "uneven-gap",
+      "caught_by": [
+        "uneven-gap",
+        "sliver"
+      ],
+      "seen_on": [
+        "e2bae25"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "gone: the lines of a pack are on one path"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.86954,
+          39.54537
+        ],
+        [
+          -104.86958,
+          39.5464
+        ]
+      ],
+      "radius_px": 30,
+      "capture": {
+        "view": "16/39.54560/-104.86955",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            202,
+            465
+          ],
+          [
+            198,
+            340
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "clear"
+    },
+    {
+      "id": "103-lincoln-drift",
+      "issue": 103,
+      "place": "Lincoln",
+      "said": "there's a small gap between the rail lines south of lincoln and they don't look straight.",
+      "kind": "drift",
+      "caught_by": [
+        "drift",
+        "steep-ease",
+        "step"
+      ],
+      "seen_on": [
+        "e2bae25"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "gone: E and R take their places under the mark"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.8694,
+          39.5442
+        ]
+      ],
+      "radius_px": 40,
+      "capture": {
+        "view": "16/39.54560/-104.86955",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            215,
+            606
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "clear"
+    },
+    {
+      "id": "103-airport-skew",
+      "issue": 103,
+      "place": "Denver Airport",
+      "said": "It's also not parallel with the platform which is obviously wrong",
+      "kind": "skew",
+      "caught_by": [
+        "skew"
+      ],
+      "seen_on": [
+        "e2bae25"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "gone: the line runs parallel to its platform"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.67393,
+          39.84686
+        ]
+      ],
+      "radius_px": 40,
+      "capture": {
+        "view": "16/39.84700/-104.67396",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            204,
+            454
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "clear"
+    },
+    {
+      "id": "103-airport-past-roof",
+      "issue": 103,
+      "place": "Denver Airport",
+      "said": "the line goes too far and it should end under the canopy",
+      "kind": "past-roof",
+      "caught_by": [
+        "past-roof"
+      ],
+      "seen_on": [
+        "e2bae25"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "gone: the line ends under the roof, 15 m short of the buffers"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.67396,
+          39.84731
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "16/39.84700/-104.67396",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            201,
+            399
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "clear"
+    },
+    {
+      "id": "103-alameda-bus-on-rail",
+      "issue": 103,
+      "place": "Alameda",
+      "said": "the buses aren't literally on top of the rail so that makes no sense.",
+      "kind": "under-rail",
+      "caught_by": [
+        "under-rail",
+        "stop-on-rail"
+      ],
+      "seen_on": [
+        "e2bae25",
+        "3e38acb"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "still there"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.9925,
+          39.708
+        ],
+        [
+          -104.992,
+          39.70778
+        ]
+      ],
+      "radius_px": 40,
+      "capture": {
+        "view": "16/39.70868/-104.99316",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            263,
+            519
+          ],
+          [
+            309,
+            546
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "clear"
+    },
+    {
+      "id": "103-alameda-jerky",
+      "issue": 103,
+      "place": "Alameda",
+      "said": "the rail lines look jerky rather than clean and hand drawn.",
+      "kind": "drift",
+      "caught_by": [
+        "drift",
+        "steep-ease",
+        "step"
+      ],
+      "seen_on": [
+        "e2bae25"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "gone: C and E take their places under the mark"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -104.994,
+          39.7097
+        ]
+      ],
+      "radius_px": 40,
+      "capture": {
+        "view": "16/39.70868/-104.99316",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            123,
+            313
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "clear"
+    },
+    {
+      "id": "103-broadway-break",
+      "issue": 103,
+      "place": "I-25 / Broadway",
+      "said": "The rail line breaks at I-25 and Broadway",
+      "kind": "steep-ease",
+      "caught_by": [
+        "steep-ease",
+        "step",
+        "gap"
+      ],
+      "seen_on": [
+        "e2bae25"
+      ],
+      "latest": {
+        "build": "3e38acb",
+        "looked": "2026-11-11",
+        "status": "gone: C eases over 1.4 km"
+      },
+      "theme": "dark",
+      "zoom": 11,
+      "points": [
+        [
+          -104.9899,
+          39.6991
+        ]
+      ],
+      "radius_px": 12,
+      "capture": {
+        "view": "11/39.70050/-104.98950",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            200,
+            442
+          ]
+        ]
+      },
+      "found_by": "Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)",
+      "pinned_by": "Claude, from the build's data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11",
+      "confidence": "clear"
     }
   ]
 }

@@ -83,6 +83,8 @@ read so far. The model opens it with `root: <dir>`.
 | `0fe749b` | The build Chris looked at on 2026-11-08 when he listed the faults in #42 (the `union-building` preview until 74d93c6 landed at 18:11). |
 | `74d93c6` | The next `union-building` build. |
 | `430ea4a` | The newest `evaluator` build when this was made; faults are planted in it (`plant_on` in `fixtures.json`). |
+| `e2bae25` | The stations build Chris reviewed on 2026-11-11, when he found seven faults no check had a rule for (#103). |
+| `3e38acb` | The live build later that evening: five of the seven fixed, the two bus-under-rail finds still on it. |
 
 Fixtures are not in git: at 7 to 17 MB each (the tiles they read included)
 they would make every clone of a 5 MB repository several times larger. They

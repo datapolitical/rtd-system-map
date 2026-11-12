@@ -11,7 +11,15 @@ drawn, where it comes from, and whether anything checks it.
 | [`design-invariants.md`](design-invariants.md) | The 109 drawing rules DESIGN.md states, each with its line, how it could be measured on the drawn model, and what checks it today. Also a table of every detector and where it runs. Audit of main at `3e38acb`. |
 | [`literature.md`](literature.md) | 77 rules from published practice (metro-map layout research, line bundling, label placement, minimum sizes on phone screens, agency standards), each with its source and the page that was loaded. 75 have a source; 2 are marked as having none. Thresholds are tagged `(source)` or `(suggested)`. |
 
-## Where we stand (main at `3e38acb`)
+## Where we stand
+
+The audit below is of main at `3e38acb`, before the checks in "What gets
+built first" existed. Since then the report runs at every half zoom from 10
+to 17 (27 seconds a theme) with the rows marked "yes" in that table. On the
+build Chris reviewed (`e2bae25`) it reports 687 findings; on the live build
+that evening (`3e38acb`), with his finds fixed, 140. All ten pins made from
+his seven comments are caught on the first, and the two still open (bus
+lines under rail) on the second.
 
 | DESIGN.md's 109 rules | |
 |---|---|
@@ -38,28 +46,28 @@ are Chris's finds of 2026-11-11, pinned on the frozen build he saw them on
 
 | # | Rule | DESIGN.md | Literature | Measure | Checked today |
 |---|---|---|---|---|---|
-| 1 | Every rail line ends in a mark of its own, at every zoom from 11 | SM08 | LN-01 | each free rail end inside an own-line mark's box, per half zoom 11 to 17 | part: not at 11, 13, 15; hidden by any mark within 150 m |
-| 2 | The marks of one station are parallel | PG02 | ST-02 | difference of the marks' turn at most 1 degree | no |
-| 3 | The gaps in a pack of lines are equal | ST02 | PL-02, PL-03 | spread of the gaps between neighbouring centrelines at most 0.3 px | no |
-| 4 | Lines that run on after another ends do not drift | RL10 | PL-11, PL-12 | sideways offset constant within 0.5 px away from the end mark | no |
-| 5 | A line runs parallel to its platform and ends under its roof | SS02, SS03 | ST-01 | angle of the line's last 100 m to the platform's long axis at most 2 degrees; the end not past the roof | no |
-| 6 | A bus line and its stops are not hidden under rail | BS12 | KD-02, KD-03, PL-01 | share of a bus stroke covered by rail strokes; stops outside the rail's casing | no (`line-covered` excuses it) |
-| 7 | A line eases between places without a kink, at every zoom | RL09 | JN-01, LN-05, PL-13 | sideways change per pixel along the track below a limit, per half zoom from 10 | no |
-| 8 | The two marks, the walk and the hall are one straight line | PG01 | ST-02 | bearing between the marks against the hall's axis within 2 degrees | no |
-| 9 | Lines that end at one station end flush | RL04 | LE-01 | spread of the ends along the track at most 1 px | no |
-| 10 | Lines never swap sides along a corridor | ST04 | PL-05, PL-06 | the sign of each pair's offset is constant | no |
-| 11 | A mark is square to its lines and as wide as them | SM01 | ST-01, ST-04 | mark turn against the track within 2 degrees; length against lines times width | no |
-| 12 | A second mark does not overlap the station's own | SM09 | ST-07 | box overlap of marks sharing a station id | no (the group-mark layers are outside `duplicate`) |
+| 1 | Every rail line ends in a mark of its own, at every zoom from 11 | SM08 | LN-01 | each free rail end inside an own-line mark's box, per half zoom 11 to 17 | yes: `end-unmarked`, in pixels against drawn marks, every half zoom |
+| 2 | The marks of one station are parallel | PG02 | ST-02 | difference of the marks' turn at most 1 degree | yes: `marks-not-parallel` |
+| 3 | The gaps in a pack of lines are equal | ST02 | PL-02, PL-03 | spread of the gaps between neighbouring centrelines at most 0.3 px | yes: `uneven-gap` at 0.5 px (0.3 px flags 19 places of 0.2 m on the live build) |
+| 4 | Lines that run on after another ends do not drift | RL10 | PL-11, PL-12 | sideways offset constant within 0.5 px away from the end mark | yes: `drift`, within 150 m of the end of a line beside it |
+| 5 | A line runs parallel to its platform and ends under its roof | SS02, SS03 | ST-01 | angle of the line's last 100 m to the platform's long axis at most 2 degrees; the end not past the roof | yes: `skew`, `past-roof`, `off-platform` |
+| 6 | A bus line and its stops are not hidden under rail | BS12 | KD-02, KD-03, PL-01 | share of a bus stroke covered by rail strokes; stops outside the rail's casing | yes: `under-rail`, `stop-on-rail`, from zoom 15 |
+| 7 | A line eases between places without a kink, at every zoom | RL09 | JN-01, LN-05, PL-13 | sideways change per pixel along the track below a limit, per half zoom from 10 | yes: `steep-ease`, more than 0.6 px across per px along |
+| 8 | The two marks, the walk and the hall are one straight line | PG01 | ST-02 | bearing between the marks against the hall's axis within 2 degrees | yes: `walk-bent` (no real case yet; unit test and a planted one) |
+| 9 | Lines that end at one station end flush | RL04 | LE-01 | spread of the ends along the track at most 1 px | yes: `ends-uneven` |
+| 10 | Lines never swap sides along a corridor | ST04 | PL-05, PL-06 | the sign of each pair's offset is constant | yes: `swap` (no real case; unit test and a planted one) |
+| 11 | A mark is square to its lines and as wide as them | SM01 | ST-01, ST-04 | mark turn against the track within 2 degrees; length against lines times width | yes: `mark-askew`, `mark-short`, from zoom 11 |
+| 12 | A second mark does not overlap the station's own | SM09 | ST-07 | box overlap of marks sharing a station id | yes: `marks-overlap` (Union Station's two marks overlap at zoom 11 to 12 on purpose; reported) |
 | 13 | No name sits on the walk or on a second mark; one name per station | PG05 | LB-02 | name boxes against the walk's dots and group marks | no |
-| 14 | Platforms and roofs end at the mark | SS04 | | polygon extent along the track against the mark | no |
-| 15 | No bus line is drawn through a hall | TH03 | | length of bus stroke inside hall polygons is zero | no |
-| 16 | A stop only trains call at is not drawn as a bus stop | SP01 | | no `stops` mark with rail-only lines | no |
+| 14 | Platforms and roofs end at the mark | SS04 | | polygon extent along the track against the mark | yes: `past-mark` |
+| 15 | No bus line is drawn through a hall | TH03 | | length of bus stroke inside hall polygons is zero | yes: `bus-in-hall` |
+| 16 | A stop only trains call at is not drawn as a bus stop | SP01 | | no `stops` mark with rail-only lines | yes: `rail-only-stop` |
 | 17 | Rail letters: evenly spaced, on their own line, none past or against an end mark | LT02, LT05, LT06 | LB-04 | distance along the line between a route's letters; letter to mark distance | no |
 | 18 | Names of places and streets, and highway shields, never cover a line | LN05, LN06, LN07 | LB-02 | basemap label boxes against line strokes | no (the model has no basemap labels) |
 | 19 | The hub's name stays off rail and frequent buses from zoom 15 | LN10 | LB-02 | name box against strokes, own lines included | no (`over-line` exempts own lines) |
-| 20 | No sliver between strokes at any zoom: side by side with a visible gap, or merged | | PL-03, CZ-02, JN-04 | no edge-to-edge gap between 0 and 1.2 px (Ledermann 2022) | no |
+| 20 | No sliver between strokes at any zoom: side by side with a visible gap, or merged | | PL-03, CZ-02, JN-04 | no edge-to-edge gap between 0 and 1.2 px (Ledermann 2022) | yes: `sliver`, between rail strokes only |
 | 21 | Branches leave without a kink and not at a tiny angle | | JN-01, JN-02 | tangent jump at a node; smallest angle at least 15 degrees (suggested) | no |
-| 22 | No zig-zag and no bend at a station | | LN-03, LN-04, LN-06 | inflections per 10 line widths; turning across a mark | no |
+| 22 | No zig-zag and no bend at a station | | LN-03, LN-04, LN-06 | inflections per 10 line widths; turning across a mark | part: `zig-zag`, `sharp-bend`, quiet on the live build; no real case pinned |
 | 23 | Width says the class: one class one width, classes visibly apart | CW rows | KD-04, LN-08 | same class within 0.25 px; neighbouring classes at least 1.6 px apart (Ledermann 2022) | part |
 
 Rows 20 to 23 come from the literature and are not in DESIGN.md. A check for

@@ -23,6 +23,20 @@
       "sha256": "6098b9dc7da1eaf5596bfe57420a9bf3a8a9b06c4fab44c6d7a2f9e7380457dc",
       "bytes": 17230962,
       "why": "The newest evaluator build on 2026-11-10; faults are planted in it."
+    },
+    "e2bae25": {
+      "commit": "e2bae25712287466d88269481742c6b9eab19a5b",
+      "preview": "https://stations.rtd-system-map.pages.dev",
+      "sha256": "79273bbde9e3ee7fcd81e86fd3fa484e0b9d1e293d2e8d10bfef8ecbfc6238ed",
+      "bytes": 7646360,
+      "why": "The stations build Chris reviewed on 2026-11-11 (the same tree as the merge 7bf19cc that put it on the live site), when he found seven faults no check had a rule for (#103)."
+    },
+    "3e38acb": {
+      "commit": "3e38acbfed783b130f5c5cf6da78b136619781ee",
+      "preview": "https://rtd-system-map.pages.dev",
+      "sha256": "f1d2c3d1fc6dd82c793a28a1fde88ee45bbaf8e8a03a0ee13b4bc3fb9b242246",
+      "bytes": 6944473,
+      "why": "The live build later that evening, with five of those seven fixed; the two bus-under-rail finds are still on it."
     }
   }
 }

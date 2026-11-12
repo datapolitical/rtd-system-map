@@ -11,6 +11,7 @@
 import { openModel } from '../drawn/model.mjs';
 import { coveredFaults, mergeCovered } from '../drawn/covered.mjs';
 import { endFaults } from '../drawn/ends.mjs';
+import { packFaults } from '../drawn/packs.mjs';
 import { shapeFaults } from '../drawn/shapes.mjs';
 import { lineFaults } from '../drawn/lines.mjs';
 import { PLACE_SOURCES, routeFaults } from '../drawn/routes.mjs';
@@ -22,9 +23,9 @@ import { seededViews } from '../lib/views.mjs';
 
 export const SEVERITY = {
   gap: 1, overshoot: 1, dangling: 1, 'end-unmarked': 1,
-  hook: 2, tick: 2, 'off-street': 2, 'under-rail': 2, 'stop-on-rail': 2, 'bus-in-hall': 2, 'mark-askew': 2, 'marks-not-parallel': 2, 'off-platform': 2, skew: 2, 'past-roof': 2,
-  'stray-stop': 3, 'mark-short': 3, 'ends-uneven': 3, 'past-mark': 3, 'walk-bent': 3, 'rail-only-stop': 3, 'rail-under-bus': 3,
-  duplicate: 4, 'marks-overlap': 4, 'over-line': 5, step: 6, hidden: 7, far: 8, translucent: 9, 'marks-nested': 9, 'platform-covered': 9,
+  hook: 2, tick: 2, 'steep-ease': 2, 'off-street': 2, 'under-rail': 2, 'stop-on-rail': 2, 'bus-in-hall': 2, 'mark-askew': 2, 'marks-not-parallel': 2, 'off-platform': 2, skew: 2, 'past-roof': 2,
+  'stray-stop': 3, drift: 3, 'uneven-gap': 3, swap: 3, 'mark-short': 3, 'ends-uneven': 3, 'past-mark': 3, 'walk-bent': 3, 'rail-only-stop': 3, 'rail-under-bus': 3,
+  duplicate: 4, 'marks-overlap': 4, sliver: 4, 'zig-zag': 4, 'sharp-bend': 4, 'over-line': 5, step: 6, hidden: 7, far: 8, translucent: 9, 'marks-nested': 9, 'platform-covered': 9,
 };
 // Every half zoom the page shows the network at. The checks used to look at
 // 12, 14, 16 and 17 only, and two faults Chris found by eye on 2026-11-11
@@ -91,6 +92,8 @@ export async function runChecks({ data, meta, root, theme, zooms = ZOOMS, views 
     // Rail ends and station marks (ends.mjs), and lines against platforms,
     // roofs and walks (shapes.mjs).
     for (const fault of endFaults(at)) push(fault, 'ends');
+    // Lines sharing track (packs.mjs): even gaps, no drift, no steep ease.
+    for (const fault of packFaults(at)) push(fault, 'packs');
     for (const fault of shapeFaults(at, { data: model.data })) if (leads || !LEADS.has(fault.kind)) push(fault, 'shapes');
     // Bus lines and stops under rail (covered.mjs), kept with their zoom to
     // be merged below: a stretch is not the same length at every zoom.

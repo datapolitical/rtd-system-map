@@ -28,6 +28,26 @@ const VIEWS = {
   ninemileWest: '16/39.65960/-104.84780',
   union: '16/39.75300/-105.00050',
   unionLightRail: '16/39.75560/-105.00240',
+  // 2026-11-11, the stations build (e2bae25).
+  union13: '13/39.75450/-105.00180',
+  union15: '15/39.75450/-105.00180',
+  lincoln: '16/39.54560/-104.86955',
+  airport: '16/39.84700/-104.67396',
+  alameda: '16/39.70868/-104.99316',
+  broadway: '11/39.70050/-104.98950',
+};
+
+// Chris's review of the stations build on 2026-11-11: his words on the
+// feedback page and one phone screenshot. These pins are given as ground
+// points (`at`), read from the build's data and the pictures he commented on,
+// not off a gridded capture; the picture pixels are worked out from them.
+const REVIEW = {
+  issue: 103,
+  seen: 'e2bae25',
+  latestBuild: '3e38acb',
+  looked: '2026-11-11',
+  found: 'Chris, on the review page and his phone, the stations build, 2026-11-11 (issue #103)',
+  pinned: 'Claude, from the build\'s data and the pictures he commented on (ground points, not a gridded capture), 2026-11-11',
 };
 
 const PINS = [
@@ -69,7 +89,38 @@ const PINS = [
     said: 'dashed part-time lines wander off their solid lines', kind: 'slot', caught_by: ['slot', 'off-street', 'dangling'], confidence: 'approximate: the dashed line that runs on alone past the hook; others beside their solid lines look right', radius: 30 },
   { id: '42-union-hook', latest: 'changed: the hook is now a junction of dashed hairlines',  place: 'Union Station', view: 'union', px: [[318, 285]],
     said: 'a bus line ends in a hook', kind: 'hook', caught_by: ['hook', 'short', 'dangling'], confidence: 'clear', radius: 20 },
+
+  // The stations build, 2026-11-11 (issue #103). Seven things Chris found by
+  // eye that no check had a rule for.
+  { ...REVIEW, id: '103-union-end-unmarked', latest: 'gone: the light rail\'s mark is drawn from zoom 11', place: 'Union Station', view: 'union13', at: [[-105.00303, 39.75542]],
+    said: 'The Light rail lacks a terminal marker.', kind: 'end-unmarked', caught_by: ['end-unmarked', 'dangling', 'mark-short'], confidence: 'clear', radius: 12 },
+  { ...REVIEW, id: '103-union-marks-parallel', latest: 'gone: both marks lie along the walk', place: 'Union Station', view: 'union15', at: [[-105.00303, 39.75542]],
+    said: 'would it look better if the two station markers were parallel? the light rail is angled', kind: 'marks-not-parallel', caught_by: ['marks-not-parallel', 'mark-askew'], confidence: 'clear', radius: 15 },
+  { ...REVIEW, id: '103-union-bus-on-rail', latest: 'still there', also: '3e38acb', place: 'Union Station', view: 'union15', at: [[-105.00326, 39.75481]],
+    said: 'it overlaps the bus routes in a way that a hand drawn map wouldn\'t', kind: 'under-rail', caught_by: ['under-rail', 'stop-on-rail'], confidence: 'approximate: which bus line he meant is a reading of the picture', radius: 40 },
+  { ...REVIEW, id: '103-lincoln-gap', latest: 'gone: the lines of a pack are on one path', place: 'Lincoln', view: 'lincoln', at: [[-104.86954, 39.54537], [-104.86958, 39.54640]],
+    said: 'There\'s an unnecessary gap between the light rail lines', kind: 'uneven-gap', caught_by: ['uneven-gap', 'sliver'], confidence: 'clear', radius: 30 },
+  { ...REVIEW, id: '103-lincoln-drift', latest: 'gone: E and R take their places under the mark', place: 'Lincoln', view: 'lincoln', at: [[-104.86940, 39.54420]],
+    said: 'there\'s a small gap between the rail lines south of lincoln and they don\'t look straight.', kind: 'drift', caught_by: ['drift', 'steep-ease', 'step'], confidence: 'clear', radius: 40 },
+  { ...REVIEW, id: '103-airport-skew', latest: 'gone: the line runs parallel to its platform', place: 'Denver Airport', view: 'airport', at: [[-104.67393, 39.84686]],
+    said: 'It\'s also not parallel with the platform which is obviously wrong', kind: 'skew', caught_by: ['skew'], confidence: 'clear', radius: 40 },
+  { ...REVIEW, id: '103-airport-past-roof', latest: 'gone: the line ends under the roof, 15 m short of the buffers', place: 'Denver Airport', view: 'airport', at: [[-104.67396, 39.84731]],
+    said: 'the line goes too far and it should end under the canopy', kind: 'past-roof', caught_by: ['past-roof'], confidence: 'clear', radius: 20 },
+  { ...REVIEW, id: '103-alameda-bus-on-rail', latest: 'still there', also: '3e38acb', place: 'Alameda', view: 'alameda', at: [[-104.99250, 39.70800], [-104.99200, 39.70778]],
+    said: 'the buses aren\'t literally on top of the rail so that makes no sense.', kind: 'under-rail', caught_by: ['under-rail', 'stop-on-rail'], confidence: 'clear', radius: 40 },
+  { ...REVIEW, id: '103-alameda-jerky', latest: 'gone: C and E take their places under the mark', place: 'Alameda', view: 'alameda', at: [[-104.99400, 39.70970]],
+    said: 'the rail lines look jerky rather than clean and hand drawn.', kind: 'drift', caught_by: ['drift', 'steep-ease', 'step'], confidence: 'clear', radius: 40 },
+  { ...REVIEW, id: '103-broadway-break', latest: 'gone: C eases over 1.4 km', place: 'I-25 / Broadway', view: 'broadway', at: [[-104.98990, 39.69910]],
+    said: 'The rail line breaks at I-25 and Broadway', kind: 'steep-ease', caught_by: ['steep-ease', 'step', 'gap'], confidence: 'clear', radius: 12 },
 ];
+
+// The picture point (CSS px in a phone capture of `view`) of a ground point.
+const pixel = (view, [lon, lat]) => {
+  const [z, vlat, vlon] = VIEWS[view].split('/').map(Number);
+  const c = toWorld([vlon, vlat], z);
+  const w = toWorld([lon, lat], z);
+  return [Math.round(w[0] - c[0] + PHONE.width / 2), Math.round(w[1] - c[1] + PHONE.height / 2)];
+};
 
 const ground = (view, [x, y]) => {
   const [z, lat, lon] = VIEWS[view].split('/').map(Number);
@@ -78,24 +129,24 @@ const ground = (view, [x, y]) => {
   return [+plon.toFixed(6), +plat.toFixed(6)];
 };
 
-const finds = PINS.map((p) => ({
+const finds = PINS.map((p) => ({ ...p, px: p.px ?? p.at.map((q) => pixel(p.view, q)) })).map((p) => ({
   id: p.id,
-  issue: 42,
+  issue: p.issue ?? 42,
   place: p.place,
   said: p.said,
   kind: p.kind,
   caught_by: p.caught_by,
   // Seen on the build Chris looked at; `also` adds a later build where the
   // fault is unchanged at the same place (compared by eye, same capture view).
-  seen_on: ['0fe749b', ...(p.also ? [p.also] : [])],
-  latest: { build: '430ea4a', looked: '2026-11-10', status: p.latest },
+  seen_on: [p.seen ?? '0fe749b', ...(p.also ? [p.also] : [])],
+  latest: { build: p.latestBuild ?? '430ea4a', looked: p.looked ?? '2026-11-10', status: p.latest },
   theme: 'dark',
   zoom: Number(VIEWS[p.view].split('/')[0]),
-  points: p.px.map((px) => ground(p.view, px)),
+  points: p.at ?? p.px.map((px) => ground(p.view, px)),
   radius_px: p.radius,
   capture: { view: VIEWS[p.view], size: [PHONE.width, PHONE.height], px: p.px },
-  found_by: CHRIS,
-  pinned_by: PINNED,
+  found_by: p.found ?? CHRIS,
+  pinned_by: p.pinned ?? PINNED,
   confidence: p.confidence,
 }));
 
