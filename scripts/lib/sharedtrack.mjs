@@ -21,6 +21,10 @@ const TRACK_RUN_METERS = 200;
 let MIN_RUN_METERS = TRACK_RUN_METERS;
 // How far past the end of a shared piece to look to see which way a line goes.
 let LOOK_METERS = 1200;
+// Whether a line's move across is done by the first station along. The far
+// set eases on past it: at zoom 9 a kilometre is 9 px, too short for a
+// move of a slot or more, and a far tick is small (#115).
+let EASE_BY_STATIONS = true;
 // Which points past an end count toward a line's side: those this far round
 // from straight on (cosine). The far set counts a line that leaves at a
 // right angle or curls back (W at Auraria), else it scored as going nowhere.
@@ -112,19 +116,19 @@ const STATION_CLEAR_PX = 16;
 // are rounded over a kilometre, so a knot of tracks a few hundred
 // metres apart (Union Station's train hall and light-rail platforms) is one
 // calm pack, not jogs smaller than a line (#115).
-export const FAR = { shared: 350, minRun: 1000, packFade: 150, blend: 1500, round: 1000, ease: 3000, look: 3000, lookCos: -0.5 };
+export const FAR = { shared: 350, minRun: 1000, packFade: 150, blend: 1500, round: 1000, ease: 3000, look: 3000, lookCos: -0.5, easeByStations: false };
 
 /**
  * `sharedTrack` with the far set's distances (`options` as FAR) or the
  * near set's (none).
  */
 export function sharedTrack(features, stations = [], options = null) {
-  const saved = [SHARED_METERS, MIN_RUN_METERS, PACK_FADE_METERS, BLEND_METERS, ROUND_METERS, EASE_METERS, LOOK_METERS, LOOK_COS];
-  if (options) ({ shared: SHARED_METERS, minRun: MIN_RUN_METERS, packFade: PACK_FADE_METERS, blend: BLEND_METERS, round: ROUND_METERS, ease: EASE_METERS, look: LOOK_METERS, lookCos: LOOK_COS } = options);
+  const saved = [SHARED_METERS, MIN_RUN_METERS, PACK_FADE_METERS, BLEND_METERS, ROUND_METERS, EASE_METERS, LOOK_METERS, LOOK_COS, EASE_BY_STATIONS];
+  if (options) ({ shared: SHARED_METERS, minRun: MIN_RUN_METERS, packFade: PACK_FADE_METERS, blend: BLEND_METERS, round: ROUND_METERS, ease: EASE_METERS, look: LOOK_METERS, lookCos: LOOK_COS, easeByStations: EASE_BY_STATIONS = true } = options);
   try {
     return sharedTrackNow(features, stations);
   } finally {
-    [SHARED_METERS, MIN_RUN_METERS, PACK_FADE_METERS, BLEND_METERS, ROUND_METERS, EASE_METERS, LOOK_METERS, LOOK_COS] = saved;
+    [SHARED_METERS, MIN_RUN_METERS, PACK_FADE_METERS, BLEND_METERS, ROUND_METERS, EASE_METERS, LOOK_METERS, LOOK_COS, EASE_BY_STATIONS] = saved;
   }
 }
 
@@ -730,7 +734,7 @@ function eased(run, marks, endedAt = () => false) {
     // Done by the first station along, by EASE_METERS, or within the run: by
     // its middle if it moves over from both ends.
     let room = Math.min(EASE_METERS, along.at(-1) / ends.length);
-    for (const mark of marks) {
+    for (const mark of EASE_BY_STATIONS ? marks : []) {
       let nearest = null;
       for (let k = 0; k < order.length && along[k] <= EASE_METERS + STATION_METERS; k++) {
         const d = Math.hypot(points[order[k]][0] - mark[0], points[order[k]][1] - mark[1]);
