@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { toLonLat, toWorld } from '../drawn/mercator.mjs';
+import { stubAnalytics } from '../lib/analytics.mjs';
 
 const arg = (name) => {
   const at = process.argv.indexOf(`--${name}`);
@@ -43,6 +44,7 @@ try {
   // The phone size the evaluator and the checks use.
   const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 2, colorScheme: theme });
   const page = await ctx.newPage();
+  await stubAnalytics(page);
   await page.route('**/js/main.js', async (route) => {
     const res = await route.fetch();
     const body = (await res.text()).replace('loadWhenNeeded(map);', 'window.__map=map;loadWhenNeeded(map);');

@@ -4,7 +4,7 @@
 // two whole zooms does nothing; a filter sees the zoom as a whole number.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { filterOf, inZoom, property, setState } from '../qa/drawn/expressions.mjs';
+import { assertStyleEvaluates, filterOf, inZoom, property, setState, styleErrors } from '../qa/drawn/expressions.mjs';
 
 setState({});
 
@@ -106,4 +106,42 @@ test('a layer is in zoom from its minzoom up to, not including, its maxzoom', ()
   assert.equal(inZoom(layer, 11), true);
   assert.equal(inZoom(layer, 12.99), true);
   assert.equal(inZoom(layer, 13), false);
+});
+
+// #58: MapLibre draws a property whose expression throws with the default and
+// says nothing on screen, so the model counts each one and the run fails.
+test('a broken expression is counted by layer and property, and fails the run', () => {
+  setState({});
+  const layer = { id: 'rail', type: 'line', paint: { 'line-width': ['*', 2, ['get', 'missing']] } };
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    for (let i = 0; i < 3; i++) assert.equal(property(layer, 'line-width', 'paint', 12, { other: 1 }, 1), 1);
+  } finally {
+    console.warn = warn;
+  }
+  assert.deepEqual(styleErrors().map(({ layer: l, property: p, count }) => ({ layer: l, property: p, count })),
+    [{ layer: 'rail', property: 'paint line-width', count: 3 }]);
+  assert.throws(() => assertStyleEvaluates(), /rail paint line-width: 3 feature/);
+  // An expression that allows for a missing property is not an error.
+  setState({});
+  const sized = { id: 'bus', type: 'line', paint: { 'line-width': ['coalesce', ['get', 'w'], 2] } };
+  assert.equal(property(sized, 'line-width', 'paint', 12, {}, 1), 2);
+  assert.deepEqual(styleErrors(), []);
+  assert.doesNotThrow(() => assertStyleEvaluates());
+});
+
+test('a value outside an enum is an error, not a silent default', () => {
+  setState({});
+  const layer = { id: 'ends', type: 'line', layout: { 'line-cap': ['get', 'cap'] } };
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    assert.equal(property(layer, 'line-cap', 'layout', 12, { cap: 'pointy' }, 'butt'), 'butt');
+    assert.equal(property(layer, 'line-cap', 'layout', 12, { cap: 'round' }, 'butt'), 'round');
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(styleErrors().length, 1);
+  setState({});
 });

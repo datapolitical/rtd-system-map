@@ -40,7 +40,32 @@ let state;
 export const setState = (s = {}) => {
   state = Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v?.default ?? v]));
   cache.clear();
+  errors.clear();
 };
+
+// Expressions that threw while being evaluated, by layer and property.
+// MapLibre draws such a property with its default and only logs a warning,
+// and style-spec's own evaluate() does the same, so a style change the model
+// can't follow would be drawn with a default width or colour and nobody told.
+// Every one is counted here, and a run fails on any (assertStyleEvaluates).
+// Cleared with the state, so each model opened starts at none.
+const errors = new Map();
+export const styleErrors = () => [...errors.values()];
+
+function noteError(layer, kind, name, e) {
+  const key = `${layer.id}\0${kind}\0${name}`;
+  const hit = errors.get(key);
+  if (hit) hit.count++;
+  else errors.set(key, { layer: layer.id, property: `${kind} ${name}`, count: 1, message: e.message });
+}
+
+// Throws when any expression failed, naming each layer and property.
+export function assertStyleEvaluates() {
+  const list = styleErrors();
+  if (!list.length) return;
+  const lines = list.map((x) => `  ${x.layer} ${x.property}: ${x.count} feature(s), ${x.message}`);
+  throw new Error(`style expressions the model could not evaluate (MapLibre draws them with the default):\n${lines.join('\n')}`);
+}
 
 // A literal array (a dash pattern, a font stack, an anchor list) is not an
 // expression: MapLibre wraps it, and so does the model. An expression written
@@ -73,8 +98,9 @@ export function property(layer, name, kind, zoom, properties, fallback = undefin
   const expr = compiled(value, name, spec, kind);
   let out;
   try {
-    out = evaluateAt(expr, kind, zoom, { type: featureType(properties), properties });
-  } catch {
+    out = evaluateAt(expr, kind, zoom, { type: featureType(properties), properties }, spec);
+  } catch (e) {
+    noteError(layer, kind, name, e);
     return fallback;
   }
   return out === undefined || out === null ? fallback : out;
@@ -86,15 +112,29 @@ export function property(layer, name, kind, zoom, properties, fallback = undefin
 // interpolation of the zoom between them (its `interpolationFactor`: linear,
 // exponential or a curve for an `interpolate`; none for a `step`, which
 // holds the lower value). Everything else is evaluated at the zoom itself.
-export function evaluateAt(expr, kind, zoom, feature) {
-  if (kind !== 'paint' || expr.kind !== 'composite') return expr.evaluate({ zoom }, feature);
+export function evaluateAt(expr, kind, zoom, feature, spec = null) {
+  if (kind !== 'paint' || expr.kind !== 'composite') return evaluate(expr, { zoom }, feature, spec);
   const lower = Math.floor(zoom);
-  const a = expr.evaluate({ zoom: lower }, feature);
+  const a = evaluate(expr, { zoom: lower }, feature, spec);
   if (zoom === lower) return a;
   const t = Math.max(0, Math.min(1, expr.interpolationFactor(zoom, lower, lower + 1)));
   if (!(t > 0)) return a;
-  const b = expr.evaluate({ zoom: lower + 1 }, feature);
+  const b = evaluate(expr, { zoom: lower + 1 }, feature, spec);
   return blend(a, b, t);
+}
+
+// style-spec's evaluate(), but an error is thrown rather than logged and
+// swapped for the default. What evaluate() does with a value that isn't an
+// error is kept: nothing (null, undefined, NaN) is the property's default,
+// and an enum value the spec doesn't list is an error.
+function evaluate(expr, globals, feature, spec) {
+  if (typeof expr.evaluateWithoutErrorHandling !== 'function') return expr.evaluate(globals, feature);
+  const v = expr.evaluateWithoutErrorHandling(globals, feature);
+  if (v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v))) return expr.evaluate(globals, feature);
+  if (spec?.type === 'enum' && !(v in spec.values)) {
+    throw new Error(`expected one of ${Object.keys(spec.values).join(', ')}, found ${JSON.stringify(v)}`);
+  }
+  return v;
 }
 
 // Two evaluated values, `t` of the way from a to b: numbers and colours (in

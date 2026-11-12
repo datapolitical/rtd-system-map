@@ -29,6 +29,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect, siteData } from './fixtures.mjs';
 import { openModel, pageSources } from '../drawn/model.mjs';
+import { styleErrors } from '../drawn/expressions.mjs';
 import { compareBoxes, compareLines, compareLinesBack, compareProbes, comparePoints, lineSamples, modelHitMap, probeLines, signature } from '../drawn/compare.mjs';
 import { offsetParts } from '../drawn/strokes.mjs';
 import { seededViews } from '../lib/views.mjs';
@@ -122,8 +123,17 @@ async function readView(mapPage, v, layers) {
     // (a FlexRide zone is a polygon drawn by a line layer), for the
     // model-to-page check; `lines`: the line geometries, for page-to-model.
     const out = { lines: [], lineSigs: [], marks: [] };
+    // A tile holds features of a layer from the whole zoom below its
+    // minzoom (a z13 tile carries a layer that starts at 13.5), and
+    // queryRenderedFeatures answers for them although nothing is drawn.
+    // Read a layer only where MapLibre draws it (StyleLayer.isHidden).
+    const z = m.getZoom();
+    const drawnNow = (id) => {
+      const l = m.getLayer(id);
+      return !!l && z >= (l.minzoom ?? 0) && z < (l.maxzoom ?? 24) && m.getLayoutProperty(id, 'visibility') !== 'none';
+    };
     for (const layer of lines) {
-      if (!m.getLayer(layer)) continue;
+      if (!drawnNow(layer)) continue;
       for (const f of m.queryRenderedFeatures(query, { layers: [layer] })) {
         out.lineSigs.push({ layer, sig: sigOf(f.properties) });
         const g = f.geometry;
@@ -133,7 +143,7 @@ async function readView(mapPage, v, layers) {
       }
     }
     for (const layer of marks) {
-      if (!m.getLayer(layer)) continue;
+      if (!drawnNow(layer)) continue;
       for (const f of m.queryRenderedFeatures(query, { layers: [layer] })) {
         if (f.geometry.type !== 'Point') continue;
         const p = m.project(f.geometry.coordinates);
@@ -156,7 +166,7 @@ async function readView(mapPage, v, layers) {
     // where that camera put it, far from where the letter is now.
     const lettersNow = [];
     for (const layer of bullets) {
-      if (!m.getLayer(layer)) continue;
+      if (!drawnNow(layer)) continue;
       for (const f of m.queryRenderedFeatures(query, { layers: [layer] })) {
         if (f.geometry.type !== 'Point') continue;
         const p = m.project(f.geometry.coordinates);
@@ -268,6 +278,7 @@ test('the drawn model matches what the browser draws', async ({ mapPage }) => {
   // with, and every line the model draws must be on the page.
   expect(totalMissing, `line points the model does not have (${missingLayers.join(' ')})`).toBe(0);
   expect(sum((r) => r.back.missing), 'lines the model draws and the page does not').toBe(0);
+  expect(styleErrors(), 'style expressions the model could not evaluate').toEqual([]);
   await expect(detail, 'the model and the browser disagree').toEqual([]);
 });
 

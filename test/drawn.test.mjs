@@ -86,6 +86,12 @@ test('the drift comparison passes lines that agree and names the ones that do no
   const outside = compareLines([{ ...line, parts: [[[-50, -50], [-40, -50]]] }], [{ ...line, parts: [[[0, 0], [1, 1]]] }], { tolerance: 1, width: 390, height: 664 });
   assert.equal(outside.pairs, 0);
   assert.equal(outside.failures.length, 0);
+  // Nor one within the tolerance of the edge: the model's line is clipped
+  // there, and the point of it nearest the vertex can be just off the screen
+  // (a street seen 1.04 px off at x 389.99 in the drift test at z10.4).
+  const edge = compareLines([{ ...line, parts: [[[300, 103], [389.6, 103]]] }], [{ ...line, parts: [[[300, 103], [380, 103], [390, 100]]] }], { tolerance: 1, width: 390, height: 664 });
+  assert.equal(edge.pairs, 1);
+  assert.equal(edge.failures.length, 0);
 });
 
 test('a page line the model does not load is missing, not silently passed', () => {

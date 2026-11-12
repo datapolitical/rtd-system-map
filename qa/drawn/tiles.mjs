@@ -2,10 +2,15 @@
 // (qa/drawn/README.md).
 //
 // The basemap's streets and buildings come from the vector source the style
-// names -- never a URL written here. The source's TileJSON is fetched once,
-// cached beside the tiles, and its versioned tile URL decides the cache
-// path, so a new OpenFreeMap build lands in a new folder instead of being
-// served stale tiles. `qa/cache/` is git-ignored.
+// names -- never a URL written here. The source's TileJSON is cached beside
+// the tiles and its versioned tile URL decides the cache path, so a new
+// OpenFreeMap build lands in a new folder instead of being served stale
+// tiles. The TileJSON's own URL stays the same from one build to the next,
+// so the cached copy is read again once it is a day old; a frozen build
+// (qa/recall/fixtures/<commit>, with its manifest.json) keeps the TileJSON
+// it was frozen with. A tile the server has no data for (404) is not saved,
+// so a tile missing for a while doesn't read as a place with no streets for
+// good. `qa/cache/` is git-ignored.
 //
 // Tiles are 512 px (MapLibre's tile size) whatever their zoom. A tile's
 // geometry is quantised to `extent` (4096 for OpenMapTiles), so it is scaled
@@ -28,12 +33,20 @@ export function vectorSources(style) {
     .map(([name, s]) => ({ name, ...s }));
 }
 
+const DAY = 24 * 3600 * 1000;
+
 export class Tiles {
-  constructor({ root, source, concurrency = 6 }) {
+  constructor({ root, source, concurrency = 6, maxAge = DAY, frozen = fsSync.existsSync(path.join(root, 'manifest.json')), fetch: get = globalThis.fetch }) {
     this.source = source;
     this.concurrency = concurrency;
+    this.maxAge = maxAge;
+    this.frozen = frozen;
+    this.get = (url) => get(url, { headers: { 'user-agent': USER_AGENT } });
     this.dir = path.join(root, 'qa', 'cache', 'tiles');
     this.tilejson = null;
+    // Tiles that answered 404 in this run: not asked twice in one run, and
+    // not saved, so the next run asks again.
+    this.missing = new Set();
     this.queue = 0;
     this.waiting = [];
     this.used = 0;
@@ -44,15 +57,18 @@ export class Tiles {
     const cacheFile = path.join(this.dir, 'tilejson.json');
     let cached = null;
     try { cached = JSON.parse(await fs.readFile(cacheFile, 'utf8')); } catch {}
-    if (cached?.url === this.source.url) {
+    // A copy with no time on it (written before #58) is as good as old.
+    const fresh = cached?.url === this.source.url
+      && (this.frozen || Date.now() - Date.parse(cached.fetched ?? 0) < this.maxAge);
+    if (fresh) {
       this.tilejson = cached.json;
       return this.tilejson;
     }
-    const res = await fetch(this.source.url, { headers: { 'user-agent': USER_AGENT } });
+    const res = await this.get(this.source.url);
     if (!res.ok) throw new Error(`TileJSON ${this.source.url}: HTTP ${res.status}`);
     const json = await res.json();
     await fs.mkdir(this.dir, { recursive: true });
-    await fs.writeFile(cacheFile, JSON.stringify({ url: this.source.url, json }));
+    await fs.writeFile(cacheFile, JSON.stringify({ url: this.source.url, fetched: new Date().toISOString(), json }));
     this.tilejson = json;
     return json;
   }
@@ -76,10 +92,12 @@ export class Tiles {
   }
 
   // A tile as a VectorTile, or null for one the server has no data on. The
-  // bytes are cached, so a second run reads the disk.
+  // bytes are cached, so a second run reads the disk; a 404 is asked again
+  // in the next run.
   async tile(z, x, y) {
     const dir = await this.folder();
     const file = path.join(dir, String(z), String(x), `${y}.pbf`);
+    if (this.missing.has(file)) { this.used++; return null; }
     let buf;
     try {
       buf = await fs.readFile(file);
@@ -89,16 +107,17 @@ export class Tiles {
         const url = (await this.template())
           .replace('{z}', z).replace('{x}', x).replace('{y}', y)
           .replace('{s}', 'a');
-        const res = await fetch(url, { headers: { 'user-agent': USER_AGENT } });
+        const res = await this.get(url);
         if (res.status === 404) {
           buf = Buffer.alloc(0);
+          this.missing.add(file);
         } else if (!res.ok) {
           throw new Error(`tile ${z}/${x}/${y}: HTTP ${res.status}`);
         } else {
           buf = Buffer.from(await res.arrayBuffer());
+          await fs.mkdir(path.dirname(file), { recursive: true });
+          await fs.writeFile(file, buf);
         }
-        await fs.mkdir(path.dirname(file), { recursive: true });
-        await fs.writeFile(file, buf);
       } finally {
         this.release();
       }

@@ -60,7 +60,10 @@ export function compareLines(drawn, model, { tolerance = 1, width, height } = {}
     }
     for (const part of line.parts) {
       for (const pt of part) {
-        if (pt[0] < 0 || pt[1] < 0 || pt[0] > width || pt[1] > height) continue;
+        // Nor within `tolerance` of the edge: the model's lines are clipped
+        // at the screen's edge (frame()), so a vertex that close can be
+        // nearest a point of the model's line just off the screen.
+        if (pt[0] < tolerance || pt[1] < tolerance || pt[0] > width - tolerance || pt[1] > height - tolerance) continue;
         const d = distanceToParts(pt, parts);
         pairs++;
         if (d > worst) worst = d;

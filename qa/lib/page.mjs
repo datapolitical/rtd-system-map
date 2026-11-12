@@ -4,6 +4,7 @@
 // map exposed as window.__map, Live off, the detectors' helpers installed.
 import { chromium, devices } from '@playwright/test';
 import { install } from './detect.mjs';
+import { stubAnalytics } from './analytics.mjs';
 
 export const BASE = (process.env.CHECK_URL || 'http://127.0.0.1:8788').replace(/\/$/, '');
 const phone = { ...devices['iPhone 14'] };
@@ -16,6 +17,7 @@ export async function open(browser, theme, v, { base = BASE } = {}) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await stubAnalytics(page);
   await page.route('**/js/main.js', async (route) => {
     const res = await route.fetch();
     const body = (await res.text()).replace('loadWhenNeeded(map);', 'window.__map=map;loadWhenNeeded(map);');

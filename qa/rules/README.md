@@ -8,6 +8,7 @@ drawn, where it comes from, and whether anything checks it.
 
 | File | What it holds |
 |---|---|
+| [`fault-classes.md`](fault-classes.md) | The checker's scope: every class of fault a transit map can have, from first principles, each with how a detector sees it and where it runs. Reported finds measure recall against it; they don't define it (#114). |
 | [`design-invariants.md`](design-invariants.md) | The 109 drawing rules DESIGN.md states, each with its line, how it could be measured on the drawn model, and what checks it today. Also a table of every detector and where it runs. Audit of main at `3e38acb`. |
 | [`literature.md`](literature.md) | 77 rules from published practice (metro-map layout research, line bundling, label placement, minimum sizes on phone screens, agency standards), each with its source and the page that was loaded. 75 have a source; 2 are marked as having none. Thresholds are tagged `(source)` or `(suggested)`. |
 
