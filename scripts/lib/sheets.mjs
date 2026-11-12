@@ -428,12 +428,20 @@ export function stationMarks(stations, lines, sheet) {
         return dot([q[0] - c[0], q[1] - c[1]], t) >= 0 ? 1 : -1;
       };
       const enders = g.filter((h) => h.end !== null);
-      for (const side of [1, -1]) {
-        const set = enders.filter((h) => inward(h) === side).sort((x, y) => x.s - y.s);
+      const sets = [1, -1].map((side) => enders.filter((h) => inward(h) === side).sort((x, y) => x.s - y.s));
+      const midOf = (set) => set.reduce((x, h) => x + h.s, 0) / set.length;
+      // Lines that end at one bar from either side are set beside each other along it, never
+      // head to head: met end to end they would read as one line running through.
+      const both = allEnd && sets.every((set) => set.length);
+      const order = both ? [...sets].sort((x, y) => midOf(x) - midOf(y)).flat() : [];
+      const whole = both ? midOf(order) : 0;
+      for (const [k, side] of [1, -1].entries()) {
+        const set = sets[k];
         if (!set.length) continue;
-        const mid = set.reduce((x, h) => x + h.s, 0) / set.length;
+        const mid = midOf(set);
         set.forEach((h, i) => {
-          if (allEnd) h.s = mid + (i - (set.length - 1) / 2) * pitch;
+          if (both) h.s = whole + (order.indexOf(h) - (order.length - 1) / 2) * pitch;
+          else if (allEnd) h.s = mid + (i - (set.length - 1) / 2) * pitch;
           const path = h.line.paths[h.pi];
           const far = reach(h);
           const from = h.end ? h.total - far : far;
