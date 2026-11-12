@@ -57,6 +57,8 @@ export const SIZES = {
   busSnap: 3,
   // A street that carries straight on and strays no farther than this from a straight line is drawn straight.
   busStraight: 2.5,
+  // Where a street turns at a corner the turn is rounded over about this far, as a pen would take it.
+  busTurn: { 1: 3, 2: 4, 3: 6, 4: 9 },
   // Bus streets closer together than this can't be told apart: they are drawn as one.
   busMerge: { 1: 4, 2: 7, 3: 7, 4: 24 },
   // A street's label lists this many routes; a street with more lists one fewer, then how many more.
@@ -931,6 +933,59 @@ export function unjogged(streets, most) {
 }
 
 /**
+ * Streets turned as a pen turns them. Where the two pieces at a corner that carry on most nearly
+ * straight still bend (an L, a loop's corner), the bend is rounded: both are cut back by up to
+ * `radius` pixels and joined by a curve, and a third street meeting them there ends on its
+ * middle. A corner where a street carries straight on, or where four or more meet, is left.
+ * Each street's own bends are smoothed over half that, so a curve has no facets.
+ */
+export function filleted(streets, radius) {
+  const edges = cornered(streets).map((e) => ({ ...e, path: e.st.path.map((p) => [...p]) }));
+  const at = new Map();
+  edges.forEach((e, i) => { if (e.a !== e.b) for (const k of [e.a, e.b]) at.set(k, [...(at.get(k) ?? []), i]); });
+  // A path from corner k outward, and the same path put back the way the edge runs.
+  const outward = (e, k) => (e.a === k ? e.path : [...e.path].reverse());
+  const put = (e, k, path) => { e.path = e.a === k ? path : [...path].reverse(); };
+  for (const [k, list] of at) {
+    if (list.length < 2 || list.length > 3) continue;
+    const r = (e) => Math.min(radius, 0.4 * length(e.path));
+    const leaves = (e) => {
+      const path = outward(e, k);
+      const q = pointAlong(path, Math.max(1, r(e)));
+      const d = dist(path[0], q) || 1;
+      return [(q[0] - path[0][0]) / d, (q[1] - path[0][1]) / d];
+    };
+    let best = null;
+    for (let x = 0; x < list.length; x++) for (let y = x + 1; y < list.length; y++) {
+      const [u, v] = [leaves(edges[list[x]]), leaves(edges[list[y]])];
+      const d = u[0] * v[0] + u[1] * v[1];
+      if (!best || d < best.d) best = { x: edges[list[x]], y: edges[list[y]], d };
+    }
+    // Straight on, or folded back on itself: nothing to round.
+    if (best.d < -0.97 || best.d > 0.7) continue;
+    const [px, py] = [outward(best.x, k), outward(best.y, k)];
+    const c = px[0];
+    const reach = Math.min(r(best.x), r(best.y));
+    if (reach < 1) continue;
+    const [p, q] = [pointAlong(px, reach), pointAlong(py, reach)];
+    const bez = (t) => [0, 1].map((j) => (1 - t) * (1 - t) * p[j] + 2 * (1 - t) * t * c[j] + t * t * q[j]);
+    const steps = 8;
+    const half = (from, to) => Array.from({ length: steps + 1 }, (_, i) => bez(from + ((to - from) * i) / steps));
+    const mid = bez(0.5);
+    put(best.x, k, [...half(0.5, 0), ...partOf(px, reach, length(px)).slice(1)]);
+    put(best.y, k, [...half(0.5, 1), ...partOf(py, reach, length(py)).slice(1)]);
+    for (const i of list) {
+      const e = edges[i];
+      if (e === best.x || e === best.y) continue;
+      const path = outward(e, k);
+      put(e, k, [mid, ...path.slice(1)]);
+    }
+  }
+  // Each street's own bends are smoothed the same way, so a curve has no facets; ends stay put.
+  return edges.map((e) => ({ ...e.st, path: e.path.length > 2 ? simplify(rounded(e.path, radius / 2), 0.2) : e.path }));
+}
+
+/**
  * Streets drawn straight. A street that carries straight on through its corners can still
  * drift a pixel or three between them (the middle of a divided road found block by block, a
  * corner placed where two halves met): a gentle bend either side of a cross street, where the
@@ -1405,7 +1460,7 @@ export function busStreets(streets, sheet, walls = [], marks = []) {
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
   const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
-  return toStations(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing), marks, SIZES.busBridgeMetres * perMetre);
+  return toStations(filleted(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre);
 }
 
 /**

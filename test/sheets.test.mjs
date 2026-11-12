@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -595,4 +595,19 @@ test('lines that end at one bar coming in from either side meet back to back at 
     const ids = sheetStyle(theme).layers.map((l) => l.id);
     for (const n of [1, 2, 3, 4]) assert.ok(ids.indexOf(`station-divider-${n}`) > ids.indexOf(`station-${n}`), `sheet ${n}: the divider lies on the bar`);
   }
+});
+
+test('a street that turns at a corner turns as a pen would: the bend is rounded, a street carrying straight on is not', () => {
+  // A street turning north-east, a side street meeting its corner from the south, and a crossing that runs straight on.
+  const out = filleted([
+    st([[0, 0], [100, 0]]), st([[100, 0], [140, -20]]), st([[100, 0], [100, 100]]),
+    st([[0, 200], [100, 200]]), st([[100, 200], [200, 200]]),
+  ], 9);
+  const [a, b, side, c, d] = out;
+  assert.ok(Math.hypot(a.path.at(-1)[0] - 100, a.path.at(-1)[1]) > 1 && b.path.length > 2, 'the turn no longer meets at the sharp corner');
+  assert.deepEqual(a.path.at(-1), b.path[0], 'its two pieces still meet');
+  assert.deepEqual(side.path[0], a.path.at(-1), 'the side street ends on the curve');
+  assert.ok(nearest([...a.path, ...b.path], [100, 0]).d > 1, 'the curve cuts inside the corner');
+  assert.deepEqual([c.path.at(-1), d.path[0]], [[100, 200], [100, 200]], 'straight on: left as it is');
+  assert.equal(c.path.length, 2);
 });

@@ -2079,6 +2079,12 @@ How it is built:
   its corners with it, and the streets that meet it there move their ends
   the same few pixels: no gentle bend either side of a cross street. A real
   bend strays farther and stays. The longest streets are set first.
+  Where a street turns at a corner, the two pieces that carry on most nearly
+  straight are rounded into each other over a few pixels (3 on sheet 1 up to
+  9 on sheet 4), as a pen would take the turn, and a third street meeting
+  them there ends on the curve; each street's own bends are smoothed over
+  half that, so a curve has no facets. A street that carries straight on, or
+  a corner where four or more meet, is left.
 - **Route numbers are said once, not every block.** A street is cut at every
   corner and each piece's list differs a little from the next. Pieces that
   carry straight on from each other are one street; along it the longest
@@ -4146,6 +4152,10 @@ work against the real structure before asking for evaluation.
   Chris asked for Union Station on sheet 1 to be one marker, slightly fat,
   with a divider through it, and found the angled link on sheet 2 confusing
   and not beautiful.
+- 2026-11-12: Sheets round a street's turns and smooth its curves. Reason:
+  the FreeRide loop beside Union Station's light rail on sheet 4 turned in
+  sharp angles where its pieces met and was faceted between them; Chris
+  said it did not look hand drawn.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.
