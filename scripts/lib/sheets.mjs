@@ -270,14 +270,63 @@ export function railLines(routes, sheet) {
     // A third number rides along with each point: its slot.
     lines.get(q.route).pieces.push(f.geometry.coordinates.map((c) => [...toPx(c, sheet.zoom), q.slot ?? 0]));
   }
-  return [...lines.values()].map(({ route, color, pieces }) => ({
+  // Pieces that meet are joined first. A scrap lying beside the line (a second track in
+  // the data) is not part of the drawing; then a short break in the data is bridged.
+  const joined = [...lines.values()].map(({ route, color, pieces }) => ({
     route,
     color,
-    // Pieces that meet are joined first. A scrap lying beside the line (a second track in
-    // the data) is not part of the drawing; then a short break in the data is bridged.
-    paths: whole(chained(apart(chained(pieces, 0.75, turned), 4 * pitch), 4 * pitch, turned), SIZES.busBlip)
-      .map((run) => simplify(rounded(slotted(run, pitch, SIZES.ease), SIZES.round[sheet.id]))),
+    runs: whole(chained(apart(chained(pieces, 0.75, turned), 4 * pitch), 4 * pitch, turned), SIZES.busBlip),
   }));
+  carriedOn(joined, sheet, pitch);
+  return joined.map(({ route, color, runs }) => ({
+    route,
+    color,
+    paths: runs.map((run) => simplify(rounded(slotted(run, pitch, SIZES.ease), SIZES.round[sheet.id]))),
+  }));
+}
+
+/**
+ * Where a line at the side of a pack ends, the lines beside it carry straight on: each keeps
+ * the place it had beside that line until the lines on its track next change. The data moves
+ * them over to the middle of the track there, which on a sheet reads as the pack bending in
+ * to cover the line that stopped. Where a line in the middle ends, the others do close up.
+ * `lines` are `{ route, runs }`, each run [x, y, slot] points; the runs are changed in place.
+ */
+function carriedOn(lines, sheet, pitch) {
+  const ends = lines.flatMap((line) => line.runs.flatMap((run) => [run[0], run.at(-1)].map((p) => ({ line, p }))));
+  // The point `far` pixels along a run from point `i`, forwards (`way` 1) or back (-1).
+  const along = (run, i, way, far) => {
+    let j = i;
+    for (let left = far; run[j + way] && left > 0; j += way) left -= dist(run[j], run[j + way]);
+    return run[j];
+  };
+  const steps = [];
+  for (const line of lines) for (const run of line.runs) for (let i = 1; i < run.length; i++) {
+    // The data slides a line across in small steps; where another line ends it steps at once.
+    if (Math.abs(run[i][2] - run[i - 1][2]) < 0.25) continue;
+    const at = run[i - 1];
+    const walk = SIZES.walk / metresPerPixel(toLonLat(at, sheet.zoom)[1], sheet.zoom);
+    const end = ends.filter((e) => e.line !== line && dist(e.p, at) <= walk).sort((a, b) => dist(a.p, at) - dist(b.p, at))[0];
+    if (!end) continue;
+    // The side of the step the other line is still on, and the side it has ended on.
+    const beside = [-1, 1].map((way) => end.line.runs.some((r) => nearest(r, along(run, way < 0 ? i - 1 : i, way, walk + 3 * pitch)).d < pitch));
+    if (beside[0] === beside[1]) continue;
+    const way = beside[0] ? 1 : -1;
+    const [a, b] = [run[Math.max(0, i - 3)], run[Math.min(run.length - 1, i + 2)]];
+    const d = dist(a, b) || 1;
+    // How the step moves the line over, on the sheet, from beside the other line to past its end.
+    const moved = (run[i][2] - run[i - 1][2]) * way;
+    steps.push({ run, i, way, end, over: [(-(b[1] - a[1]) / d) * moved, ((b[0] - a[0]) / d) * moved] });
+  }
+  for (const step of steps) {
+    // Every line stepping here moves the same way: the line that ended was at the side.
+    const here = steps.filter((o) => o.end === step.end);
+    if (here.some((o) => o.over[0] * step.over[0] + o.over[1] * step.over[1] <= 0)) continue;
+    const { run, i, way } = step;
+    const [from, kept] = way > 0 ? [i, run[i - 1][2]] : [i - 1, run[i][2]];
+    const was = run[from][2];
+    for (let j = from; run[j] && Math.abs(run[j][2] - was) < 1e-6; j += way) run[j] = [run[j][0], run[j][1], kept];
+  }
 }
 
 /** A piece of [x, y, slot] points run the other way: its slot is then on the other hand. */

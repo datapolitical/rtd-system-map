@@ -938,3 +938,22 @@ test('a name that cannot sit right beside its bar stands off only as far as it m
   assert.ok(off(beside) > off(clear), 'the name moves off the street');
   assert.ok(off(beside) < 11, `but no further than it must: ${off(beside).toFixed(1)} px`);
 });
+
+test('where a line at the side of a pack ends, the lines beside it carry straight on; where one in the middle ends, the others close up', () => {
+  const s1 = SHEETS[0];
+  const pitch = SIZES.rail[s1.id] + SIZES.gap[s1.id];
+  const o1 = toPx([-105, 39.75], s1.zoom);
+  const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
+  // Three lines run down the sheet on one track. T ends 5 px past where the data moves the others over.
+  const piece = (route, slot, from, to) => line({ mode: 'rail', route, color: '#552683', slot }, [at1(0, from), at1(0, to)]);
+  const drawn = (pieces) => new Map(railLines(all(pieces), s1).map((l) => [l.route, l.paths[0].map((p) => p[0] - o1[0])]));
+  // T at the side: the data centres E and R on the track from there on.
+  const side = drawn([piece('T', -1, -300, 5), piece('E', 0, -300, 0), piece('E', -0.5, 0, 300), piece('R', 1, -300, 0), piece('R', 0.5, 0, 300)]);
+  const spread = (xs) => Math.max(...xs) - Math.min(...xs);
+  assert.ok(spread(side.get('E')) < 0.3, `E runs straight past the end of T, not ${spread(side.get('E')).toFixed(1)} px over`);
+  assert.ok(spread(side.get('R')) < 0.3, 'and so does R');
+  assert.ok(Math.abs(Math.abs(side.get('E')[0] - side.get('R')[0]) - pitch) < 0.3, 'one place apart');
+  // T in the middle: C and E each move half a place in, and meet.
+  const middle = drawn([piece('T', 0, -300, 5), piece('C', -1, -300, 0), piece('C', -0.5, 0, 300), piece('E', 1, -300, 0), piece('E', 0.5, 0, 300)]);
+  for (const route of ['C', 'E']) assert.ok(Math.abs(spread(middle.get(route)) - pitch / 2) < 0.3, `${route} closes up half a place`);
+});

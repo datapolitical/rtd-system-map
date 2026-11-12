@@ -2001,7 +2001,11 @@ How it is built:
   track is drawn straight through it, the station bars with it, and it
   arrives at its end the way it was heading. A turn that moves it further
   keeps its place, so the same S-bend that is gone on sheet 1 is drawn on
-  sheet 2. Track that runs on past a station no farther than a walk (600 m),
+  sheet 2. Where a line at the side of a pack ends, it just stops: the lines
+  beside it carry straight on in the places they had, until the lines on
+  their track next change. They do not move over to the middle of the track
+  as they do on the main map. Where a line in the middle of a pack ends, the
+  lines either side close up. Track that runs on past a station no farther than a walk (600 m),
   with none of the line's stations beyond it, is tail track: the line ends
   at that station's bar. A line never ends at a station while another of
   its stations lies beyond, however little track is left. On the first sheet the hub and line ends are named large and other
@@ -4303,6 +4307,16 @@ work against the real structure before asking for evaluation.
   The slide where a line ends at Lincoln, about 1 px, no longer shows on the
   straight line and is unchanged. Names step out from a bar in smaller steps
   (1, 1.4, 1.8, 2.8) so one beside a leaning line stays close.
+- 2026-11-12: Sheets: where a line at the side of a pack ends, the others
+  carry straight on. Chris, of E and R past Lincoln: "just have the E and R
+  continue. Don't have it bend inward to cover the T line. Just have the T
+  line stop". The data steps E and R half a place over where T ends, to
+  centre them on the track; the sheet slid them across over 26 px each side,
+  which read as the pack bending in over the line that had stopped. The
+  sheet now tells that step from a slide (the data slides in thirty-seconds
+  of a place), and where another line's track ends within a walk of it and
+  every line stepping there moves the same way, each keeps the place it had.
+  The main map is unchanged.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.
