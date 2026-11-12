@@ -1664,6 +1664,64 @@ The route tiers in the table above (frequent, every 30, hourly...) remain
 what a route *is*, for its panel, its tag, its part-time line and the Lines
 list; the map's bus lines are streets.
 
+*Beside rail* (`scripts/lib/beside.mjs`, `public/js/beside.js`,
+`public/js/bands.js`; #97). Rail is drawn at a width on screen that doesn't
+change with zoom ("Shared track"), so a pack covers more ground the further
+out the map is: three lines sharing track are about 41 m wide on the ground at
+zoom 15, 24 m at 16 and 12 m at 17. A street that really runs beside the track
+(a station's bus bays, a road along the line) was drawn where it is, under
+the pack, its stops on the rail. Chris, 2026-11-11, at Alameda: "the buses
+aren't literally on top of the rail so that makes no sense"; at Union Station,
+the light rail "overlaps the bus routes in a way that a hand drawn map
+wouldn't". There is no one rule for every such place (Chris: "in some cases
+the rail line is in the wrong place, in some cases the bus is in the wrong
+place, in some cases they are on top of each other"), and the bar is that
+every view looks intentional and hand-drawn. This rule covers the first case
+found, where both are where they really are and only the drawing overlaps
+(Alameda and Union Station's light rail: RTD's rail within 2.6 m of the track
+in OpenStreetMap, its bus lines within 4 m of the street, 12 to 16 m apart):
+
+- From zoom 14 (`BESIDE_FROM`), every bus line and stop near rail is drawn
+  again for each quarter of a zoom up to 18, each point moved straight away
+  from the nearest track by just enough to clear the pack's outer line, its
+  white casing and 2.2 px of land (the gap a part-time line keeps beside a
+  street) at that band's lowest zoom, and not at all where it is already
+  clear. So a line is never drawn nearer the rail than it is, and from zoom
+  18 nothing near rail is moved. The move eases in over the first zoom.
+- The move is one field over the ground, the same for every line at a point,
+  so streets that meet still meet, a line that turns away from the rail turns
+  away, a street that crosses the rail stays joined either side of it, and a
+  stop under the pack lands on its moved street. It is smoothed along each
+  line over a few pixels so a line comes off the pack in a curve, except at a
+  line's ends, where two streets meet and must move alike.
+- A line that ends near rail heading into it (its last 20 m more than 30
+  degrees off the track's direction, and no other line going on from its end)
+  ends short of the pack instead of being moved: moved straight away from the
+  track, its last stretch turned and ran along the pack, and Union Station's
+  FreeRide folded into a V. Chris: "the V probably isn't necessary … system
+  maps are an abstraction that allow you to understand what happens in the
+  world and if the lines are not perfectly drawn, but they convey an accurate
+  understanding, then that is more important." A line ending at the station
+  it serves says that.
+- Closer than 4 m to a track (`MIN_APART`), bus and rail are on one right of
+  way (15L on Abilene beside the R line, 0.6 m), and are left as they are
+  until Chris decides how those should read. Nor does this rule move rail:
+  where RTD's track or a pack's middle is off the real track, or a bus line is
+  off its real street, the fix is that line's place, not this one (#97).
+- The build marks each street and stop near rail `bs` (drawn as it is only
+  further out than zoom 14) and writes the copies to `beside.geojson`, loaded
+  only from zoom 13.5: for each band the moved copy (`bz`) and the pieces that
+  have stopped moving by then (`sf`). The page draws each street and stop
+  layer again over that source, each copy only in its band (`banded`, a step
+  in the opacity at each band's start: a layer filter can only change at a
+  whole zoom), with the layer's own fades bound once (`let`), so the style
+  stays small. A route's highlight near rail is hidden while its stretch is
+  moved; the street there, at full strength for the open route, stands for
+  it. A tap finds only what is drawn at its zoom.
+- Measured on RTD's network 2026-11-11 (main 3e38acb): 443 streets, 105 routes
+  and 99 stops have a stretch near rail; the copies are 2.4 MB, loaded only
+  close in, and the files loaded at the start grow by 0.4 MB.
+
 **Numbers.** The map must show which route is which without a tap, at the
 appropriate zoom (Chris, 2026-11-10; see "What the bus lines say" under
 "Objective"). It doesn't yet: the map carries no bus route numbers today.
@@ -3877,6 +3935,20 @@ work against the real structure before asking for evaluation.
   the lines end there: every point beside the mark is on a track, and a
   haloed name on its own station's tracks reads where no name at all does
   not.
+
+- 2026-11-11: Bus lines beside rail (#97, "Beside rail" under "Bus
+  routes"). Rail packs are drawn at a fixed width on screen, so a street that
+  really runs beside the track was drawn under it, its stops on the rail
+  (Alameda, Union Station's light rail). From zoom 14 every bus line and stop
+  near rail is drawn again for each quarter zoom, moved straight away from the
+  track just enough to clear the pack, never nearer than it is, as one field
+  so streets that meet still meet. Rejected: setting the street off with
+  `line-offset` alone (it moves each piece across its own direction, so a line
+  that turns away from the rail came apart at the corner); one moved copy per
+  whole zoom (a layer filter only changes at whole zooms, and the gap doubled
+  across one); moving the bus with one rule everywhere ("rail keeps its
+  place"), which Chris rejected: where rail or bus is in the wrong place, or
+  both share a right of way, each needs its own fix.
 
 ## Sources
 

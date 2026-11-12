@@ -35,6 +35,10 @@ import { css, filterOf, inZoom, property, setState } from './expressions.mjs';
 import { bbox, clipLine, tileAt, tileSpan, toWorld } from './mercator.mjs';
 import { Tiles, geometry, vectorSources } from './tiles.mjs';
 import { drawnWidth, offsetParts } from './strokes.mjs';
+// Near rail a bus line is drawn band by band, and the pieces of other bands
+// are in the data but hidden (public/js/bands.js): the model leaves them out
+// as the page does.
+import { shownAt } from '../../public/js/bands.js';
 
 const run = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -166,6 +170,7 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
       if (!list || !inZoom(layer, z)) continue;
       const f = filterOf(layer);
       for (const x of features[layer.source]) {
+        if (!shownAt(x.properties, z)) continue;
         if (f && !f(z, x.properties)) continue;
         const width = property(layer, 'line-width', 'paint', z, x.properties, 1);
         if (!(width > 0)) continue;
@@ -214,6 +219,7 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
       if (!list || !(anyZoom || inZoom(layer, z))) continue;
       const f = filterOf(layer);
       for (const x of features[layer.source]) {
+        if (!shownAt(x.properties, z)) continue;
         if (f && !f(z, x.properties)) continue;
         out.push({
           layer: layer.id,
@@ -265,6 +271,7 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
       if (!list || !(anyZoom || inZoom(layer, z))) continue;
       const f = filterOf(layer);
       for (const x of features[layer.source]) {
+        if (!shownAt(x.properties, z)) continue;
         if (f && !f(z, x.properties)) continue;
         const at = point(x, z);
         if (!at) continue;
@@ -356,6 +363,7 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
       if (layer.type !== 'symbol' || layer.layout?.['text-field'] === undefined) continue;
       const f = filterOf(layer);
       for (const x of features[layer.source]) {
+        if (!shownAt(x.properties, z)) continue;
         if (f && !f(z, x.properties)) continue;
         const at = point(x, z);
         if (!at) continue;

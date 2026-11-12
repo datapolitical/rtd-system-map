@@ -5,7 +5,7 @@
 import { textOn } from './color.js';
 import { P, PALETTES } from './palette.js';
 import { ZOOMS } from './sizes.js';
-import { CLASS_RANK, STREET_CLASSES } from './frequency.js';
+import { CLASS_RANK, STREET_CLASSES, STREET_WIDTH, classWidthAt } from './frequency.js';
 
 // Phones, and any short screen (a phone on its side): framing, key closed,
 // panel as a bottom sheet. The same query is in app.css.
@@ -46,10 +46,9 @@ export const TIERS = [
 // a step a reader can tell apart, and roughly the square root of the rate,
 // so a line's area follows the buses on it. Colours are the palette's
 // `freq`; `from` is the zoom each class fades in from.
-const streetSpec = { c3: { width: [2.8, 4.4, 7, 14], from: 0 }, c5: { width: [2.1, 3.3, 5, 10], from: 0 }, c10: { width: [1.6, 2.5, 3.6, 7.2], from: 0 }, c15: { width: [1.2, 1.8, 2.6, 5.2], from: 0 }, c30: { width: [0.8, 1.2, 1.7, 3.4], from: 9 }, c60: { width: [0.45, 0.6, 1, 2], from: 10.5 } };
 export const STREETS = STREET_CLASSES.map((c) => ({
   ...c,
-  ...streetSpec[c.id],
+  ...STREET_WIDTH[c.id],
   get color() {
     return P.freq[c.id];
   },
@@ -58,17 +57,10 @@ export { CLASS_RANK };
 export const classMatch = (pick, key = 'cls') => ['match', ['get', key], ...STREETS.flatMap((c) => [c.id, pick(c)]), pick(STREETS.at(-1))];
 export const classWidth = (extra = 0) =>
   ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, classMatch((c) => c.width[i] + extra)])];
+// A class's width in pixels at a zoom, as the map interpolates it (frequency.js).
+export { classWidthAt };
 // The class width times `factor` (a number or a feature expression), with
 // the zoom interpolation kept at the top, as MapLibre requires.
-// A class's width in pixels at a zoom, as the map interpolates it.
-export function classWidthAt(cls, zoom) {
-  const c = STREETS.find((s) => s.id === cls) ?? STREETS.at(-1);
-  if (zoom <= ZOOMS[0]) return c.width[0];
-  if (zoom >= ZOOMS.at(-1)) return c.width.at(-1);
-  const i = ZOOMS.findIndex((z, k) => zoom < ZOOMS[k + 1]);
-  const t = (1.4 ** (zoom - ZOOMS[i]) - 1) / (1.4 ** (ZOOMS[i + 1] - ZOOMS[i]) - 1);
-  return c.width[i] + (c.width[i + 1] - c.width[i]) * t;
-}
 export const classWidthTimes = (factor) =>
   ['interpolate', ['exponential', 1.4], ['zoom'], ...ZOOMS.flatMap((z, i) => [z, ['*', classMatch((c) => c.width[i]), factor]])];
 

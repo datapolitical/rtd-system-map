@@ -21,6 +21,7 @@ import { buildStreets } from './lib/streets.mjs';
 import { BUILDING_R, terminalFootprints } from './lib/footprints.mjs';
 import { extendLineToPlatforms, hallRoofs, platformsToMarks, stationStructures } from './lib/structures.mjs';
 import { clipAtHalls, shortenAtHall, stopsOfHalls } from './lib/halls.mjs';
+import { besideRail } from './lib/beside.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
@@ -699,7 +700,18 @@ async function main() {
   // to the ramp, which isn't drawn) goes with the hall's own stops. Measured
   // against the streets, which are the bus lines the page draws.
   const hallStops = stopsOfHalls(geo.stops, halls, geo.streets.map((f) => f.geometry.coordinates), { near: HALL_STOP_NEAR, line: HALL_STOP_LINE });
+  let besideReport = null;
   if (hallStops) console.log(`  stops by a hall with no line left to stand on, shown with the hall: ${hallStops}`);
+  // Bus lines and stops beside rail, drawn clear of the pack from BESIDE_FROM
+  // in (scripts/lib/beside.mjs; DESIGN.md, "Bus routes", "Beside rail").
+  // Last, so it moves the streets, routes and stops as they will be drawn.
+  {
+    const [[w, s], [e, n]] = bbox(geo.routes.filter((f) => f.properties.mode === 'rail'));
+    const near = besideRail({ streets: geo.streets, routes: geo.routes, stops: geo.stops, origin: [(w + e) / 2, (s + n) / 2], precision: PRECISION });
+    Object.assign(geo, { streets: near.streets, routes: near.routes, stops: near.stops, beside: near.beside });
+    besideReport = near.report;
+    console.log(`  beside rail: ${near.report.streets} streets, ${near.report.routes} routes and ${near.report.stops} stops drawn clear of rail from z14; ${near.report.copies} copies`);
+  }
   const streetGraph = { nodes: built.report.nodes, edges: built.report.edges, ends: built.report.ends, nearOwn: built.report.nearOwn };
   const streetKm = (cls) => geo.streets.filter((f) => f.properties.cls === cls).reduce((a, f) => a + lengthKm(f.geometry.coordinates), 0);
   const classes = Object.fromEntries(STREET_CLASSES.map((c) => [c.id, { streets: geo.streets.filter((f) => f.properties.cls === c.id).length, km: Math.round(streetKm(c.id) * 10) / 10 }]));
@@ -757,6 +769,8 @@ async function main() {
     // How much street is drawn in each frequency class (frequency.js).
     classes,
     streetGraph,
+    // Bus lines beside rail (scripts/lib/beside.mjs): what is drawn clear of it.
+    beside: besideReport,
     halls: hallReport,
     // The Live relay's feeds, and the realtime route ids that belong to a map
     // route under another name (public/js/realtime.js, routeOf).

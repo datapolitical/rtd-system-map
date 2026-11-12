@@ -15,6 +15,8 @@ import { CLASS_RANK, DETAIL_FROM, PART_TIME, byZoom, classMatch, classWidth, cla
 import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
 import { fade, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
 import { edgeLetterLayer } from './edgeletters.js';
+import { BESIDE_FROM } from './beside.js';
+import { banded, notBeside, times } from './bands.js';
 
 // Rail is heavier than any bus at every zoom. On shared track, lines run side
 // by side with a white gap between them (DESIGN.md, "Shared track"). Width
@@ -34,11 +36,19 @@ const STOPS_ZOOM = 15;
 const STOPS_PRELOAD_ZOOM = 14;
 
 // A bus line fades in by tier as you zoom, and to 20% when another route is open.
-const fadeIn = ['interpolate', ['linear'], ['zoom'], ...[8, 9, 10, 11, 12, 13].flatMap((z) => [z, ['*', tierMatch((t) => Math.min(1, Math.max(0, (z - t.from) / 1.5 + 0.25))), fade(isRoute())]])];
+// Fades are given as their value at a zoom, for `banded` (bands.js): from
+// BESIDE_FROM in, a bus line near rail is drawn band by band, and each layer
+// keeps its own fades.
+const FADE_ZOOMS = [8, 9, 10, 11, 12, 13];
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+const fadeZoom = (z) => Math.min(13, Math.max(8, z));
+const fadeInAt = (z) => times(tierMatch((t) => clamp01((fadeZoom(z) - t.from) / 1.5 + 0.25)), fade(isRoute()));
+const over = (at, zooms) => ['interpolate', ['linear'], ['zoom'], ...zooms.flatMap((z) => [z, at(z)])];
+const stepped = (at, zooms) => ['step', ['zoom'], 0, ...zooms.flatMap((z) => [z, at(z)])];
 // A street fades in by class the same way, and to 20% when a route that
 // isn't on it is open.
 const onStreet = inList('routes');
-const streetFade = ['interpolate', ['linear'], ['zoom'], ...[8, 9, 10, 11, 12, 13].flatMap((z) => [z, ['*', classMatch((c) => Math.min(1, Math.max(0, (z - c.from) / 1.5 + 0.25))), fade(onStreet)]])];
+const streetFadeAt = (z) => times(classMatch((c) => clamp01((fadeZoom(z) - c.from) / 1.5 + 0.25)), fade(onStreet));
 // Inside a shared street, from STRANDS_FROM, a hairline between each pair
 // of routes hints how many run there, like strands in a cable: no gap and no
 // land between them, so the street still reads as one line. Up to
@@ -65,8 +75,9 @@ const BESIDE_GAP = 2.2;
 const BESIDE_MIN_LEN = 25;
 const strandRoom = (zoom) => ['>=', ['/', classMatch((c) => classWidthAt(c.id, zoom)), strands], STRAND_MIN];
 const strandZooms = Array.from({ length: Math.round((18 - STRANDS_FROM) / 0.5) + 1 }, (_, i) => STRANDS_FROM + i / 2);
-const strandFade = ['step', ['zoom'], 0, ...strandZooms.flatMap((z) => [z, ['case', strandRoom(z), fade(onStreet), 0]])];
-const coreFade = ['interpolate', ['linear'], ['zoom'], STRANDS_FROM, 0, STRANDS_FROM + 1, fade(onStreet)];
+const stepOf = (zs, z) => zs.findLast((s) => s <= z + 1e-9);
+const strandFadeAt = (z) => (stepOf(strandZooms, z) === undefined ? 0 : ['case', strandRoom(stepOf(strandZooms, z)), fade(onStreet), 0]);
+const coreFadeAt = (z) => times(clamp01(z - STRANDS_FROM), fade(onStreet));
 // One-way streets (the build's `oneway`, drawn the way the buses go) carry
 // chevrons from ARROWS_FROM, about ARROW_SPACING px apart; two-way streets
 // none, so an arrow means "one way" (DESIGN.md, "Bus routes"). One glyph,
@@ -78,7 +89,12 @@ const ARROWS_FROM = 14;
 const ARROW_SPACING = 300;
 const ARROW_MIN_LEN = 250;
 const arrowSize = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0.62, 16, 0.78];
-const arrowFade = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0, ARROWS_FROM + 0.5, fade(onStreet)];
+const arrowFadeAt = (z) => times(clamp01((z - ARROWS_FROM) / 0.5), fade(onStreet));
+// The part-time hairline beside a narrow street, until the strands have room.
+const besideZooms = strandZooms.filter((z) => z >= ARROWS_FROM);
+const besideFadeAt = (z) => (stepOf(besideZooms, z) === undefined ? 0 : ['case', strandRoom(stepOf(besideZooms, z)), 0, fade(onStreet)]);
+const stopFadeAt = () => fade(inList('lines'));
+
 // A bus terminal where routes lay over is drawn as the building its bus gates
 // stand in (the build finds it: scripts/lib/footprints.mjs), from the zoom the
 // old disk appeared at.
@@ -127,9 +143,10 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'structures', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'structures', 'labels', 'stops', 'beside'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
-const LAZY = ['stops'];
+// The moved copies of bus lines beside rail are needed only from BESIDE_FROM in.
+const LAZY = ['stops', 'beside'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
 
 // By URL, so each file downloads and parses in the map's worker.
@@ -211,10 +228,36 @@ const streetZoom = [
 // with only part-time routes (`n` 0) is drawn by the part-time layers.
 const allDayStreet = ['>', ['coalesce', ['get', 'n'], 0], 0];
 const withStreetZooms = (layers) =>
-  layers.map((l) => (l.source === 'streets' ? { ...l, filter: ['all', streetZoom, ...(l.id.startsWith('street') ? [allDayStreet] : []), ...(l.filter ? [l.filter] : [])] } : l));
+  layers.map((l) => (l.source === 'streets' || (l.source === 'beside' && l.id.endsWith('-moved') && !l.id.startsWith('stops')) ? { ...l, filter: ['all', streetZoom, ...(l.source === 'streets' ? [notBeside] : []), ...(l.id.startsWith('street') ? [allDayStreet] : []), ...(l.filter ? [l.filter] : [])] } : l));
+
+// Each layer that draws bus lines gets a twin for their moved copies near
+// rail (the `beside` source, bands.js), drawn just after it with the same
+// widths, colors and dashes, each copy only in its own band.
+const MOVED_FADES = {
+  'bus-part-time': [fadeInAt, FADE_ZOOMS],
+  'bus-limited': [fadeInAt, FADE_ZOOMS],
+  street: [streetFadeAt, FADE_ZOOMS],
+  'street-part-time-beside': [besideFadeAt, besideZooms],
+  'street-core': [coreFadeAt, [STRANDS_FROM, STRANDS_FROM + 1]],
+};
+const movedFades = (id) => MOVED_FADES[id] ?? (id.startsWith('street-strand-') ? [strandFadeAt, strandZooms] : null);
+const withMovedCopies = (layers) =>
+  layers.flatMap((l) => {
+    const fades = movedFades(l.id);
+    if (!fades) return [l];
+    const moved = {
+      ...l,
+      id: `${l.id}-moved`,
+      source: 'beside',
+      minzoom: Math.max(l.minzoom ?? 0, BESIDE_FROM),
+      filter: ['all', ['==', ['get', 'of'], 'street'], ...(l.filter ? [l.filter] : [])],
+      paint: { ...l.paint, 'line-opacity': banded(fades[0], fades[1], true) },
+    };
+    return [l, moved];
+  });
 
 export function transitLines(lines) {
-  return withStreetZooms([
+  return withStreetZooms(withMovedCopies([
     // FlexRide: a light hatch with a dashed edge, never a green that reads as park.
     // Not until close in: further out, zone outlines are boxes around
     // nothing, and read as city limits.
@@ -320,7 +363,7 @@ export function transitLines(lines) {
       source: 'streets',
       filter: ['all', bus, ['==', ['coalesce', ['get', 'n'], 0], 0], partTime, ['!=', ['get', 'tier'], 'limited']],
       layout: { 'line-join': 'round' },
-      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn, 'line-dasharray': [3, 2] },
+      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': over(fadeInAt, FADE_ZOOMS), 'line-dasharray': [3, 2] },
     },
     {
       id: 'bus-limited',
@@ -328,7 +371,7 @@ export function transitLines(lines) {
       source: 'streets',
       filter: ['all', bus, ['==', ['coalesce', ['get', 'n'], 0], 0], ['==', ['get', 'tier'], 'limited']],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': fadeIn, 'line-dasharray': [0.1, 2.2] },
+      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(), 'line-opacity': over(fadeInAt, FADE_ZOOMS), 'line-dasharray': [0.1, 2.2] },
     },
     // Every street a bus runs on all day, drawn once at the width of the
     // buses along it, all routes counted (DESIGN.md, "Bus routes"; the
@@ -347,7 +390,7 @@ export function transitLines(lines) {
         'line-join': 'round',
         'line-sort-key': classMatch((c) => CLASS_RANK[c.id]),
       },
-      paint: { 'line-color': classMatch((c) => c.color), 'line-width': classWidth(), 'line-opacity': streetFade },
+      paint: { 'line-color': classMatch((c) => c.color), 'line-width': classWidth(), 'line-opacity': over(streetFadeAt, FADE_ZOOMS) },
     },
     ...[false, true].flatMap((dashed) =>
       Array.from({ length: STRANDS_MAX - 1 }, (_, i) => i + 1).map((k) => ({
@@ -364,7 +407,7 @@ export function transitLines(lines) {
           'line-width': strandWidth,
           // The k-th seam of n equal strands, measured from the line's middle.
           'line-offset': classWidthTimes(['-', ['/', k, strands], 0.5]),
-          'line-opacity': strandFade,
+          'line-opacity': stepped(strandFadeAt, strandZooms),
           ...(dashed ? { 'line-dasharray': [3, 2] } : {}),
         },
       })),
@@ -385,7 +428,7 @@ export function transitLines(lines) {
         'line-width': strandWidth,
         'line-offset': ['interpolate', ['linear'], ['zoom'], ...strandZooms.filter((z) => z >= ARROWS_FROM).flatMap((z) => [z, classMatch((c) => classWidthAt(c.id, z) / 2 + strandAt(z) / 2 + BESIDE_GAP)])],
         'line-dasharray': [3, 2],
-        'line-opacity': ['step', ['zoom'], 0, ...strandZooms.filter((z) => z >= ARROWS_FROM).flatMap((z) => [z, ['case', strandRoom(z), 0, fade(onStreet)]])],
+        'line-opacity': stepped(besideFadeAt, besideZooms),
       },
     },
     {
@@ -395,7 +438,7 @@ export function transitLines(lines) {
       minzoom: STRANDS_FROM,
       filter: ['>', strands, STRANDS_MAX],
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
-      paint: { 'line-color': P.strand, 'line-width': classWidthTimes(0.34), 'line-opacity': coreFade },
+      paint: { 'line-color': P.strand, 'line-width': classWidthTimes(0.34), 'line-opacity': over(coreFadeAt, [STRANDS_FROM, STRANDS_FROM + 1]) },
     },
 
     {
@@ -415,7 +458,7 @@ export function transitLines(lines) {
         'icon-ignore-placement': true,
         'icon-padding': 0,
       },
-      paint: { 'icon-opacity': arrowFade },
+      paint: { 'icon-opacity': over(arrowFadeAt, [ARROWS_FROM, ARROWS_FROM + 0.5]) },
     },
     // The open bus route, drawn over its faded neighbours.
     ...selectionLines(),
@@ -453,13 +496,29 @@ export function transitLines(lines) {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': lines.color, 'line-width': railWidth(), 'line-offset': railOffset, 'line-opacity': fade(isRoute()) },
     },
-  ]);
+  ]));
 }
+
+// A stop beside rail moves with its street (bands.js): the stop layers get a
+// twin for the moved copies, each shown only in its band.
+const withMovedStops = (layers) =>
+  layers.flatMap((l) =>
+    l.id === 'stops' || l.id === 'stops-gate'
+      ? [l, {
+          ...l,
+          id: `${l.id}-moved`,
+          source: 'beside',
+          minzoom: Math.max(l.minzoom ?? 0, BESIDE_FROM),
+          filter: ['all', ['==', ['get', 'of'], 'stop'], l.filter],
+          paint: { ...l.paint, 'circle-opacity': banded(stopFadeAt, [], true), 'circle-stroke-opacity': banded(stopFadeAt, [], true) },
+        }]
+      : [l],
+  );
 
 // Stations, stops, symbols and our labels, above everything else.
 export function transitMarks(lines) {
   const halo = { 'text-halo-color': P.land, 'text-halo-width': 1.8, 'text-halo-blur': 0.4 };
-  return [
+  return withMovedStops([
     // A station whose lines stop in places too far apart for one mark to stand
     // for them gets a station mark at each platform group, joined to the
     // station's own mark by a thin line, so every line ends at a mark and the
@@ -533,14 +592,14 @@ export function transitMarks(lines) {
       // ('stops-gate'); out here the hall stands for them. A stop only
       // trains call at (`platform`) is its station's, and the station's mark
       // stands for it: the small dot is a bus stop.
-      filter: ['all', ['!=', ['coalesce', ['get', 'terminal'], 0], 1], ['!=', ['coalesce', ['get', 'platform'], 0], 1]],
+      filter: ['all', ['!=', ['coalesce', ['get', 'terminal'], 0], 1], ['!=', ['coalesce', ['get', 'platform'], 0], 1], notBeside],
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 2.4, 18, 5],
         'circle-color': P.stop.fill,
         'circle-stroke-color': P.stop.edge,
         'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 15, 1, 18, 1.6],
-        'circle-opacity': fade(inList('lines')),
-        'circle-stroke-opacity': fade(inList('lines')),
+        'circle-opacity': stopFadeAt(),
+        'circle-stroke-opacity': stopFadeAt(),
       },
     },
     {
@@ -548,14 +607,14 @@ export function transitMarks(lines) {
       type: 'circle',
       source: 'stops',
       minzoom: 17,
-      filter: ['==', ['get', 'gate'], 1],
+      filter: ['all', ['==', ['get', 'gate'], 1], notBeside],
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 17, 2.4, 18, 5],
         'circle-color': P.stop.fill,
         'circle-stroke-color': P.stop.edge,
         'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 17, 1, 18, 1.6],
-        'circle-opacity': fade(inList('lines')),
-        'circle-stroke-opacity': fade(inList('lines')),
+        'circle-opacity': stopFadeAt(),
+        'circle-stroke-opacity': stopFadeAt(),
       },
     },
     // Stations with no trains this week: a hollow gray ring, from closer in.
@@ -798,7 +857,7 @@ export function transitMarks(lines) {
     // (scripts/lib/labels.mjs).
     sign('line-signs'),
     ...selectionMarks(),
-  ];
+  ]);
 }
 
 function sign(id) {
@@ -910,7 +969,7 @@ const AWAY = {
 // The biggest file loads when the map first gets near the zoom that shows it.
 export function loadWhenNeeded(map) {
   const load1 = (name) => map.getSource(name).setData(`data/${name}.geojson`);
-  const pending = new Map([['stops', STOPS_PRELOAD_ZOOM]]);
+  const pending = new Map([['stops', STOPS_PRELOAD_ZOOM], ['beside', BESIDE_FROM - 0.5]]);
   const load = () => {
     for (const [name, zoom] of pending) {
       if (map.getZoom() < zoom) continue;

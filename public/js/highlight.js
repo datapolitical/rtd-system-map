@@ -12,6 +12,7 @@
 import { FONT } from './basemap.js';
 import { PART_TIME, tierMatch, tierWidth } from './shared.js';
 import { P } from './palette.js';
+import { banded } from './bands.js';
 
 export const DIM = 0.2;
 const SEL = ['global-state', 'sel'];
@@ -57,7 +58,9 @@ export function selectionLines() {
       source: 'routes',
       filter: chosen(''),
       layout: layout('round'),
-      paint: { 'line-color': P.casing, 'line-width': tierWidth(4.2), 'line-opacity': 0.92 },
+      // A route's stretch beside rail is hidden while it is moved (bands.js):
+      // the street there, at full strength for the open route, stands for it.
+      paint: { 'line-color': P.casing, 'line-width': tierWidth(4.2), 'line-opacity': banded(() => 0.92) },
     },
     ...SEL_PARTS.map(({ id, where, dash, cap }) => ({
       id,
@@ -65,7 +68,7 @@ export function selectionLines() {
       source: 'routes',
       filter: within(where, ''),
       layout: layout(cap),
-      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(1.6), ...(dash ? { 'line-dasharray': dash } : {}) },
+      paint: { 'line-color': tierMatch((t) => t.color), 'line-width': tierWidth(1.6), 'line-opacity': banded(() => 1), ...(dash ? { 'line-dasharray': dash } : {}) },
     })),
   ];
 }

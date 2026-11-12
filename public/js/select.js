@@ -18,9 +18,11 @@
 
 import * as ui from './panel.js';
 import { setHighlight, setEnds } from './highlight.js';
+import { shownAt } from './bands.js';
 import { TIERS, TIER_RANK, bullet, dayFreq, date, esc, freq, goesText, isPhone, joinDot, middayPhrase, time, weekendOnly } from './shared.js';
 
-const ROUTE_LAYERS = ['street', 'bus-part-time', 'bus-limited', 'rail', 'rail-part-time'];
+// With the moved copies of bus lines beside rail (bands.js).
+const ROUTE_LAYERS = ['street', 'street-moved', 'bus-part-time', 'bus-part-time-moved', 'bus-limited', 'bus-limited-moved', 'rail', 'rail-part-time'];
 const STATION_LAYERS = ['stations', 'stations-dot', 'stations-unserved', 'platform', 'platform-dot'];
 const TAG_LAYERS = ['rail-bullets', 'rail-edge-letters', 'line-signs'];
 const POINTER_LAYERS = [...ROUTE_LAYERS, ...STATION_LAYERS, 'facilities', 'stops', ...TAG_LAYERS, 'flexride-fill', 'vehicles-rail', 'vehicles-bus'];
@@ -590,7 +592,10 @@ export async function openStop(id) {
 
 function near(point, pad, layers) {
   const layer = layers.filter((id) => map.getLayer(id));
-  return map.queryRenderedFeatures([[point.x - pad, point.y - pad], [point.x + pad, point.y + pad]], { layers: layer });
+  // Only what is drawn at this zoom: near rail, a bus line is drawn band by
+  // band, and the pieces of other bands are there but hidden (bands.js).
+  const zoom = map.getZoom();
+  return map.queryRenderedFeatures([[point.x - pad, point.y - pad], [point.x + pad, point.y + pad]], { layers: layer }).filter((f) => shownAt(f.properties, zoom));
 }
 
 // The closest of some point features to where the finger landed.
@@ -632,7 +637,7 @@ async function onTap(e) {
   // that stop, not the whole station.
   const station = closest(near(e.point, pad, STATION_LAYERS), e.point);
   const facility = closest(near(e.point, pad, ['facilities']), e.point);
-  const stop = closest(near(e.point, pad, ['stops', 'stops-gate']), e.point);
+  const stop = closest(near(e.point, pad, ['stops', 'stops-gate', 'stops-moved', 'stops-gate-moved']), e.point);
   if (station) return open(stationView(Number(station.properties.id)), false);
   if (facility) {
     await loadDirectory().catch(() => {});
