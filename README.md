@@ -9,6 +9,9 @@ are. It is built for phones first.
 
 **Open it: [rtd-system-map.pages.dev](https://rtd-system-map.pages.dev)**
 
+The front page is four sheets, each drawn for one scale. The earlier
+continuous map is the [Classic map](https://rtd-system-map.pages.dev/classic/).
+
 **How it's built: [the design specification](DESIGN.md)**, also [in the
 wiki](https://github.com/datapolitical/rtd-system-map/wiki), one page per
 section. Every part of the map follows it: what it shows, how it looks and

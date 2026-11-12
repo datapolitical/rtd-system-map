@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { toLonLat, toWorld } from '../drawn/mercator.mjs';
 import { stubAnalytics } from '../lib/analytics.mjs';
+import { mapPath } from '../lib/where.mjs';
 
 const arg = (name) => {
   const at = process.argv.indexOf(`--${name}`);
@@ -51,7 +52,7 @@ try {
     await route.fulfill({ response: res, body });
   });
   await page.addInitScript(() => { try { localStorage.setItem('live', 'off'); } catch {} });
-  await page.goto(`${url}/#${zoom}/${lat}/${lon}`, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+  await page.goto(`${url}${await mapPath(url)}#${zoom}/${lat}/${lon}`, { waitUntil: 'domcontentloaded', timeout: 90_000 });
   await page.waitForFunction(() => window.__map && window.__map.loaded(), null, { timeout: 90_000 });
   for (let i = 0; i < 4; i++) {
     const busy = await page.evaluate(() => new Promise((r) => {

@@ -5,6 +5,10 @@ should look and behave. Read it before changing the map, the interface, or the
 data pipeline. When a decision changes, update this file and add a line to the
 decision log at the bottom.
 
+The site has two pages. The front page is the four sheets ("Four sheets").
+The continuous map the rest of this document describes is the Classic map, at
+`/classic/`, one link from the front page.
+
 ## Principles
 
 Six principles, in priority order. When two of them pull against each other,
@@ -1959,8 +1963,8 @@ the map and interface re-color in place and the map stays where it was.
 
 ## Four sheets
 
-A second way of drawing the same data, at `/sheets/`, built to be finished
-before it is clever. Think of four printed maps of the district, each drawn
+The site's front page: a second way of drawing the same data, built to be
+finished before it is clever. Think of four printed maps of the district, each drawn
 for one scale on a phone, each complete: every rail line and every bus route
 is on every sheet. The page rests only on a sheet. A scroll or a pinch goes
 to the next sheet the way it was heading, however short it was (a tenth of
@@ -1971,9 +1975,18 @@ began, not from the sheet shown, so a second scroll that catches the map on
 its way to a sheet carries on to that sheet and never sends it back. Issue
 #117 holds the work.
 
-The root of a branch preview named after one of the site's pages opens on
-that page (`functions/index.js`): the `sheets` preview opens on the sheets.
-The live site and every other preview open on the main map.
+The sheets are `public/index.html`. The map they took the front page from is
+the Classic map, `public/classic/index.html`, and the sheets' credit line
+links to it. Each page finds its files wherever it is served from: the front
+page asks for them from the site's root, so it also works at any address
+Cloudflare answers with it (the site has no 404 page, so that is every address
+with no page of its own, the old `/sheets/` among them), and the classic
+map's scripts ask from where the scripts are. Both pages read the address the
+same way (`#zoom/lat/lon`), so a link made on the classic map when it was the
+front page opens the sheets at the same place. The checks in `qa/` read the
+classic map and find it with `qa/lib/where.mjs`: `/classic/` on a site that
+has a page there, the root on a build from before. `test/pages.test.mjs`
+holds these rules.
 
 | Sheet | Zoom | What it adds |
 |---|---|---|
@@ -2420,12 +2433,16 @@ shared or bookmarked.
 
 ### Link preview
 
-A link to the map shows the title "RTD system map", the page's description
-and a picture (`public/og.png`, 1200x630): central Denver at zoom 11 in the
+A link to the site shows the title "RTD system map", the page's description
+and a picture (`public/og.png`, 1200x630): central Denver on sheet 2 in the
+light theme, with the buttons and credit hidden. A link to the classic map
+shows its own (`public/classic/og.png`): central Denver at zoom 11 in the
 light theme, with the interface and route letters hidden.
-`node scripts/og-image.mjs` makes it again from the live site; run it when
-the map's look changes. The browser tab says "RTD system map" too; the key
-still says the map is unofficial.
+`node scripts/og-image.mjs` makes either again from the live site (`sheets`
+or `classic`); run it when that map's look changes. The browser tab says
+"RTD system map" on the front page and "RTD system map: classic" on the
+classic map; the classic map's key still says the map is unofficial, and so
+does the sheets' credit line.
 
 ### The key
 
@@ -4340,6 +4357,16 @@ work against the real structure before asking for evaluation.
   on the branch, on 1688fd1). The page must now differ from the main map,
   and `qa/checks/preview.mjs` reads the build's own address from
   Cloudflare's summary.
+- 2026-11-12: The four sheets are the front page and the map they replace
+  is the Classic map at `/classic/`. Reason: Chris: "I want to migrate the
+  current main and rename it and make this the main"; asked which, he chose
+  the sheets as the front page and "Classic map at /classic/". The preview
+  redirect (`functions/index.js`) is gone, since every preview's root is now
+  the sheets. The classic map's scripts ask for their files from where the
+  scripts are, because MapLibre writes the address relative to the page and a
+  `<base>` tag would have sent it to the root. The checks still read the
+  classic map and find it on each site, so they also run on builds from
+  before the move.
 - 2026-11-12: Sheets ring only stops a bus street serves: not a bus
   station's gates, nor stops only trains call at. Reason: Union Station's
   bus gates and rail tracks were scattered as rings over its hall and round

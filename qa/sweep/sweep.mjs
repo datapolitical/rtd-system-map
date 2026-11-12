@@ -23,6 +23,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { annotate, crop, detect, jump, measure, SEVERITY_NAME } from '../lib/detect.mjs';
 import { BASE, launch, open } from '../lib/page.mjs';
+import { mapPath } from '../lib/where.mjs';
 import { alongPoints, tiles } from '../lib/views.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -131,7 +132,7 @@ async function main() {
   const whole = new Set();
   for (let i = findings.length - 1; i >= 0; i--) if (findings[i].whole) { const k = `${findings[i].theme}|${findings[i].zoom}|${findings[i].msg}`; if (whole.has(k)) findings.splice(i, 1); else whole.add(k); }
   findings.sort((a, b) => a.severity - b.severity || a.zoom - b.zoom || a.lat - b.lat);
-  const run = { base: BASE, zooms: ZOOMS, themes: THEMES, quick: QUICK, tiles: seen.tiles, minutes: +minutes.toFixed(1), lowestFreeMemory: peakLow, stopped, at: new Date().toISOString() };
+  const run = { base: BASE, map: await mapPath(BASE), zooms: ZOOMS, themes: THEMES, quick: QUICK, tiles: seen.tiles, minutes: +minutes.toFixed(1), lowestFreeMemory: peakLow, stopped, at: new Date().toISOString() };
   fs.writeFileSync(path.join(OUT, 'findings.json'), JSON.stringify({ run, findings, log }, null, 1));
   fs.writeFileSync(path.join(OUT, 'report.html'), report(run, findings));
   console.log(`${seen.tiles} tiles in ${minutes.toFixed(1)} min, ${findings.length} findings${stopped ? `; STOPPED: ${stopped}` : ''}`);
@@ -145,7 +146,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 function report(run, findings) {
   const groups = new Map();
   for (const f of findings) { const k = SEVERITY_NAME[f.severity]; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
-  const link = (f) => `${run.base}/#${f.zoom}/${f.lat}/${f.lon}`;
+  const link = (f) => `${run.base}${run.map ?? '/'}#${f.zoom}/${f.lat}/${f.lon}`;
   const rows = [...groups].map(([name, fs]) => `
     <h2>${esc(name)} <small>${fs.length}</small></h2>
     <div class="grid">${fs.map((f, i) => `

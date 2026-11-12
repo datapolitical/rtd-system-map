@@ -51,7 +51,7 @@ const coarse = matchMedia('(pointer: coarse)');
 // --- Data ---------------------------------------------------------------
 
 export function loadDirectory() {
-  directory ??= fetch('data/directory.json')
+  directory ??= fetch(new URL('../data/directory.json', import.meta.url))
     .then((res) => {
       if (!res.ok) throw new Error(`directory.json: ${res.status}`);
       return res.json();
@@ -74,7 +74,7 @@ export function loadDirectory() {
 const files = {};
 export const loadData = (name) => loadFile(name);
 const loadFile = (name) =>
-  (files[name] ??= fetch(`data/${name}.geojson`)
+  (files[name] ??= fetch(new URL(`../data/${name}.geojson`, import.meta.url))
     .then((res) => {
       if (!res.ok) throw new Error(`${name}.geojson: ${res.status}`);
       return res.json();

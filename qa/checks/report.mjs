@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pageSources } from '../drawn/model.mjs';
 import { ZOOMS as ALL_ZOOMS, mergeFindings, runChecks } from './run.mjs';
+import { mapPath } from '../lib/where.mjs';
 
 const arg = (name, fallback) => {
   const at = process.argv.indexOf(`--${name}`);
@@ -38,7 +39,7 @@ const meta = await readData('meta.json');
 
 // The checks themselves are in run.mjs, shared with qa/recall/recall.mjs.
 const all = [];
-for (const theme of THEMES) all.push(...await runChecks({ ...(ROOT ? { root: ROOT } : {}), data, meta, theme, zooms: ZOOMS, views: VIEWS, site: SITE }));
+for (const theme of THEMES) all.push(...await runChecks({ ...(ROOT ? { root: ROOT } : {}), data, meta, theme, zooms: ZOOMS, views: VIEWS, site: SITE + (await mapPath(SITE)).replace(/\/$/, '') }));
 const findings = mergeFindings(all);
 
 fs.mkdirSync(OUT, { recursive: true });

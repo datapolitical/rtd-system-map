@@ -1,116 +1,58 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <!-- Light or dark, as the system says (DESIGN.md, "Dark mode"): form
-         controls, scrollbars and the browser's own chrome follow it. -->
-    <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#eef1f2" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0e1216" media="(prefers-color-scheme: dark)" />
-    <title>RTD system map</title>
-    <meta name="description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs." />
-    <!-- What a shared link shows in messages and social posts (DESIGN.md,
-         "Link preview"). The picture is made by scripts/og-image.mjs. -->
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="RTD system map" />
-    <meta property="og:title" content="RTD system map" />
-    <meta property="og:description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs." />
-    <meta property="og:url" content="https://rtd-system-map.pages.dev/" />
-    <meta property="og:image" content="https://rtd-system-map.pages.dev/og.png" />
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Map of central Denver with the colored rail lines meeting at Union Station and the bus streets in navy." />
-    <meta name="twitter:card" content="summary_large_image" />
-    <!-- Start everything the map needs at once: the library, the network
-         summary, the font, and a connection to the basemap's server. -->
-    <link rel="modulepreload" href="vendor/maplibre-gl.mjs" />
-    <link rel="preload" href="data/meta.json" as="fetch" crossorigin="anonymous" />
-    <link rel="preload" href="vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
-    <link href="vendor/maplibre-gl.css" rel="stylesheet" />
-    <link href="css/app.css" rel="stylesheet" />
-    <script type="module" src="js/main.js"></script>
-  </head>
-  <body>
-    <!-- Search and the Lines list: first in the tab order, at the top of the
-         screen on phones and above the panel on wider screens. -->
-    <div class="finder" id="finder" role="search">
-      <div class="search">
-        <svg class="search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.2" /><path d="m12.5 12.5 4 4" /></svg>
-        <input id="search" type="text" role="combobox" aria-label="Search lines and places" aria-autocomplete="list" aria-expanded="false" aria-controls="search-list" placeholder="Search lines, places" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
-        <button class="search-clear" id="search-clear" type="button" aria-label="Clear search" hidden>
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9" /></svg>
-        </button>
-        <button class="lines-button" id="lines-button" type="button">Lines</button>
-      </div>
-      <div class="search-pop" id="search-pop" hidden>
-        <div id="search-list" role="listbox" aria-label="Search results"></div>
-        <p class="search-empty" id="search-empty" hidden></p>
-      </div>
-      <p class="sr-only" id="search-status" role="status" aria-live="polite"></p>
-    </div>
-
-    <details class="legend" id="legend">
-      <!-- The icon is the map in miniature: a thick train line with a station
-           on it, over a thinner bus line that ends short of it. The time the
-           map shows is on the button itself, so it's visible with the key
-           closed. -->
-      <summary>
-        <svg class="key-icon" viewBox="0 0 20 20" aria-hidden="true">
-          <path class="k-rail" d="M2.5 7h15" stroke-width="4" stroke-linecap="round" />
-          <circle class="k-station" cx="12.5" cy="7" r="2.1" stroke-width="1.3" />
-          <path class="k-bus" d="M2.5 14.5h9" stroke-width="1.6" stroke-linecap="round" />
-        </svg>
-        <span class="key-title">Key</span>
-        <span class="key-time" id="legend-time">Weekdays, 9am to 3pm</span>
-        <svg class="key-close" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke-width="1.8" /></svg>
-      </summary>
-      <div class="legend-body">
-        <p class="about">An unofficial map of RTD buses and trains.</p>
-        <h2>Buses</h2>
-        <ul class="tiers" id="legend-tiers"></ul>
-        <h2 class="split"><span>Trains</span><span>How often</span></h2>
-        <ul class="rail" id="legend-rail"></ul>
-        <h2>On the map</h2>
-        <ul class="symbols" id="legend-symbols"></ul>
-        <h2 id="legend-live-head" hidden>Live</h2>
-        <ul class="symbols" id="legend-live" hidden></ul>
-        <p class="note" id="legend-note">Not affiliated with RTD. Data from RTD's public map and GTFS feeds.</p>
-      </div>
-      <div class="legend-more" aria-hidden="true"><span>More below</span></div>
-    </details>
-
-    <!-- Live: the one labeled button, because it changes what the map means.
-         Off, the word; on, the live mark and how old the positions shown are. -->
-    <button class="live-button" id="live-button" type="button" aria-pressed="false" title="Show the trains and buses where they are right now">
-      <span class="live-dot" aria-hidden="true"></span><span class="live-text">Live</span>
-    </button>
-
-    <div id="map" role="region" aria-label="Map"></div>
-
-    <!-- The panel for whatever is open: a bottom sheet on phones, a card on
-         the left on wider screens. It exists only while something is open. -->
-    <aside class="panel" id="panel" role="region" aria-labelledby="panel-title" hidden>
-      <div class="panel-top">
-        <button class="panel-handle" id="panel-handle" type="button" aria-label="Make the panel taller or shorter"><span></span></button>
-        <div class="panel-head">
-          <button class="panel-back" id="panel-back" type="button" aria-label="Back" hidden>
-            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" /></svg>
-          </button>
-          <div class="panel-titles">
-            <h2 id="panel-title" tabindex="-1"></h2>
-            <p class="panel-sub" id="panel-sub" hidden></p>
-          </div>
-          <button class="panel-close" id="panel-close" type="button" aria-label="Close">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" /></svg>
-          </button>
-        </div>
-      </div>
-      <div class="panel-body" id="panel-body"></div>
-    </aside>
-
-    <p class="status" id="status" role="status">Loading the network…</p>
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>RTD system map</title>
+<meta name="theme-color" content="#f5f3ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e141d" media="(prefers-color-scheme: dark)">
+<meta name="description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs.">
+<!-- What a shared link shows in messages and social posts (DESIGN.md, "Link preview"). The picture is made by scripts/og-image.mjs. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="RTD system map">
+<meta property="og:title" content="RTD system map">
+<meta property="og:description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs.">
+<meta property="og:url" content="https://rtd-system-map.pages.dev/">
+<meta property="og:image" content="https://rtd-system-map.pages.dev/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Map of central Denver with the colored rail lines meeting at Union Station and the bus streets beside them.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/vendor/maplibre-gl.css">
+<style>
+  @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: block; }
+  :root { --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; }
+  @media (prefers-color-scheme: dark) { :root { --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; } }
+  html, body, #map { margin: 0; height: 100%; background: var(--ground); }
+  body { font-family: Overpass, system-ui, sans-serif; overscroll-behavior: none; }
+  #steps { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(28px, calc(env(safe-area-inset-bottom) + 20px)); display: flex; align-items: center;
+    background: var(--card); border-radius: 22px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); }
+  #steps button { all: unset; width: 44px; height: 44px; text-align: center; font-size: 24px; line-height: 44px; color: var(--ink); cursor: pointer; }
+  #steps button:disabled { color: var(--quiet); opacity: 0.5; }
+  #sheets { display: flex; gap: 6px; padding: 0 2px; }
+  #sheets i { width: 5px; height: 5px; border-radius: 50%; background: var(--quiet); opacity: 0.5; }
+  #sheets i.on { background: var(--ink); opacity: 1; }
+  #credit { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--quiet); padding: 2px 6px; margin-left: -6px; border-radius: 8px; background: color-mix(in srgb, var(--ground) 82%, transparent); }
+  #credit a { color: inherit; }
+  #card { position: absolute; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: max(84px, calc(env(safe-area-inset-bottom) + 76px)); max-width: 420px; padding: 12px 14px; background: var(--card); color: var(--ink);
+    border-radius: 14px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); }
+  #card[hidden] { display: none; }
+  #card b { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; }
+  #card span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--quiet); line-height: 1.3; }
+  #card i { display: inline-block; min-width: 1.5em; height: 1.5em; margin-right: 6px; border-radius: 0.75em; text-align: center; font-style: normal; line-height: 1.55em; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="steps" role="group" aria-label="Map sheet">
+  <button id="out" aria-label="Wider sheet">&minus;</button>
+  <div id="sheets" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <button id="in" aria-label="Closer sheet">+</button>
+</div>
+<div id="card" role="status" hidden></div>
+<div id="credit">Unofficial. Data: RTD · <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · <a href="https://openfreemap.org">OpenFreeMap</a> · <a href="/classic/">Classic map</a></div>
+<script type="module" src="/js/sheets/main.js"></script>
+</body>
 </html>

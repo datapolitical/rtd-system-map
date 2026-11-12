@@ -24,7 +24,7 @@ export const BASEMAP_SOURCES = {
   openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
 };
 
-export const GLYPHS = `${new URL('vendor/glyphs/', document.baseURI).href}{fontstack}/{range}.pbf`;
+export const GLYPHS = `${new URL('../vendor/glyphs/', import.meta.url).href}{fontstack}/{range}.pbf`;
 
 const omt = (id, layer, rest) => ({ id, source: 'openmaptiles', 'source-layer': layer, ...rest });
 const zoom = (...stops) => ['interpolate', ['exponential', 1.5], ['zoom'], ...stops];

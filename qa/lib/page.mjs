@@ -5,6 +5,7 @@
 import { chromium, devices } from '@playwright/test';
 import { install } from './detect.mjs';
 import { stubAnalytics } from './analytics.mjs';
+import { mapPath } from './where.mjs';
 
 export const BASE = (process.env.CHECK_URL || 'http://127.0.0.1:8788').replace(/\/$/, '');
 const phone = { ...devices['iPhone 14'] };
@@ -24,7 +25,7 @@ export async function open(browser, theme, v, { base = BASE } = {}) {
     await route.fulfill({ response: res, body });
   });
   await page.addInitScript(() => localStorage.setItem('live', 'off'));
-  await page.goto(`/#${v.zoom}/${v.lat}/${v.lon}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${await mapPath(base)}#${v.zoom}/${v.lat}/${v.lon}`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__map, null, { timeout: 60_000 });
   await page.waitForFunction(() => window.__map.loaded(), null, { timeout: 60_000 }).catch(() => {});
   await install(page);

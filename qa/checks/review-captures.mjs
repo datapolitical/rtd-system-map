@@ -14,6 +14,7 @@ import path from 'node:path';
 import { chromium, devices } from '@playwright/test';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { stubAnalytics } from '../lib/analytics.mjs';
+import { mapPath } from '../lib/where.mjs';
 
 const BASE = (process.env.CHECK_URL || 'http://127.0.0.1:8788').replace(/\/$/, '');
 const outIndex = process.argv.indexOf('--out');
@@ -52,7 +53,7 @@ try {
     });
     await page.addInitScript(() => { try { localStorage.setItem('live', 'off'); } catch {} });
     for (const v of views) {
-      await page.goto(`${BASE}/#${v.zoom}/${v.lat}/${v.lon}`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${BASE}${await mapPath(BASE)}#${v.zoom}/${v.lat}/${v.lon}`, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.__map && window.__map.loaded(), null, { timeout: 90_000 });
       await page.waitForTimeout(2500);
       const buf = await page.screenshot();

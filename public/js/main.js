@@ -91,13 +91,13 @@ async function main() {
   // are: the labels come from the build's stations.geojson, read here with
   // meta.json and passed to basemapLabels. A failed read leaves the places
   // named.
-  const stations = fetch('data/stations.geojson').then(
+  const stations = fetch(new URL('../data/stations.geojson', import.meta.url)).then(
     (res) => (res.ok ? res.json() : { features: [] }),
     () => ({ features: [] }),
   );
   let meta;
   try {
-    const res = await fetch('data/meta.json');
+    const res = await fetch(new URL('../data/meta.json', import.meta.url));
     if (!res.ok) throw new Error(`meta.json: ${res.status}`);
     meta = await res.json();
     setWindow(meta.window);

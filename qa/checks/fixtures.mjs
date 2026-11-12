@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
 import { annotate, contrast, detect, install, jump, measure, pixels } from '../lib/detect.mjs';
 import { stubAnalytics } from '../lib/analytics.mjs';
+import { mapPath } from '../lib/where.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 // The site's own data, as the server under test serves it (CHECK_URL or the
@@ -66,7 +67,7 @@ export const test = base.extend({
         // where localStorage throws; that would read as a page error. The
         // latest one added runs last, so it sets the value.
         await page.addInitScript((v) => { try { localStorage.setItem('live', v ? 'on' : 'off'); } catch {} }, live);
-        await page.goto(`/#${zoom}/${lat}/${lon}`, { waitUntil: 'domcontentloaded' });
+        await page.goto(`${await mapPath(baseURL)}#${zoom}/${lat}/${lon}`, { waitUntil: 'domcontentloaded' });
         await idle(settle);
         installed = false;
       },
