@@ -2029,7 +2029,9 @@ How it is built:
   `terminals.geojson`) RTD's route lines stop at the door. A hall at least
   five pixels wide on a sheet is drawn as a quiet filled shape, a shade off
   both the ground and the buildings round it in either theme, edged in a
-  line that reads against it, under the streets and stops. Its shape is a squared room:
+  line that reads against it, under the streets and stops. The stops the build
+  counted as the station's are not ringed, nor are stops only trains call at:
+  the hall and the bar stand for them. Its shape is a squared room:
   the tightest rectangle round the surveyed outline, along its own lie,
   brought in until it covers the same ground. A street whose loose end is
   within ten pixels of a hall's wall is drawn onto the wall without
@@ -4129,6 +4131,10 @@ work against the real structure before asking for evaluation.
   100 px past Union Station's bar to a ragged cut; a line counted as ending
   only when its track stopped within three pitches of the station, which at
   zoom 16 is a few yards.
+- 2026-11-12: Sheets ring only stops a bus street serves: not a bus
+  station's gates, nor stops only trains call at. Reason: Union Station's
+  bus gates and rail tracks were scattered as rings over its hall and round
+  its bars on sheet 4.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
 

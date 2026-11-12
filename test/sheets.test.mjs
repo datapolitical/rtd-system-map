@@ -452,14 +452,16 @@ test('a route number never sits on a stop: each stop holds its ground, placed be
   const { sheetStyle, STOP_RING, STOP_ROOM } = await import('../public/js/sheets/style.js');
   for (const theme of ['light', 'dark']) {
     const layers = sheetStyle(theme).layers;
-    const rings = layers.filter((l) => l.source === 'stops' && l.type === 'circle');
+    const isStop = (l) => JSON.stringify(l.filter) === JSON.stringify(['==', ['get', 'kind'], 'stop']);
+    const rings = layers.filter((l) => isStop(l) && l.type === 'circle');
+    assert.ok(rings.length, 'the closest sheet rings its stops');
     for (const ring of rings) {
       const n = ring.id.split('-').pop();
       const keep = layers.findIndex((l) => l.id === `keep-off-stop-${n}`);
       const numbers = layers.findIndex((l) => l.id === `bus-number-${n}`);
       assert.ok(keep > numbers && numbers >= 0, `sheet ${n}: the stops' marks are placed first (MapLibre places the last layer first)`);
       const k = layers[keep];
-      assert.equal(k.source, 'stops');
+      assert.ok(isStop(k) && k.source === ring.source);
       assert.ok(k.layout['text-allow-overlap'] && !k.layout['text-ignore-placement'], 'the mark is always there and keeps others off');
       assert.ok(k.layout['text-size'] >= 2 * (STOP_RING.radius + STOP_RING.stroke / 2), 'the mark covers the whole ring');
       assert.equal(ring.paint['circle-radius'], STOP_RING.radius);
@@ -544,6 +546,15 @@ test('a block too short for its numbers and some air before its cross streets is
   const drawn = drawSheet(data, near).features.filter((f) => f.properties.kind === 'bus');
   assert.ok(drawn.some((f) => f.properties.routes === '3'), 'the rung is drawn');
   assert.ok(!drawn.some((f) => f.properties.routes === '3' && f.properties.label), 'but its number would overrun the streets at its ends');
+});
+
+test("a stop the build counted as a bus station's, or one only trains call at, is not ringed: the hall and the bar stand for it", async () => {
+  const { busStops } = await import('../scripts/lib/sheets.mjs');
+  const pt = (id, props) => ({ type: 'Feature', properties: { id, ...props }, geometry: { type: 'Point', coordinates: [0, 0] } });
+  const stops = { features: [pt('street', { lines: '15 19' }), pt('gate', { lines: '15', terminal: 1 }), pt('track', { lines: 'A B' }), pt('both', { lines: 'A 15' })] };
+  const routes = { features: [{ properties: { mode: 'rail', route: 'A' } }, { properties: { mode: 'rail', route: 'B' } }, { properties: { mode: 'bus', route: '15' } }] };
+  assert.deepEqual(busStops(stops, routes).map((f) => f.properties.id), ['street', 'both']);
+  assert.deepEqual(busStops(null, routes), []);
 });
 
 test("a line's tail track past its last station is no part of it: the line ends at that station's bar", () => {

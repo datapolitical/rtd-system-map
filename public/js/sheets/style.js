@@ -95,7 +95,7 @@ export function sheetStyle(theme) {
       paint: { 'line-color': byClass(c.bus), 'line-width': byClass(BUS_WIDTH[n]) } });
 
     // Bus stops: each one a ring, on the closest sheet.
-    if (n >= 4) layers.push({ id: `stop-${n}`, type: 'circle', source: 'stops', ...band,
+    if (n >= 4) layers.push({ id: `stop-${n}`, type: 'circle', source: `sheet-${n}`, filter: ['==', ['get', 'kind'], 'stop'], ...band,
       paint: n === 3 ? { 'circle-radius': 1.3, 'circle-color': c.stop, 'circle-opacity': 0.7 } : { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': c.stop, 'circle-stroke-width': STOP_RING.stroke } });
 
     // Rail: every line whole, with a rim of ground so lines side by side stay apart.
@@ -151,7 +151,7 @@ export function sheetStyle(theme) {
     layer('keep-off', 'symbol', { filter: kind('rail'), ...unseen });
     // A stop's ring holds its ground too: a route number never sits on a stop. One unseen
     // mark the size of the ring and a little air, placed before the numbers.
-    if (n >= 4) layers.push({ id: `keep-off-stop-${n}`, type: 'symbol', source: 'stops', ...band,
+    if (n >= 4) layers.push({ id: `keep-off-stop-${n}`, type: 'symbol', source: `sheet-${n}`, filter: ['==', ['get', 'kind'], 'stop'], ...band,
       layout: { 'text-field': 'O', 'text-font': FONT.medium, 'text-size': STOP_ROOM, 'text-allow-overlap': true, 'text-padding': 1.5, 'text-rotation-alignment': 'viewport' },
       paint: { 'text-opacity': 0 } });
   });
@@ -160,7 +160,6 @@ export function sheetStyle(theme) {
     glyphs: new URL('../../vendor/glyphs/{fontstack}/{range}.pbf', import.meta.url).href.replace(/%7B/g, '{').replace(/%7D/g, '}'),
     sources: {
       ground: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
-      stops: { type: 'geojson', data: new URL('../../data/stops.geojson', import.meta.url).href },
       ...Object.fromEntries(SHEETS.map((s) => [`sheet-${s.id}`, { type: 'geojson', data: new URL(`../../data/sheet-${s.id}.geojson`, import.meta.url).href, tolerance: 0.1 }])),
     },
     layers,

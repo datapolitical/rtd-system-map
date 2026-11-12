@@ -69,6 +69,8 @@ export const SIZES = {
   // A bus station's hall is drawn where it is at least this wide; a street that ends this near its wall ends on it.
   hallWide: 5,
   hallReach: 10,
+  // The sheet from which bus stops are drawn, each a ring.
+  stopSheet: 4,
 };
 
 // --- Screen pixels at a zoom (512-pixel tiles, as MapLibre draws) -----------
@@ -1901,10 +1903,24 @@ export function labelSide(street, streets, size) {
   return crowded(-1) ? 0 : -1;
 }
 
+/**
+ * The bus stops a sheet draws as rings. A stop the build counted as a bus station's is left
+ * off (its hall stands for it), and so is one only trains call at (its station's bar does).
+ */
+export function busStops(stops, routes) {
+  if (!stops) return [];
+  const rail = new Set(routes.features.filter((f) => f.properties.mode === 'rail').map((f) => f.properties.route));
+  return stops.features.filter((f) => {
+    const q = f.properties;
+    const served = String(q.lines ?? q.routes ?? '').split(/[ ,]+/).filter(Boolean);
+    return !q.terminal && !(served.length && served.every((r) => rail.has(r)));
+  });
+}
+
 // --- One sheet, as GeoJSON -------------------------------------------------------
 
 /** Everything one sheet draws, as a FeatureCollection the page loads. */
-export function drawSheet({ routes, stations, streets, terminals }, sheet) {
+export function drawSheet({ routes, stations, streets, terminals, stops }, sheet) {
   const lines = railLines(routes, sheet);
   const marks = stationMarks(stations, lines, sheet);
   const walls = halls(terminals, sheet);
@@ -1948,6 +1964,9 @@ export function drawSheet({ routes, stations, streets, terminals }, sheet) {
     const m = n.mark;
     features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: n.text, anchor: n.anchor, offset: n.offset, justify: n.justify },
       { type: 'Point', coordinates: back(lerp(m.ends[0], m.ends[1], 0.5)) }));
+  }
+  if (sheet.id >= SIZES.stopSheet) {
+    for (const f of busStops(stops, routes)) features.push(feature({ kind: 'stop', id: f.properties.id }, f.geometry));
   }
   const hub = marks.find((m) => m.hub);
   return { type: 'FeatureCollection', hub: hub ? back(lerp(hub.ends[0], hub.ends[1], 0.5)) : null, features };
