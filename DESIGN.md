@@ -1996,7 +1996,12 @@ How it is built:
   each station's name goes on the clearest side of its mark. A second track
   of the same line is not drawn, the shared track is rounded before lines are
   set beside it so a pack turns as one, and a line ends square at its last
-  station. Track that runs on past a station no farther than a walk (600 m),
+  station. A bend that moves the track less than about two thirds of a
+  line's width (a line and its gap) is too small to draw on that sheet: the
+  track is drawn straight through it, the station bars with it, and it
+  arrives at its end the way it was heading. A turn that moves it further
+  keeps its place, so the same S-bend that is gone on sheet 1 is drawn on
+  sheet 2. Track that runs on past a station no farther than a walk (600 m),
   with none of the line's stations beyond it, is tail track: the line ends
   at that station's bar. A line never ends at a station while another of
   its stations lies beyond, however little track is left. On the first sheet the hub and line ends are named large and other
@@ -2057,7 +2062,8 @@ How it is built:
   its bar is level with it, the letters of lines that end there hanging
   below. A name is never nearer another station's bar than its own: it
   moves, is set in one row, or (where not every station is named) is left
-  off. Where every line at a bar ends and the station before stands closer
+  off. A name that cannot sit right beside its bar stands off only as far
+  as it must, in small steps. Where every line at a bar ends and the station before stands closer
   than the name is tall, the name goes beyond the end of the line, the way
   the line was heading: beside the bar it would stand beside that station
   too.
@@ -4287,6 +4293,16 @@ work against the real structure before asking for evaluation.
   on sheet 1, through Sky Ridge and Lone Tree City Center, and pulled the
   lines up to 6 px off those stations' bars; and the large two-row
   "RidgeGate Parkway" stood beside the small names of the stations before.
+- 2026-11-12: Sheets: a bend smaller than a line is wide is drawn straight.
+  Chris, of the south end of E and R on sheet 1: "So how do we fix it?" The
+  track there swings 10 px side to side within 17 px, which the rounding over
+  three line widths left as a 6 px kink between Sky Ridge and Lone Tree City
+  Center. The track is now also rounded over nine line widths each way, and
+  that straighter course is the one drawn wherever it stays within 0.7 of a
+  line's width of the first; no line moves further than that on any sheet.
+  The slide where a line ends at Lincoln, about 1 px, no longer shows on the
+  straight line and is unchanged. Names step out from a bar in smaller steps
+  (1, 1.4, 1.8, 2.8) so one beside a leaning line stays close.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.

@@ -25,6 +25,10 @@ export const SIZES = {
   round: { 1: 2.5, 2: 3, 3: 3, 4: 3 },
   // Where a line changes its place beside others, it slides across over about this far each side.
   ease: 26,
+  // A bend that moves the track less than this many line widths (a line and its gap) is drawn
+  // straight: the track is rounded over this many line widths each way there.
+  bend: 0.7,
+  straight: 9,
   // Station marks this close would run together: the lesser one is left off the sheet.
   markRoom: 8.5,
   // A line within this many metres of a station stops there.
@@ -305,17 +309,42 @@ function slotted(run, pitch, ease) {
   }
   // The track itself is rounded over three pitches before anything is set beside it, so the
   // line on the inside of a tight bend still has room to curve: the pack turns as one.
-  const reach = Math.round(3 * pitch);
+  // `on` carries the path on past its ends as its mirror image through each end, so the end
+  // stays where it is and the path arrives there the way it was heading, not as the data wiggles.
+  const averaged = (reach, on = false) => {
+    let now = pts.map(([x, y]) => [x, y]);
+    const n = now.length - 1;
+    for (let pass = 0; pass < 2; pass++) {
+      const was = now;
+      const at = (j) => (j < 0 ? [2 * was[0][0] - was[-j][0], 2 * was[0][1] - was[-j][1]] : j > n ? [2 * was[n][0] - was[2 * n - j][0], 2 * was[n][1] - was[2 * n - j][1]] : was[j]);
+      now = was.map((_, i) => {
+        const k = on ? Math.min(reach, n) : Math.min(reach, i, n - i);
+        let [x, y] = [0, 0];
+        for (let j = i - k; j <= i + k; j++) { const q = at(j); x += q[0]; y += q[1]; }
+        return [x / (2 * k + 1), y / (2 * k + 1)];
+      });
+    }
+    return now;
+  };
+  const near = averaged(Math.round(3 * pitch));
+  // A bend that moves the track less than a line is wide is too small to draw at this scale.
+  // There the track is rounded over a far longer run, which leaves it all but straight; a
+  // bend that moves it further is a real turn and keeps its shape.
+  const far = averaged(Math.round(SIZES.straight * pitch), true);
+  let part = near.map((p, i) => Math.max(0, Math.min(1, 2 - dist(p, far[i]) / (SIZES.bend * pitch))));
   for (let pass = 0; pass < 2; pass++) {
-    const was = pts.map(([x, y]) => [x, y]);
-    pts.forEach((p, i) => {
-      const k = Math.min(reach, i, pts.length - 1 - i);
-      let [x, y] = [0, 0];
-      for (let j = i - k; j <= i + k; j++) { x += was[j][0]; y += was[j][1]; }
-      p[0] = x / (2 * k + 1);
-      p[1] = y / (2 * k + 1);
+    const was = part;
+    const reach = Math.round(pitch);
+    part = was.map((_, i) => {
+      const k = Math.min(reach, i, was.length - 1 - i);
+      let sum = 0;
+      for (let j = i - k; j <= i + k; j++) sum += was[j];
+      return sum / (2 * k + 1);
     });
   }
+  pts.forEach((p, i) => {
+    [p[0], p[1]] = lerp(near[i], far[i], part[i]);
+  });
   let slots = pts.map((p) => p[2]);
   for (let pass = 0; pass < 2; pass++) {
     slots = slots.map((_, i) => {
@@ -661,7 +690,7 @@ export function names(marks, lines, discs, sheet, streets = []) {
       // The row of letters sits under the name, and the name's room includes it.
       const [w, h] = [Math.max(wide, row.length * (2 * r + 2)), tall + (row.length ? 2 * r + 5 : 0)];
       let best = null;
-      for (const reach of [1, 1.8, 2.8]) {
+      for (const reach of [1, 1.4, 1.8, 2.8]) {
         for (const [dx, dy, anchor, cost] of sides) {
           const n = Math.hypot(dx, dy);
           const off = (rail / 2 + 5 + Math.abs((half[0] * dx + half[1] * dy) / n)) * reach;

@@ -894,3 +894,47 @@ test('a last station whose neighbour is closer than its name is tall is named be
   // With the station before far off, the name stands beside its bar as everywhere else.
   assert.equal(named(-150).anchor, 'left');
 });
+
+test('a bend smaller than a line is wide is drawn straight; a real turn keeps its place; the pack moves as one', () => {
+  const s1 = SHEETS[0];
+  const pitch = SIZES.rail[s1.id] + SIZES.gap[s1.id];
+  const o1 = toPx([-105, 39.75], s1.zoom);
+  const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
+  const drawn = (track, slot = 0) => railLines(all([line({ mode: 'rail', route: 'E', color: '#552683', slot }, track.map(([x, y]) => at1(x, y)))]), s1)[0]
+    .paths[0].map((p) => [p[0] - o1[0], p[1] - o1[1]]);
+  const without = (track) => {
+    const keep = SIZES.bend;
+    SIZES.bend = 1e-9;
+    try { return drawn(track); } finally { SIZES.bend = keep; }
+  };
+  // The track swings 6 px each way within 36 px of a long straight run.
+  const wiggle = [[0, -300], [0, -30], [-6, -12], [6, 6], [0, 24], [0, 300]];
+  const swing = (path) => Math.max(...path.map((p) => Math.abs(p[0])));
+  assert.ok(swing(without(wiggle)) > 1.5, 'the wiggle shows when only rounded over three line widths');
+  assert.ok(swing(drawn(wiggle)) < 0.75, `the line runs straight, not ${swing(drawn(wiggle)).toFixed(2)} px side to side`);
+  const [first, second] = [drawn(wiggle), drawn(wiggle, 1)];
+  for (const p of second) assert.ok(Math.abs(nearest(first, p).d - pitch) < 0.25, 'a line beside it stays one place over all the way');
+  // A dogleg 30 px across is a real turn: the line still makes it where the track does.
+  const dogleg = [[0, -300], [0, -15], [30, 15], [30, 300]];
+  const [turn, was] = [drawn(dogleg), without(dogleg)];
+  assert.ok(nearest(turn, [15, 0]).d < 1, 'it crosses half way where the track does');
+  for (const p of turn) assert.ok(nearest(was, p).d <= SIZES.bend * pitch + 0.5, 'and is nowhere moved further than a bend may be');
+  // A track that swings one way and ends the other arrives at its end the way it was heading.
+  const hook = drawn([[0, -300], [0, -30], [-6, -12], [4, 0]]);
+  assert.deepEqual(hook.at(-1).map((v) => Math.round(v)), [4, 0], 'the end stays where the track ends');
+  assert.ok(Math.min(...hook.map((p) => p[0])) > -0.5, 'with no swing the other way first');
+});
+
+test('a name that cannot sit right beside its bar stands off only as far as it must', () => {
+  const s1 = SHEETS[0];
+  const o1 = toPx([-105, 39.75], s1.zoom);
+  const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
+  const lines = railLines(all([line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(0, -300), at1(0, 300)])]), s1);
+  const marks = stationMarks(all([point({ id: 1, name: 'City', served: true, lines: 'E' }, at1(0, 0))]), lines, s1);
+  // A quiet street runs 7 px to each side of the line, where a name right beside the bar would sit.
+  const streets = [-7, 7].map((x) => st([[o1[0] + x, o1[1] - 100], [o1[0] + x, o1[1] + 100]], { cls: 'c30', hw: 30 }));
+  const off = (n) => Math.min(...marks[0].ends.map((p) => Math.hypot(Math.max(n.box[0] - p[0], 0, p[0] - n.box[2]), Math.max(n.box[1] - p[1], 0, p[1] - n.box[3]))));
+  const [clear, beside] = [names(marks, lines, [], s1)[0], names(marks, lines, [], s1, streets)[0]];
+  assert.ok(off(beside) > off(clear), 'the name moves off the street');
+  assert.ok(off(beside) < 11, `but no further than it must: ${off(beside).toFixed(1)} px`);
+});
