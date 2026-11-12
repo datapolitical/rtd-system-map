@@ -1982,10 +1982,17 @@ How it is built:
 - **The build decides where things go; the page only inks them.** Rail pieces
   are joined into whole lines and set side by side; a station is one white bar
   across the lines that stop there; each line's letter sits where the line
-  runs alone; each station's name goes on the clearest side of its mark.
+  runs alone, or among its neighbours where it shares track for a long way;
+  each station's name goes on the clearest side of its mark. A second track
+  of the same line is not drawn, the shared track is rounded before lines are
+  set beside it so a pack turns as one, and a line ends square at its last
+  station. On the first sheet the hub and line ends are named large and other
+  stations small, where a name has open ground.
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
+  Streets too close to tell apart at a sheet's scale are drawn as one street
+  that carries the routes of both.
   `test/sheets.test.mjs` holds the rules.
 - **Made for continuous zoom later.** Each sheet's layers show for a band of
   zooms around its own, so drawing between two sheets is a later step that

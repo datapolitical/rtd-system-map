@@ -10,6 +10,8 @@ export async function writeSheets(dir) {
   const data = { routes: await read('routes'), stations: await read('stations'), streets: await read('streets') };
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
+    // Where the page opens: on the hub.
+    if (sheet.id === 1) await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ hub: drawn.hub }));
     await writeFile(path.join(dir, `sheet-${sheet.id}.geojson`), JSON.stringify(drawn));
     const count = (kind) => drawn.features.filter((f) => f.properties.kind === kind).length;
     console.log(`sheet ${sheet.id} (zoom ${sheet.zoom}): ${count('rail')} rail lines, ${drawn.features.filter((f) => f.properties.shape === 'name').length} station names, ${count('letter')} letters, ${count('bus')} bus streets`);

@@ -10,11 +10,13 @@ const zooms = SHEETS.map((s) => s.zoom);
 
 const meta = await fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json());
 const [[west, south], [east, north]] = meta.bounds.core;
+// The page opens on the hub, a little above the middle so the lines south of it show.
+const { hub } = await fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({}));
 
 const map = new maplibregl.Map({
   container: 'map',
   style: sheetStyle(theme()),
-  center: [(west + east) / 2, (south + north) / 2],
+  center: hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2],
   zoom: zooms[0],
   minZoom: zooms[0] - 0.6,
   maxZoom: zooms.at(-1) + 0.6,

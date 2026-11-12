@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, names, busStreets, drawSheet, inkOn } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, drawSheet, inkOn } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -93,4 +93,19 @@ test('a sheet is rail, bus, stations and letters, and lettering reads on its col
   for (const kind of ['bus', 'rail', 'bar', 'name', 'letter']) assert.ok(kinds.includes(kind), `no ${kind}`);
   assert.equal(inkOn('#C4D600'), '#10151d');
   assert.equal(inkOn('#552683'), '#ffffff');
+});
+
+test('a second track beside a line is not drawn, and a line that never runs alone still gets its letter', () => {
+  const rail = (route, slot, coords) => line({ mode: 'rail', route, color: '#57C1E9', slot }, coords);
+  const routes = all([
+    rail('A', 0.5, [at(0, 0), at(400, 0)]),
+    // A second track of A, a few pixels to one side and ending short: no part of the drawing.
+    rail('A', 0.5, [at(360, 3), at(385, 3)]),
+    rail('B', -0.5, [at(0, 0), at(400, 0)]),
+  ]);
+  const lines = railLines(routes, sheet);
+  assert.equal(lines[0].paths.length, 1);
+  assert.ok(Math.abs(length(lines[0].paths[0]) - 400) < 2, 'the line does not fold back along its second track');
+  const set = letters(lines, [], sheet);
+  assert.deepEqual([...new Set(set.map((l) => l.route))].sort(), ['A', 'B']);
 });

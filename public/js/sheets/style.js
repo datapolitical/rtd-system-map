@@ -16,21 +16,21 @@ const GAP = { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
 
 export const PALETTES = {
   dark: {
-    ground: '#0e141d', water: '#15202f', park: '#101a1c', road: '#131a25', street: '#121923', building: '#121924',
+    ground: '#0e141d', water: '#15202f', park: '#101a1c', freeway: '#1b2535', road: '#131a25', street: '#121923', building: '#121924',
     // Bus streets, quietest to busiest: one family, brighter as buses come more often.
-    bus: { c60: '#3c4a63', c30: '#55668a', c15: '#93a3c2', c10: '#c3cde2', c5: '#f0f3fa', c3: '#f0f3fa' },
+    bus: { c60: '#39465e', c30: '#51617f', c15: '#8291ae', c10: '#aab5cb', c5: '#ccd4e3', c3: '#ccd4e3' },
     mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', streetName: '#4b566b', number: '#c9d2e4', stop: '#aab6cf',
   },
   light: {
-    ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
-    bus: { c60: '#c0c5ce', c30: '#a5adbb', c15: '#7d889c', c10: '#566179', c5: '#232d45', c3: '#232d45' },
+    ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
+    bus: { c60: '#c6c8cd', c30: '#adb0b7', c15: '#868a93', c10: '#5f636c', c5: '#3c4048', c3: '#3c4048' },
     mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', streetName: '#a3a6ad', number: '#3a4560', stop: '#566179',
   },
 };
 
 // Bus street widths by class, per sheet.
 const BUS_WIDTH = {
-  1: { c60: 0.8, c30: 1, c15: 1.5, c10: 1.9, c5: 2.3, c3: 2.3 },
+  1: { c60: 0.8, c30: 1, c15: 1.4, c10: 1.8, c5: 2.1, c3: 2.1 },
   2: { c60: 0.9, c30: 1.2, c15: 1.8, c10: 2.4, c5: 3.1, c3: 3.1 },
   3: { c60: 1.4, c30: 1.8, c15: 2.4, c10: 3, c5: 3.6, c3: 3.6 },
   4: { c60: 2.2, c30: 2.8, c15: 3.6, c10: 4.4, c5: 5.2, c3: 5.2 },
@@ -43,6 +43,8 @@ const FONT = { regular: ['Overpass Regular'], medium: ['Overpass Medium'], semib
 const byClass = (table) => ['match', ['get', 'cls'], ...Object.entries(table).flat(), Object.values(table)[0]];
 const kind = (k, ...more) => ['all', ['==', ['get', 'kind'], k], ...more];
 const ROUND = { 'line-cap': 'round', 'line-join': 'round' };
+// Rail ends square, so a line stops at its last station's mark and doesn't poke past it.
+const FLAT = { 'line-cap': 'butt', 'line-join': 'round' };
 
 /** The whole style: the ground, then each sheet's layers, each shown only around its own zoom. */
 export function sheetStyle(theme) {
@@ -65,8 +67,8 @@ export function sheetStyle(theme) {
     const roads = n === 1 ? ['motorway'] : n === 2 ? ['motorway', 'trunk', 'primary'] : ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service'];
     layers.push({ id: `roads-${n}`, type: 'line', source: 'ground', 'source-layer': 'transportation', ...band,
       filter: ['all', ['in', ['get', 'class'], ['literal', roads]], ['!=', ['get', 'brunnel'], 'tunnel']], layout: ROUND,
-      paint: { 'line-color': ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], c.road, c.street],
-        'line-width': ['match', ['get', 'class'], 'motorway', [1, 2, 5, 12][i], ['trunk', 'primary'], [0, 1.2, 4, 10][i], [0, 0, 2.4, 7][i]] } });
+      paint: { 'line-color': ['match', ['get', 'class'], 'motorway', n <= 2 ? c.freeway : c.road, ['trunk', 'primary'], c.road, c.street],
+        'line-width': ['match', ['get', 'class'], 'motorway', [2.2, 3, 5, 12][i], ['trunk', 'primary'], [0, 1.2, 4, 10][i], [0, 0, 2.4, 7][i]] } });
     if (n === 4) layers.push({ id: 'buildings-4', type: 'fill', source: 'ground', 'source-layer': 'building', ...band, paint: { 'fill-color': c.building } });
 
     // Bus streets, quietest first so the busiest are on top; the busiest get a rim of ground to sit clear.
@@ -81,16 +83,20 @@ export function sheetStyle(theme) {
       paint: n === 3 ? { 'circle-radius': 1.3, 'circle-color': c.stop, 'circle-opacity': 0.7 } : { 'circle-radius': 3, 'circle-color': c.ground, 'circle-stroke-color': c.stop, 'circle-stroke-width': 1.4 } });
 
     // Rail: every line whole, with a rim of ground so lines side by side stay apart.
-    layer('rail-rim', 'line', { filter: kind('rail'), layout: ROUND, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
-    layer('rail', 'line', { filter: kind('rail'), layout: ROUND, paint: { 'line-color': ['get', 'color'], 'line-width': w } });
+    layer('rail-rim', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
+    layer('rail', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': ['get', 'color'], 'line-width': w } });
 
     // Stations: one white bar across the lines that stop there; the hub's is heavier.
     const bar = kind('station', ['==', ['get', 'shape'], 'bar']);
-    const heavy = ['case', ['get', 'hub'], 2.2, 0];
-    layer('station-edge', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.markEdge, 'line-width': ['+', w * 0.72 + 2.4, heavy] } });
-    layer('station', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.mark, 'line-width': ['+', w * 0.72, heavy] } });
+    // A station on one line is a dot a little wider than its line, so it reads as a station.
+    const mark = ['case', ['get', 'single'], w + 1.4, ['get', 'hub'], w * 0.72 + 2.2, w * 0.72];
+    layer('station-edge', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.markEdge, 'line-width': ['+', mark, 2.6] } });
+    layer('station', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.mark, 'line-width': mark } });
 
     // Lettering, least important first (MapLibre places the last layer first).
+    if (n <= 2) layers.push({ id: `freeway-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band, filter: ['all', ['==', ['get', 'class'], 'motorway'], ['has', 'ref'], ['==', ['geometry-type'], 'LineString']],
+      layout: { 'symbol-placement': 'line', 'symbol-spacing': 260, 'text-field': ['concat', ['match', ['get', 'network'], 'us-interstate', 'I-', 'us-highway', 'US ', ['case', ['>=', ['to-number', ['get', 'ref'], -1], 0], 'Hwy ', '']], ['get', 'ref']], 'text-font': FONT.medium, 'text-size': 9, 'text-letter-spacing': 0.04, 'text-rotation-alignment': 'viewport', 'text-padding': 6 },
+      paint: { 'text-color': c.place, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
     if (n >= 3) layers.push({ id: `street-name-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band,
       layout: { 'symbol-placement': 'line', 'symbol-spacing': 320, 'text-field': ['get', 'name'], 'text-font': FONT.regular, 'text-size': n === 3 ? 9 : 10.5, 'text-max-angle': 25, 'text-padding': 8 },
       paint: { 'text-color': c.streetName, 'text-halo-color': c.ground, 'text-halo-width': 1.2 } });
@@ -101,11 +107,11 @@ export function sheetStyle(theme) {
       paint: { 'text-color': c.number, 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
     layers.push({ id: `place-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'place', ...band,
       filter: ['in', ['get', 'class'], ['literal', n < 3 ? ['city', 'town'] : ['suburb', 'neighbourhood', 'quarter']]],
-      layout: { 'text-field': ['upcase', ['get', 'name']], 'text-font': FONT.medium, 'text-size': 10.5, 'text-letter-spacing': 0.22, 'text-padding': 12, 'text-max-width': 8 },
+      layout: { 'text-field': ['upcase', ['get', 'name']], 'text-font': FONT.medium, 'text-size': 10.5, 'text-letter-spacing': 0.22, 'text-padding': 4, 'text-max-width': 8 },
       paint: { 'text-color': c.place, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
     layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name']),
-      layout: { 'text-field': ['get', 'text'], 'text-font': FONT.semibold, 'text-size': NAME_SIZE[n], 'text-max-width': 40, 'text-line-height': 1.12,
+      layout: { 'text-field': ['get', 'text'], 'text-font': ['case', ['get', 'minor'], ['literal', FONT.medium], ['literal', FONT.semibold]], 'text-size': ['case', ['get', 'minor'], 10, NAME_SIZE[n]], 'text-max-width': 40, 'text-line-height': 1.12,
         'text-anchor': ['get', 'anchor'], 'text-offset': ['get', 'offset'], 'text-justify': ['get', 'justify'], 'text-allow-overlap': true, 'text-padding': 3 },
       paint: { 'text-color': c.name, 'text-halo-color': c.ground, 'text-halo-width': 2 } });
     // Line letters, placed by the build where each line runs alone: a disc in the line's colour.
@@ -116,7 +122,7 @@ export function sheetStyle(theme) {
       paint: { 'text-color': ['get', 'ink'] } });
     // Names keep off the lines: unseen marks along rail and the busiest streets hold their ground.
     // (MapLibre places the last layer first, so this comes after the names.)
-    layer('keep-off', 'symbol', { filter: n === 1 ? kind('rail') : ['any', kind('rail'), kind('bus', ['in', ['get', 'cls'], ['literal', ['c10', 'c5', 'c3']]])],
+    layer('keep-off', 'symbol', { filter: ['any', kind('rail'), kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]])],
       layout: { 'symbol-placement': 'line', 'symbol-spacing': 6, 'text-field': 'o', 'text-font': FONT.medium, 'text-size': 7, 'text-allow-overlap': true, 'text-padding': 0, 'text-rotation-alignment': 'viewport' },
       paint: { 'text-opacity': 0 } });
   });

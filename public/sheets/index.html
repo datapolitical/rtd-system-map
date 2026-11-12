@@ -12,16 +12,16 @@
   @media (prefers-color-scheme: dark) { :root { --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; } }
   html, body, #map { margin: 0; height: 100%; background: var(--ground); }
   body { font-family: Overpass, system-ui, sans-serif; overscroll-behavior: none; }
-  #steps { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center;
+  #steps { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(28px, calc(env(safe-area-inset-bottom) + 20px)); display: flex; align-items: center;
     background: var(--card); border-radius: 22px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); }
   #steps button { all: unset; width: 44px; height: 44px; text-align: center; font-size: 24px; line-height: 44px; color: var(--ink); cursor: pointer; }
   #steps button:disabled { color: var(--quiet); opacity: 0.5; }
-  #sheets { display: flex; flex-direction: column-reverse; gap: 5px; padding: 2px 0; }
+  #sheets { display: flex; gap: 6px; padding: 0 2px; }
   #sheets i { width: 5px; height: 5px; border-radius: 50%; background: var(--quiet); opacity: 0.5; }
   #sheets i.on { background: var(--ink); opacity: 1; }
-  #credit { position: absolute; left: max(10px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--quiet); }
+  #credit { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--quiet); }
   #credit a { color: inherit; }
-  #card { position: absolute; left: max(12px, env(safe-area-inset-left)); right: 76px; bottom: max(30px, env(safe-area-inset-bottom)); max-width: 420px; padding: 12px 14px; background: var(--card); color: var(--ink);
+  #card { position: absolute; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: max(84px, calc(env(safe-area-inset-bottom) + 76px)); max-width: 420px; padding: 12px 14px; background: var(--card); color: var(--ink);
     border-radius: 14px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); }
   #card[hidden] { display: none; }
   #card b { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; }
@@ -32,9 +32,9 @@
 <body>
 <div id="map"></div>
 <div id="steps" role="group" aria-label="Map sheet">
-  <button id="in" aria-label="Closer sheet">+</button>
-  <div id="sheets" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
   <button id="out" aria-label="Wider sheet">&minus;</button>
+  <div id="sheets" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <button id="in" aria-label="Closer sheet">+</button>
 </div>
 <div id="card" role="status" hidden></div>
 <div id="credit">Unofficial. Data: RTD · <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · <a href="https://openfreemap.org">OpenFreeMap</a></div>
