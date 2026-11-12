@@ -25,9 +25,8 @@ const SPIKE_METERS = 100;
 // its steps.
 const RETRACE_METERS = 5;
 // Where a line leaves others it shared track with, it eases from its slot
-// beside them to its slot without them: done once they are this far away, or
-// this far along at the latest, and in steps of this part of a line's width.
-const APART_METERS = 250;
+// beside them to its slot without them: over this far along at the most, and
+// in steps of this part of a line's width.
 const EASE_METERS = 1500;
 const EASE_STEP = 1 / 32;
 // A line that left a pack within this of an end of its own track ended there.
@@ -152,21 +151,6 @@ export function sharedTrack(features, stations = []) {
     }
     return [...found].sort().join(' ');
   };
-  // How far a point is from the nearest of some lines, as far as APART_METERS.
-  const reach = Math.ceil(APART_METERS / 100);
-  const apart = (routes, p) => {
-    let best = Infinity;
-    const [cx, cy] = cell(...p).split(',').map(Number);
-    for (let dx = -reach; dx <= reach; dx++) {
-      for (let dy = -reach; dy <= reach; dy++) {
-        for (const s of grid.get(`${cx + dx},${cy + dy}`) ?? []) {
-          if (routes.has(s.route)) best = Math.min(best, segmentDistance(p, s.a, s.b));
-        }
-      }
-    }
-    return best;
-  };
-
   // Where each line's track ends, for the runs to change at (atLineEnds).
   const lineEnds = lines.flatMap((line) => line.parts.flatMap((part) => [part[0], part.at(-1)].map((p) => ({ route: line.route, p }))));
   // Each part becomes runs of points that share with the same lines. A run
@@ -290,7 +274,7 @@ export function sharedTrack(features, stations = []) {
     [...routes].every((route) =>
       lines.some((line) => line.route === route && line.parts.some((part) => [part[0], part.at(-1)].some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) <= END_HERE_METERS))),
     );
-  for (const run of runs) run.slots = eased(run, apart, marks, endedAt);
+  for (const run of runs) run.slots = eased(run, marks, endedAt);
   const pieces = runs.flatMap((run) =>
     inPieces(run.points, run.slots).map(({ slot, points }) => ({
       type: 'Feature',
@@ -679,7 +663,7 @@ function lettersAlong(tracks, marks, metersPerPixel) {
 // further away, so the line doesn't step sideways where the others leave, and
 // isn't drawn over one of them while their tracks are still close. Only the
 // run with fewer lines moves; the lines still together stay in their slots.
-function eased(run, apart, marks, endedAt = () => false) {
+function eased(run, marks, endedAt = () => false) {
   const { points } = run;
   const slots = points.map(() => run.slot);
   const members = (r) => r.set.split(' ');
@@ -715,10 +699,15 @@ function eased(run, apart, marks, endedAt = () => false) {
       }
       if (nearest && nearest.at > STATION_CLEAR_METERS) room = Math.min(room, nearest.at - STATION_CLEAR_METERS);
     }
+    // Over the whole of that room, however soon the other lines are far
+    // away. The move used to finish once they were 250 m off, which at a
+    // junction where they turn sharply aside is within 300 m: a slot
+    // sideways in 300 m is a kink at zoom 11, where 300 m is 10 px and a
+    // slot is 6, and it read as the line breaking (C south of I-25 /
+    // Broadway, where E and T turn east).
     let done = 0;
     for (let k = 0; k < order.length && done < 1; k++) {
-      const farEnough = (apart(gone, points[order[k]]) - SHARED_METERS) / (APART_METERS - SHARED_METERS);
-      done = Math.max(done, Math.min(1, Math.max(farEnough, along[k] / room)));
+      done = Math.max(done, Math.min(1, along[k] / room));
       // Eased at both ends, so the line bends into and out of the move.
       slots[order[k]] += shift * (1 - done * done * (3 - 2 * done));
     }
