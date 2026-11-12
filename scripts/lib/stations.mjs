@@ -16,12 +16,14 @@ const MATCH_METERS = 300;
  * draws it. `today` is midnight UTC on the agency's local date.
  *
  * Returns { stations, unmatched, positioning, ends, headsigns, order }: per map
- * station, in order, { served, lines, returns } (returns is the ISO date trains
- * next call there, when they don't this week); the names of GTFS rail stations
- * that match no map station; the lines that are only trains getting into
- * position; each line's two ends, as indexes into `stations`; the headsign
- * trains to each of those ends most often show (null if none); and each line's
- * stations from its first end to its second, as most of its trips call there.
+ * station, in order, { served, lines, returns, platforms } (returns is the ISO
+ * date trains next call there, when they don't this week; platforms are its
+ * GTFS child stops, each with the lines that call at it); the names of GTFS
+ * rail stations that match no map station; the lines that are only trains
+ * getting into position; each line's two ends, as indexes into `stations`; the
+ * headsign trains to each of those ends most often show (null if none); and
+ * each line's stations from its first end to its second, as most of its trips
+ * call there.
  */
 export function stationService(text, stations, { today, isRailRoute, lineOf }) {
   const routes = new Map(readCsv(text['routes.txt']).map((r) => [r.route_id, r]));
@@ -54,16 +56,20 @@ export function stationService(text, stations, { today, isRailRoute, lineOf }) {
 
   // Platforms belong to a station through parent_station.
   const stops = new Map(readCsv(text['stops.txt']).map((s) => [s.stop_id, s]));
-  const groups = new Map(); // station stop_id -> { stop, services: service -> lines }
+  const groups = new Map(); // station stop_id -> { stop, services: service -> lines, platforms: stop_id -> { stop, lines } }
   for (const [stopId, byService] of calls) {
     const stop = stops.get(stopId);
     if (!stop) continue;
     const station = stops.get(stop.parent_station) ?? stop;
-    const group = groups.get(station.stop_id) ?? groups.set(station.stop_id, { stop: station, services: new Map() }).get(station.stop_id);
+    const group = groups.get(station.stop_id) ?? groups.set(station.stop_id, { stop: station, services: new Map(), platforms: new Map() }).get(station.stop_id);
     for (const [service, lines] of byService) {
       const all = group.services.get(service) ?? group.services.set(service, new Set()).get(service);
       for (const line of lines) all.add(line);
     }
+    // The child stop itself, with every line that calls there: where the
+    // station's platforms are, for the platform groups (platforms.mjs).
+    const platform = group.platforms.get(stopId) ?? group.platforms.set(stopId, { stop, lines: new Set() }).get(stopId);
+    for (const lines of byService.values()) for (const line of lines) platform.lines.add(line);
   }
 
   // A "line" whose trains all run one way, stopping only where other lines
@@ -168,6 +174,15 @@ export function stationService(text, stations, { today, isRailRoute, lineOf }) {
         served,
         lines: [...lines].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
         returns: !served && next ? iso(next) : null,
+        // The station's platforms, where trains call: each child stop with the
+        // lines that call at it, in stop order (platforms.mjs groups them).
+        platforms: found
+          .flatMap(({ platforms }) => [...platforms.values()])
+          .map(({ stop, lines: at }) => ({
+            at: [Number(stop.stop_lon), Number(stop.stop_lat)],
+            lines: [...at].filter((line) => !positioning.has(line)).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
+          }))
+          .filter((platform) => platform.lines.length),
       };
     }),
     unmatched: unmatched.sort(),

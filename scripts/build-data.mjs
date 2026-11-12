@@ -12,12 +12,14 @@ import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { busNames } from './lib/busnames.mjs';
 import { heading, stopLines } from './lib/stops.mjs';
-import { nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
+import { endAtMarks, nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
+import { groupPlatforms, groupPoints, meters, platformMarks, walkPoint } from './lib/platforms.mjs';
 import { busStretches } from './lib/stretches.mjs';
 import { buildStreets } from './lib/streets.mjs';
-import { terminalFootprints } from './lib/footprints.mjs';
+import { BUILDING_R, terminalFootprints } from './lib/footprints.mjs';
+import { extendLineToPlatforms, platformsToMarks, stationStructures } from './lib/structures.mjs';
 import { clipAtHalls, shortenAtHall, stopsOfHalls } from './lib/halls.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
@@ -50,6 +52,14 @@ const ROLES = {
 // Our own published site: where the last build's halls are, on a fresh
 // checkout, for a station OpenStreetMap doesn't answer for.
 const SITE = (process.env.RTD_SITE_URL ?? 'https://rtd-system-map.pages.dev').replace(/\/$/, '');
+// A rail letter stands within this of its line (metres); letters sit up
+// to about 20 m off the drawn track where lines share it.
+const LETTER_ON = 30;
+// ...and not within this of a mark its line ends at, on the far side of it.
+const LETTER_PAST = 150;
+// ...and no nearer than this (px, at the zoom it comes in) to the mark of a
+// station its line ends at.
+const LETTER_CLEAR_PX = 24;
 const SIMPLIFY = 0.00001;
 // A stop within this of a terminal's hall (metres) and farther than
 // HALL_STOP_LINE from every bus line drawn is shown with the hall.
@@ -58,6 +68,9 @@ const HALL_STOP_LINE = 30;
 const PRECISION = 5;
 // A station is moved onto its lines' track when it's at most this far away.
 const SNAP_METERS = 200;
+// Line ends this close together are one row of platforms, and the station's
+// bar goes across them (Union Station's four commuter lines).
+const ROW_METERS = 60;
 // Phones open on the box holding this share of weekday service, east to west
 // and north to south (scripts/lib/core.mjs).
 const CORE_SHARE = 0.6;
@@ -219,6 +232,29 @@ async function main() {
   const positioning = new Set(service.positioning);
   geo.routes = geo.routes.filter((f) => !(f.properties.mode === 'rail' && positioning.has(f.properties.route)));
 
+  // The shapes each rail station has in OpenStreetMap: its platforms, the
+  // canopy over them and its station building, read from tags and where the
+  // station's platform stops are (scripts/lib/structures.mjs; DESIGN.md,
+  // "Stations"). Nothing about a station is written down: a station draws
+  // what OSM has, and a station whose box OSM would not answer for keeps last
+  // build's shapes.
+  // This folder's, or on a fresh checkout (the daily build) the published
+  // site's, as the halls do below.
+  const structuresPrevious =
+    (await readFile(path.join(OUT, 'structures.geojson'), 'utf8').then((t) => JSON.parse(t).features).catch(() => null)) ??
+    (await fetch(`${SITE}/data/structures.geojson`, { signal: AbortSignal.timeout(20_000) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.features ?? [])
+      .catch(() => []));
+  const shapesAt = await stationStructures({
+    stations: geo.stations,
+    platforms: service.stations.map((s) => s.platforms),
+    previous: structuresPrevious,
+  });
+  console.log(
+    `  rail station shapes: ${shapesAt.byStation.size} stations (${[...shapesAt.byStation.values()].filter((s) => s.building).length} with a station building, ${[...shapesAt.byStation.values()].filter((s) => s.canopies.length).length} with a canopy)${shapesAt.failed ? `, ${shapesAt.failed} not looked up` : ''}`,
+  );
+
   // Bus routes in stretches, each with the frequency of the trips that run
   // along it, so a leg only a few trips take isn't drawn as frequent.
   const buses = geo.routes.filter((f) => f.properties.mode === 'bus');
@@ -271,10 +307,18 @@ async function main() {
   // from far out: signs at the ends of rail lines, tags on frequent buses.
   // Each line stops at its end stations (no tail track), and each station
   // sits on its lines' track: RTD's points can be off it by a platform's width.
+  // Where each station's platform stops are, for running lines along their
+  // platforms (extendLineToPlatforms).
+  const atStop = service.stations.map((s) => (s.platforms ?? []).map((p) => p.at));
   for (const f of rail) {
     const ends = service.ends[f.properties.route];
     if (!ends) continue;
-    f.geometry = { type: 'MultiLineString', coordinates: trimToEnds(partsOf(f.geometry), ends.map((i) => geo.stations[i].geometry.coordinates)) };
+    const trimmed = trimToEnds(partsOf(f.geometry), ends.map((i) => geo.stations[i].geometry.coordinates));
+    // Where OSM draws the platforms, each line runs along the one it stops at
+    // to the platform's real end, so the lines fill the train hall and the
+    // light-rail platforms rather than stopping at one point
+    // (scripts/lib/structures.mjs, extendLineToPlatforms).
+    f.geometry = { type: 'MultiLineString', coordinates: extendLineToPlatforms(trimmed, ends, atStop, shapesAt.byStation) };
   }
   const { pieces, letters } = sharedTrack(
     rail,
@@ -286,6 +330,213 @@ async function main() {
     const lines = new Set(f.properties.lines.split(' '));
     const at = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), f.geometry.coordinates, SNAP_METERS);
     if (at) f.geometry = { type: 'Point', coordinates: at };
+  }
+  // A rail station's own mark and name belong beside its station building,
+  // at the platform group nearest it: Union Station's are on the train hall,
+  // where its building is, not at the light-rail tip RTD's single point falls
+  // on. The group comes from the GTFS child stops, the building from OSM; a
+  // station with no building keeps RTD's point.
+  for (let i = 0; i < geo.stations.length; i++) {
+    const f = geo.stations[i];
+    const shapes = shapesAt.byStation.get(i);
+    if (!f.properties.served || !shapes?.building || !shapes.centre) continue;
+    const groups = groupPlatforms(service.stations[i].platforms ?? []).map(meanPoint).sort((a, b) => meters(a, shapes.centre) - meters(b, shapes.centre));
+    if (!groups.length) continue;
+    const lines = new Set(f.properties.lines.split(' '));
+    const home = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), groups[0], SNAP_METERS);
+    if (home) f.geometry = { type: 'Point', coordinates: home };
+  }
+  // A station where several lines end draws its bar across the row they end
+  // in. Each line runs to the end of its own platform; at a terminal the
+  // platforms stand side by side, so the lines end in one row there, and the
+  // mark belongs on it, not at the platforms' middle nor at the end RTD's
+  // single point falls on. Union Station's four commuter lines end together
+  // at the train hall's southwest end.
+  // The lines that end at a station (by its index).
+  const endingAt = (i) => new Set(Object.entries(service.ends).filter(([, ends]) => ends.includes(i)).map(([route]) => route));
+  {
+    const endsAt = new Map();
+    for (const f of rail) {
+      const ends = service.ends[f.properties.route];
+      if (!ends) continue;
+      const parts = partsOf(f.geometry);
+      for (const i of ends) {
+        const ref = shapesAt.byStation.get(i)?.centre ?? geo.stations[i].geometry.coordinates;
+        let near = null;
+        for (const part of parts) {
+          for (const p of [part[0], part.at(-1)]) {
+            const d = meters(p, ref);
+            if (d <= BUILDING_R && (!near || d < near.d)) near = { p, d };
+          }
+        }
+        if (!near) continue;
+        if (!endsAt.has(i)) endsAt.set(i, []);
+        endsAt.get(i).push({ p: near.p, d: near.d });
+      }
+    }
+    for (const [i, ends] of endsAt) {
+      // A station a line ends at is marked at the line's end, one line or
+      // several, whether or not other lines run on through it: the line runs
+      // the length of its platform and ends at the mark. A mark left back at
+      // the stops had the line cut there, short of the platform drawn beside
+      // it, and the rest of the platform showed past the mark like the ghost
+      // of the line (Lincoln, where T ends and E and R run on).
+      // The largest group of ends within a row's width is the row.
+      const rows = [];
+      for (const t of ends) {
+        const row = rows.find((r) => r.some((q) => meters(q.p, t.p) <= ROW_METERS));
+        if (row) row.push(t);
+        else rows.push([t]);
+      }
+      rows.sort((a, b) => b.length - a.length || Math.min(...a.map((t) => t.d)) - Math.min(...b.map((t) => t.d)));
+      const at = [0, 1].map((c) => rows[0].reduce((s, t) => s + t.p[c], 0) / rows[0].length);
+      const f = geo.stations[i];
+      const lines = new Set(f.properties.lines.split(' '));
+      const on = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), at, SNAP_METERS);
+      if (on && meters(on, at) <= ROW_METERS) f.geometry = { type: 'Point', coordinates: on };
+    }
+  }
+  // The bus stations' halls (see "Bus stations drawn as their halls" below),
+  // found here because a hall between a station's platform groups says where
+  // their marks go. The station points are as they were when the halls were
+  // found further down: the walk's move comes after.
+  const busStations = geo.facilities.flatMap((f, i) => (['BUS', 'STN'].includes(f.properties.class) ? [i] : []));
+  const nearRail = (q) => geo.stations.some((s) => Math.hypot((s.geometry.coordinates[0] - q[0]) * 85300, (s.geometry.coordinates[1] - q[1]) * 110540) < 100);
+  const hallsBefore =
+    (await readFile(path.join(OUT, 'terminals.geojson'), 'utf8').then((t) => JSON.parse(t).features).catch(() => null)) ??
+    (await fetch(`${SITE}/data/terminals.geojson`, { signal: AbortSignal.timeout(20_000) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.features ?? [])
+      .catch(() => []));
+  const footprints = await terminalFootprints({
+    facilities: geo.facilities,
+    indexes: busStations,
+    stops: geo.stops,
+    previous: hallsBefore,
+    busOnly: new Set(busStations.filter((i) => nearRail(geo.facilities[i].geometry.coordinates))),
+  });
+  geo.terminals = [...footprints.terminals.values()].map((t) => t.feature);
+  const halls = geo.terminals.flatMap((f) => (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).map((rings) => rings[0]));
+  // The walk between a station's platform groups runs straight along the
+  // hall between them (platforms.mjs, walkAxis; DESIGN.md, "Platform
+  // groups"): the station's own mark moves onto that line, at its own group,
+  // and the other groups' marks are placed on it too (groupPoints,
+  // platformMarks). Union Station's two marks stand at the two ends of its
+  // bus concourse, and the walk runs down the middle of it.
+  geo.stations.forEach((f, i) => {
+    if (!f.properties.served) return;
+    const at = walkPoint(f, service.stations[i].platforms ?? [], pieces, endingAt(i), halls);
+    if (!at) return;
+    console.log(`  ${f.properties.name}: marks in line with the hall between its platforms (its own moved ${Math.round(meters(f.geometry.coordinates, at))} m)`);
+    f.geometry = { type: 'Point', coordinates: at };
+  });
+  // A line ends at its end station's mark (DESIGN.md, "Stations"; #75): the
+  // station's own mark, or the mark of the platform group the line stops
+  // at. Where the line ran on along its platform past the mark, it is cut
+  // where the mark crosses it, before the ends are signed and the marks
+  // drawn from the track. A group has a mark of its own only where the
+  // station has more than one and it is not the group the station's own
+  // mark stands for (platformMarks); a station with one group is drawn at
+  // its own point, which can be tens of metres from its stops (the airport).
+  {
+    const groups = groupPoints(geo.stations, service.stations.map((s) => s.platforms ?? []), pieces, endingAt, halls);
+    const marks = new Map();
+    for (const [route, ends] of Object.entries(service.ends)) {
+      const at = [];
+      for (const i of ends) {
+        if (!geo.stations[i]?.properties.served) continue;
+        const here = geo.stations[i].geometry.coordinates;
+        at.push(here);
+        const mine = groups.filter((g) => g.station === i);
+        if (mine.length < 2) continue;
+        const own = mine.reduce((best, g) => (meters(here, g.at) < meters(here, best.at) ? g : best));
+        for (const g of mine) if (g !== own && g.lines.includes(route)) at.push(g.at);
+      }
+      if (at.length) marks.set(route, at);
+    }
+    const kept = endAtMarks(pieces, marks);
+    pieces.splice(0, pieces.length, ...kept);
+    // The way back along a line from the mark it ends at ([east, north], a
+    // unit vector): from the line's end there to the point 20 m along it.
+    const inwardAt = (routes, at) => {
+      // The line's end at the mark is the piece end nearest it.
+      let best = null;
+      for (const piece of pieces) {
+        if (!routes.includes(piece.properties.route)) continue;
+        for (const part of partsOf(piece.geometry)) {
+          for (const path of [part, [...part].reverse()]) {
+            const d = meters(path[0], at);
+            if (d <= 30 && (!best || d < best.d)) best = { d, path };
+          }
+        }
+      }
+      if (!best) return null;
+      const { path } = best;
+      let k = 1;
+      while (k < path.length - 1 && meters(path[0], path[k]) < 20) k += 1;
+      const [dx, dy] = [(path[k][0] - path[0][0]) * 111320 * Math.cos((at[1] * Math.PI) / 180), (path[k][1] - path[0][1]) * 110540];
+      const l = Math.hypot(dx, dy);
+      return l > 1 ? [dx / l, dy / l] : null;
+    };
+    // A platform is drawn only as far as the mark its lines end at
+    // (structures.mjs, platformsToMarks): each mark every one of whose lines
+    // ends there, with the way back along those lines.
+    {
+      const ends = [];
+      for (const i of new Set(Object.values(service.ends).flat())) {
+        const f = geo.stations[i];
+        if (!f?.properties.served) continue;
+        const here = f.geometry.coordinates;
+        const ending = endingAt(i);
+        const mine = groups.filter((g) => g.station === i);
+        const own = mine.length ? mine.reduce((best, g) => (meters(here, g.at) < meters(here, best.at) ? g : best)) : null;
+        for (const g of mine) {
+          if (!g.lines.every((route) => ending.has(route))) continue;
+          const at = g === own ? here : g.at;
+          const inward = inwardAt(g.lines, at);
+          if (inward) ends.push({ station: f.properties.id, at, inward });
+        }
+      }
+      const before = shapesAt.features.length;
+      const cut = platformsToMarks(shapesAt.features, ends);
+      shapesAt.features.splice(0, before, ...cut);
+      const gone = shapesAt.features.filter((x) => !cut.includes(x) && !cut.some((c) => c.properties === x.properties));
+      console.log(`  platforms and roofs drawn as far as the mark their lines end at: ${ends.length} marks; wholly past a mark, not drawn: ${before - cut.length}${gone.length ? ` (${gone.map((x) => `${x.properties.name} ${x.properties.kind}`).join(', ')})` : ''}`);
+    }
+    geo.routes = [...geo.routes.filter((f) => f.properties.mode !== 'rail'), ...pieces];
+    // A letter names the line it stands on. The letters were placed on the
+    // lines before they were cut: one left past the mark, where its line no
+    // longer runs (W and E beyond Union Station's light-rail mark), goes.
+    // Past the mark: within LETTER_PAST of a mark its line ends at, on the
+    // side the line doesn't come from. (Its distance from the line alone
+    // doesn't say: a letter 20 m past a cut end is as near the line as one
+    // on a track drawn in a pack.)
+    const pastMark = (f) =>
+      (marks.get(f.properties.route) ?? []).some((m) => {
+        const p = f.geometry.coordinates;
+        if (meters(m, p) > LETTER_PAST) return false;
+        const inward = inwardAt([f.properties.route], m);
+        if (!inward) return false;
+        return (p[0] - m[0]) * 111320 * Math.cos((m[1] * Math.PI) / 180) * inward[0] + (p[1] - m[1]) * 110540 * inward[1] < -2;
+      });
+    const onLine = (f) => !pastMark(f) && nearestOnTrack(pieces.filter((p) => p.properties.route === f.properties.route), f.geometry.coordinates, LETTER_ON) !== null;
+    const stranded = letters.filter((f) => !onLine(f));
+    if (stranded.length) {
+      letters.splice(0, letters.length, ...letters.filter(onLine));
+      console.log(`  rail letters left past a line's end, not drawn: ${stranded.length} (${[...new Set(stranded.map((f) => f.properties.route))].join(', ')})`);
+    }
+    // A letter up against the mark its line ends at crowds it (the W touched
+    // Union Station's light-rail mark once the mark stood at the line's end):
+    // one within LETTER_CLEAR_PX of such a mark, at the zoom the letter comes
+    // in, goes. The marks have moved since the letters were spaced from them.
+    const pxMetres = (zoom, lat) => (78271.517 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
+    const crowds = (f) =>
+      (marks.get(f.properties.route) ?? []).some((m) => meters(m, f.geometry.coordinates) <= LETTER_CLEAR_PX * pxMetres(f.properties.from, m[1]));
+    const crowding = letters.filter(crowds);
+    if (crowding.length) {
+      letters.splice(0, letters.length, ...letters.filter((f) => !crowds(f)));
+      console.log(`  rail letters up against the mark their line ends at, not drawn: ${crowding.length} (${[...new Set(crowding.map((f) => f.properties.route))].join(', ')})`);
+    }
   }
   // Wider screens open on the routes drawn at full strength from far out,
   // rail and buses every 30 minutes or better, not on the long reach of a few
@@ -339,6 +590,24 @@ async function main() {
   stationMarks(geo.stations, pieces).forEach((m, i) => {
     Object.assign(geo.stations[i].properties, { tick: m.tick, tickBearing: m.tickBearing, tickFrom: m.from, meet: m.meet });
   });
+  // Where a station's lines stop in places too far apart for one mark to
+  // stand for them (DESIGN.md, "Stations"): a station mark at each platform
+  // group, joined to the station's own mark by a thin line. The groups come
+  // from the GTFS child stops and the lines that call at them, so a station
+  // whose platforms are one place gets nothing extra, and one that gains or
+  // loses a platform group does so with no change here.
+  geo.platforms = platformMarks(
+    geo.stations,
+    service.stations.map((s) => s.platforms),
+    pieces,
+    endingAt,
+    halls,
+  );
+  const apart = [...new Set(geo.platforms.filter((f) => f.properties.kind === 'mark').map((f) => f.properties.id))];
+  if (apart.length) {
+    const labels = new Map(geo.stations.map((f) => [f.properties.id, f.properties.label]));
+    console.log(`  stations marked at more than one platform group: ${apart.map((id) => labels.get(id)).join(', ')}`);
+  }
 
   // Names along the streets buses share, one run per street.
   geo.busnames = busNames(geo.routes.filter((f) => f.properties.mode === 'bus'), { precision: PRECISION });
@@ -353,6 +622,20 @@ async function main() {
   const drawnLines = new Set(geo.routes.map((f) => f.properties.route));
   const lineAt = (code) => (drawnLines.has(code) ? code : drawnLines.has(byCode.get(code)) ? byCode.get(code) : null);
   for (const { properties: p } of geo.stops) Object.assign(p, { lines: stopLines(p.routes, lineAt), heading: heading(p.dir) });
+  // A stop only trains call at is a platform of its station, which the
+  // station's mark stands for: it isn't drawn as a stop, the small dot the
+  // key calls a bus stop (it stood on the rail line beside the mark).
+  {
+    const railLines = new Set(geo.routes.filter((f) => f.properties.mode === 'rail').map((f) => f.properties.route));
+    let platforms = 0;
+    for (const { properties: p } of geo.stops) {
+      const lines = String(p.lines ?? '').split(' ').filter(Boolean);
+      if (!lines.length || !lines.every((l) => railLines.has(l))) continue;
+      p.platform = 1;
+      platforms += 1;
+    }
+    console.log(`  stops only trains call at (platforms, not drawn as stops): ${platforms}`);
+  }
   // Bus stations drawn as their halls (DESIGN.md, "Bus routes", "Terminals";
   // scripts/lib/footprints.mjs, #82): each of RTD's bus-station facilities
   // (class BUS or STN) as the hall its gates stand in, from OpenStreetMap,
@@ -362,23 +645,6 @@ async function main() {
   // (shortenAtHall), and no line is drawn through a hall (scripts/lib/halls.mjs).
   // Last build's halls stand in for a station OSM doesn't answer for: this
   // folder's, or on a fresh checkout (the daily build) the published site's.
-  const busStations = geo.facilities.flatMap((f, i) => (['BUS', 'STN'].includes(f.properties.class) ? [i] : []));
-  const nearRail = (q) => geo.stations.some((s) => Math.hypot((s.geometry.coordinates[0] - q[0]) * 85300, (s.geometry.coordinates[1] - q[1]) * 110540) < 100);
-  const hallsBefore =
-    (await readFile(path.join(OUT, 'terminals.geojson'), 'utf8').then((t) => JSON.parse(t).features).catch(() => null)) ??
-    (await fetch(`${SITE}/data/terminals.geojson`, { signal: AbortSignal.timeout(20_000) })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => j?.features ?? [])
-      .catch(() => []));
-  const footprints = await terminalFootprints({
-    facilities: geo.facilities,
-    indexes: busStations,
-    stops: geo.stops,
-    previous: hallsBefore,
-    busOnly: new Set(busStations.filter((i) => nearRail(geo.facilities[i].geometry.coordinates))),
-  });
-  geo.terminals = [...footprints.terminals.values()].map((t) => t.feature);
-  const halls = geo.terminals.flatMap((f) => (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).map((rings) => rings[0]));
   const served = new Set(geo.stops.filter((f) => f.properties.terminal).flatMap((f) => String(f.properties.lines ?? '').split(' ').filter(Boolean)));
   geo.routes = shortenAtHall(geo.routes, halls, served);
   console.log(`  bus terminals drawn as their halls: ${geo.terminals.map((f) => `${f.properties.name} (${f.properties.kind}${f.properties.underground ? ', below ground' : ''}, ${f.properties.gates} gates)`).join(', ') || 'none'}`);
@@ -387,6 +653,9 @@ async function main() {
   const hallReport = { drawn: geo.terminals.map((f) => f.properties.name), fellBack: footprints.fellBack, lost: footprints.lost };
   if (hallReport.fellBack.length) console.log(`  HALLS FROM THE LAST BUILD (OpenStreetMap didn't answer): ${hallReport.fellBack.join(', ')}`);
   if (hallReport.lost.length) console.log(`  HALLS NOT DRAWN (OpenStreetMap didn't answer, and no last build to draw them from): ${hallReport.lost.join(', ')}`);
+  // The rail stations' shapes, and the roofs over the halls, drawn as one
+  // layer: platforms, canopies and station buildings (network.js, 'structures').
+  geo.structures = [...shapesAt.features, ...footprints.canopies];
   const built = buildStreets(geo.routes.filter((f) => f.properties.mode === 'bus'), split.loads, {
     precision: PRECISION,
     places: [...geo.stations, ...geo.facilities].map((f) => f.geometry.coordinates),
@@ -481,6 +750,7 @@ async function main() {
   counts.streets = geo.streets.length;
   counts.terminals = geo.terminals.filter((f) => !f.properties.underground).length;
   counts.terminals_under = geo.terminals.filter((f) => f.properties.underground).length;
+  counts.structures = geo.structures.length;
 
   // Write to a fresh folder, then swap it in, so a crash mid-write can't leave
   // half a dataset behind.
@@ -575,3 +845,6 @@ main().catch((err) => {
 });
 
 const partsOf = (g) => (g.type === 'LineString' ? [g.coordinates] : g.coordinates);
+
+// The middle of a platform group's stops.
+const meanPoint = (group) => [group.reduce((s, p) => s + p.at[0], 0) / group.length, group.reduce((s, p) => s + p.at[1], 0) / group.length];

@@ -15,7 +15,8 @@ import { test, expect, pixels } from './fixtures.mjs';
 const VIEW = { lat: 39.75491, lon: -105.00348 };
 const MAX_MEAN = 8, MIN_WITHIN = 90;
 const layerOf = (m) =>
-  m.startsWith('dot-') ? 'stations-dot' : m.startsWith('station-') ? 'stations' : m.startsWith('hub-') ? 'stations-hub'
+  m.includes('+') ? null // an area drawn from paint, compared by its own layers elsewhere
+  : m.startsWith('dot-') ? 'stations-dot' : m.startsWith('station-') ? 'stations' : m.startsWith('hub-') ? 'stations-hub'
   : m === 'parking' || m === 'transit-center' ? 'facilities' : m === 'vehicle-bus' ? 'vehicles-bus' : m.startsWith('vehicle-') ? 'vehicles-rail'
   : m === 'stations-unserved' || m === 'stops' ? m : null;
 

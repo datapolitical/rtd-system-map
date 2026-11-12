@@ -83,6 +83,9 @@ const arrowFade = ['interpolate', ['linear'], ['zoom'], ARROWS_FROM, 0, ARROWS_F
 // stand in (the build finds it: scripts/lib/footprints.mjs), from the zoom the
 // old disk appeared at.
 const TERMINAL_FROM = 13;
+// A station's platforms and canopy are detail: they earn their place once the
+// station is bigger than its mark.
+const STRUCTURE_FROM = 14.2;
 // Width from the line's weekday headway, at the bus tier boundaries: <=15
 // minutes full width, 16-30 and 31-60 a step down, over 60 thinner still. A
 // line with no weekday headway (weekend-only, or not running) is thinnest.
@@ -124,7 +127,7 @@ export function lettersFirst(layers) {
   return layers;
 }
 
-export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'facilities', 'terminals', 'labels', 'stops'];
+export const DATA_SOURCES = ['flexride', 'routes', 'streets', 'stations', 'platforms', 'facilities', 'terminals', 'structures', 'labels', 'stops'];
 // Loaded when the map gets close enough to need them (see loadWhenNeeded).
 const LAZY = ['stops'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -263,6 +266,46 @@ export function transitLines(lines) {
       paint: {
         'fill-color': P.under.fill,
         'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 0.8],
+      },
+    },
+    // A rail station's shapes, from OpenStreetMap at build time
+    // (scripts/lib/structures.mjs; DESIGN.md, "Stations"): its station
+    // building filled like the halls, its platforms in concrete, the canopy
+    // over them as the lightest wash, so a station reads as a place with a
+    // hall, bays and a roof, not as a point. The roofs over the bus halls are
+    // in the same source. Only at the zooms where they are bigger than a
+    // mark.
+    {
+      id: 'station-building',
+      type: 'fill',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'building'],
+      minzoom: TERMINAL_FROM,
+      paint: {
+        'fill-color': P.building,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], TERMINAL_FROM, 0, TERMINAL_FROM + 0.5, 1],
+      },
+    },
+    {
+      id: 'station-platform',
+      type: 'fill',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'platform'],
+      minzoom: STRUCTURE_FROM,
+      paint: {
+        'fill-color': P.platform.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], STRUCTURE_FROM, 0, STRUCTURE_FROM + 0.6, 1],
+      },
+    },
+    {
+      id: 'station-canopy',
+      type: 'fill',
+      source: 'structures',
+      filter: ['==', ['get', 'kind'], 'canopy'],
+      minzoom: STRUCTURE_FROM,
+      paint: {
+        'fill-color': P.canopy.fill,
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], STRUCTURE_FROM, 0, STRUCTURE_FROM + 0.6, 1],
       },
     },
     // (Beneath the bus lines, so a line that ends at a hall's edge ends on
@@ -415,14 +458,77 @@ export function transitLines(lines) {
 export function transitMarks(lines) {
   const halo = { 'text-halo-color': P.land, 'text-halo-width': 1.8, 'text-halo-blur': 0.4 };
   return [
+    // A station whose lines stop in places too far apart for one mark to stand
+    // for them gets a station mark at each platform group, joined to the
+    // station's own mark by a thin line, so every line ends at a mark and the
+    // groups read as one place (DESIGN.md, "Stations"). The build finds the
+    // groups in GTFS and places them on the drawn track (platforms.geojson);
+    // a group's mark waits for the zoom where it is clear of the station's own
+    // (`tickFrom`, as a station too near a stronger one does), then it is a
+    // station mark, drawn with the same images at the same sizes.
+    {
+      id: 'platform-joins',
+      type: 'line',
+      source: 'platforms',
+      filter: ['==', ['get', 'kind'], 'join'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      // A row of dots, the walk between the marks: a hairline here read as a
+      // scratch across the blocks, not as part of the station.
+      paint: {
+        'line-color': P.station.edge,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.4, 13, 2, 16, 2.6],
+        'line-dasharray': [0.01, 2.1],
+        'line-opacity': farOpacity(() => 0.9, { until: ZOOMS.at(-1) }),
+      },
+    },
+    {
+      id: 'platform-dot',
+      type: 'symbol',
+      source: 'platforms',
+      filter: ['==', ['get', 'kind'], 'mark'],
+      minzoom: OVERVIEW_UNTIL,
+      maxzoom: CAPSULE_TO,
+      layout: {
+        'icon-image': ['concat', 'dot-', ['coalesce', ['get', 'tick'], ['get', 'span']]],
+        'icon-size': stationSize,
+        'icon-rotate': ['coalesce', ['get', 'tickBearing'], ['get', 'bearing']],
+        'icon-rotation-alignment': 'map',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+      paint: {
+        'icon-opacity': farOpacity((z) => (z < OVERVIEW_UNTIL + 0.4 ? (z - OVERVIEW_UNTIL) / 0.4 : z <= CAPSULE_FROM ? 1 : Math.max(0, (CAPSULE_TO - z) / (CAPSULE_TO - CAPSULE_FROM)))),
+      },
+    },
+    {
+      id: 'platform',
+      type: 'symbol',
+      source: 'platforms',
+      filter: ['==', ['get', 'kind'], 'mark'],
+      minzoom: CAPSULE_FROM,
+      layout: {
+        'icon-image': ['step', ['zoom'], ['concat', 'station-', ['coalesce', ['get', 'tick'], ['get', 'span']]], CAPSULE_TO, ['concat', 'station-', ['get', 'span']]],
+        'icon-size': stationSize,
+        'icon-rotate': ['step', ['zoom'], ['coalesce', ['get', 'tickBearing'], ['get', 'bearing']], CAPSULE_TO, ['get', 'bearing']],
+        'icon-rotation-alignment': 'map',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+      // A group's mark arrives at its own `tickFrom`, which can be any zoom the
+      // capsule is drawn at, so the fades are stepped to the last zoom the
+      // marks grow to (16), not to the capsule's first (11).
+      paint: { 'icon-opacity': farOpacity((z) => Math.min(1, Math.max(0, (z - CAPSULE_FROM) / (CAPSULE_TO - CAPSULE_FROM))), { until: ZOOMS.at(-1) }) },
+    },
     {
       id: 'stops',
       type: 'circle',
       source: 'stops',
       minzoom: STOPS_ZOOM,
       // A stop inside a terminal's hall is one of its gates, shown from z17
-      // ('stops-gate'); out here the hall stands for them.
-      filter: ['!=', ['coalesce', ['get', 'terminal'], 0], 1],
+      // ('stops-gate'); out here the hall stands for them. A stop only
+      // trains call at (`platform`) is its station's, and the station's mark
+      // stands for it: the small dot is a bus stop.
+      filter: ['all', ['!=', ['coalesce', ['get', 'terminal'], 0], 1], ['!=', ['coalesce', ['get', 'platform'], 0], 1]],
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 2.4, 18, 5],
         'circle-color': P.stop.fill,
@@ -592,25 +698,49 @@ export function transitMarks(lines) {
       },
       paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
     },
+    // From HUB_CLEAR_FROM the hub's name stays off rail and the frequent
+    // buses like every other name (see 'station-labels-hub' below for why it
+    // doesn't further out), and is still placed before the other stations'.
+    {
+      id: 'station-labels-hub-near',
+      type: 'symbol',
+      source: 'stations',
+      minzoom: HUB_CLEAR_FROM,
+      filter: ['all', served, isHub],
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-font': FONT.bold,
+        'text-size': ['interpolate', ['linear'], ['zoom'], 10.5, 10.5, 13, 12, 16, 14.5],
+        'text-variable-anchor-offset': HUB_NEAR_BESIDE,
+        'text-justify': 'auto',
+        'text-max-width': 8,
+      },
+      paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
+    },
     // Rail and the frequent buses take up their own room here (basemap.js),
     // so everything placed after them, which is every name on the map, stays
-    // off them. Above these: only what names a line and so sits on it. The
-    // hub's name is placed between the two (see below).
-    ...lineKeepOut().filter((l) => l.id !== 'keep-out-rail'),
+    // off them. Above these: only what names a line and so sits on it, and
+    // the hub's name, the one exception (see below).
+    ...lineKeepOut(),
     // The hub (Union Station: where the most lines meet, and more end than
     // get a sign) is the one name the metro zooms must have, and the one with
     // the least room beside it: seven lines leave it in four directions, and
     // frequent buses fill the rest. So at every zoom its name is placed
-    // before every other station's and before the frequent
-    // buses claim their room: it stays off rail, may cross a bus line, and
-    // sits as near its ring as any other name sits to its mark. It used to
-    // go up to six ems out, a quarter of a phone's width, where it read as
-    // some other place's.
+    // before every other station's and before rail and the frequent buses
+    // claim their room: it may cross a bus line, and it sits as near its ring
+    // as any other name sits to its mark. It used to go up to six ems out, a
+    // quarter of a phone's width, where it read as some other place's. It is
+    // the one name placed before the rail keep-out too, because at the
+    // station the lines end: they run along the platform to its end, and the
+    // mark and its name stand where they do, so there is no point beside the
+    // mark that is not on rail. A name with a halo on its own station's tracks
+    // reads; a station with no name at all does not.
     {
       id: 'station-labels-hub',
       type: 'symbol',
       source: 'stations',
       minzoom: NAMES_FROM,
+      maxzoom: HUB_CLEAR_FROM,
       filter: ['all', served, isHub],
       layout: {
         'text-field': ['get', 'label'],
@@ -622,7 +752,6 @@ export function transitMarks(lines) {
       },
       paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
     },
-    ...lineKeepOut().filter((l) => l.id === 'keep-out-rail'),
     // Rail letters ride along their lines, placed before the bus numbers
     // below. The build says where (scripts/lib/sharedtrack.mjs): lines that
     // share track take turns, so each is named, and a letter sits between
@@ -725,6 +854,12 @@ const BESIDE = beside([0.7, 1.1, 1.4]);
 // The hub's name starts a little further out, clear of its ring (about 0.85
 // em across at the metro zooms), and goes no further than any other's.
 const HUB_BESIDE = beside([1, 1.4]);
+// Closer in the lines end at the hub's mark (they run their platforms'
+// length to it), so there is room beside it that is on no line, and its
+// name takes it: from this zoom the name stays off rail and the frequent
+// buses, with one more ring to find its place in.
+const HUB_CLEAR_FROM = 15;
+const HUB_NEAR_BESIDE = beside([1, 1.4, 1.8]);
 // The hub: where the most lines meet (`meet`), and where more lines end than
 // get a sign (`hub`); the same station on RTD's network.
 const isHub = ['any', ['==', ['get', 'hub'], true], ['==', ['get', 'meet'], true]];

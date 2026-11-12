@@ -660,7 +660,10 @@ publishes:
 - **Stops** with `lines`, the drawn map routes that actually stop there
   (families mapped to the drawn code, so FF1 is FF), and `heading`
   ("Northbound", "Southeast-bound", and so on). Stop popups used to list
-  routes that pass a stop but do not stop at it, with no direction.
+  routes that pass a stop but do not stop at it, with no direction. A stop
+  only trains call at carries `platform`: it is a platform of its station,
+  which the station's mark stands for, and is not drawn as a stop (the small
+  dot is a bus stop, and these stood on the rail line beside the mark).
 - **`meta.json`:** besides source versions and bounds, `window` (`{"from":
   "09:00","to":"15:00"}`, from which the page words "Weekdays, 9am to 3pm"),
   `rail[].ends` (each line's two end names, from what trains there say
@@ -696,7 +699,9 @@ and the return on its own.
 On every build:
 
 1. Find GTFS stops served by rail trips and group platforms by their
-   `parent_station`.
+   `parent_station`. Each group keeps its child stops and the lines that call
+   at each, so the map can mark a station at more than one platform (see
+   "Platform groups" under "Stations").
 2. Match each group to the nearest station on RTD's map within 300 m.
 3. For each map station, check the feed's calendar (with its exceptions):
    - **Served:** trains call there in the next seven days. Its lines are the
@@ -961,7 +966,10 @@ what it leaves to us:
   hub's name keeps the same distance, but is placed first, before every
   other name and before the frequent buses claim their room, because at the
   metro zooms the map must have it: it stays off rail and may cross a bus
-  line. (Until 2026-11-07 it could go six ems out and sat a quarter of a
+  line. From zoom 15 there is room, and it stays off rail and the frequent
+  buses like every other name, with one more ring (1.8 ems) to find its
+  place in: the lines end at the hub's mark, so the ground past their end is
+  on no line. (Until 2026-11-07 it could go six ems out and sat a quarter of a
   phone's width from the knot, in empty space.)
 - **Line labels** (Imhof): follow the line; if repeated, the copies are
   evenly spaced; on long lines in dense networks a label "may be repeated
@@ -1052,7 +1060,13 @@ carry the sense of place:
   shield and fade out from 14.5 to 15. US highways have a notched US-route
   shield, so "40" on Colfax doesn't read as a bus tag, and fade out from 13
   to 13.5. State highway numbers are not drawn.
-- **Neighborhood names** in plain sentence case, from zoom 12. **City names**,
+- **Neighborhood names** in plain sentence case, from zoom 12. A place whose
+  name is a served station's label (the Union Station neighbourhood, the
+  Central Park suburb) is left out: the map reads the served stations'
+  own labels from `data/stations.geojson` when it loads and passes them to
+  the basemap's place layer, so a place never reads as a second name for the
+  station (from 2026-11-08; nothing is written down about any one place).
+  **City names**,
   and town names from zoom 11, in
   small, letter-spaced capitals in the same quiet gray, the convention for a
   name that covers an area rather than marks a point, so "DENVER" reads as
@@ -1161,6 +1175,129 @@ station, line or split needs no change:
   fill, light edge) read as a light pill. Ticks across lines are 10 px
   before scaling (5 at zoom 10), a dot 8.
 
+**Platform groups.** A station whose lines stop in places too far apart for
+one mark gets a mark at each group, joined to the station's own mark by a row
+of dots, the walk between them. Union Station is the one place this happens: its light rail ends on the
+west side and its four commuter lines end 273 m east, where RTD's single point
+for the station cannot stand for them. The build finds the groups from the
+GTFS child stops it already collects under each station (`parent_station`) and
+knows nothing about a station, a platform or a line
+(`scripts/lib/platforms.mjs`, with `test/platforms.test.mjs`):
+
+- *One group or two.* Child stops up to 100 m apart are one place whatever
+  lines call there, since two sides of one platform are one platform. Up to
+  250 m apart they are one place when a line calls at both, since RTD puts a
+  line's two directions' platforms up to 200 m apart along the street. Beyond
+  that, or at that distance with no line in common, they are two. A stop
+  between two others makes one group of all three, so a long platform is not
+  split in two.
+- *One group or two, by track.* Lines of one place whose drawn tracks are
+  more than 20 m apart where they stop are two groups (`splitByTrack`): one
+  mark can't stand across both tracks, and the line left out ran past the
+  station with no mark on it. Peoria is the case: R ends at its own platform
+  and A passes 30 m north. Lines that share track are drawn on one path and
+  are never split.
+- *Where a group's mark goes.* In this order. (1) In line with the hall:
+  where a bus terminal's hall lies between a station's groups, the marks
+  stand where the hall's long axis crosses each group's track beside its
+  stops (`walkAxis`; the axis is carried 80 m past each end of the hall, and
+  a hall counts when it is at least twice as long as it is wide), so the two
+  marks, the walk between them and the hall are one straight line. Union
+  Station's two marks are at the two ends of its bus concourse, and the walk
+  runs down the middle of it. The marks used to stand at the lines' ends,
+  one at the north end of the light-rail platform and one at the south end
+  of the train hall, and the walk between them ran at an angle across the
+  hall: "you would never draw it that way if you were just drawing this by
+  hand". (2) At the lines' end, where every line of the group ends there, so
+  each runs the length of its platform and ends at the mark. (3) Abreast of
+  the station's own mark, where the platform reaches that far (within 40 m of
+  one of the group's stops), so two marks of one station stand side by side
+  (Peoria). (4) Otherwise on the track beside the group's stops, and only
+  when the stops are nowhere near the drawn track at the lines' ends, so it
+  never stands in the air. A line that ends at the group ends at its mark
+  (`endAtMarks`), never past it. It is a station mark like any other, the
+  same image at the same size, turned across its lines, as wide as the lines
+  that stop there, so a group reads as a station, not a new kind of thing.
+- *When it comes.* A group's mark waits until it clears the station's own mark
+  by the same rule as a station's tick (`tickFrom`), so a group a few metres
+  from the station never doubles it, and a group that never clears gets no
+  mark. The station's own mark stands for the group its point is on, if it is
+  on one. At Union Station the second mark arrives at zoom 13.
+- *One station.* A row of dots from the station's mark to each group's, in
+  the station's edge ink (dots 1.4 px across at zoom 10, 2 at 13 and 2.6 at
+  16, a little over two dots apart), says the marks are one place and the way
+  between them is on foot. It was a hairline at 55%, which read as a scratch
+  across the blocks. No name sits on the dots (`keep-out-walk`). The name is
+  still drawn once, on the station's own mark.
+
+Union Station and Peoria have more than one group in RTD's feed today. The build
+reports every station it marks at more than one group, so a change in RTD's
+data shows in the build's output instead of going unnoticed.
+
+**The station's real shape.** A station is a place with a building, platforms
+and a roof, and at the zooms where it is bigger than a mark the map draws
+those, from OpenStreetMap, at build time (`scripts/lib/structures.mjs`, with
+`test/structures.test.mjs`). Nothing about a station is written down: the
+build asks OSM for the box around the station's own platform stops and picks
+the shapes by tag and by where those stops are, so a station RTD adds, moves
+or loses draws itself.
+
+- *A platform* is a `railway=platform` area holding or touching one of the
+  station's platform stops. A platform tagged `public_transport=no` is not
+  one (Track 3 at Union Station, out of service).
+- *A canopy* is a `building=roof`, `man_made=canopy` or `amenity=shelter`
+  area over a platform, and *the station building* is a
+  `building=train_station` area touching one. A block that happens to be
+  called "... Union Station", such as an apartment tower or an office, carries
+  none of these tags and is never drawn: the match is on tags and stops, never
+  names.
+- *Lines run the platform's length.* Where a line ends at a station whose
+  platforms OSM draws, it runs along the platform it stops at to the
+  platform's real end, instead of stopping at RTD's single point
+  (`extendLineToPlatforms`). At Union Station that fills the train hall with
+  A, B, G and N and the light-rail platforms with C, E and W. A station with
+  no platform in OSM is left exactly where RTD's data puts it.
+  The line runs straight on along its own bearing to abreast of the
+  platform's far end (`platformEndFor`); bent toward the platform's middle
+  line it kinked just before its mark.
+- *The mark is at the end of the line.* A train runs the whole platform it
+  stops at and stops at its head end, so the platform's far end is the one
+  away from the side the line came in on. A station a line ends at is marked
+  there, at the line's end, one line or several, whether or not other lines
+  run on through it: Westminster's mark is at the far end of its platform,
+  and Lincoln's, where T ends and E and R run on, at the south end of its
+  platform. Lines that end at a station from the same side end together, in
+  one row (ends within 60 m of each other, `ROW_METERS` in the build), and
+  the mark is drawn across the row. A mark left back at the stops had the
+  line cut there, short of the platform drawn beside it, and the rest of the
+  platform showed past the mark like the ghost of the line.
+- *A line ends at its station's mark.* Where the mark stands short of the
+  line's end all the same (a platform group's mark in line with a hall, see
+  "Platform groups"), the line is cut where the mark crosses it (`endAtMarks`
+  in `sharedtrack.mjs`), so no line runs on past the station it ends at. A
+  piece wholly past the mark goes; an end with no mark of its line within
+  150 m, or a mark more than 25 m off its track, is left as it is.
+- *Nothing stands past the mark.* Where every line at a mark ends there, the
+  station's platforms and the roofs over them are drawn only as far as the
+  mark (`platformsToMarks`; 2 m past it, so they tuck under it), and one
+  wholly past it is not drawn; the station building is left whole. A rail
+  letter past the mark, on the side the line doesn't come from, is not drawn,
+  nor one within 24 px of the mark at the zoom the letter comes in, which
+  crowded it.
+- *The station's point moves to its building.* A station whose OSM has a
+  station building takes the platform group nearest that building as its own
+  point (`geo.stations`), so its mark, its ring and its one name stand at the
+  station's building and hall, not at whichever platform RTD's point fell on.
+  Union Station's name is on the train hall and the historic building; the
+  light-rail platforms carry a group mark joined to it by the transfer line.
+- *Drawn quiet.* The building is a faint neutral fill with no outline, the
+  same as a bus hall, so it never reads as a line round its block; the
+  platforms are a step off the land; the canopy is the palest wash on the map,
+  over them. Platforms and canopies arrive at zoom 14.2, where they are more
+  than a smudge; the building from 13, with the halls. The roofs the build
+  finds over the bus halls are in the same layer (`structures`), drawn the
+  same way, and the Key has a row for platforms and their roof.
+
 ### Shared track
 
 Where lines share track (today, for example, C, E and T in the south, and
@@ -1228,7 +1365,9 @@ The build works this out from the geometry every time
    corner is cut by a few meters. The ends of a line don't move.
 8. Ease each line between slots. Where a line leaves others, it starts in
    the slot it had beside them and moves to its new one in steps of a
-   sixteenth of a line's width, over up to 1.5 km, finishing before the next
+   thirty-second of a line's width (a sixteenth until 2026-11-11: at a phone's
+   pixel density each step showed as a notch in the line's edge), over up to
+   1.5 km, finishing before the next
    station. Only the piece with fewer lines moves; lines still together stay
    put. So a line never steps sideways at a junction, and isn't drawn over
    another while their tracks are still close.
@@ -1240,9 +1379,11 @@ the four lines are within 0.8 m of one path all the way (they were up to
 20 m apart). `test/sharedtrack.test.mjs` holds these rules on a made-up
 network.
 
-Known limit: the four commuter lines end at Union Station with no station
-mark on them. RTD's data has one point for Union Station, and it sits on the
-light rail end, 250 m away.
+Where a line ends, it ends on a mark: at Union Station the four commuter
+lines end 273 m from RTD's one point for the station, so the build marks their
+platform group and joins it to the station's own mark (see "Platform groups"
+under "Stations"). Nothing in the shared-track work treats the place
+differently.
 
 A new line, a rerouted line, or a new shared corridor is handled with no
 changes. Never fix a corridor by hand-editing data or hiding a line, and
@@ -1578,10 +1719,14 @@ draws it at its zoom (see "The key"). Nothing in the key is a second drawing.
     number), and on screen the same letters are 1.4 times as far apart at
     the zoom's far end as at its middle and 0.7 times at its near end: 270
     to 540 px. A phone screen is 844 px tall and 390 wide, so a stretch of
-    line as long as the screen is never lacks a letter, and two letters of
-    one line are never much nearer than a third of its height. (At 700 the
-    far end was 990 px: the W and the T crossed a phone with no letter.) A
-    stretch with no fork is lettered from its middle out; one shorter than
+    line as long as the screen is never lacks a letter. A new place is only
+    added for a full spacing of extra track, not a half one, so a line alone
+    on a stretch shorter than a spacing of track is named once, not twice
+    (2026-11-08: rounding counted half a spacing over as a second place, and
+    Union Station's tails, each a platform short, were named twice: a second
+    B beside its first, with A, G and N between). (At 700
+    the far end was 990 px: the W and the T crossed a phone with no letter.)
+    A stretch with no fork is lettered from its middle out; one shorter than
     60 px gets none of its own. Until 2026-11-06 a place came up every
     100 px and a line alone took every other one, which put three C's,
     three T's or three E's on one phone screen.
@@ -1596,10 +1741,15 @@ draws it at its zoom (see "The key"). Nothing in the key is a second drawing.
     `symbol-sort-key` is the rank, so where the map is short of room the
     first letters are drawn before the second ones. A line's letter claims
     its space before a station's name does (letters are placed before names
-    in `lettersFirst`). A line with a letter of its own within 110 px of a
-    place (on a neighboring stretch, in a knot of short ones) counts as
-    named there, so downtown's second and third B don't take the room of
-    another line's first letter. Letters are kept clear of each other by
+    in `lettersFirst`). A line with a letter of its own within a spacing
+    (380 px) of a place counts as named there, on a neighboring stretch too:
+    where branches bunch at the approach to a station (Union Station's), the
+    same letter shows once, before the next station, and not twice
+    (2026-11-08: the guard keeps its screen distance and gains a floor of
+    200 m in metres, the whole approach a couple of branches bunch at. The
+    screen rule alone, a third of a screen, left two B's 180 m apart with
+    A, G and N between on the hall's approach at 16). Letters are kept
+    clear of each other by
     28 px as the map shows them at the near end of their zoom (where the same
     meters are fewest pixels), not at its middle: at the middle they were 22
     px apart at the near end and the map drew one of two.
@@ -3597,6 +3747,67 @@ work against the real structure before asking for evaluation.
   and its two carriageways from there in (#81, Chris's choice), and ramp
   circles, small loops and terminal loops are drawn as the turn the bus
   makes or a short end to the place it serves, on the graph (#82).
+- 2026-11-08: A station whose lines stop at platforms too far apart for one
+  mark gets a mark at each platform group, joined to the station's own mark by
+  a thin line (see "Platform groups"). The groups come from the GTFS child
+  stops, clustered by distance and by shared lines, so nothing knows a station
+  or a line, and the rule covers any station RTD splits this way, not the one
+  place it happens today. It replaces the known limit where Union Station's
+  four commuter lines ended with no mark, 273 m from the station's point.
+- 2026-11-08: A rail station draws its real shape from OpenStreetMap at build
+  time: its platforms, the canopy over them and its station building, matched
+  by tag and by the station's own platform stops, never by name (see "The
+  station's real shape"). Lines run along the platform they stop at to the
+  platform's real end, and a station with a station building takes the
+  platform group nearest it as its point, so Union Station's one name and
+  ring stand on the train hall and the historic building, not at the
+  light-rail tip RTD's single point falls on. A platform group's mark now
+  stands on the track at the platform's stops, where riders board, because a
+  line no longer ends there. The station building is drawn as the bus halls
+  are, a faint fill with no outline. (Ported onto the street-graph bus work
+  from the union-building batch, #83; that batch's bus terminal text is not
+  carried over.)
+- 2026-11-08: Round four, Union Station. A train runs the whole platform it
+  stops at, so a line ends at the platform's far end from the side it came in
+  on, and the lines of a terminal end together in one row with the station's
+  mark drawn across it, not fanned out at whichever end RTD's own route ends
+  happen to fall on (see "The station's real shape"). This is the rail half
+  of that round; its bus-hall changes are not ported, since the street graph
+  draws the halls and the lines that end at them.
+- 2026-11-11: Stations, after looking at each terminus at a phone's size
+  (#83). A station a line ends at is marked at the line's end, and the line
+  runs straight along its platform to it; this replaces the cut at the stops
+  of 2026-11-10 below wherever the mark can stand at the end. Where a hall
+  lies between a station's platform groups, their marks stand in line with
+  it and the walk between them runs along it (Union Station), because a walk
+  at an angle across the hall is not how anyone would draw it; there the
+  lines are cut at the marks, and the platforms and roofs past the marks are
+  not drawn. The walk is a row of dots, not a hairline. Lines on tracks more
+  than 20 m apart are separate groups, so A has a mark at Peoria. A stop only
+  trains call at is not drawn as a bus stop. The hub's name stays off lines
+  from zoom 15. Lines ease between slots in thirty-seconds of a width.
+- 2026-11-10: A rail line ends at the mark of the station it ends at, not
+  past it. Running each line along its platform to the platform's far end
+  while the mark stays at the stops, where riders board, left lines running
+  on past the station they end at: on the map-fixes branch's build that was
+  41 to 53 px at zoom 16 at Union Station's light rail (C, E, W), 51 at
+  Golden, 47 at Lincoln and 64 at the airport, and 16 overshoots in the route
+  check (#74, #75). The line is now cut where its
+  end station's mark, or its platform group's mark, crosses it (see "The
+  station's real shape").
+- 2026-11-08: Round three on the sketch evaluation. A place whose name is a
+  served station's label (the Union Station neighbourhood) is no longer named
+  by the basemap: the served stations' labels are read from stations.geojson
+  when the page loads and passed to the place layer, so the station has the
+  one name it deserves (see "Basemap"). On an approach where branches bunch at
+  one place, a line's letter shows once: the third-of-a-screen guard gains a
+  200 m floor in metres, and a place is only added for a full spacing of extra
+  track, which had rounded a half-over into a second letter on Union
+  Station's platform-short tails (see "Rail bullets"). The hub's name is now
+  placed before rail's keep-out as well as the buses', because at a station
+  the lines end there: every point beside the mark is on a track, and a
+  haloed name on its own station's tracks reads where no name at all does
+  not.
 
 ## Sources
 

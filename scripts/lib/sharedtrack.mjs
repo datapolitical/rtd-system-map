@@ -29,7 +29,7 @@ const RETRACE_METERS = 5;
 // this far along at the latest, and in steps of this part of a line's width.
 const APART_METERS = 250;
 const EASE_METERS = 1500;
-const EASE_STEP = 1 / 16;
+const EASE_STEP = 1 / 32;
 // Lines whose ends are this close, and run within 20 degrees of the same
 // way, end at the same station: their ends are drawn level (see flushEnds).
 const FLUSH_METERS = 150;
@@ -72,7 +72,15 @@ const LETTER_MIN_PX = 60;
 // On shared track a line's second letter is not placed this near (at the
 // middle of the zoom) its first: in a knot of short stretches that was a
 // second B beside the first, and another line's first letter left out.
+// Two of one line are never nearer than this many METRES either, wherever
+// the fork they bunch at is: a branch letter comes out just past its fork,
+// so where several lines leave in the same couple of hundred metres (a
+// station's platforms), the branches bunched at one place and the near pair
+// read as two (2026-11-08, issue #19): at Union Station's train hall, two
+// B's 180 m apart with A, G and N between. 200 m is the whole approach a
+// rider sees the branch from, and far out the screen rule above is wider.
 const LETTER_SAME_PX = 110;
+const LETTER_SAME_METERS = 200;
 const LETTER_SLACK_PX = 60;
 // Two letters closer than this many pixels can touch; so can a letter and a
 // station's mark this close.
@@ -563,9 +571,14 @@ function lettersAlong(tracks, marks, metersPerPixel) {
       const forkAtEnd = members.some((run) => (run.flipped ? run.before : run.after));
       const first = forkAtStart ? edge : Math.min(spacing / 2, reach / 2);
       const last = reach - (forkAtEnd ? edge : Math.min(spacing / 2, reach / 2));
-      // At least one place for each line on the stretch, if they fit.
+      // At least one place for each line on the stretch, if they fit. Past
+      // the last full spacing, a place is only added for a full spacing of
+      // track: round counted a stretch a part of a spacing longer as two
+      // places, and a line alone on a short stretch (Union Station's
+      // tails are a platform short) was named twice, a second letter beside
+      // its first with the others between (2026-11-08, issue #19).
       const fit = last < first ? 1 : Math.floor((last - first) / clear) + 1;
-      const count = last < first ? 1 : Math.max(Math.round((last - first) / spacing) + 1, Math.min(members.length, fit));
+      const count = last < first ? 1 : Math.max(Math.floor((last - first) / spacing) + 1, Math.min(members.length, fit));
       const places =
         last < first
           ? [forkAtStart === forkAtEnd ? reach / 2 : forkAtStart ? first : last]
@@ -579,8 +592,11 @@ function lettersAlong(tracks, marks, metersPerPixel) {
         if (members.every((run) => named.has(run.line.route))) named.clear();
         // A line with a letter of its own this near, on this stretch or the
         // next (a knot of short stretches), is named here already: a second
-        // would crowd out another line's first.
-        const waiting = members.filter((run) => !named.has(run.line.route) && away(placed.get(run.line.route), here(run)) >= px(LETTER_SAME_PX));
+        // would crowd out another line's first. The metres floor holds for
+        // the forks that bunch at the same place whatever the zoom set
+        // (LETTER_SAME_METERS); the screen rule holds where two of one line
+        // the same distance apart read as two at the far zooms.
+        const waiting = members.filter((run) => !named.has(run.line.route) && away(placed.get(run.line.route), here(run)) >= Math.max(LETTER_SAME_METERS, px(LETTER_SAME_PX)));
         if (!waiting.length) continue;
         const turn = waiting.reduce((a, b) => (away(placed.get(b.line.route), here(b)) > away(placed.get(a.line.route), here(a)) ? b : a));
         named.add(turn.line.route);
@@ -882,6 +898,65 @@ export function trimToEnds(paths, ends) {
     }
     return out;
   });
+}
+
+// A line ends at the mark of the station it ends at (DESIGN.md, "Stations";
+// #75). A line runs along its platform to the platform's far end, or RTD's
+// line runs a few metres on, while the station's mark stands on the track
+// at the platform stops, where riders board: drawn, the line ran on past
+// the station it ends at (41 to 64 px at z16 at Union Station's light
+// rail, Golden, Lincoln and the airport). It is cut where the mark crosses
+// it, so the mark is the line's end, and the lines of a terminal end
+// together across their mark. A piece wholly past the mark goes. An end
+// with no mark of its own line's end station within END_REACH, or a mark
+// more than END_ON off the line's track, is left as it is.
+const END_REACH = 150;
+const END_ON = 25;
+// Ends this close are one line going on from piece to piece.
+const END_JOINED = 2;
+
+/**
+ * Cut each line's pieces where they run past the mark of a station the line
+ * ends at. `pieces` are `sharedTrack`'s pieces (LineStrings, one line each,
+ * `route`); `marks` maps a line to the [lon, lat] marks of its end stations.
+ * Returns the pieces kept, cut.
+ */
+export function endAtMarks(pieces, marks) {
+  const metres = (a, b) => Math.hypot((a[0] - b[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180), (a[1] - b[1]) * 110540);
+  const gone = new Set();
+  for (const [route, points] of marks) {
+    const mine = pieces.filter((p) => p.properties.route === route);
+    const joined = (piece, end) => mine.some((o) => o !== piece && !gone.has(o) && [o.geometry.coordinates[0], o.geometry.coordinates.at(-1)].some((q) => metres(q, end) <= END_JOINED));
+    for (let changed = true, guard = 0; changed && guard <= mine.length * 2; guard++) {
+      changed = false;
+      for (const piece of mine) {
+        if (gone.has(piece)) continue;
+        for (const atEnd of [false, true]) {
+          const path = piece.geometry.coordinates;
+          const end = atEnd ? path.at(-1) : path[0];
+          const inner = atEnd ? path[0] : path.at(-1);
+          if (joined(piece, end)) continue;
+          const mark = points.filter((m) => metres(m, end) <= END_REACH).sort((a, b) => metres(a, end) - metres(b, end))[0];
+          if (!mark) continue;
+          const at = closestOn(path, mark);
+          if (!at || at.meters > END_ON || metres(at.point, end) < 1) continue;
+          if (metres(at.point, inner) < 1) {
+            // The whole piece is past the mark, if the line goes on from its
+            // other end; otherwise the mark is not this piece's to end at.
+            if (joined(piece, inner)) {
+              gone.add(piece);
+              changed = true;
+            }
+            break;
+          }
+          const point = at.point.map(round);
+          piece.geometry = { ...piece.geometry, coordinates: atEnd ? [...path.slice(0, at.index), point] : [point, ...path.slice(at.index)] };
+          changed = true;
+        }
+      }
+    }
+  }
+  return pieces.filter((p) => !gone.has(p));
 }
 
 /**

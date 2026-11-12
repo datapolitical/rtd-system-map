@@ -95,8 +95,9 @@ function circleImage(layer, at, alt) {
 }
 
 // An area as the map fills it, on the land: a fill layer's pattern or color
-// at its opacity, and an edge layer's dashed line.
-function areaImage({ fill, edge }, lines, at, alt) {
+// at its opacity, a second fill over it (a station's canopy over its
+// platform), and an edge layer's dashed line.
+function areaImage({ fill, over, edge }, lines, at, alt) {
   const [w, h] = [30, 16];
   const ctx = canvas(w, h);
   ctx.fillStyle = P.land;
@@ -115,6 +116,12 @@ function areaImage({ fill, edge }, lines, at, alt) {
     ctx.fillStyle = evaluate(fill.paint['fill-color'], at);
   }
   ctx.fillRect(0, 0, w, h);
+  if (over) {
+    // The roof covers the middle of the platform, so both show.
+    ctx.globalAlpha = evaluate(over.paint['fill-opacity'] ?? 1, at);
+    ctx.fillStyle = evaluate(over.paint['fill-color'], at);
+    ctx.fillRect(w / 4, 0, w / 2, h);
+  }
   if (edge) {
     const lw = evaluate(edge.paint['line-width'], at);
     ctx.globalAlpha = evaluate(edge.paint['line-opacity'] ?? 1, at);
@@ -123,7 +130,7 @@ function areaImage({ fill, edge }, lines, at, alt) {
     ctx.strokeStyle = evaluate(edge.paint['line-color'], at);
     ctx.strokeRect(lw / 2, lw / 2, w - lw, h - lw);
   }
-  return ctxImage(ctx, alt, [fill.id, edge?.id].filter(Boolean).join('+'));
+  return ctxImage(ctx, alt, [fill.id, over?.id, edge?.id].filter(Boolean).join('+'));
 }
 
 // A layer's paint opacity, whichever kind it has.
@@ -267,6 +274,17 @@ export function buildLegend(meta, lines) {
               'A pale hall, no edge',
             ),
             'Bus station below the street',
+          ]
+        : null,
+      counts.structures
+        ? [
+            areaImage(
+              { fill: layers.get('station-platform'), over: layers.get('station-canopy') },
+              lines,
+              at(Math.max(settled(layers.get('station-platform')), settled(layers.get('station-canopy')))),
+              'Platforms under a pale roof',
+            ),
+            'Rail station: its platforms, and the roof over them',
           ]
         : null,
       oneWay(layers.get('street-oneway'), layers.get('street')),

@@ -82,6 +82,15 @@ class WholeNetwork {
 
 async function main() {
   keepTabbable();
+  // The basemap names places whose names can be a station's own (the Union
+  // Station neighbourhood), and only the network knows which stations there
+  // are: the labels come from the build's stations.geojson, read here with
+  // meta.json and passed to basemapLabels. A failed read leaves the places
+  // named.
+  const stations = fetch('data/stations.geojson').then(
+    (res) => (res.ok ? res.json() : { features: [] }),
+    () => ({ features: [] }),
+  );
   let meta;
   try {
     const res = await fetch('data/meta.json');
@@ -92,6 +101,8 @@ async function main() {
     showStatus('The map data is missing. Run "npm run build", then reload.');
     throw err;
   }
+  // Only a station with trains this week leaves its name to no one else.
+  const places = (await stations).features.filter((f) => f.properties?.served && f.properties.label).map((f) => f.properties.label);
 
   const lines = railStyle(meta.rail);
   const legend = buildLegend(meta, lines);
@@ -141,7 +152,7 @@ async function main() {
       glyphs: GLYPHS,
       state: STATE,
       sources: { ...BASEMAP_SOURCES, ...dataSources() },
-      layers: [...lettersFirst([...basemapBelow(), ...transitLines(lines), ...basemapLabels(), ...transitMarks(lines)]), ...vehicleLayers(lines)],
+      layers: [...lettersFirst([...basemapBelow(), ...transitLines(lines), ...basemapLabels(places), ...transitMarks(lines)]), ...vehicleLayers(lines)],
     },
     bounds: start.bounds,
     fitBoundsOptions: { padding: start.padding },
@@ -256,7 +267,7 @@ async function main() {
   // keeps its position, zoom, open route and loaded tiles.
   let ready = false;
   map.once('load', () => (ready = true));
-  followScheme(() => (ready ? applyTheme(map, lines, legend) : map.once('load', () => applyTheme(map, lines, legend))));
+  followScheme(() => (ready ? applyTheme(map, lines, legend, places) : map.once('load', () => applyTheme(map, lines, legend, places))));
   const context = { lines, legend, opening };
   initSelection(map, context);
   // Live: the button, the relay connection and the vehicles. A tap on a
@@ -305,8 +316,8 @@ async function openNearby(map, locate, inArea) {
 // theme's colors (layout, filters and sources are the same in both themes), then
 // every drawn symbol (tags, signs, stations, shields, icons) redrawn at the
 // same size, then the key.
-function applyTheme(map, lines, legend) {
-  const layers = [...basemapBelow(), ...transitLines(lines), ...basemapLabels(), ...transitMarks(lines), ...(map.getSource('terrain') ? TERRAIN.layers : []), ...vehicleLayers(lines)];
+function applyTheme(map, lines, legend, places = []) {
+  const layers = [...basemapBelow(), ...transitLines(lines), ...basemapLabels(places), ...transitMarks(lines), ...(map.getSource('terrain') ? TERRAIN.layers : []), ...vehicleLayers(lines)];
   for (const { id, paint } of layers) {
     if (!map.getLayer(id)) continue;
     for (const [name, value] of Object.entries(paint ?? {})) map.setPaintProperty(id, name, value);
