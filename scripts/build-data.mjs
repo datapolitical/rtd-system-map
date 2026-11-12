@@ -648,6 +648,35 @@ async function main() {
       return { ...f, properties, geometry: at ? { type: 'Point', coordinates: at } : f.geometry };
     });
     stationMarks(far, geo.railfar).forEach((m, i) => Object.assign(far[i].properties, { tick: m.tick, tickBearing: m.tickBearing, tickFrom: m.from, meet: m.meet }));
+    // The hub's lines can end in more than one place on the far set: at
+    // Union Station the light rail ends a few hundred metres from the
+    // commuter lines, beside them. Its tick then stands between those
+    // places and spans every line that ends there, so it covers them all.
+    for (const f of far.filter((s) => s.properties.meet)) {
+      const lines = new Set(String(f.properties.lines ?? '').split(' '));
+      const key = (c) => c.join(',');
+      const seen = new Map();
+      for (const p of geo.railfar) {
+        if (!lines.has(p.properties.route)) continue;
+        for (const c of [p.geometry.coordinates[0], p.geometry.coordinates.at(-1)]) {
+          const k = `${p.properties.route} ${key(c)}`;
+          seen.set(k, { route: p.properties.route, at: c, n: (seen.get(k)?.n ?? 0) + 1 });
+        }
+      }
+      // A line's end is a piece's end no other piece of that line meets.
+      const ends = [...seen.values()].filter((e) => e.n === 1 && meters(e.at, f.geometry.coordinates) < FAR_SNAP_METERS);
+      const places = [];
+      for (const e of ends) {
+        const near = places.find((pl) => meters(pl.at, e.at) < 50);
+        if (near) near.routes.add(e.route);
+        else places.push({ at: e.at, routes: new Set([e.route]) });
+      }
+      if (places.length < 2) continue;
+      const span = places.reduce((n, pl) => n + pl.routes.size, 0);
+      const at = [0, 1].map((k) => places.reduce((s, pl) => s + pl.at[k], 0) / places.length);
+      Object.assign(f.properties, { tick: span, span });
+      f.geometry = { type: 'Point', coordinates: at };
+    }
     geo.stationsfar = far.filter((f) => f.properties.served);
   }
   // Where a station's lines stop in places too far apart for one mark to
