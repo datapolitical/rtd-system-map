@@ -1998,10 +1998,10 @@ How it is built:
   drawing, the drawing wins by a few pixels. A station bar is square across
   its lines. The platforms of one station where lines end are drawn parallel,
   and each ending line is led into its bar in a smooth curve so it arrives
-  square. Lines that end at one station coming in from opposite ways, near
-  enough to share a bar, get a bar each instead, held at least two and a
-  half pitches apart and joined by a slimmer link: met end to end at one
-  bar they would read as one line running through. The two halves of a divided road are one straight line down the
+  square. Lines that end at one bar coming in from either side meet back to
+  back on it, each set centred: that bar is drawn about half again as thick,
+  with a thin divider down its middle, so the sets read as one station's two
+  platforms and not as lines running through. The two halves of a divided road are one straight line down the
   middle. A short break in a bus street between two ends that share a route
   is bridged. A line weight holds for a few blocks: a short stretch takes the
   weight of the longer stretch it runs into, so a street is never dashes of
@@ -4141,11 +4141,11 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets set lines that end at one bar from either side beside
   each other along it. Reason: on sheet 1 light rail and commuter rail met
   head to head at Union Station's bar, so E read as running on into N.
-- 2026-11-12: Sheets give lines that end at one station from opposite ways a
-  bar each, held apart and linked, in place of one bar with both sets side
-  by side. Reason: the side-by-side bar at Union Station on sheets 1 and 2
-  was seven lines long and pulled each pack out of line to reach it; Chris
-  saw it as wrong and the station as huge.
+- 2026-11-12: Sheets draw lines that end back to back at one bar on a fat bar
+  with a divider down it, in place of two bars joined by a link. Reason:
+  Chris asked for Union Station on sheet 1 to be one marker, slightly fat,
+  with a divider through it, and found the angled link on sheet 2 confusing
+  and not beautiful.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.

@@ -105,13 +105,12 @@ export function sheetStyle(theme) {
     // Stations: one white bar across the lines that stop there; the hub's is heavier.
     const bar = kind('station', ['==', ['get', 'shape'], 'bar']);
     // A station on one line is a dot a little wider than its line, so it reads as a station.
-    const mark = ['case', ['get', 'single'], w + 1.4, ['get', 'hub'], w * 0.72 + 2.2, w * 0.72];
-    // Bars of one station held apart are joined by a slimmer link, under them.
-    const link = kind('station', ['==', ['get', 'shape'], 'link']);
-    layer('station-link-edge', 'line', { filter: link, layout: FLAT, paint: { 'line-color': c.markEdge, 'line-width': w * 0.45 + 2.6 } });
-    layer('station-link', 'line', { filter: link, layout: FLAT, paint: { 'line-color': c.mark, 'line-width': w * 0.45 } });
+    const thin = ['case', ['get', 'single'], w + 1.4, ['get', 'hub'], w * 0.72 + 2.2, w * 0.72];
+    // Lines that meet back to back at a bar get a fat one, about half again as thick, with a divider down it.
+    const mark = ['case', ['get', 'fat'], ['+', ['*', 1.6, thin], 1], thin];
     layer('station-edge', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.markEdge, 'line-width': ['+', mark, 2.6] } });
     layer('station', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.mark, 'line-width': mark } });
+    layer('station-divider', 'line', { filter: ['all', bar, ['==', ['get', 'fat'], true]], layout: FLAT, paint: { 'line-color': c.markEdge, 'line-width': 1.2 } });
 
     // Lettering, least important first (MapLibre places the last layer first).
     if (n <= 2) layers.push({ id: `freeway-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band, filter: ['all', ['==', ['get', 'class'], 'motorway'], ['has', 'ref'], ['==', ['geometry-type'], 'LineString']],

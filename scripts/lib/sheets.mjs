@@ -69,8 +69,6 @@ export const SIZES = {
   // A bus station's hall is drawn where it is at least this wide; a street that ends this near its wall ends on it.
   hallWide: 5,
   hallReach: 10,
-  // Bars of one station whose lines come in facing each other stand at least this many pitches apart.
-  barApart: 2.5,
   // The sheet from which bus stops are drawn, each a ring.
   stopSheet: 4,
 };
@@ -404,17 +402,9 @@ export function stationMarks(stations, lines, sheet) {
         : h.total - h.along <= walk && open(1) ? 1 : h.along <= walk && open(0) ? 0 : null;
     }
     // Platforms apart from each other get a bar each; the bar with the most lines carries the name.
-    // Lines that end here coming in from opposite ways get a bar each, held apart and linked:
-    // met at one bar, end to end, they would read as one line running through.
-    for (const h of hits) {
-      if (h.end === null) continue;
-      const q = pointAlong(h.line.paths[h.pi], h.end ? h.total - Math.min(14 * pitch, h.total / 3) : Math.min(14 * pitch, h.total / 3));
-      h.way = [h.at[0] - q[0], h.at[1] - q[1]];
-    }
-    const facing = (x, h) => x.way && h.way && x.way[0] * h.way[0] + x.way[1] * h.way[1] < 0;
     const groups = [];
     for (const h of hits) {
-      const g = groups.find((o) => o.some((x) => dist(x.at, h.at) <= 3.5 * pitch) && !o.some((x) => facing(x, h)));
+      const g = groups.find((o) => o.some((x) => dist(x.at, h.at) <= 3.5 * pitch));
       if (g) g.push(h); else groups.push([h]);
     }
     groups.sort((x, y) => y.length - x.length);
@@ -422,8 +412,6 @@ export function stationMarks(stations, lines, sheet) {
     // A bar lies square across its lines: across the heading most of them share.
     const across = (g) => [...g].sort((x, y) => g.reduce((n, o) => n + Math.abs(dot(y.heading, o.heading)) - Math.abs(dot(x.heading, o.heading)), 0))[0].heading;
     const first = across(groups[0]);
-    const centres = [];
-    const links = [];
     const bars = groups.map((g, gi) => {
       const allEnd = g.every((h) => h.end !== null);
       // Platforms of one station where lines end are drawn parallel, as one station.
@@ -431,18 +419,6 @@ export function stationMarks(stations, lines, sheet) {
       if (gi && allEnd && Math.abs(dot(t, first)) > 0.5) t = first;
       const n = [-t[1], t[0]];
       const c = [g.reduce((x, h) => x + h.at[0], 0) / g.length, g.reduce((y, h) => y + h.at[1], 0) / g.length];
-      // A bar whose lines come in facing another bar's, near enough to have shared it, is moved
-      // back along them, if need be, to stand clear of it, and a link joins the two.
-      const facer = gi && allEnd ? groups.slice(0, gi).findIndex((o) => o.some((x) => g.some((h) => facing(x, h) && dist(x.at, h.at) <= 3.5 * pitch))) : -1;
-      if (facer >= 0) {
-        const c0 = centres[facer];
-        const back = dot(g[0].way, t) > 0 ? -1 : 1;
-        const apart = dot([c[0] - c0[0], c[1] - c0[1]], t) * back;
-        const want = SIZES.barApart * pitch;
-        if (apart < want) { c[0] += t[0] * back * (want - apart); c[1] += t[1] * back * (want - apart); }
-        links.push([c0, [...c]]);
-      }
-      centres.push(c);
       for (const h of g) h.s = dot([h.at[0] - c[0], h.at[1] - c[1]], n);
       // A line that ends here is drawn into the bar square-on and stops at it, whatever the
       // track does in its last few yards; lines ending side by side keep their pitch.
@@ -452,10 +428,16 @@ export function stationMarks(stations, lines, sheet) {
         return dot([q[0] - c[0], q[1] - c[1]], t) >= 0 ? 1 : -1;
       };
       const enders = g.filter((h) => h.end !== null);
-      for (const side of [1, -1]) {
-        const set = enders.filter((h) => inward(h) === side).sort((x, y) => x.s - y.s);
+      const sets = [1, -1].map((side) => enders.filter((h) => inward(h) === side).sort((x, y) => x.s - y.s));
+      // Lines that end here coming in from either side meet back to back at one bar, each set
+      // centred on it: the bar is drawn fat, with a divider down it, so they don't read as
+      // running through.
+      g.fat = allEnd && sets.every((set) => set.length);
+      const all = enders.reduce((x, h) => x + h.s, 0) / (enders.length || 1);
+      for (const [k, side] of [1, -1].entries()) {
+        const set = sets[k];
         if (!set.length) continue;
-        const mid = set.reduce((x, h) => x + h.s, 0) / set.length;
+        const mid = g.fat ? all : set.reduce((x, h) => x + h.s, 0) / set.length;
         set.forEach((h, i) => {
           if (allEnd) h.s = mid + (i - (set.length - 1) / 2) * pitch;
           const path = h.line.paths[h.pi];
@@ -479,7 +461,7 @@ export function stationMarks(stations, lines, sheet) {
       return [Math.min(...ss), Math.max(...ss)].map((v) => [c[0] + n[0] * v, c[1] + n[1] * v]);
     });
     const ends = bars[0];
-    marks.push({ id: q.id, name: q.label ?? q.name, hub: !!q.hub, end: !!q.end, lines: q.lines, count: hits.length, ends, span: dist(ends[0], ends[1]), more: bars.slice(1), links });
+    marks.push({ id: q.id, name: q.label ?? q.name, hub: !!q.hub, end: !!q.end, lines: q.lines, count: hits.length, ends, span: dist(ends[0], ends[1]), more: bars.slice(1), fat: !!groups[0].fat });
   }
   // Marks need room. The hub first, then line ends, then stations with more lines; a mark
   // that would touch one already drawn is left for a closer sheet.
@@ -1976,13 +1958,10 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   for (const m of marks) {
     const properties = { kind: 'station', shape: 'bar', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines };
     // A bar is drawn as a short round-ended line; a single stop is a bar of no length: a dot.
-    for (const [a, b] of [m.ends, ...m.more]) {
+    for (const [i, [a, b]] of [m.ends, ...m.more].entries()) {
       const single = dist(a, b) < 0.5;
-      features.push(feature({ ...properties, single }, { type: 'LineString', coordinates: [back(a), back(single ? [a[0] + 0.5, a[1]] : b)] }));
+      features.push(feature({ ...properties, single, fat: !i && m.fat }, { type: 'LineString', coordinates: [back(a), back(single ? [a[0] + 0.5, a[1]] : b)] }));
     }
-  }
-  for (const m of marks) {
-    for (const [a, b] of m.links ?? []) features.push(feature({ kind: 'station', shape: 'link', id: m.id, hub: m.hub }, { type: 'LineString', coordinates: [back(a), back(b)] }));
   }
   for (const b of discs) {
     features.push(feature({ kind: 'letter', route: b.route, color: b.color, ink: b.ink }, { type: 'Point', coordinates: back(b.at) }));
