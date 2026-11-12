@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -956,4 +956,20 @@ test('where a line at the side of a pack ends, the lines beside it carry straigh
   // T in the middle: C and E each move half a place in, and meet.
   const middle = drawn([piece('T', 0, -300, 5), piece('C', -1, -300, 0), piece('C', -0.5, 0, 300), piece('E', 1, -300, 0), piece('E', 0.5, 0, 300)]);
   for (const route of ['C', 'E']) assert.ok(Math.abs(spread(middle.get(route)) - pitch / 2) < 0.3, `${route} closes up half a place`);
+});
+
+test("a name level with another station's bar, and not with its own, reads as the other's", () => {
+  const bar = (x, y) => [[x - 2.5, y], [x, y], [x + 2.5, y]];
+  const [mine, before] = [bar(0, 0), bar(-11, -25)];
+  // Up and to the right of its own bar, level with the bar of the station before: it is
+  // nearer its own (15 px against 20), and still reads as the other's.
+  assert.ok(strayed([12, -34, 98, -12], mine, [before]));
+  // Beside its own bar it is its own, however near the other.
+  assert.ok(!strayed([9, -11, 95, 11], mine, [before]));
+  // Up on the diagonal with no bar level with it, it is still its own.
+  assert.ok(!strayed([12, -34, 98, -12], mine, [bar(-30, -70)]));
+  // Level with a bar far across the sheet is no confusion.
+  assert.ok(!strayed([12, -34, 98, -12], mine, [bar(-80, -25)]));
+  // And nearer another bar than its own it is the other's.
+  assert.ok(strayed([12, -34, 98, -12], mine, [bar(14, -40)]));
 });

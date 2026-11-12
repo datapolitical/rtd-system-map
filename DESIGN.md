@@ -2064,7 +2064,9 @@ How it is built:
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
   shorter name sits better; a name with room is written out. A name beside
   its bar is level with it, the letters of lines that end there hanging
-  below. A name is never nearer another station's bar than its own: it
+  below. A name is never nearer another station's bar than its own, and
+  never level with another bar close by (or in line above or below it)
+  unless it is level or in line with its own: it
   moves, is set in one row, or (where not every station is named) is left
   off. A name that cannot sit right beside its bar stands off only as far
   as it must, in small steps. Where every line at a bar ends and the station before stands closer
@@ -4317,6 +4319,14 @@ work against the real structure before asking for evaluation.
   of a place), and where another line's track ends within a walk of it and
   every line stepping there moves the same way, each keeps the place it had.
   The main map is unchanged.
+- 2026-11-12: Sheets: a name does not line up with another station's bar.
+  On sheet 1 "Arapahoe at Village Center" stood up and to the right of its
+  bar, level with Orchard's, and read as Orchard's name; it was nearer its
+  own bar, so the nearness rule let it by. A name off on the diagonal, level
+  with neither its own bar nor in line with it, now gives way when another
+  bar within twice the distance is. Six names moved on sheets 1 and 2
+  (I-25 / Broadway on sheet 2 came in from far off to beside its bar) and
+  Arvada Ridge is left off sheet 1.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.

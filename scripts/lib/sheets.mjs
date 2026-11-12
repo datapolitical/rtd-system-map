@@ -667,6 +667,19 @@ export function letters(lines, marks, sheet) {
 }
 
 /**
+ * Whether a name in `box` reads as another station's. It does when it is nearer one of the
+ * `others` bars than its own; and when it stands level with another bar close by (or in line
+ * above or below it) while it is neither with its own: the eye reads a name with the bar it
+ * lines up with. A bar is a list of points, three to each of its strokes: end, middle, end.
+ */
+export function strayed(box, mine, others) {
+  const gap = (pts) => Math.min(...pts.map((p) => Math.hypot(Math.max(box[0] - p[0], 0, p[0] - box[2]), Math.max(box[1] - p[1], 0, p[1] - box[3]))));
+  const lined = (pts) => pts.some((p, i) => i % 3 === 1 && ((p[1] >= box[1] && p[1] <= box[3]) || (p[0] >= box[0] && p[0] <= box[2])));
+  const own = gap(mine);
+  return others.some((pts) => gap(pts) < own || (!lined(mine) && lined(pts) && gap(pts) < 2 * own));
+}
+
+/**
  * Where each station's name goes, chosen the way a cartographer would: beside
  * its mark, on the side with the most open ground, clear of every rail line,
  * letter and name already set. Important stations choose first. A name with
@@ -709,7 +722,6 @@ export function names(marks, lines, discs, sheet, streets = []) {
   // A name belongs to the bar it is nearest: one nearer another station's bar than its own
   // names that station to the eye, which is worse than no name.
   const bars = marks.map((m) => ({ m, pts: [m.ends, ...m.more].flatMap((bar) => [bar[0], lerp(bar[0], bar[1], 0.5), bar[1]]) }));
-  const gap = (box, pts) => Math.min(...pts.map((p) => Math.hypot(Math.max(box[0] - p[0], 0, p[0] - box[2]), Math.max(box[1] - p[1], 0, p[1] - box[3]))));
   const r = SIZES.nameLetter[sheet.id];
   for (const m of [...marks].sort((a, b) => rank(a) - rank(b) || a.id - b.id)) for (const [bi, bar] of (m.bars ?? [{ ends: m.ends, ending: [] }]).entries()) {
     const mid = lerp(bar.ends[0], bar.ends[1], 0.5);
@@ -751,8 +763,7 @@ export function names(marks, lines, discs, sheet, streets = []) {
           // The name keeps its own anchor: where the row makes the box taller, the text sits at its top.
           const ty = dy > 0 ? at[1] : dy < 0 ? y0 + tall : y0 + tall / 2;
           const lettering = [x0, y0, x0 + w, y0 + tall];
-          const own = gap(lettering, bars.find((o) => o.m === m).pts);
-          const strays = bars.some((o) => o.m !== m && gap(lettering, o.pts) < own);
+          const strays = strayed(lettering, bars.find((o) => o.m === m).pts, bars.filter((o) => o.m !== m).map((o) => o.pts));
           const hits = set.filter((o) => touch(box, o.box)).length + (strays ? 1 : 0);
           const beyond = last && ((c[0] - before[0]) * dx + (c[1] - before[1]) * dy) / n / dist(c, before) > 0.9;
           const crowded = last && dist(c, before) < tall && !beyond;
