@@ -545,3 +545,22 @@ test('a block too short for its numbers and some air before its cross streets is
   assert.ok(drawn.some((f) => f.properties.routes === '3'), 'the rung is drawn');
   assert.ok(!drawn.some((f) => f.properties.routes === '3' && f.properties.label), 'but its number would overrun the streets at its ends');
 });
+
+test("a line's tail track past its last station is no part of it: the line ends at that station's bar", () => {
+  // On the closest sheet a walk is hundreds of pixels; the track runs 120 px past the last station.
+  const s4 = SHEETS[3];
+  const o4 = toPx([-105, 39.75], s4.zoom);
+  const at4 = (x, y) => toLonLat([o4[0] + x, o4[1] + y], s4.zoom);
+  const rail = line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at4(-900, 0), at4(520, 0)]);
+  const lines = railLines(all([rail]), s4);
+  const marks = stationMarks(all([
+    point({ id: 1, name: 'Mill', served: true, lines: 'A' }, at4(100, 0)),
+    point({ id: 2, name: 'Yard', served: true, lines: 'A', end: true }, at4(400, 0)),
+  ]), lines, s4);
+  const path = lines[0].paths[0];
+  const end = path[0][0] > path.at(-1)[0] ? path[0] : path.at(-1);
+  assert.ok(Math.abs(end[0] - (o4[0] + 400)) < 1, `the line stops at the last station, not ${(end[0] - o4[0]).toFixed(0)}`);
+  assert.equal(marks.length, 2);
+  const begin = path[0][0] > path.at(-1)[0] ? path.at(-1) : path[0];
+  assert.ok(begin[0] - o4[0] < -899, 'track running on farther than a walk is the line going on: it is kept');
+});

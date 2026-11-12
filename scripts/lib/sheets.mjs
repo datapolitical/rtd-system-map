@@ -359,6 +359,16 @@ export function stationMarks(stations, lines, sheet) {
   const byRoute = new Map(lines.map((l) => [l.route, l]));
   const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
   const marks = [];
+  // Where each line stops, so a line can tell whether any of its stations lie beyond another.
+  const stopsOf = new Map();
+  for (const f of stations.features) {
+    if (!f.properties.served) continue;
+    f.px = toPx(f.geometry.coordinates, sheet.zoom);
+    for (const r of String(f.properties.lines ?? '').split(' ')) {
+      if (!stopsOf.has(r)) stopsOf.set(r, []);
+      stopsOf.get(r).push(f);
+    }
+  }
   for (const f of stations.features) {
     const q = f.properties;
     if (!q.served) continue;
@@ -380,8 +390,14 @@ export function stationMarks(stations, lines, sheet) {
       const path = h.line.paths[h.pi];
       h.total = length(path);
       h.heading = headingAt(path, h.along, h.total);
-      // A line whose path stops within a few pitches of the station ends here.
-      h.end = h.along < 3 * pitch ? 0 : h.total - h.along < 3 * pitch ? 1 : null;
+      // A line whose path stops within a few pitches of the station ends here, and so does one
+      // that runs on no farther than a walk with none of its stations beyond: its tail track
+      // past the platform is no part of the line.
+      const others = (stopsOf.get(h.line.route) ?? []).filter((o) => o !== f)
+        .map((o) => nearest(path, o.px)).filter((o) => o.d <= walk).map((o) => o.along);
+      const open = (side) => !others.some((a) => (side ? a > h.along + pitch : a < h.along - pitch));
+      h.end = h.along < 3 * pitch ? 0 : h.total - h.along < 3 * pitch ? 1
+        : h.total - h.along <= walk && open(1) ? 1 : h.along <= walk && open(0) ? 0 : null;
     }
     // Platforms apart from each other get a bar each; the bar with the most lines carries the name.
     const groups = [];

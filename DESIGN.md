@@ -1986,7 +1986,9 @@ How it is built:
   each station's name goes on the clearest side of its mark. A second track
   of the same line is not drawn, the shared track is rounded before lines are
   set beside it so a pack turns as one, and a line ends square at its last
-  station. On the first sheet the hub and line ends are named large and other
+  station. Track that runs on past a station no farther than a walk (600 m),
+  with none of the line's stations beyond it, is tail track: the line ends
+  at that station's bar. On the first sheet the hub and line ends are named large and other
   stations small, where a name has open ground.
 - **Drawn, not traced.** Where the true position of a thing makes an ugly
   drawing, the drawing wins by a few pixels. A station bar is square across
@@ -4122,6 +4124,11 @@ work against the real structure before asking for evaluation.
   blocks long enough for them. Reason: south of downtown on sheet 2 the
   numbers of one half of a one-way pair sat on the other half, and a
   number on the short rung between them overran both.
+- 2026-11-12: Sheets end a line at its last station's bar, whatever tail
+  track runs on past it. Reason: on sheet 4 three light rail lines ran about
+  100 px past Union Station's bar to a ragged cut; a line counted as ending
+  only when its track stopped within three pitches of the station, which at
+  zoom 16 is a few yards.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
 
