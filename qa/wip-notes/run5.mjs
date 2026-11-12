@@ -1,0 +1,11 @@
+import { viewOf } from './viewof.mjs';
+import { zoomRowFaults, tickFromFaults, jumpFaults, offsetFaults } from '../drawn/zooms.mjs';
+import { icons } from '../drawn/icons.mjs';
+import path from 'node:path';
+const [root, theme] = process.argv.slice(2);
+const v = await viewOf(root, theme);
+const ic = await icons(theme, path.resolve(root));
+const t = Date.now();
+const f = [...zoomRowFaults(v), ...tickFromFaults(v), ...offsetFaults(v), ...jumpFaults(v, { imageSize: (n) => ic.size(n) })];
+console.log(theme, f.length, 'findings', Date.now() - t, 'ms');
+for (const x of f) console.log(x.kind, x.rule, x.layer, '|', x.msg);

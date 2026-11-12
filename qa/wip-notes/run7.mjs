@@ -1,0 +1,13 @@
+import { viewOf } from './viewof.mjs';
+import { readKey, keyFaults } from '../drawn/keys.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+const [root, theme] = process.argv.slice(2);
+const v = await viewOf(root, theme);
+const meta = JSON.parse(fs.readFileSync(path.join(root, 'public/data/meta.json'), 'utf8'));
+const t = Date.now();
+const key = await readKey({ root, theme, meta });
+console.log('read key', Date.now() - t, 'ms');
+const f = keyFaults(v, key, { meta });
+console.log(theme, f.length, 'findings');
+for (const x of f) console.log(x.kind, x.rule, x.layer, 'z' + x.zoom, '|', x.msg);

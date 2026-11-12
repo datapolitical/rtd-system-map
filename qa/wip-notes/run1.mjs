@@ -1,0 +1,10 @@
+import { viewOf } from './viewof.mjs';
+import { colourFaults, markContrast } from '../drawn/styles.mjs';
+import { iconReader } from '../drawn/iconpix.mjs';
+const [root, theme] = process.argv.slice(2);
+const v = await viewOf(root, theme);
+const icon = await iconReader({ root: new URL('../../' + root, import.meta.url).pathname.replace(/\/$/, ''), theme });
+const t = Date.now();
+const f = [...colourFaults(v, { icon }), ...markContrast(v, { icon })];
+console.log(theme, f.length, 'findings', Date.now() - t, 'ms');
+for (const x of f) console.log(x.kind, x.rule, x.layer, x.route ?? '', '|', x.msg);

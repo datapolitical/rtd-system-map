@@ -1,0 +1,11 @@
+import { viewOf } from './viewof.mjs';
+import { layerOrderFaults, flexFaults, basemapFaults, liveFaults } from '../drawn/statics.mjs';
+import { iconReader } from '../drawn/iconpix.mjs';
+import path from 'node:path';
+const [root, theme] = process.argv.slice(2);
+const v = await viewOf(root, theme);
+const icon = await iconReader({ root: path.resolve(root), theme });
+const f = [...layerOrderFaults(v), ...flexFaults(v, { icon }), ...basemapFaults(v), ...liveFaults(v)];
+console.log(theme, f.length, 'findings');
+for (const x of f) console.log(x.kind, x.rule, x.layer, '|', x.msg);
+console.log(icon('hatch'));
