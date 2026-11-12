@@ -1965,6 +1965,10 @@ for one scale on a phone, each complete: every rail line and every bus route
 is on every sheet. The page rests only on a sheet; a pinch settles on the
 nearest one. Issue #117 holds the work.
 
+The root of a branch preview named after one of the site's pages opens on
+that page (`functions/index.js`): the `sheets` preview opens on the sheets.
+The live site and every other preview open on the main map.
+
 | Sheet | Zoom | What it adds |
 |---|---|---|
 | 1 | 10 | The network: rail lines whole, every bus street by how often a bus comes, the hub and line ends named. Tap a line for its routes. |
@@ -4142,6 +4146,9 @@ work against the real structure before asking for evaluation.
   by side. Reason: the side-by-side bar at Union Station on sheets 1 and 2
   was seven lines long and pulled each pack out of line to reach it; Chris
   saw it as wrong and the station as huge.
+- 2026-11-12: A branch preview named after a page opens on that page.
+  Reason: the `sheets` preview's root opened the main map, and Chris was
+  sent there for the sheets.
 - 2026-11-12: Sheets ring only stops a bus street serves: not a bus
   station's gates, nor stops only trains call at. Reason: Union Station's
   bus gates and rail tracks were scattered as rings over its hall and round
