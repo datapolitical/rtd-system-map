@@ -8,7 +8,7 @@
 // only: the pictures they name are drawn by symbols.js, and the Key reads the
 // same definitions (legend.js).
 
-import { FONT, lineKeepOut } from './basemap.js';
+import { FONT, groupKeepOut, lineKeepOut } from './basemap.js';
 import { lightenTo, shade, textOn } from './color.js';
 import { DARK_RAIL_MIN, P, PALETTES } from './palette.js';
 import { CLASS_RANK, DETAIL_FROM, PART_TIME, byZoom, classMatch, classWidth, classWidthAt, classWidthTimes, tierMatch, tierWidth } from './shared.js';
@@ -279,7 +279,9 @@ export function transitLines(lines) {
       id: 'station-building',
       type: 'fill',
       source: 'structures',
-      filter: ['==', ['get', 'kind'], 'building'],
+      // The station building, and a roof wide enough to be a hall (the
+      // airport's canopy, Union Station's train hall).
+      filter: ['in', ['get', 'kind'], ['literal', ['building', 'hall']]],
       minzoom: TERMINAL_FROM,
       paint: {
         'fill-color': P.building,
@@ -470,7 +472,11 @@ export function transitMarks(lines) {
       id: 'platform-joins',
       type: 'line',
       source: 'platforms',
-      filter: ['==', ['get', 'kind'], 'join'],
+      // From the whole zoom the group's mark comes at (`tickFrom`). A filter,
+      // not an opacity: a paint property that reads both the zoom and the
+      // feature is worked out at whole zooms and blended between, so a mark
+      // due at 13 was nothing at 13 and a ghost until 14.
+      filter: ['all', ['==', ['get', 'kind'], 'join'], ['<=', ['coalesce', ['get', 'tickFrom'], 0], ['zoom']]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       // A row of dots, the walk between the marks: a hairline here read as a
       // scratch across the blocks, not as part of the station.
@@ -478,7 +484,7 @@ export function transitMarks(lines) {
         'line-color': P.station.edge,
         'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.4, 13, 2, 16, 2.6],
         'line-dasharray': [0.01, 2.1],
-        'line-opacity': farOpacity(() => 0.9, { until: ZOOMS.at(-1) }),
+        'line-opacity': 0.9,
       },
     },
     {
@@ -504,7 +510,7 @@ export function transitMarks(lines) {
       id: 'platform',
       type: 'symbol',
       source: 'platforms',
-      filter: ['==', ['get', 'kind'], 'mark'],
+      filter: ['all', ['==', ['get', 'kind'], 'mark'], ['<=', ['coalesce', ['get', 'tickFrom'], 0], ['zoom']]],
       minzoom: CAPSULE_FROM,
       layout: {
         'icon-image': ['step', ['zoom'], ['concat', 'station-', ['coalesce', ['get', 'tick'], ['get', 'span']]], CAPSULE_TO, ['concat', 'station-', ['get', 'span']]],
@@ -514,10 +520,9 @@ export function transitMarks(lines) {
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
       },
-      // A group's mark arrives at its own `tickFrom`, which can be any zoom the
-      // capsule is drawn at, so the fades are stepped to the last zoom the
-      // marks grow to (16), not to the capsule's first (11).
-      paint: { 'icon-opacity': farOpacity((z) => Math.min(1, Math.max(0, (z - CAPSULE_FROM) / (CAPSULE_TO - CAPSULE_FROM))), { until: ZOOMS.at(-1) }) },
+      // A group's mark arrives at its own `tickFrom`, a whole zoom, by the
+      // filter above.
+      paint: { 'icon-opacity': fade(onRoute) },
     },
     {
       id: 'stops',
@@ -752,6 +757,9 @@ export function transitMarks(lines) {
       },
       paint: { 'text-color': P.ink, 'text-opacity': fade(onRoute), ...halo },
     },
+    // The station's own second mark and the walk to it take their room before
+    // any station's name, the hub's included (basemap.js).
+    ...groupKeepOut(),
     // Rail letters ride along their lines, placed before the bus numbers
     // below. The build says where (scripts/lib/sharedtrack.mjs): lines that
     // share track take turns, so each is named, and a letter sits between

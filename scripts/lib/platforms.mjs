@@ -144,6 +144,27 @@ export function splitByTrack(group, pieces, { apart = TRACK_APART_METERS } = {})
 // hall counts as long when it is this many times longer than it is wide.
 export const WALK_REACH_METERS = 80;
 const LONG_HALL = 2;
+// A mark on the walk's line lies along it, not exactly across its own lines,
+// when the two are within this many degrees: the marks at the two ends of the
+// walk are then parallel, in one line with it, as they would be drawn by
+// hand. (Union Station's light rail comes in 14 degrees off square to the
+// concourse, and its mark was tilted that much against the other.) A mark
+// turned this far still covers the ends of the lines it spans.
+export const WALK_TURN_DEGREES = 25;
+
+/**
+ * A mark's bearing (the way its lines run, which it is drawn across) turned
+ * so the mark lies along the walk's line `axis`, if that is within
+ * WALK_TURN_DEGREES of where it lay; else as it was.
+ */
+export function alongWalk(bearing, axis) {
+  const k = kx(axis[0][1]);
+  const walk = (Math.atan2((axis[1][0] - axis[0][0]) * k, (axis[1][1] - axis[0][1]) * KY) * 180) / Math.PI;
+  // The mark lies along `bearing + 90`: square to the walk, give or take a
+  // half turn, which is the same mark.
+  const want = walk - 90 + 180 * Math.round((bearing - (walk - 90)) / 180);
+  return Math.abs(want - bearing) <= WALK_TURN_DEGREES ? Math.round(want) : bearing;
+}
 
 const KY = 110540;
 const kx = (lat) => 111320 * Math.cos((lat * Math.PI) / 180);
@@ -295,8 +316,11 @@ export function placeGroup(group, pieces, paths, ending = null, beside = null, a
   }
   // On the walk's line (`along`, walkAxis), before all of these: the marks
   // of the station's groups stand in one line with the hall between them.
-  if (along) at = crossingBeside(group, pieces, along) ?? at;
-  const { span, bearing } = trackAt(mine, at);
+  const onWalk = along ? crossingBeside(group, pieces, along) : null;
+  if (onWalk) at = onWalk;
+  const track = trackAt(mine, at);
+  const { span } = track;
+  const bearing = onWalk ? alongWalk(track.bearing, along) : track.bearing;
   // Across the lines it spans, unless they part within the tick's length
   // (stationmarks.mjs, "the tick spans its lines where they run together").
   let tick = span;
@@ -307,7 +331,7 @@ export function placeGroup(group, pieces, paths, ending = null, beside = null, a
       return parallelAt(paths, lines, at, { zoom, meters: reach });
     });
     if (checks.some((c) => !c.parallel)) tick = 1;
-    else if (checks[1].bearing !== null) tickBearing = checks[1].bearing;
+    else if (checks[1].bearing !== null) tickBearing = onWalk ? alongWalk(checks[1].bearing, along) : checks[1].bearing;
   }
   return { at, lines, span, bearing, tick, tickBearing };
 }
@@ -356,13 +380,17 @@ export function stationGroups(f, platformStops, pieces, paths, ending = null, ha
 /**
  * Where a station's own mark goes when the walk between its platform groups
  * runs along a hall (walkAxis): on the walk's line, at the group its point
- * is nearest. Null for a station with no such walk.
+ * is nearest, as [lon, lat] with the walk's line as `axis`. Null for a
+ * station with no such walk.
  */
 export function walkPoint(f, platformStops, pieces, ending = null, halls = []) {
   const { axis, groups } = stationGroups(f, platformStops, pieces, linePaths(pieces), ending, halls);
   if (!axis || groups.length < 2) return null;
   const here = f.geometry.coordinates;
-  return groups.reduce((best, g) => (meters(here, g.at) < meters(here, best.at) ? g : best)).at;
+  const at = groups.reduce((best, g) => (meters(here, g.at) < meters(here, best.at) ? g : best)).at;
+  // The point, with the walk's line on it for the station's own mark to lie
+  // along (alongWalk).
+  return Object.assign([...at], { axis });
 }
 
 /**
@@ -401,10 +429,20 @@ export function platformMarks(stations, platforms, pieces, endingAt = () => null
     // The station's own mark is drawn at the station: it stands for the group
     // it sits on, and every other group gets a mark of its own.
     const own = groups.reduce((best, g, k) => (meters(here, g.at) < meters(here, groups[best].at) ? k : best), 0);
+    const ending = endingAt(i);
     groups.forEach((group, k) => {
       if (k === own && meters(here, group.at) <= SAME_PLACE_METERS) return;
-      const from = clearFrom(here, p, group);
-      if (from === null) return;
+      const clear = clearFrom(here, p, group);
+      if (clear === null) return;
+      // The map shows a mark from a whole zoom (network.js, 'platform'), so
+      // the zoom is a whole one: the first at which the mark is clear. A
+      // group its lines end at doesn't wait to be clear. Its lines end at
+      // its mark, and with the mark held back they ended at nothing (the
+      // light rail at Union Station at zoom 13, where its mark was not yet
+      // clear of the station's): it is marked from the zoom stations are
+      // capsules, and overlaps the station's own mark until it is clear.
+      const ends = Boolean(ending) && group.lines.every((route) => ending.has(route));
+      const from = ends ? Math.min(Math.ceil(clear), TICK_TO) : Math.ceil(clear);
       const at = group.at.map(round);
       features.push({
         type: 'Feature',

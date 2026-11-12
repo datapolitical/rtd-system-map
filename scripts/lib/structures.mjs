@@ -223,6 +223,8 @@ export function principalAxis(ring) {
  * near enough, so a line with no platform in OSM is left where RTD's data
  * puts its end.
  */
+// A line runs on along a platform it comes in within 30 degrees of.
+const ALONG_PLATFORM_COS = Math.cos((30 * Math.PI) / 180);
 export function platformEndFor(point, platforms, { reach = 90, longest = 450, from = point } = {}) {
   let best = null;
   for (const ring of platforms) {
@@ -232,22 +234,49 @@ export function platformEndFor(point, platforms, { reach = 90, longest = 450, fr
   if (!best) return null;
   const axis = principalAxis(best.ring);
   const far = metres(from, axis[0]) > metres(from, axis[1]) ? axis[0] : axis[1];
-  // The line runs straight on, beside its platform, until it is level with
-  // the platform's end: the point on the line's own bearing abreast of that
-  // end. Run to the end of the platform's middle line, a few metres to the
-  // side of the track, it bent there (Union Station's four commuter lines
-  // kinked 40 px before their mark).
+  // The line runs on beside its platform, parallel to it, until it is level
+  // with the platform's end: track runs along its platform, and RTD's line
+  // can come in a few degrees off it. Run to the end of the platform's
+  // middle line, a few metres to the side of the track, it bent there (Union
+  // Station's four commuter lines kinked 40 px before their mark); run
+  // straight on along its own bearing it drifted across the platform (the
+  // airport's A line, 4 degrees off over 120 m).
   const kx = 111320 * Math.cos((point[1] * Math.PI) / 180);
   const ky = 110540;
-  const way = [(point[0] - from[0]) * kx, (point[1] - from[1]) * ky];
+  const near = far === axis[0] ? axis[1] : axis[0];
+  const way = [(far[0] - near[0]) * kx, (far[1] - near[1]) * ky];
   const wl = Math.hypot(...way);
-  let tip = far;
-  if (wl > 1) {
-    const along = ((far[0] - point[0]) * kx * way[0] + (far[1] - point[1]) * ky * way[1]) / wl;
-    tip = [point[0] + ((way[0] / wl) * along) / kx, point[1] + ((way[1] / wl) * along) / ky];
-  }
+  if (wl < 1) return null;
+  // Only a line that comes in along the platform: one that crosses it is not
+  // turned to run along it.
+  const came = [(point[0] - from[0]) * kx, (point[1] - from[1]) * ky];
+  const cl = Math.hypot(...came);
+  if (cl > 1 && (came[0] * way[0] + came[1] * way[1]) / (cl * wl) < ALONG_PLATFORM_COS) return null;
+  const along = ((far[0] - point[0]) * kx * way[0] + (far[1] - point[1]) * ky * way[1]) / wl;
+  const tip = [point[0] + ((way[0] / wl) * along) / kx, point[1] + ((way[1] / wl) * along) / ky];
   const run = metres(point, tip);
   return run >= 8 && run <= longest ? tip : null;
+}
+
+// A roof at least this wide (its area over its length, metres) is a hall, not
+// the awning along a platform: the airport's canopy and Union Station's train
+// hall. A hall is drawn like the station building and kept whole, and a line
+// that ends at it ends under it (build-data.mjs).
+export const HALL_ROOF_WIDTH = 10;
+// ...and this big (m2): a shelter 15 m square is not a hall.
+export const HALL_ROOF_AREA = 600;
+const isHallRoof = (a) =>
+  a.polygons.some((p) => {
+    const [from, to] = principalAxis(p.outer);
+    return polygonArea(p) >= HALL_ROOF_AREA && polygonArea(p) / Math.max(1, metres(from, to)) >= HALL_ROOF_WIDTH;
+  });
+/** The middles of a station's hall roofs, largest first: `shapes` as shapesFor gives them. */
+export function hallRoofs(shapes) {
+  return (shapes?.canopies ?? [])
+    .filter(isHallRoof)
+    .map((a) => a.polygons.reduce((best, p) => (polygonArea(p) > polygonArea(best) ? p : best)))
+    .sort((a, b) => polygonArea(b) - polygonArea(a))
+    .map((p) => polygonCentre(p.outer));
 }
 
 const isRailPlatform = (tags) => tags.railway === 'platform' && tags.public_transport !== 'no';
@@ -461,7 +490,7 @@ export async function stationStructures({ stations, platforms, previous = [], fe
     const shapes = shapesFor(points, areas, station.geometry.coordinates);
     byStation.set(i, shapes);
     for (const area of shapes.platforms) features.push(featureOf(area, 'platform', station, shapes.project));
-    for (const area of shapes.canopies) features.push(featureOf(area, 'canopy', station, shapes.project));
+    for (const area of shapes.canopies) features.push(featureOf(area, isHallRoof(area) ? 'hall' : 'canopy', station, shapes.project));
     if (shapes.building) features.push(featureOf(shapes.building, 'building', station, shapes.project));
   }
   return { byStation, features, failed };

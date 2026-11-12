@@ -30,6 +30,8 @@ const RETRACE_METERS = 5;
 const APART_METERS = 250;
 const EASE_METERS = 1500;
 const EASE_STEP = 1 / 32;
+// A line that left a pack within this of an end of its own track ended there.
+const END_HERE_METERS = 40;
 // Lines whose ends are this close, and run within 20 degrees of the same
 // way, end at the same station: their ends are drawn level (see flushEnds).
 const FLUSH_METERS = 150;
@@ -165,13 +167,15 @@ export function sharedTrack(features, stations = []) {
     return best;
   };
 
+  // Where each line's track ends, for the runs to change at (atLineEnds).
+  const lineEnds = lines.flatMap((line) => line.parts.flatMap((part) => [part[0], part.at(-1)].map((p) => ({ route: line.route, p }))));
   // Each part becomes runs of points that share with the same lines. A run
   // knows the runs before and after it along its line.
   const runs = [];
   for (const line of lines) {
     for (const part of line.parts) {
       const sets = part.map((p) => sharing(line.route, p));
-      const inPart = smooth(runsOf(part, sets)).map((run) => ({ ...run, line, part, flipped: false }));
+      const inPart = atLineEnds(smooth(runsOf(part, sets)), line.route, lineEnds).map((run) => ({ ...run, line, part, flipped: false }));
       inPart.forEach((run, i) => Object.assign(run, { before: inPart[i - 1], after: inPart[i + 1] }));
       runs.push(...inPart);
     }
@@ -278,8 +282,15 @@ export function sharedTrack(features, stations = []) {
   };
   packed(runs, onLine);
   rounded(runs);
+  aligned(runs);
   const marks = stations.map(project);
-  for (const run of runs) run.slots = eased(run, apart, marks);
+  // Whether every one of some lines has an end of its track within
+  // END_HERE_METERS of p: the lines that left a pack there did so by ending.
+  const endedAt = (routes, p) =>
+    [...routes].every((route) =>
+      lines.some((line) => line.route === route && line.parts.some((part) => [part[0], part.at(-1)].some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) <= END_HERE_METERS))),
+    );
+  for (const run of runs) run.slots = eased(run, apart, marks, endedAt);
   const pieces = runs.flatMap((run) =>
     inPieces(run.points, run.slots).map(({ slot, points }) => ({
       type: 'Feature',
@@ -510,6 +521,51 @@ function rounded(runs) {
   }
 }
 
+// Lines of a pack on one path. `packed` moves each line to the middle of the
+// pack's tracks as seen from its own points, and `rounded` rounds each line
+// along its own length, less near its end: the lines come out up to a metre
+// apart, most where one of them ends, and at zoom 16 the gap between two of
+// them was a pixel wider than between the next two (T beside E and R at
+// Lincoln). So each line, in the order of the lines' names, is moved onto the
+// path of the lines before it that share its track: all the way when it is
+// within ALIGN_FULL metres of them, less and less out to ALIGN_NONE, so a
+// line swinging into or out of a pack is not snatched sideways. Where two
+// runs of a line meet they still meet. Changes each run's points in place.
+const ALIGN_FULL = 1;
+const ALIGN_NONE = 2.5;
+function aligned(runs) {
+  const order = [...runs].sort((a, b) => a.line.route.localeCompare(b.line.route, 'en', { numeric: true }));
+  const done = [];
+  for (const run of order) {
+    const others = new Set(run.set.split(' ').filter((route) => route !== run.line.route));
+    const leaders = done.filter((r) => others.has(r.line.route));
+    done.push(run);
+    if (!leaders.length) continue;
+    run.points = run.points.map((p) => {
+      let best = null;
+      for (const leader of leaders) {
+        const path = leader.points;
+        for (let i = 1; i < path.length; i++) {
+          // (A cheap box test first: most segments are nowhere near.)
+          if (Math.min(path[i - 1][0], path[i][0]) - p[0] > ALIGN_NONE || p[0] - Math.max(path[i - 1][0], path[i][0]) > ALIGN_NONE) continue;
+          if (Math.min(path[i - 1][1], path[i][1]) - p[1] > ALIGN_NONE || p[1] - Math.max(path[i - 1][1], path[i][1]) > ALIGN_NONE) continue;
+          const q = closestOnSegment(p, path[i - 1], path[i]);
+          const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+          if (!best || d < best.d) best = { q, d };
+        }
+      }
+      if (!best || best.d >= ALIGN_NONE) return p;
+      const w = best.d <= ALIGN_FULL ? 1 : (ALIGN_NONE - best.d) / (ALIGN_NONE - ALIGN_FULL);
+      return [p[0] + (best.q[0] - p[0]) * w, p[1] + (best.q[1] - p[1]) * w];
+    });
+  }
+  // Runs of one line that met at a point still do: the next run starts where
+  // this one now ends.
+  const head = (run) => (run.flipped ? run.points.length - 1 : 0);
+  const tail = (run) => (run.flipped ? 0 : run.points.length - 1);
+  for (const run of runs) if (run.after) run.after.points[head(run.after)] = run.points[tail(run)];
+}
+
 // Where each line carries its letter, zoom by zoom (DESIGN.md, "Rail
 // bullets"). Each line gets a letter just past each fork it leaves, and
 // about every LETTER_PX along it between, evenly. On shared track the
@@ -623,7 +679,7 @@ function lettersAlong(tracks, marks, metersPerPixel) {
 // further away, so the line doesn't step sideways where the others leave, and
 // isn't drawn over one of them while their tracks are still close. Only the
 // run with fewer lines moves; the lines still together stay in their slots.
-function eased(run, apart, marks) {
+function eased(run, apart, marks, endedAt = () => false) {
   const { points } = run;
   const slots = points.map(() => run.slot);
   const members = (r) => r.set.split(' ');
@@ -637,6 +693,12 @@ function eased(run, apart, marks) {
   for (const { other, fromStart, shift } of ends) {
     const gone = new Set(members(other).filter((route) => !members(run).includes(route)));
     const order = points.map((_, i) => (fromStart ? i : points.length - 1 - i));
+    // Where the lines that left did so by ending, there is a station's mark
+    // across the pack at that very place: the lines that run on take their
+    // own places under it, and are straight on both sides of it. Eased over
+    // the next few hundred metres they bent away from the mark for no reason
+    // a reader could see (E and R south of Lincoln, where T ends).
+    if (endedAt(gone, points[order[0]])) continue;
     const along = [0];
     for (let k = 1; k < order.length; k++) {
       const [a, b] = [points[order[k - 1]], points[order[k]]];
@@ -1015,6 +1077,51 @@ function forward(points) {
   return Math.abs(dx) >= Math.abs(dy) ? dx > 0 : dy > 0;
 }
 
+// Where a line of a pack ends and the others run on, their runs change
+// abreast of its end, not where its end stops counting as near (up to
+// SHARED_METERS further on): the pack changes width there, under the mark the
+// line's end is marked with, and a change a few metres past the mark showed
+// beside it as a jog. `runs` are one part's, in order; `ends` are every
+// line's track ends ({ route, p }). Moves the boundary to the point of the
+// path abreast of the end, in place.
+function atLineEnds(runs, route, ends) {
+  for (let i = 0; i + 1 < runs.length; i++) {
+    const [a, b] = [runs[i], runs[i + 1]];
+    const [more, fewer] = a.set.split(' ').length > b.set.split(' ').length ? [a, b] : [b, a];
+    const kept = new Set(fewer.set.split(' '));
+    const lost = more.set.split(' ').filter((r) => !kept.has(r) && r !== route);
+    if (!lost.length || more.set.split(' ').length - lost.length !== kept.size) continue;
+    const meet = a.points.at(-1);
+    // The end of each line lost, if every one of them ends near here.
+    const there = lost.map((r) => {
+      let best = null;
+      for (const e of ends) {
+        if (e.route !== r) continue;
+        const d = Math.hypot(e.p[0] - meet[0], e.p[1] - meet[1]);
+        if (d <= END_HERE_METERS && (!best || d < best.d)) best = { p: e.p, d };
+      }
+      return best?.p ?? null;
+    });
+    if (there.some((p) => !p)) continue;
+    const end = [0, 1].map((k) => there.reduce((sum, p) => sum + p[k], 0) / there.length);
+    // The point of the two runs' path nearest that end.
+    const path = [...a.points, ...b.points.slice(1)];
+    let best = null;
+    for (let k = 1; k < path.length; k++) {
+      const q = closestOnSegment(end, path[k - 1], path[k]);
+      const d = Math.hypot(q[0] - end[0], q[1] - end[1]);
+      if (!best || d < best.d) best = { q, d, k };
+    }
+    if (!best || best.d > SHARED_METERS) continue;
+    const before = path.slice(0, best.k).filter((p) => Math.hypot(p[0] - best.q[0], p[1] - best.q[1]) > 0.5);
+    const after = path.slice(best.k).filter((p) => Math.hypot(p[0] - best.q[0], p[1] - best.q[1]) > 0.5);
+    if (!before.length || !after.length) continue;
+    a.points = [...before, best.q];
+    b.points = [best.q, ...after];
+  }
+  return runs;
+}
+
 function runsOf(points, sets) {
   const runs = [];
   for (let i = 0; i < points.length; i++) {
@@ -1068,12 +1175,16 @@ function densify(points) {
 }
 
 // Drop the points densify added back out where the line is straight.
+// A point is left out when it is within STRAIGHT metres of the straight line
+// past it. A tenth of a metre: at half a metre, lines on one path lost
+// different points and came out up to a metre apart (see `aligned`).
+const STRAIGHT = 0.1;
 function simplifyCollinear(points) {
   const out = [points[0]];
   for (let i = 1; i < points.length - 1; i++) {
     const [a, b, c] = [out.at(-1), points[i], points[i + 1]];
     const area = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
-    if (area / (Math.hypot(c[0] - a[0], c[1] - a[1]) || 1) > 0.5) out.push(b);
+    if (area / (Math.hypot(c[0] - a[0], c[1] - a[1]) || 1) > STRAIGHT) out.push(b);
   }
   out.push(points.at(-1));
   return out;
@@ -1098,7 +1209,10 @@ function segmentDistance(p, a, b) {
 }
 
 const partsOf = (g) => (g.type === 'LineString' ? [g.coordinates] : g.coordinates);
-const round = (v) => Math.round(v * 1e5) / 1e5;
+// Six decimals, about 0.1 m. At five (about a metre) each line of a pack was
+// rounded its own way, and two lines on one path were drawn up to a metre
+// apart: at zoom 16 one gap in a pack came out a pixel wider than the next.
+const round = (v) => Math.round(v * 1e6) / 1e6;
 
 function centerOf(features) {
   let [w, s, e, n] = [Infinity, Infinity, -Infinity, -Infinity];

@@ -15,11 +15,11 @@ import { heading, stopLines } from './lib/stops.mjs';
 import { endAtMarks, nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
-import { groupPlatforms, groupPoints, meters, platformMarks, walkPoint } from './lib/platforms.mjs';
+import { alongWalk, groupPlatforms, groupPoints, meters, platformMarks, walkPoint } from './lib/platforms.mjs';
 import { busStretches } from './lib/stretches.mjs';
 import { buildStreets } from './lib/streets.mjs';
 import { BUILDING_R, terminalFootprints } from './lib/footprints.mjs';
-import { extendLineToPlatforms, platformsToMarks, stationStructures } from './lib/structures.mjs';
+import { extendLineToPlatforms, hallRoofs, platformsToMarks, stationStructures } from './lib/structures.mjs';
 import { clipAtHalls, shortenAtHall, stopsOfHalls } from './lib/halls.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
@@ -71,6 +71,12 @@ const SNAP_METERS = 200;
 // Line ends this close together are one row of platforms, and the station's
 // bar goes across them (Union Station's four commuter lines).
 const ROW_METERS = 60;
+// A hall roof whose middle is within this of the end of the platform (metres)
+// is the roof the lines end under.
+const ROOF_NEAR = 60;
+// ...and it is over the track when its middle is at least this far short of
+// the lines' end.
+const ROOF_SHORT = 5;
 // Phones open on the box holding this share of weekday service, east to west
 // and north to south (scripts/lib/core.mjs).
 const CORE_SHARE = 0.6;
@@ -393,7 +399,26 @@ async function main() {
       const f = geo.stations[i];
       const lines = new Set(f.properties.lines.split(' '));
       const on = nearestOnTrack(pieces.filter((p) => lines.has(p.properties.route)), at, SNAP_METERS);
-      if (on && meters(on, at) <= ROW_METERS) f.geometry = { type: 'Point', coordinates: on };
+      if (!on || meters(on, at) > ROW_METERS) continue;
+      f.geometry = { type: 'Point', coordinates: on };
+      // Under the roof: where a hall's roof stands over the end of the
+      // platform (its middle within ROOF_NEAR of the lines' end), the mark is
+      // on the track abreast of the roof's middle, and the lines are cut
+      // there (endAtMarks). Run to the platform's very end, the airport's A
+      // line came out past the tip of its canopy.
+      const ending = endingAt(i);
+      const mine = pieces.filter((p) => ending.has(p.properties.route));
+      // The largest such roof that is over the track: its middle is abreast
+      // of a point short of the lines' end, not level with the end or past
+      // it (the hotel's roof at the airport, beyond the buffers).
+      for (const roof of hallRoofs(shapesAt.byStation.get(i))) {
+        if (meters(roof, on) > ROOF_NEAR) continue;
+        const under = nearestOnTrack(mine, roof, SNAP_METERS);
+        if (!under || meters(under, on) < ROOF_SHORT || meters(under, on) > ROOF_NEAR) continue;
+        console.log(`  ${f.properties.name}: its lines end under the roof, ${Math.round(meters(under, on))} m short of the platform's end`);
+        f.geometry = { type: 'Point', coordinates: under };
+        break;
+      }
     }
   }
   // The bus stations' halls (see "Bus stations drawn as their halls" below),
@@ -423,12 +448,14 @@ async function main() {
   // and the other groups' marks are placed on it too (groupPoints,
   // platformMarks). Union Station's two marks stand at the two ends of its
   // bus concourse, and the walk runs down the middle of it.
+  const walks = new Map();
   geo.stations.forEach((f, i) => {
     if (!f.properties.served) return;
     const at = walkPoint(f, service.stations[i].platforms ?? [], pieces, endingAt(i), halls);
     if (!at) return;
     console.log(`  ${f.properties.name}: marks in line with the hall between its platforms (its own moved ${Math.round(meters(f.geometry.coordinates, at))} m)`);
-    f.geometry = { type: 'Point', coordinates: at };
+    f.geometry = { type: 'Point', coordinates: [at[0], at[1]] };
+    walks.set(i, at.axis);
   });
   // A line ends at its end station's mark (DESIGN.md, "Stations"; #75): the
   // station's own mark, or the mark of the platform group the line stops
@@ -553,6 +580,9 @@ async function main() {
     // may sit further out, since the lines around it leave no room beside it.
     f.properties.hub = hubs.has(i);
     Object.assign(f.properties, f.properties.served ? trackAt(pieces, f.geometry.coordinates) : { span: 1, bearing: 0 });
+    // A mark on the walk between its station's platform groups lies along it,
+    // like the mark at the walk's other end.
+    if (walks.has(i)) f.properties.bearing = alongWalk(f.properties.bearing, walks.get(i));
   });
 
   // What the panels say about each route and station. Stop route codes are
