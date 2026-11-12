@@ -1457,20 +1457,42 @@ export function unlooped(streets, slim, speck) {
     if (st.path.length < 3 || dist(st.path[0], st.path.at(-1)) > 1.5) { out.push(st); continue; }
     const pts = resample([...st.path.slice(0, -1), st.path[0]], 2);
     const n = pts.length;
-    const half = Math.floor((n - 1) / 2);
-    const mid = (i) => lerp(pts[i], pts[n - 1 - i], 0.5);
-    let open = 0;
-    while (open < half && dist(pts[open], pts[n - 1 - open]) < slim) open++;
-    const eye = pts.slice(open, n - open);
+    // The way out and the way back are zipped together from the corner, each step taking
+    // whichever next pair lies closest, so a side that wanders a little longer than the other
+    // stays paired with it. The loop opens where the two first lie `slim` apart for longer than
+    // three times that; a shorter bulge is drawn through.
+    const all = [[0, n - 1, 0]];
+    for (let [i, j] = [0, n - 1]; j - i > 2;) {
+      const steps = [[i + 1, j - 1], [i + 1, j], [i, j - 1]].map(([a, b]) => [a, b, dist(pts[a], pts[b])]);
+      [i, j] = steps.reduce((m, x) => (x[2] < m[2] - 0.01 ? x : m));
+      all.push([i, j, dist(pts[i], pts[j])]);
+    }
+    let cut = all.length - 1;
+    for (let k = 1, from = -1, run = 0; k < all.length; k++) {
+      if (all[k][2] < slim) { from = -1; continue; }
+      if (from < 0) { from = k; run = 0; }
+      run += Math.max(dist(pts[all[k][0]], pts[all[k - 1][0]]), dist(pts[all[k][1]], pts[all[k - 1][1]]));
+      if (run >= 3 * slim) { cut = from - 1; break; }
+    }
+    const pairs = all.slice(0, cut + 1);
+    const [i, j] = pairs.at(-1);
+    const mid = ([a, b]) => lerp(pts[a], pts[b], 0.5);
+    const stick = pairs.map(mid);
+    const eye = pts.slice(i, j + 1);
     let area = 0;
-    for (let i = 0; i < eye.length; i++) { const [p, q] = [eye[i], eye[(i + 1) % eye.length]]; area += p[0] * q[1] - q[0] * p[1]; }
-    const whole = [];
-    for (let i = 0; i <= half; i++) whole.push(mid(i));
-    if (open >= half || Math.abs(area) / (length(eye) || 1) < slim) { out.push({ ...st, path: simplify([pts[0], ...whole.slice(1)], 0.3) }); continue; }
+    for (let k = 0; k < eye.length; k++) { const [p, q] = [eye[k], eye[(k + 1) % eye.length]]; area += p[0] * q[1] - q[0] * p[1]; }
+    if (j - i <= 2 || Math.abs(area) / (length(eye) || 1) < slim) {
+      // Never opens wider than `slim`: all one street, out to its far end.
+      const m = eye.length - 1;
+      const rest = [];
+      for (let k = 1; k <= m / 2; k++) rest.push(lerp(eye[k], eye[m - k], 0.5));
+      out.push({ ...st, path: simplify([pts[0], ...stick.slice(1), ...rest], 0.3) });
+      continue;
+    }
     // A stick too short to draw is left as part of the loop.
-    if (2 * open < speck) { out.push(st); continue; }
-    const join = mid(open);
-    out.push({ ...st, path: simplify([pts[0], ...whole.slice(1, open), join], 0.3) });
+    if (length(stick) < speck) { out.push(st); continue; }
+    const join = stick.at(-1);
+    out.push({ ...st, path: simplify([pts[0], ...stick.slice(1)], 0.3) });
     out.push({ ...st, path: simplify([join, ...eye, join], 0.3) });
   }
   return out;

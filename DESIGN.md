@@ -2002,7 +2002,11 @@ How it is built:
   A turnaround loop too small to read as a ring is drawn as the point where
   its streets meet, and a street that runs straight through that point
   stays straight: the point is on it, not beside it. A turnaround drawn as
-  a loop too slim to see into is one street out to its far end.
+  a loop too slim to see into is one street out to its far end. Its way out
+  and way back are paired by nearness, not by distance along each, so a way
+  back that wanders a little longer still lies on the way out; the loop
+  opens only where the two lie six pixels apart for more than eighteen, and
+  a shorter bulge is drawn through.
   A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
   Where a full name would sit on lines or stand off from its mark, common
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
@@ -4078,6 +4082,9 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets keep one weight along a street where nothing else
   meets it. Reason: pieces weighed apart left a short dark tick on the end
   of a pale street at the downtown hub on sheet 1.
+- 2026-11-12: Sheets pair a slim loop's two sides by nearness. Reason: long
+  out-and-back loops whose way back ran a little longer were left as a
+  doubled line two pixels apart (on sheets 3 and 4).
 
 ## Sources
 

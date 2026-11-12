@@ -428,3 +428,15 @@ test('along a street nothing else meets, a short stretch a class apart takes its
   ], 32);
   assert.deepEqual(real.map((s) => s.cls), ['c10', 'c30'], 'a change of service over a long stretch is kept');
 });
+
+test('a slim loop whose way back wanders longer than its way out, with a small bulge, is still one street out to a round end', () => {
+  // Out along y = 0; back along y = 3 with a bulge to y = 9 for six pixels and a few extra
+  // yards of wander; a round turnaround at the far end.
+  const out = [[0, 0], [200, 0]];
+  const turn = [[215, -12], [230, 0], [215, 14]];
+  const back = [[200, 3], [144, 3], [140, 9], [136, 9], [132, 3], [80, 3], [70, 6], [60, 3], [0, 0]];
+  const [stick, eye] = unlooped([st([...out, ...turn, ...back])], 6, 10);
+  assert.ok(eye, 'the round end stays a loop');
+  assert.ok(stick.path.every((p) => p[1] > -1 && p[1] < 5), 'the way out and back are one street down the middle, bulge and all');
+  assert.ok(length(stick.path) > 180, 'out to where the loop opens');
+});
