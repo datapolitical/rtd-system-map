@@ -10,6 +10,19 @@
     <meta name="theme-color" content="#0e1216" media="(prefers-color-scheme: dark)" />
     <title>Denver transit map (unofficial)</title>
     <meta name="description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs." />
+    <!-- What a shared link shows in messages and social posts (DESIGN.md,
+         "Link preview"). The picture is made by scripts/og-image.mjs. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="RTD system map" />
+    <meta property="og:title" content="RTD system map" />
+    <meta property="og:description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs." />
+    <meta property="og:url" content="https://rtd-system-map.pages.dev/" />
+    <meta property="og:image" content="https://rtd-system-map.pages.dev/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Map of central Denver with the colored rail lines meeting at Union Station and the bus streets in navy." />
+    <meta name="twitter:card" content="summary_large_image" />
     <!-- Start everything the map needs at once: the library, the network
          summary, the font, and a connection to the basemap's server. -->
     <link rel="modulepreload" href="vendor/maplibre-gl.mjs" />
