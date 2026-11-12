@@ -2021,7 +2021,9 @@ How it is built:
   the tightest rectangle round the surveyed outline, along its own lie,
   brought in until it covers the same ground. A street whose loose end is
   within ten pixels of a hall's wall is drawn onto the wall, square, without
-  the wander of its last few yards, and no street is drawn inside a hall:
+  the wander or gentle hook of its last few yards: it carries straight on
+  to the wall, or turns square onto it, whichever bends it less. No street
+  is drawn inside a hall:
   one that runs in stops at the wall. A street that crosses above a hall in
   a straight line and carries on stays as it is.
 - **More fudges for a clean bus drawing.** A loose end with a street of the

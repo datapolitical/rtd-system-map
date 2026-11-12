@@ -372,3 +372,13 @@ test('in the dark a hall stands off the ground and the buildings round it', asyn
     assert.ok(ratio(c.hallEdge, c.hall) >= 1.8, `${theme}: its wall reads`);
   }
 });
+
+test('a street that stops short of a slanted wall carries straight on to it, not round to its nearest point', () => {
+  // A hall set on the diagonal; the street runs east and stops a few pixels short of its slanted wall.
+  const walls = halls(all([hall(1, [at3(100, 0), at3(130, -30), at3(160, 0), at3(130, 30)])]), near);
+  const street = line({ mode: 'bus', cls: 'c5', routes: '1', n: 1, hw: 5, zoom: 'near' }, [at3(0, -8), at3(101, -8)]);
+  const [drawn] = busStreets(all([street]), near, walls);
+  const tip = drawn.path.at(-1);
+  assert.ok(nearest(walls[0].ring, tip).d < 0.5, 'it ends on the wall');
+  assert.ok(drawn.path.every((p) => Math.abs(p[1] - origin3[1] + 8) < 0.5), 'without turning to meet it');
+});

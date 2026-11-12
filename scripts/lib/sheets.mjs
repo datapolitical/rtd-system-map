@@ -1365,6 +1365,31 @@ function walled(streets, walls) {
   const met = new Map();
   for (const st of streets) for (const p of [st.path[0], st.path.at(-1)]) met.set(key(p), (met.get(key(p)) ?? 0) + 1);
   const reach = SIZES.hallReach;
+  // Where a street reaching a wall meets it: of straight on along the way it has come for the
+  // last few blocks' worth, and the nearest point of the wall, whichever turns it less, so it
+  // arrives without a hook.
+  const onWall = (ring, pts) => {
+    const tip = pts.at(-1);
+    const near = nearest(ring, tip);
+    const back = pointAlong([...pts].reverse(), Math.min(24, length(pts)));
+    const d = dist(back, tip);
+    if (d < 1) return near.at;
+    const u = [(tip[0] - back[0]) / d, (tip[1] - back[1]) / d];
+    let best = null;
+    for (let i = 1; i < ring.length; i++) {
+      const [a, b] = [ring[i - 1], ring[i]];
+      const e = [b[0] - a[0], b[1] - a[1]];
+      const den = u[0] * e[1] - u[1] * e[0];
+      if (Math.abs(den) < 1e-9) continue;
+      const t = ((a[0] - tip[0]) * e[1] - (a[1] - tip[1]) * e[0]) / den;
+      const s = ((a[0] - tip[0]) * u[1] - (a[1] - tip[1]) * u[0]) / den;
+      if (t >= -1 && s >= 0 && s <= 1 && (!best || t < best)) best = t;
+    }
+    if (best === null || best > Math.max(2 * near.d, near.d + 4)) return near.at;
+    const ahead = [tip[0] + u[0] * best, tip[1] + u[1] * best];
+    const turn = (q) => { const l = dist(tip, q); return l < 0.5 ? 0 : 1 - ((q[0] - tip[0]) * u[0] + (q[1] - tip[1]) * u[1]) / l; };
+    return turn(near.at) <= turn(ahead) ? near.at : ahead;
+  };
   // No street is drawn inside a hall: one that runs in stops at the wall it meets. One that
   // crosses above a hall in a straight line and carries on is left as it is.
   const inside = (p, ring) => {
@@ -1387,8 +1412,12 @@ function walled(streets, walls) {
     let run = [];
     const done = () => { if (run.length > 1 && length(run) > 1) outside.push({ ...st, path: simplify(run, 0.3) }); run = []; };
     for (let i = 0; i < pts.length; i++) {
-      if (!within[i]) { if (!run.length && i) run.push(nearest(ring, pts[i]).at); run.push(pts[i]); }
-      else if (run.length) { run.push(nearest(ring, run.at(-1)).at); done(); }
+      if (!within[i]) {
+        // A street coming out of a hall leaves its wall the way it carries on.
+        if (!run.length && i) run.push(onWall(ring, pts.slice(i, i + 9).reverse()));
+        run.push(pts[i]);
+      }
+      else if (run.length) { run.push(onWall(ring, run)); done(); }
     }
     done();
   }
@@ -1402,11 +1431,19 @@ function walled(streets, walls) {
       if (met.get(key(tip)) > 1) continue;
       const wall = walls.map((w) => w.ring).sort((a, b) => nearest(a, tip).d - nearest(b, tip).d)[0];
       if (nearest(wall, tip).d > reach) continue;
-      // Back along the street to where it is clear of the wall, then straight to the wall.
-      const pts = resample(end ? path : [...path].reverse(), 2);
+      // Back along the street to where it is clear of the wall, and past any gentle bend in
+      // its last yards (a hook in the data, not a corner), then on to the wall.
+      const v = end ? [...path] : [...path].reverse();
+      const bend = (a, b, c) => {
+        const [p, q] = [[b[0] - a[0], b[1] - a[1]], [c[0] - b[0], c[1] - b[1]]];
+        const l = Math.hypot(...p) * Math.hypot(...q);
+        return l ? Math.acos(Math.max(-1, Math.min(1, (p[0] * q[0] + p[1] * q[1]) / l))) : 0;
+      };
+      while (v.length > 2 && nearest(wall, v.at(-2)).d <= 3 * reach && ((t) => t > 0.07 && t < 0.5)(bend(...v.slice(-3)))) v.pop();
+      const pts = resample(v, 2);
       while (pts.length > 2 && nearest(wall, pts.at(-1)).d <= reach) pts.pop();
       if (nearest(wall, pts.at(-1)).d > 3 * reach) continue;
-      pts.push(nearest(wall, pts.at(-1)).at);
+      pts.push(onWall(wall, pts));
       path = simplify(end ? pts : pts.reverse(), 0.3);
     }
     return path === st.path ? st : { ...st, path };
