@@ -1996,11 +1996,13 @@ How it is built:
   middle. A short break in a bus street between two ends that share a route
   is bridged. A line weight holds for a few blocks: a short stretch takes the
   weight of the longer stretch it runs into, so a street is never dashes of
-  different weights. A stub a few pixels long with nothing at its far
-  end is left off; this is the one thing not drawn, and it is under half a
-  percent of route length on any sheet.
+  different weights. A short end that leads nowhere (under 25 px from its
+  loose end to the first corner where streets part, however many pieces it
+  is in) is left off; this is the one thing not drawn.
   A turnaround loop too small to read as a ring is drawn as the point where
-  its streets meet.
+  its streets meet, and a street that runs straight through that point
+  stays straight: the point is on it, not beside it. A turnaround drawn as
+  a loop too slim to see into is one street out to its far end.
   A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
   Where a full name would sit on lines or stand off from its mark, common
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
@@ -2014,10 +2016,13 @@ How it is built:
 - **Bus stations are rooms.** Where buses go indoors (the halls in
   `terminals.geojson`) RTD's route lines stop at the door. A hall at least
   five pixels wide on a sheet is drawn as a quiet filled shape, edged like a
-  quiet street, under the streets and stops. A street whose loose end is
+  quiet street, under the streets and stops. Its shape is a squared room:
+  the tightest rectangle round the surveyed outline, along its own lie,
+  brought in until it covers the same ground. A street whose loose end is
   within ten pixels of a hall's wall is drawn onto the wall, square, without
-  the wander of its last few yards. Streets that cross above a hall below
-  ground stay as they are.
+  the wander of its last few yards, and no street is drawn inside a hall:
+  one that runs in stops at the wall. A street that crosses above a hall in
+  a straight line and carries on stays as it is.
 - **More fudges for a clean bus drawing.** A loose end with a street of the
   same route a short walk away (110 m) is led to it, so a turnaround is a
   closed shape. Where two ways between the same corners enclose a strip
@@ -2025,6 +2030,17 @@ How it is built:
   its routes: a route that leaves a street and rejoins it a block later is
   no longer a notch. A short stretch takes the weight of the busier longer
   street it runs into, not merely the longer one.
+- **Streets meet at corners.** Before any of those rules run, every place
+  two streets meet is made a corner both share: where one ends on the
+  middle of another, where two cross, and where an end stops within a few
+  pixels of a street (the end is led onto the street; the street does not
+  bend to it). Rings, strips and stubs are then judged between real
+  corners. A strip is thin when its area over its length is under six
+  pixels and it is at least three times as long as wide, so a small square
+  block between streets that carry on past it is kept. Of a strip's sides
+  the quietest goes, then one no street runs straight through. Two streets
+  side by side tied by short links are one street. The same street said
+  twice between two corners is drawn once.
 - **Route numbers are said once, not every block.** A street is cut at every
   corner and each piece's list differs a little from the next. Pieces that
   carry straight on from each other are one street; along it the longest
@@ -4023,6 +4039,18 @@ work against the real structure before asking for evaluation.
   ended in mid-air where buses go indoors, turnarounds read as scraps, the
   same long list repeated block after block downtown, and lines beside one
   that ended jogged at its last station.
+- 2026-11-12: Sheets give bus streets real corners, and halls are squared
+  rooms. Streets are cut and joined wherever they meet before rings, strips
+  and stubs are judged; a stub is measured from its loose end to the first
+  corner where streets part; a slim turnaround loop is one street; two
+  streets tied by short links are one; a gathered turnaround never bends a
+  street running through it; a hall is the squared room over its outline
+  and no street is drawn inside one unless it crosses straight above.
+  Reason: stray spurs, the Decatur-Federal tangle, teardrop loops, ladder
+  cells and the torn outline of Civic Center's hall all came from streets
+  that touched without a shared corner, or from a surveyed shape drawn
+  true. The stub rule's old bound (half a percent of route length) is no
+  longer claimed; it was measured for single pieces.
 
 ## Sources
 

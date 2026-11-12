@@ -53,6 +53,8 @@ export const SIZES = {
   busSpeck: 10,
   // Two ways round that enclose a strip thinner than this are drawn as one street.
   busSlim: 6,
+  // A street's end this near another street is on it.
+  busSnap: 3,
   // Bus streets closer together than this can't be told apart: they are drawn as one.
   busMerge: { 1: 4, 2: 7, 3: 7, 4: 24 },
   // A street's label lists this many routes; a street with more lists one fewer, then how many more.
@@ -589,9 +591,21 @@ function unringed(streets, most) {
   for (const e of small) for (const k of [e.a, e.b]) at.set(k, [...(at.get(k) ?? []), e]);
   const group = new Map();
   const find = (k) => { while (group.has(k) && group.get(k) !== k) k = group.get(k); return k; };
+  const meet = new Map();
+  const corner = new Map();
+  const twice = new Set();
+  for (const e of edges) for (const k of new Set([e.a, e.b])) meet.set(k, [...(meet.get(k) ?? []), e]);
+  for (const e of edges) for (const [k, q] of [[e.a, e.st.path[0]], [e.b, e.st.path.at(-1)]]) if (!corner.has(k)) corner.set(k, q);
+  // Which way a street leaves a corner.
+  const leaves = (o, k) => {
+    const path = o.a === k ? o.st.path : [...o.st.path].reverse();
+    const q = pointAlong(path, Math.min(4, o.len));
+    const d = dist(path[0], q) || 1;
+    return [(q[0] - path[0][0]) / d, (q[1] - path[0][1]) / d];
+  };
   for (const e of small) {
     // The shortest way round from one end of this street to the other without using it.
-    const far = new Map([[e.a, { d: 0, via: [] }]]);
+    const far = new Map([[e.a, { d: 0, via: [], by: [] }]]);
     const open = [e.a];
     while (open.length) {
       const k = open.sort((x, y) => far.get(y).d - far.get(x).d).pop();
@@ -599,22 +613,63 @@ function unringed(streets, most) {
         if (o === e) continue;
         const to = o.a === k ? o.b : o.a;
         const d = far.get(k).d + o.len;
-        if (d + e.len < most && (!far.has(to) || d < far.get(to).d)) { far.set(to, { d, via: [...far.get(k).via, to] }); open.push(to); }
+        if (d + e.len < most && (!far.has(to) || d < far.get(to).d)) { far.set(to, { d, via: [...far.get(k).via, to], by: [...far.get(k).by, o] }); open.push(to); }
       }
     }
     if (!far.has(e.b)) continue;
-    for (const k of [e.a, ...far.get(e.b).via]) { if (!group.has(k)) group.set(k, k); group.set(find(k), find(e.a)); }
+    // A block between streets that carry on past it is not a turnaround, however small: a side
+    // of the ring with a street straight on from it at both ends is part of a street going through.
+    const ring = [e, ...far.get(e.b).by];
+    const through = ring.filter((o) => o.a !== o.b && [o.a, o.b].every((k) => {
+      const mine = leaves(o, k);
+      return (meet.get(k) ?? []).some((x) => !ring.includes(x) && x.a !== x.b && ((v) => mine[0] * v[0] + mine[1] * v[1] < -0.8)(leaves(x, k)));
+    }));
+    // Two streets between the same two corners that never part are one street said twice, not
+    // a ring: the busier is drawn and carries the other's routes.
+    if (ring.length === 2 && ring[1].st.path.every((q) => nearest(ring[0].st.path, q).d < 2)) {
+      const [keep, drop] = CLASS_ORDER.indexOf(ring[0].st.cls) >= CLASS_ORDER.indexOf(ring[1].st.cls) ? ring : [ring[1], ring[0]];
+      if (!twice.has(keep) && !twice.has(drop)) {
+        twice.add(drop);
+        const all = [...new Set(`${keep.st.routes} ${drop.st.routes}`.split(' '))].sort();
+        keep.st = { ...keep.st, routes: all.join(' '), n: Math.max(keep.st.n ?? 0, all.length) };
+      }
+      continue;
+    }
+    if (through.length >= 2) continue;
+    const ks = [e.a, ...far.get(e.b).via];
+    for (const k of ks) { if (!group.has(k)) group.set(k, k); group.set(find(k), find(ks[0])); }
   }
-  if (!group.size) return streets;
+  if (!group.size && !twice.size) return streets;
   const members = new Map();
   for (const e of edges) for (const [k, p] of [[e.a, e.st.path[0]], [e.b, e.st.path.at(-1)]]) {
     if (group.has(k)) members.set(find(k), [...(members.get(find(k)) ?? []), p]);
   }
   const middle = new Map([...members].map(([k, ps]) => [k, [ps.reduce((x, q) => x + q[0], 0) / ps.length, ps.reduce((y, q) => y + q[1], 0) / ps.length]]));
+  // A street that runs straight through what is gathered stays straight: the meeting point is
+  // on the line between where it comes in and where it goes out, not off to the side of it.
+  const into = new Map();
+  for (const e of edges) {
+    const [ga, gb] = [group.has(e.a) ? find(e.a) : null, group.has(e.b) ? find(e.b) : null];
+    if (ga && ga === gb) continue;
+    if (ga) into.set(ga, [...(into.get(ga) ?? []), { e, k: e.a }]);
+    if (gb) into.set(gb, [...(into.get(gb) ?? []), { e, k: e.b }]);
+  }
+  for (const [g, list] of into) {
+    let best = null;
+    for (const x of list) for (const y of list) {
+      if (x === y) continue;
+      const [u, v] = [leaves(x.e, x.k), leaves(y.e, y.k)];
+      const [p, q] = [corner.get(x.k), corner.get(y.k)];
+      const off = Math.abs((q[0] - p[0]) * u[1] - (q[1] - p[1]) * u[0]);
+      const busy = Math.min(CLASS_ORDER.indexOf(x.e.st.cls), CLASS_ORDER.indexOf(y.e.st.cls));
+      if (u[0] * v[0] + u[1] * v[1] < -0.8 && off < 3 && (!best || busy > best.busy)) best = { p, q, busy };
+    }
+    if (best) middle.set(g, toSegment(middle.get(g), best.p, best.q).at);
+  }
   const out = [];
   for (const e of edges) {
     const [ga, gb] = [group.has(e.a) ? find(e.a) : null, group.has(e.b) ? find(e.b) : null];
-    if (ga && ga === gb && e.len < most) continue;
+    if (twice.has(e) || (ga && ga === gb && e.len < most)) continue;
     const path = [...e.st.path];
     if (ga) path[0] = middle.get(ga);
     if (gb) path[path.length - 1] = middle.get(gb);
@@ -641,16 +696,24 @@ function cornered(streets) {
 
 /**
  * Streets without slivers. Where two ways between the same two corners enclose a strip too
- * thin to see into (a route that leaves a street and comes back to it a block later), the
- * drawing is a notch or a hook on the street. The quietest side of the strip is not drawn;
- * the sides that are carry its routes.
+ * thin to see into (a route that leaves a street and comes back to it a block later, or the
+ * cell between two streets that run side by side), the drawing is a notch or a hook on the
+ * street. The strip has two tips, its corners farthest apart, and a way round each side
+ * between them: the quieter way (or, of two alike, the longer) is not drawn, the other carries
+ * its routes, and a street that met the way not drawn is led across to the one that is. A thin
+ * loop that hangs from one corner is made one closed street, for `unlooped` to draw.
  */
-function unslivered(streets, most, slim) {
+function unslivered(streets, most, slim, snap) {
   const edges = cornered(streets);
   const at = new Map();
-  for (const e of edges) for (const k of new Set([e.a, e.b])) at.set(k, [...(at.get(k) ?? []), e]);
+  const add = (e) => { for (const k of new Set([e.a, e.b])) at.set(k, [...(at.get(k) ?? []), e]); };
+  edges.forEach(add);
+  const where = new Map();
+  for (const e of edges) for (const [k, p] of [[e.a, e.st.path[0]], [e.b, e.st.path.at(-1)]]) if (!where.has(k)) where.set(k, p);
   const gone = new Set();
-  const order = (st) => CLASS_ORDER.indexOf(st.cls);
+  const rank = (o) => CLASS_ORDER.indexOf(o.st.cls);
+  const live = (k) => (at.get(k) ?? []).filter((o) => !gone.has(o));
+  const routesOf = (list) => [...new Set(list.flatMap((o) => String(o.st.routes).split(' ')))];
   for (const e of [...edges].sort((x, y) => x.len - y.len)) {
     if (gone.has(e) || e.a === e.b || e.len >= most) continue;
     // The shortest way round from one end of this street to the other without using it.
@@ -668,29 +731,112 @@ function unslivered(streets, most, slim) {
     if (!far.has(e.b)) continue;
     const ring = [{ o: e, from: e.b }, ...far.get(e.b).by];
     const round = ring.reduce((n, r) => n + r.o.len, 0);
-    const pts = ring.flatMap((r) => (r.o.a === r.from ? r.o.st.path : [...r.o.st.path].reverse()));
+    const run = (r) => (r.o.a === r.from ? r.o.st.path : [...r.o.st.path].reverse());
+    const pts = ring.flatMap(run);
     let area = 0;
     for (let i = 0; i < pts.length; i++) { const [p, q] = [pts[i], pts[(i + 1) % pts.length]]; area += p[0] * q[1] - q[0] * p[1]; }
-    // The shoelace sum is twice the area; a strip's area over half the way round it is its width.
-    if (Math.abs(area) / round >= slim) continue;
+    const joins = ring.map((r, i) => i).filter((i) => live(ring[i].from).length > 2);
+    if (!joins.length) continue;
+    // The strip's tips are its corners farthest apart (a loop hanging from one corner: that corner and its far side).
+    let tips = null;
+    for (const i of joins) for (const j of joins) {
+      if (i >= j) continue;
+      const d = dist(where.get(ring[i].from), where.get(ring[j].from));
+      if (!tips || d > tips.d) tips = { i, j, d };
+    }
+    const reach = tips?.d ?? Math.max(...pts.map((p) => dist(p, where.get(ring[joins[0]].from))));
+    // The shoelace sum is twice the area; a strip's area over its length is its width. A strip
+    // is long and thin: a small square block is not one.
+    const wide = Math.abs(area) / 2 / (reach || 1);
+    if (wide >= slim || reach < 3 * wide) continue;
+    const longest = (list) => [...list].sort((x, y) => y.len - x.len)[0];
+    if (joins.length === 1) {
+      const turn = [...ring.slice(joins[0]), ...ring.slice(0, joins[0])];
+      const path = turn.flatMap((r, i) => (i ? run(r).slice(1) : run(r)));
+      path[path.length - 1] = path[0];
+      const all = routesOf(turn.map((r) => r.o));
+      const loop = { st: { ...longest(turn.map((r) => r.o)).st, routes: all.join(' '), n: all.length, path }, a: turn[0].from, b: turn[0].from, len: round };
+      for (const r of ring) gone.add(r.o);
+      edges.push(loop);
+      add(loop);
+      continue;
+    }
     // The ring is a few sides, each from one corner where another street joins it to the next.
-    const live = (k) => (at.get(k) ?? []).filter((o) => !gone.has(o)).length;
-    const joins = ring.map((r, i) => i).filter((i) => live(ring[i].from) > 2);
-    if (joins.length < 2) continue;
     const sides = joins.map((from, n) => (n + 1 < joins.length ? ring.slice(from, joins[n + 1]) : [...ring.slice(from), ...ring.slice(0, joins[0])]));
-    // The quietest side (then the one with fewest routes, then the longest) is the one not drawn.
-    const busy = (side) => Math.max(...side.map((r) => order(r.o.st)));
+    const leaves = (o, k) => {
+      const path = o.a === k ? o.st.path : [...o.st.path].reverse();
+      const q = pointAlong(path, Math.min(4, o.len));
+      const d = dist(path[0], q) || 1;
+      return [(q[0] - path[0][0]) / d, (q[1] - path[0][1]) / d];
+    };
+    const inRing = new Set(ring.map((r) => r.o));
+    // A side goes through when another street carries straight on from it at both ends.
+    const onward = (o, k) => live(k).some((x) => x !== o && x.a !== x.b && ((u, v) => u[0] * v[0] + u[1] * v[1] < -0.8)(leaves(o, k), leaves(x, k)));
+    const through = (side) => onward(side[0].o, side[0].from) && onward(side.at(-1).o, side.at(-1).o.a === side.at(-1).from ? side.at(-1).o.b : side.at(-1).o.a) ? 1 : 0;
+    const busy = (side) => Math.max(...side.map((r) => rank(r.o)));
     const count = (side) => Math.max(...side.map((r) => String(r.o.st.routes).split(' ').length));
     const long = (side) => side.reduce((n, r) => n + r.o.len, 0);
-    sides.sort((x, y) => busy(x) - busy(y) || count(x) - count(y) || long(y) - long(x));
-    const routes = new Set(sides[0].flatMap((r) => String(r.o.st.routes).split(' ')));
-    for (const r of sides.slice(1).flat()) {
-      const all = [...new Set([...String(r.o.st.routes).split(' '), ...routes])];
-      r.o.st = { ...r.o.st, routes: all.join(' '), n: Math.max(r.o.st.n ?? 0, all.length) };
+    // The side not drawn: the quietest, then one that no street runs straight through, the one with fewest routes, the longest.
+    const order = (x, y) => busy(x) - busy(y) || through(x) - through(y) || count(x) - count(y) || long(y) - long(x);
+    const rails = sides.filter((side) => long(side) > slim);
+    const rungs = sides.filter((side) => long(side) <= slim);
+    let drop = [[...sides].sort(order)[0]];
+    let keep = sides.filter((side) => side !== drop[0]);
+    // A cell of a ladder, two streets side by side with a short rung at one end or both: one of
+    // the two is drawn, the rungs go, and what met the other's ends is led the rung's length across.
+    const ladder = rails.length === 2 && rungs.length && !rungs.some(through);
+    if (ladder) {
+      const gone1 = [...rails].sort(order)[0];
+      keep = [rails.find((side) => side !== gone1)];
+      drop = [gone1, ...rungs];
+      const n = sides.length;
+      const [d, k] = [sides.indexOf(gone1), sides.indexOf(keep[0])];
+      const corner = (i) => sides[((i % n) + n) % n][0].from;
+      const moves = [];
+      for (let i = d + 1; ((i % n) + n) % n !== k; i++) moves.push([corner(i), corner(k)]);
+      for (let i = k + 2; ((((i - 1) % n) + n) % n) !== d; i++) moves.push([corner(i), corner(k + 1)]);
+      for (const [k0, to] of moves) {
+        if (k0 === to) continue;
+        const point = where.get(to);
+        for (const o of live(k0).filter((x) => !inRing.has(x))) {
+          let path = o.st.path;
+          if (o.a === k0) { path = ledTo(path, 0, point); o.a = to; }
+          if (o.b === k0) { path = ledTo(path, 1, point); o.b = to; }
+          o.st = { ...o.st, path };
+          o.len = length(path);
+          at.set(to, [...(at.get(to) ?? []), o]);
+        }
+      }
     }
-    for (const r of sides[0]) gone.add(r.o);
+    const routes = routesOf(drop.flat().map((r) => r.o));
+    const top = ladder ? busy(drop[0]) : -1;
+    for (const r of keep.flat()) {
+      const all = [...new Set([...String(r.o.st.routes).split(' '), ...routes])];
+      r.o.st = { ...r.o.st, routes: all.join(' '), n: Math.max(r.o.st.n ?? 0, all.length), cls: CLASS_ORDER[Math.max(rank(r.o), top)] };
+    }
+    for (const r of drop.flat()) gone.add(r.o);
   }
-  return edges.filter((e) => !gone.has(e)).map((e) => e.st);
+  return edges.filter((e) => !gone.has(e) && e.len > 0.5).map((e) => e.st);
+}
+
+/** A path with one end moved to `to`, the move taken up smoothly over the last stretch of it. */
+function ledTo(path, end, to) {
+  const pts = end ? [...path] : [...path].reverse();
+  const shift = [to[0] - pts.at(-1)[0], to[1] - pts.at(-1)[1]];
+  const far = Math.hypot(shift[0], shift[1]);
+  if (far < 1e-6) return path;
+  const total = length(pts);
+  const over = Math.min(total, Math.max(4 * far, 12));
+  const tail = resample(partOf(pts, total - over, total), 2);
+  const moved = tail.map((p, i) => {
+    const t = i / (tail.length - 1);
+    const w = t * t * (3 - 2 * t);
+    return [p[0] + shift[0] * w, p[1] + shift[1] * w];
+  });
+  const out = simplify([...partOf(pts, 0, total - over).slice(0, -1), ...moved], 0.3);
+  out[0] = pts[0];
+  out[out.length - 1] = to;
+  return end ? out : out.reverse();
 }
 
 /** A name with its common words in their usual short forms, still plain to read. */
@@ -957,7 +1103,7 @@ export function busStreets(streets, sheet, walls = []) {
     e.path = rounded(path, cell);
     e.len = length(e.path);
   }
-  const drawn = unslivered(unringed(kept
+  const drawn = kept
     .filter((e) => {
       const closed = dist(e.path[0], e.path.at(-1)) < 1;
       const reachOf = Math.max(...e.path.map((p) => dist(p, e.path[0])));
@@ -965,8 +1111,248 @@ export function busStreets(streets, sheet, walls = []) {
       // A short spur off a street reads as a barb, not a route.
       return !(e.free && e.len < 2.5 * SIZES.busSpeck);
     })
-    .map((e) => ({ cls: CLASS_ORDER[e.rank], routes: e.routes, n: e.n, hw: e.hw, path: simplify(rounded(simplify(e.path, 2), 2), 0.3) })), SIZES.busRing), 3 * SIZES.busRing, SIZES.busSlim);
-  return walled(drawn, walls);
+    .map((e) => ({ cls: CLASS_ORDER[e.rank], routes: e.routes, n: e.n, hw: e.hw, path: simplify(rounded(simplify(e.path, 2), 2), 0.3) }));
+  // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
+  // end a hair from the street it met, so the round is made twice.
+  const tidied = (list) => unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck);
+  return pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls);
+}
+
+/**
+ * Streets cut so that wherever two meet, both have a corner there. A street that ends on the
+ * middle of another, or stops a hair short of it or past it, and two streets that cross, all
+ * meet at one point. Every later rule reads the drawing by its corners, so it sees what the
+ * eye sees: a strip, a ring or a stub is found however the data was cut.
+ */
+export function noded(streets, snap, reach = snap) {
+  const paths = streets.map((st) => st.path.map((p) => [...p]));
+  // Ends within `snap` of each other are one corner, at the first of them.
+  const corners = [];
+  const cornerAt = (p) => corners.find((c) => Math.abs(c[0] - p[0]) <= snap && Math.abs(c[1] - p[1]) <= snap && dist(c, p) <= snap);
+  const near = new Map();
+  const cellOf = (p) => `${Math.floor(p[0] / 16)},${Math.floor(p[1] / 16)}`;
+  const weld = (p) => {
+    const [x, y] = [Math.floor(p[0] / 16), Math.floor(p[1] / 16)];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const c of near.get(`${x + dx},${y + dy}`) ?? []) if (dist(c, p) <= snap) return c;
+    const c = [...p];
+    near.set(cellOf(c), [...(near.get(cellOf(c)) ?? []), c]);
+    corners.push(c);
+    return c;
+  };
+  for (const path of paths) {
+    path[0] = weld(path[0]);
+    path[path.length - 1] = weld(path.at(-1));
+  }
+  const nearCorner = (p) => {
+    const [x, y] = [Math.floor(p[0] / 16), Math.floor(p[1] / 16)];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const c of near.get(`${x + dx},${y + dy}`) ?? []) if (dist(c, p) <= snap) return c;
+    return null;
+  };
+  // Every segment, by the squares of ground it passes over.
+  const gridded = () => {
+    const grid = new Map();
+    paths.forEach((path, si) => {
+      for (let i = 1; i < path.length; i++) {
+        const [a, b] = [path[i - 1], path[i]];
+        for (let x = Math.floor(Math.min(a[0], b[0]) / 16); x <= Math.floor(Math.max(a[0], b[0]) / 16); x++) {
+          for (let y = Math.floor(Math.min(a[1], b[1]) / 16); y <= Math.floor(Math.max(a[1], b[1]) / 16); y++) {
+            const k = `${x},${y}`;
+            if (!grid.has(k)) grid.set(k, []);
+            grid.get(k).push({ si, i });
+          }
+        }
+      }
+    });
+    return grid;
+  };
+  let grid = gridded();
+  // A loose end that stops within `reach` of another street is led to it: the gap would read as a slip of the pen.
+  const ends = new Map();
+  for (const path of paths) for (const c of new Set([path[0], path.at(-1)])) ends.set(c, (ends.get(c) ?? 0) + 1);
+  const span = Math.ceil(reach / 16);
+  paths.forEach((path, si) => {
+    const total = length(path);
+    for (const end of [0, 1]) {
+      const tip = end ? path.at(-1) : path[0];
+      const base = end ? path[0] : path.at(-1);
+      if (ends.get(tip) !== 1 || tip === base) continue;
+      const [x, y] = [Math.floor(tip[0] / 16), Math.floor(tip[1] / 16)];
+      const seen = new Set([si]);
+      let best = null;
+      for (let dx = -span; dx <= span; dx++) for (let dy = -span; dy <= span; dy++) for (const o of grid.get(`${x + dx},${y + dy}`) ?? []) {
+        if (seen.has(o.si)) continue;
+        seen.add(o.si);
+        const host = paths[o.si];
+        // A short street is not bent back onto the street it has just left.
+        if ((host[0] === base || host.at(-1) === base) && total < 2 * reach) continue;
+        const hit = nearest(host, tip);
+        if (hit.d <= reach && (!best || hit.d < best.d)) best = hit;
+      }
+      if (!best || best.d <= snap) continue;
+      const to = weld(best.at);
+      if (to === base) continue;
+      if (end) path.push(to); else path.unshift(to);
+    }
+  });
+  grid = gridded();
+  const before = paths.map((path) => { const run = [0]; for (let i = 1; i < path.length; i++) run.push(run[i - 1] + dist(path[i - 1], path[i])); return run; });
+  const cuts = paths.map(() => []);
+  // A corner on the middle of a street: the street is cut there and passes through the corner.
+  for (const c of corners) {
+    const seen = new Set();
+    const [x, y] = [Math.floor(c[0] / 16), Math.floor(c[1] / 16)];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const { si } of grid.get(`${x + dx},${y + dy}`) ?? []) {
+      if (seen.has(si)) continue;
+      seen.add(si);
+      const path = paths[si];
+      if (path[0] === c || path.at(-1) === c) continue;
+      const hit = nearest(path, c);
+      if (hit.d > snap || hit.along <= snap || hit.along >= before[si].at(-1) - snap) continue;
+      // The corner is on the street: it moves to the first street it lies beside, so that
+      // street stays straight, rather than the street bending out to it.
+      if (!cuts.some((list) => list.some((cut) => cut.at === c))) [c[0], c[1]] = hit.at;
+      cuts[si].push({ along: hit.along, at: c });
+    }
+  }
+  // Two streets that cross: both are cut at the crossing.
+  const crossings = new Map();
+  for (const segs of grid.values()) {
+    for (let m = 0; m < segs.length; m++) for (let n = m + 1; n < segs.length; n++) {
+      const [s, t] = [segs[m], segs[n]];
+      if (s.si === t.si) continue;
+      const k = s.si < t.si ? `${s.si}/${s.i}/${t.si}/${t.i}` : `${t.si}/${t.i}/${s.si}/${s.i}`;
+      if (crossings.has(k)) continue;
+      const [a, b, c, d] = [paths[s.si][s.i - 1], paths[s.si][s.i], paths[t.si][t.i - 1], paths[t.si][t.i]];
+      const den = (b[0] - a[0]) * (d[1] - c[1]) - (b[1] - a[1]) * (d[0] - c[0]);
+      if (Math.abs(den) < 1e-9) { crossings.set(k, null); continue; }
+      const u = ((c[0] - a[0]) * (d[1] - c[1]) - (c[1] - a[1]) * (d[0] - c[0])) / den;
+      const v = ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / den;
+      crossings.set(k, u >= 0 && u <= 1 && v >= 0 && v <= 1 ? { s, t, u, v, at: lerp(a, b, u) } : null);
+    }
+  }
+  for (const x of crossings.values()) {
+    if (!x || nearCorner(x.at)) continue;
+    const at = weld(x.at);
+    for (const [g, f] of [[x.s, x.u], [x.t, x.v]]) cuts[g.si].push({ along: before[g.si][g.i - 1] + f * (before[g.si][g.i] - before[g.si][g.i - 1]), at });
+  }
+  const out = [];
+  streets.forEach((st, si) => {
+    const path = paths[si];
+    const total = before[si].at(-1);
+    const at = [{ along: 0, at: path[0] }];
+    for (const cut of cuts[si].sort((p, q) => p.along - q.along)) if (cut.at !== at.at(-1).at && cut.at !== path.at(-1)) at.push(cut);
+    at.push({ along: total, at: path.at(-1) });
+    for (let i = 1; i < at.length; i++) {
+      const piece = at.length === 2 ? [...path] : partOf(path, at[i - 1].along, at[i].along);
+      piece[0] = at[i - 1].at;
+      piece[piece.length - 1] = at[i].at;
+      // A link shorter than the reach of a corner, both ends at one corner, is the corner itself.
+      if (piece[0] === piece.at(-1) && length(piece) <= 2 * snap) continue;
+      out.push({ ...st, path: piece });
+    }
+  });
+  return out;
+}
+
+/**
+ * Streets without stubs: a short run from a corner to an end where nothing else is (no
+ * street, no hall's wall) reads as a barb on the street it leaves, not as a route.
+ */
+export function pruned(streets, stub, walls = []) {
+  const key = (p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+  // The last steps of a street to a hall's wall are drawn as the street they carry on from: cut
+  // at the wall, a few pixels of a busier street that ran on through the hall would be a blot.
+  const ends = new Map();
+  for (const st of streets) for (const p of new Set([key(st.path[0]), key(st.path.at(-1))])) ends.set(p, [...(ends.get(p) ?? []), st]);
+  // Where several streets run those last steps from one corner, one is drawn: the one that
+  // shares most routes with the streets it carries on from.
+  const lastSteps = (st) => {
+    if (length(st.path) >= stub) return null;
+    const tips = [st.path[0], st.path.at(-1)];
+    const wall = tips.findIndex((tip) => ends.get(key(tip)).length === 1 && walls.some((w) => nearest(w.ring, tip).d < 1));
+    return wall < 0 ? null : key(tips[1 - wall]);
+  };
+  const said = new Set();
+  for (const [k, list] of ends) {
+    const steps = list.filter((st) => lastSteps(st) === k);
+    if (steps.length < 2 || steps.length === list.length) continue;
+    const on = new Set(list.filter((st) => !steps.includes(st)).flatMap((st) => String(st.routes).split(' ')));
+    const shared = (st) => String(st.routes).split(' ').filter((r) => on.has(r)).length;
+    steps.sort((x, y) => shared(y) - shared(x) || length(y.path) - length(x.path));
+    for (const st of steps.slice(1)) said.add(st);
+  }
+  if (said.size) {
+    streets = streets.filter((st) => !said.has(st));
+    ends.clear();
+    for (const st of streets) for (const p of new Set([key(st.path[0]), key(st.path.at(-1))])) ends.set(p, [...(ends.get(p) ?? []), st]);
+  }
+  let left = streets.map((st) => {
+    if (length(st.path) >= stub) return st;
+    const tips = [st.path[0], st.path.at(-1)];
+    const wall = tips.findIndex((tip) => ends.get(key(tip)).length === 1 && walls.some((w) => nearest(w.ring, tip).d < 1));
+    const others = wall < 0 ? [] : ends.get(key(tips[1 - wall])).filter((o) => o !== st);
+    return others.length === 1 ? { ...st, cls: others[0].cls, hw: others[0].hw } : st;
+  });
+  for (let pass = 0; pass < 6; pass++) {
+    const at = new Map();
+    for (const st of left) for (const p of new Set([key(st.path[0]), key(st.path.at(-1))])) at.set(p, [...(at.get(p) ?? []), st]);
+    const gone = new Set();
+    const onWall = (tip) => walls.some((w) => nearest(w.ring, tip).d < 1);
+    for (const st of left) {
+      if (gone.has(st)) continue;
+      // A scrap along a hall's wall, both ends on it and nothing else at either, goes too.
+      if (length(st.path) < stub && [st.path[0], st.path.at(-1)].every((tip) => at.get(key(tip)).length === 1 && onWall(tip))) { gone.add(st); continue; }
+      for (const end of [0, 1]) {
+        const tip = end ? st.path.at(-1) : st.path[0];
+        if (at.get(key(tip)).length !== 1 || onWall(tip)) continue;
+        // Along the street from its loose end to the first corner where streets part.
+        const run = [st];
+        let far = length(st.path);
+        let here = key(end ? st.path[0] : st.path.at(-1));
+        while (far < stub && at.get(here).length === 2) {
+          const next = at.get(here).find((o) => o !== run.at(-1));
+          if (run.includes(next)) break;
+          run.push(next);
+          far += length(next.path);
+          here = key(next.path[0]) === here ? key(next.path.at(-1)) : key(next.path[0]);
+        }
+        if (far < stub) for (const o of run) gone.add(o);
+      }
+    }
+    if (!gone.size) break;
+    left = left.filter((st) => !gone.has(st));
+  }
+  return left;
+}
+
+/**
+ * Streets with each closed loop drawn as a hand would: where the way out and the way back
+ * lie closer than `slim` they are one street down the middle, and a loop that never opens
+ * wider than that is all one street, out to its far end.
+ */
+export function unlooped(streets, slim, speck) {
+  const out = [];
+  for (const st of streets) {
+    if (st.path.length < 3 || dist(st.path[0], st.path.at(-1)) > 1.5) { out.push(st); continue; }
+    const pts = resample([...st.path.slice(0, -1), st.path[0]], 2);
+    const n = pts.length;
+    const half = Math.floor((n - 1) / 2);
+    const mid = (i) => lerp(pts[i], pts[n - 1 - i], 0.5);
+    let open = 0;
+    while (open < half && dist(pts[open], pts[n - 1 - open]) < slim) open++;
+    const eye = pts.slice(open, n - open);
+    let area = 0;
+    for (let i = 0; i < eye.length; i++) { const [p, q] = [eye[i], eye[(i + 1) % eye.length]]; area += p[0] * q[1] - q[0] * p[1]; }
+    const whole = [];
+    for (let i = 0; i <= half; i++) whole.push(mid(i));
+    if (open >= half || Math.abs(area) / (length(eye) || 1) < slim) { out.push({ ...st, path: simplify([pts[0], ...whole.slice(1)], 0.3) }); continue; }
+    // A stick too short to draw is left as part of the loop.
+    if (2 * open < speck) { out.push(st); continue; }
+    const join = mid(open);
+    out.push({ ...st, path: simplify([pts[0], ...whole.slice(1, open), join], 0.3) });
+    out.push({ ...st, path: simplify([join, ...eye, join], 0.3) });
+  }
+  return out;
 }
 
 /**
@@ -979,6 +1365,36 @@ function walled(streets, walls) {
   const met = new Map();
   for (const st of streets) for (const p of [st.path[0], st.path.at(-1)]) met.set(key(p), (met.get(key(p)) ?? 0) + 1);
   const reach = SIZES.hallReach;
+  // No street is drawn inside a hall: one that runs in stops at the wall it meets. One that
+  // crosses above a hall in a straight line and carries on is left as it is.
+  const inside = (p, ring) => {
+    let on = false;
+    for (let i = 1; i < ring.length; i++) {
+      const [a, b] = [ring[i - 1], ring[i]];
+      if (a[1] > p[1] !== b[1] > p[1] && p[0] < a[0] + ((b[0] - a[0]) * (p[1] - a[1])) / (b[1] - a[1])) on = !on;
+    }
+    return on;
+  };
+  const outside = [];
+  for (const st of streets) {
+    const pts = resample(st.path, 1);
+    const ring = walls.map((w) => w.ring).find((r) => pts.some((p) => inside(p, r)));
+    if (!ring) { outside.push(st); continue; }
+    const within = pts.map((p) => inside(p, ring));
+    const [first, last] = [within.indexOf(true), within.lastIndexOf(true)];
+    const across = !within[0] && !within.at(-1) && within.slice(first, last + 1).every(Boolean) && dist(pts[first], pts[last]) >= 0.95 * (last - first);
+    if (across) { outside.push(st); continue; }
+    let run = [];
+    const done = () => { if (run.length > 1 && length(run) > 1) outside.push({ ...st, path: simplify(run, 0.3) }); run = []; };
+    for (let i = 0; i < pts.length; i++) {
+      if (!within[i]) { if (!run.length && i) run.push(nearest(ring, pts[i]).at); run.push(pts[i]); }
+      else if (run.length) { run.push(nearest(ring, run.at(-1)).at); done(); }
+    }
+    done();
+  }
+  streets = outside;
+  met.clear();
+  for (const st of streets) for (const p of [st.path[0], st.path.at(-1)]) met.set(key(p), (met.get(key(p)) ?? 0) + 1);
   return streets.map((st) => {
     let path = st.path;
     for (const end of [0, 1]) {
@@ -998,6 +1414,35 @@ function walled(streets, walls) {
 }
 
 /**
+ * A closed ring drawn as a room: the tightest rectangle round it, along its own lie, brought in
+ * about its middle until it covers the ground the ring does. A surveyed outline has a notch
+ * and a slant for every doorway and bay; at a sheet's size they read as a torn scrap.
+ */
+export function squared(ring) {
+  let area = 0;
+  for (let i = 1; i < ring.length; i++) area += ring[i - 1][0] * ring[i][1] - ring[i][0] * ring[i - 1][1];
+  area = Math.abs(area) / 2;
+  let best = null;
+  for (let i = 1; i < ring.length; i++) {
+    const d = dist(ring[i - 1], ring[i]);
+    if (d < 1e-9) continue;
+    const u = [(ring[i][0] - ring[i - 1][0]) / d, (ring[i][1] - ring[i - 1][1]) / d];
+    const along = ring.map((p) => p[0] * u[0] + p[1] * u[1]);
+    const across = ring.map((p) => p[1] * u[0] - p[0] * u[1]);
+    const box = [Math.min(...along), Math.max(...along), Math.min(...across), Math.max(...across)];
+    const size = (box[1] - box[0]) * (box[3] - box[2]);
+    if (!best || size < best.size) best = { u, box, size };
+  }
+  if (!best || !best.size || !area) return ring;
+  const { u, box } = best;
+  const k = Math.sqrt(area / best.size);
+  const mid = [(box[0] + box[1]) / 2, (box[2] + box[3]) / 2];
+  const half = [((box[1] - box[0]) / 2) * k, ((box[3] - box[2]) / 2) * k];
+  const at = (a, c) => [(mid[0] + a * half[0]) * u[0] - (mid[1] + c * half[1]) * u[1], (mid[0] + a * half[0]) * u[1] + (mid[1] + c * half[1]) * u[0]];
+  return [at(-1, -1), at(1, -1), at(1, 1), at(-1, 1), at(-1, -1)];
+}
+
+/**
  * The halls of bus stations wide enough to draw on this sheet, `{ id, name, ring }` in pixels
  * (the ring closed). Streets end on a hall's wall: it is where their buses go.
  */
@@ -1012,7 +1457,7 @@ export function halls(terminals, sheet) {
       for (let i = 1; i < ring.length; i++) area += ring[i - 1][0] * ring[i][1] - ring[i][0] * ring[i - 1][1];
       // How wide it is: its area over its longest reach.
       const far = Math.max(...ring.map((p) => Math.max(...ring.map((q) => dist(p, q)))));
-      if (Math.abs(area) / 2 / (far || 1) >= SIZES.hallWide) out.push({ id: f.properties.id, name: f.properties.name, ring });
+      if (Math.abs(area) / 2 / (far || 1) >= SIZES.hallWide) out.push({ id: f.properties.id, name: f.properties.name, ring: squared(ring) });
     }
   }
   return out;

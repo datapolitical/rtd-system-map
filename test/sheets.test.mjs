@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -205,11 +205,14 @@ test('a turnaround whose data stops short of the street it leaves from is drawn 
     // Another route's stub as near to the street is left alone.
     street('2', [at3(240, -15), at3(240, -80)]),
   ]), near);
-  const main = drawn.find((s) => length(s.path) > 250).path;
+  // The street is cut at each corner the loop makes with it: its pieces lie along y = 0.
+  const main = drawn.filter((s) => s.path.every((p) => Math.abs(p[1] - origin3[1]) < 1));
+  const reach = (p) => Math.min(...main.map((s) => nearest(s.path, p).d));
   const loop = drawn.find((s) => s.routes === '1' && s.path.some((p) => p[1] - origin3[1] < -50));
-  for (const end of [loop.path[0], loop.path.at(-1)]) assert.ok(nearest(main, end).d < 1, 'the loop reaches the street');
+  for (const end of [loop.path[0], loop.path.at(-1)]) assert.ok(reach(end) < 1, 'the loop reaches the street');
+  assert.ok(main.some((s) => Math.abs(s.path[0][0] - origin3[0] - 100) < 1 || Math.abs(s.path.at(-1)[0] - origin3[0] - 100) < 1), 'and the street has a corner where it does');
   const stub = drawn.find((s) => s.routes === '2');
-  assert.ok(Math.min(...[stub.path[0], stub.path.at(-1)].map((p) => nearest(main, p).d)) > 10, 'the other route is not joined on');
+  assert.ok(Math.min(...[stub.path[0], stub.path.at(-1)].map(reach)) > 10, 'the other route is not joined on');
 });
 
 test('two ways round a strip too thin to see into are drawn as one street with the routes of both', () => {
@@ -234,4 +237,110 @@ test('along one street only blocks well apart carry its label; another street ha
   assert.deepEqual(streets.map((s) => picked.has(s)), [false, true, false, true, true]);
   // A block too short to hold its label gives its turn to one that can.
   assert.deepEqual(streets.map((s) => labelled(streets.slice(0, 2), 200, () => 110).has(s)), [false, true, false, false, false]);
+});
+
+const st = (path, more = {}) => ({ cls: 'c15', routes: '1', n: 1, hw: 15, path, ...more });
+const tips = (list) => list.flatMap((s) => [s.path[0], s.path.at(-1)]);
+const meets = (list, p) => tips(list).filter((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 0.1).length;
+
+test('streets have a corner wherever they meet: at a side street, at a crossing, and where an end stops a hair short', () => {
+  const drawn = noded([
+    st([[0, 0], [300, 0]]),
+    // A side street that ends on the middle of the first.
+    st([[100, 0], [100, -80]]),
+    // One that crosses it.
+    st([[200, -60], [200, 60]]),
+    // One whose end stops two pixels short of it, and one too far off to be meant for it.
+    st([[260, 2], [260, 70]]),
+    st([[40, 20], [40, 90]]),
+  ], 3, 7);
+  assert.equal(meets(drawn, [100, 0]), 3, 'the street is cut where the side street ends on it');
+  assert.equal(meets(drawn, [200, 0]), 4, 'both streets are cut where they cross');
+  assert.equal(meets(drawn, [260, 0]), 3, 'the near end is led onto the street');
+  assert.equal(meets(drawn, [40, 20]), 1, 'the far end is left where it is');
+  assert.ok(Math.abs(drawn.reduce((n, s) => n + length(s.path), 0) - (300 + 80 + 120 + 70 + 70)) < 3, 'nothing is added or lost');
+});
+
+test('a short end that leads nowhere is not drawn, however many pieces it is in; a long one and one at a hall are', () => {
+  const wall = { ring: [[300, 20], [320, 20], [320, 40], [300, 40], [300, 20]] };
+  const drawn = pruned([
+    st([[0, 0], [100, 0]]), st([[100, 0], [200, 0]]), st([[200, 0], [300, 0]]), st([[0, 0], [0, 100]]), st([[300, 0], [300, -100]]),
+    // A stub in two pieces off the first corner, twelve pixels in all.
+    st([[100, 0], [100, 6]]), st([[100, 6], [104, 12]], { routes: 'stub' }),
+    // A route's real end, and a few steps to a hall's wall.
+    st([[200, 0], [200, 60]], { routes: 'end' }),
+    st([[300, 0], [300, 20]], { routes: 'hall' }),
+  ], 25, [wall]);
+  assert.ok(!drawn.some((s) => s.path.some((p) => p[0] > 99 && p[0] < 105 && p[1] > 1)), 'the stub is gone, both pieces');
+  assert.ok(drawn.some((s) => s.routes === 'end'), 'a long end stays');
+  assert.ok(drawn.some((s) => s.routes === 'hall'), 'so does a short one that reaches a hall');
+});
+
+test('a turnaround drawn as a loop too slim to see into is one street out to its end; a round one stays a loop', () => {
+  const slim = st([[0, 0], [40, 2], [80, 2], [84, 0], [80, -2], [40, -2], [0, 0]]);
+  const round = st([[0, 100], [30, 80], [60, 100], [30, 120], [0, 100]]);
+  const [stick, loop] = unlooped([slim, round], 6, 10);
+  assert.ok(stick.path.every((p) => Math.abs(p[1]) < 0.5), 'the slim loop is drawn down its middle');
+  assert.ok(Math.abs(length(stick.path) - 84) < 3 && Math.hypot(stick.path[0][0] - stick.path.at(-1)[0], stick.path[0][1] - stick.path.at(-1)[1]) > 80, 'as one street, not out and back');
+  assert.equal(loop, round);
+});
+
+test('two near streets tied by short links are drawn as one, and a small square block between through streets is kept', () => {
+  const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  // A ladder on the widest sheet: two streets five pixels apart, a link between them every sixty.
+  const wide = SHEETS[0];
+  const o = toPx([-105, 39.75], wide.zoom);
+  const to = (x, y) => toLonLat([o[0] + x, o[1] + y], wide.zoom);
+  const ladder = busStreets(all([
+    street('c15', '1', [to(0, 0), to(300, 0)]),
+    street('c30', '2', [to(30, 5), to(270, 5)]),
+    ...[60, 120, 180, 240].map((x) => street('c30', '2', [to(x, 0), to(x, 5)])),
+  ]), wide);
+  assert.ok(ladder.filter((s) => s.path.some((p) => p[0] - o[0] > 62 && p[0] - o[0] < 238)).every((s) => s.path.every((p) => Math.abs(p[1] - o[1]) < 1)), 'between the links one line is drawn, the busier street');
+  assert.ok(ladder.some((s) => s.routes.split(' ').includes('2') && s.routes.split(' ').includes('1')), 'and it carries the routes of both');
+  // A block of streets that all carry on past it, twelve pixels square.
+  const block = busStreets(all([
+    street('c15', '1', [at(0, 0), at(200, 0)]), street('c15', '2', [at(0, 12), at(200, 12)]),
+    street('c15', '3', [at(94, -100), at(94, 100)]), street('c15', '4', [at(106, -100), at(106, 100)]),
+  ]), sheet);
+  for (const [x, y] of [[94, 0], [106, 0], [94, 12], [106, 12]]) assert.equal(meets(block, [origin[0] + x, origin[1] + y]), 4, 'each corner of the block is still a crossing');
+});
+
+test("a hall is drawn as a squared room over the same ground, and no street is drawn inside it", () => {
+  // A surveyed outline with a notch and a slanted corner.
+  const ring = [[0, 0], [60, 0], [60, 12], [52, 12], [52, 20], [8, 24], [0, 20], [0, 0]];
+  const room = squared(ring);
+  const area = (r) => Math.abs(r.slice(1).reduce((n, p, i) => n + r[i][0] * p[1] - p[0] * r[i][1], 0)) / 2;
+  assert.equal(room.length, 5);
+  for (let i = 1; i < 4; i++) {
+    const [a, b, c] = [room[i - 1], room[i], room[i + 1]];
+    assert.ok(Math.abs((b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])) < 1e-6, 'every corner is square');
+  }
+  assert.ok(Math.abs(area(room) - area(ring)) < 1, 'it covers as much ground');
+  const square = [[0, 0], [40, 0], [40, 20], [0, 20], [0, 0]];
+  assert.ok(squared(square).every((p) => square.some((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-6)), 'a room already square is drawn as it is');
+  const terminals = all([hall(1, [at3(100, -10), at3(160, -10), at3(160, 10), at3(100, 10)])]);
+  const walls = halls(terminals, near);
+  const street = (routes, coords) => line({ mode: 'bus', cls: 'c15', routes, n: 1, hw: 15, zoom: 'near' }, coords);
+  // Two streets meet inside the hall; a third crosses above it and carries on.
+  const drawn = busStreets(all([street('1', [at3(0, 0), at3(130, 0)]), street('2', [at3(130, -80), at3(130, 0)]), street('3', [at3(150, -80), at3(150, 80)])]), near, walls);
+  const inside = (p) => p[0] - origin3[0] > 101 && p[0] - origin3[0] < 159 && Math.abs(p[1] - origin3[1]) < 9;
+  assert.ok(!drawn.filter((s) => s.routes !== '3').some((s) => resample(s.path, 1).some(inside)), 'streets that go indoors stop at the walls');
+  assert.equal(drawn.filter((s) => s.routes !== '3' && [s.path[0], s.path.at(-1)].some((p) => nearest(walls[0].ring, p).d < 0.5)).length, 2, 'each on the side it comes from');
+  assert.ok(drawn.some((s) => s.routes === '3' && Math.abs(length(s.path) - 160) < 1), 'the street that crosses is whole');
+});
+
+test('a knot gathered to a point beside a street going through does not bend that street', () => {
+  const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'near' }, coords);
+  const drawn = busStreets(all([
+    street('c5', '1', [at3(0, -100), at3(0, 0)]), street('c5', '1', [at3(0, 0), at3(0, 100)]),
+    // A turnaround a few pixels round hangs off the street, and a quiet street runs into it.
+    street('c60', '2', [at3(0, 0), at3(9, -5)]), street('c60', '2', [at3(9, -5), at3(9, 5)]), street('c60', '2', [at3(9, 5), at3(0, 0)]),
+    street('c60', '2', [at3(9, -5), at3(80, -5)]),
+  ]), near);
+  const main = drawn.filter((s) => s.cls === 'c5');
+  assert.ok(main.every((s) => s.path.every((p) => Math.abs(p[0] - origin3[0]) < 0.5)), 'the street is as straight as before');
+  const quiet = drawn.filter((s) => s.cls === 'c60');
+  assert.equal(quiet.length, 1, 'the turnaround is a point');
+  assert.ok(Math.min(...[quiet[0].path[0], quiet[0].path.at(-1)].map((p) => Math.hypot(p[0] - origin3[0], p[1] - origin3[1]))) < 1, 'on the street, where the quiet street now ends');
 });
