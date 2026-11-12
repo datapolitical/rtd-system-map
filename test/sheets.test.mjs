@@ -440,3 +440,23 @@ test('a slim loop whose way back wanders longer than its way out, with a small b
   assert.ok(stick.path.every((p) => p[1] > -1 && p[1] < 5), 'the way out and back are one street down the middle, bulge and all');
   assert.ok(length(stick.path) > 180, 'out to where the loop opens');
 });
+
+test('a route number never sits on a stop: each stop holds its ground, placed before the numbers', async () => {
+  const { sheetStyle, STOP_RING, STOP_ROOM } = await import('../public/js/sheets/style.js');
+  for (const theme of ['light', 'dark']) {
+    const layers = sheetStyle(theme).layers;
+    const rings = layers.filter((l) => l.source === 'stops' && l.type === 'circle');
+    for (const ring of rings) {
+      const n = ring.id.split('-').pop();
+      const keep = layers.findIndex((l) => l.id === `keep-off-stop-${n}`);
+      const numbers = layers.findIndex((l) => l.id === `bus-number-${n}`);
+      assert.ok(keep > numbers && numbers >= 0, `sheet ${n}: the stops' marks are placed first (MapLibre places the last layer first)`);
+      const k = layers[keep];
+      assert.equal(k.source, 'stops');
+      assert.ok(k.layout['text-allow-overlap'] && !k.layout['text-ignore-placement'], 'the mark is always there and keeps others off');
+      assert.ok(k.layout['text-size'] >= 2 * (STOP_RING.radius + STOP_RING.stroke / 2), 'the mark covers the whole ring');
+      assert.equal(ring.paint['circle-radius'], STOP_RING.radius);
+    }
+    assert.ok(rings.length && STOP_ROOM > 0);
+  }
+});

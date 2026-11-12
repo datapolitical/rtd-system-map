@@ -2065,6 +2065,7 @@ How it is built:
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
+  Nor on a stop: on sheet 4 each stop's ring keeps lettering off it.
 - **Lines change place gently.** Where a line joins or leaves a pack, the
   others slide to their new places over about 26 pixels each side, so the
   lines beside one that ends do not jog at its last station.
@@ -4085,6 +4086,8 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets pair a slim loop's two sides by nearness. Reason: long
   out-and-back loops whose way back ran a little longer were left as a
   doubled line two pixels apart (on sheets 3 and 4).
+- 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
+  takes no part in placing lettering, so numbers landed on stops on sheet 4.
 
 ## Sources
 

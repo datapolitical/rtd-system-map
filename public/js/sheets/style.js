@@ -43,6 +43,11 @@ export const BUS_WIDTH = {
 export const NUMBER_SIZE = { 1: 0, 2: 8.5, 3: 10, 4: 11.5 };
 export const numberOffset = (n, width) => -((width / 2 + 1.5) / NUMBER_SIZE[n] + 0.36);
 
+// A stop's ring: radius and stroke on sheet 4, and the type size of the unseen mark that keeps
+// lettering off it (a letter's box is about as tall as its size: the ring's width and some air).
+export const STOP_RING = { radius: 3, stroke: 1.4 };
+export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
+
 // Station name size per sheet (SIZES.name in the build).
 const NAME_SIZE = { 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 };
 
@@ -91,7 +96,7 @@ export function sheetStyle(theme) {
 
     // Bus stops: each one a ring, on the closest sheet.
     if (n >= 4) layers.push({ id: `stop-${n}`, type: 'circle', source: 'stops', ...band,
-      paint: n === 3 ? { 'circle-radius': 1.3, 'circle-color': c.stop, 'circle-opacity': 0.7 } : { 'circle-radius': 3, 'circle-color': c.ground, 'circle-stroke-color': c.stop, 'circle-stroke-width': 1.4 } });
+      paint: n === 3 ? { 'circle-radius': 1.3, 'circle-color': c.stop, 'circle-opacity': 0.7 } : { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': c.stop, 'circle-stroke-width': STOP_RING.stroke } });
 
     // Rail: every line whole, with a rim of ground so lines side by side stay apart.
     layer('rail-rim', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
@@ -141,6 +146,11 @@ export function sheetStyle(theme) {
     // ground. MapLibre places the last layer first: rail's marks, then the route numbers (which
     // sit on their own streets but never on rail), then the streets' marks, then everything above.
     layer('keep-off', 'symbol', { filter: kind('rail'), ...unseen });
+    // A stop's ring holds its ground too: a route number never sits on a stop. One unseen
+    // mark the size of the ring and a little air, placed before the numbers.
+    if (n >= 4) layers.push({ id: `keep-off-stop-${n}`, type: 'symbol', source: 'stops', ...band,
+      layout: { 'text-field': 'O', 'text-font': FONT.medium, 'text-size': STOP_ROOM, 'text-allow-overlap': true, 'text-padding': 1.5, 'text-rotation-alignment': 'viewport' },
+      paint: { 'text-opacity': 0 } });
   });
   return {
     version: 8,
