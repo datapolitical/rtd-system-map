@@ -7,12 +7,24 @@
 // does when it draws. A layer added or restyled in the page is therefore in
 // the model with no code change here.
 //
-// One difference from MapLibre is deliberate: filters read the zoom the way
-// the page says they do (shared.js: "a filter sees the zoom as a whole
-// number"), so `zoom` is floored before a filter is asked, while paint and
-// layout read the zoom as it is.
+// Where the model follows MapLibre's quirks rather than the style spec's
+// plain reading:
+//
+//  - A filter sees the zoom as a whole number (shared.js): the tile's zoom,
+//    which is the map's zoom floored. `zoom` is floored before a filter is
+//    asked.
+//  - A paint property that reads BOTH the zoom and a feature's property (the
+//    spec's "composite") is not worked out at the zoom on screen. MapLibre
+//    works it out per feature when the tile is cut, at the tile's whole zoom
+//    and at the next one (program_configuration.ts, CompositeExpressionBinder),
+//    and the shader blends the two by how far the zoom has got between them.
+//    A stop between two whole zooms in such an expression does nothing: a
+//    mark whose opacity ramps 0 to 1 over 13 to 14 is whatever it is at 13
+//    and at 14, blended in a straight line. Properties that read only the
+//    zoom ("camera") or only the feature are worked out as they are. Layout
+//    properties are a separate case (the symbol's size, in model.mjs).
 
-import { createPropertyExpression, expression, featureFilter, latest } from '@maplibre/maplibre-gl-style-spec';
+import { Color, createPropertyExpression, expression, featureFilter, latest } from '@maplibre/maplibre-gl-style-spec';
 
 const SPEC = {
   paint: { line: latest.paint_line, fill: latest.paint_fill, circle: latest.paint_circle, symbol: latest.paint_symbol, background: latest.paint_background, fillExtrusion: latest.paint_fill_extrusion, heatmap: latest.paint_heatmap },
@@ -61,11 +73,40 @@ export function property(layer, name, kind, zoom, properties, fallback = undefin
   const expr = compiled(value, name, spec, kind);
   let out;
   try {
-    out = expr.evaluate({ zoom }, { type: featureType(properties), properties });
+    out = evaluateAt(expr, kind, zoom, { type: featureType(properties), properties });
   } catch {
     return fallback;
   }
   return out === undefined || out === null ? fallback : out;
+}
+
+// A paint property at a zoom, the way MapLibre draws it. A composite one (it
+// reads the zoom and a feature property) is evaluated at the whole zoom below
+// and the whole zoom above, and the two are blended by the expression's own
+// interpolation of the zoom between them (its `interpolationFactor`: linear,
+// exponential or a curve for an `interpolate`; none for a `step`, which
+// holds the lower value). Everything else is evaluated at the zoom itself.
+export function evaluateAt(expr, kind, zoom, feature) {
+  if (kind !== 'paint' || expr.kind !== 'composite') return expr.evaluate({ zoom }, feature);
+  const lower = Math.floor(zoom);
+  const a = expr.evaluate({ zoom: lower }, feature);
+  if (zoom === lower) return a;
+  const t = Math.max(0, Math.min(1, expr.interpolationFactor(zoom, lower, lower + 1)));
+  if (!(t > 0)) return a;
+  const b = expr.evaluate({ zoom: lower + 1 }, feature);
+  return blend(a, b, t);
+}
+
+// Two evaluated values, `t` of the way from a to b: numbers and colours (in
+// the premultiplied form the shader mixes them in) are mixed; anything else
+// (a string, a list of numbers the shader does not mix) stays the lower one.
+function blend(a, b, t) {
+  if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * t;
+  if (a instanceof Color && b instanceof Color) {
+    const mix = (x, y) => x + (y - x) * t;
+    return new Color(mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a));
+  }
+  return a;
 }
 
 // Filters see the zoom in whole steps (shared.js), so pass the floor. The

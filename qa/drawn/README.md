@@ -105,7 +105,15 @@ findings, and `npm run check:recall` (`qa/recall/`) scores them.
 
 - **Zoom in filters, fractional zoom in paint.** Filter expressions see the
   whole zoom (`Math.floor`), paint and layout expressions the fractional one,
-  as MapLibre evaluates them.
+  as MapLibre evaluates them. One exception, and it is MapLibre's: a paint
+  property that reads both the zoom and a feature's property (a mark's
+  opacity that depends on its `tickFrom`, say) is worked out at the whole zoom
+  below and the whole zoom above, and the two are blended by how far the zoom
+  has got between them; a stop at a half zoom in such an expression does
+  nothing. `expressions.mjs` does the same, so a mark that ramps from 0 to 1
+  over 13 to 14 is 0.5 at 13.5, whatever the stops say. (Widths and offsets
+  that are exponential curves with their stops on whole zooms come out the
+  same either way.)
 - **Collision boxes are the bucket's.** MapLibre builds a symbol's collision
   box from the layout size at the next whole zoom (`sizes.layoutTextSize`), so
   a label's box is measured at `floor(zoom) + 1` while its text is drawn at
