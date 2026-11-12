@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -476,4 +476,23 @@ test('the quietest bus street reads clearly in both themes and each busier class
     assert.ok(steps[0] >= least[theme], `${theme}: the quietest street reads (${steps[0].toFixed(2)})`);
     for (let i = 1; i < steps.length; i++) assert.ok(steps[i] >= steps[i - 1] * 1.25, `${theme}: class ${i} stands above class ${i - 1}`);
   }
+});
+
+test('a street that drifts a pixel or two through its corners is drawn straight, its cross streets with it; a real bend stays', () => {
+  const colfax = { cls: 'c5', routes: '15' };
+  const cross = { cls: 'c10', routes: '0' };
+  const out = straightened([
+    st([[-100, 2], [0, 2]], colfax),
+    st([[0, 2], [15, 2], [30, 4]], colfax),
+    st([[30, 4], [60, 5], [90, 4]], colfax),
+    st([[90, 4], [200, 3]], colfax),
+    st([[0, -80], [0, 2]], cross), st([[0, 2], [0, 80]], cross),
+    st([[30, -80], [30, 4]], cross),
+  ], SIZES.busStraight);
+  const ys = out.slice(0, 4).flatMap((s) => s.path.map((p) => p[1]));
+  const line = (x) => 2 + (x + 100) / 300;
+  for (const s of out.slice(0, 4)) for (const p of s.path) assert.ok(Math.abs(p[1] - line(p[0])) < 0.01, `the street is one straight line (${ys.map((y) => y.toFixed(1))})`);
+  assert.deepEqual(out[6].path.at(-1), out[1].path.at(-1), 'the cross street still ends on its corner');
+  const bend = straightened([st([[0, 0], [50, 0]], colfax), st([[50, 0], [100, 8]], colfax), st([[100, 8], [150, 8]], colfax)], SIZES.busStraight);
+  assert.deepEqual(bend[1].path, [[50, 0], [100, 8]], 'a real bend is kept');
 });

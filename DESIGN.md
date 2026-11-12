@@ -2059,6 +2059,11 @@ How it is built:
   a class apart from the rest and shorter than a ring (32 pixels) takes the
   weight of the longer stretch beside it; a longer one is a real change of
   service and stays.
+  A street that carries straight on through its corners and strays no more
+  than two and a half pixels from a straight line is drawn on that line,
+  its corners with it, and the streets that meet it there move their ends
+  the same few pixels: no gentle bend either side of a cross street. A real
+  bend strays farther and stays. The longest streets are set first.
 - **Route numbers are said once, not every block.** A street is cut at every
   corner and each piece's list differs a little from the next. Pieces that
   carry straight on from each other are one street; along it the longest
@@ -4092,6 +4097,9 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets draw the quietest bus streets brighter in the dark and a
   shade darker in the light, each class still well above the one below.
   Reason: on dark ground the hairline streets with a bus an hour faded out.
+- 2026-11-12: Sheets draw a street straight where it strays only a pixel or
+  two from a straight line. Reason: Colfax kept two gentle bends either side
+  of Lincoln on sheet 3, left by the divided road's middle found block by block.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
 

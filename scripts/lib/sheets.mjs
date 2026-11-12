@@ -55,6 +55,8 @@ export const SIZES = {
   busSlim: 6,
   // A street's end this near another street is on it.
   busSnap: 3,
+  // A street that carries straight on and strays no farther than this from a straight line is drawn straight.
+  busStraight: 2.5,
   // Bus streets closer together than this can't be told apart: they are drawn as one.
   busMerge: { 1: 4, 2: 7, 3: 7, 4: 24 },
   // A street's label lists this many routes; a street with more lists one fewer, then how many more.
@@ -903,6 +905,115 @@ export function unjogged(streets, most) {
 }
 
 /**
+ * Streets drawn straight. A street that carries straight on through its corners can still
+ * drift a pixel or three between them (the middle of a divided road found block by block, a
+ * corner placed where two halves met): a gentle bend either side of a cross street, where the
+ * street on the ground runs straight. Along a street that carries straight on, a stretch whose
+ * every point lies within `tol` of the line between its two ends is drawn on that line, its
+ * corners with it; the streets that meet it there move their ends the same few pixels. A real
+ * bend sits farther off the line than that and stays. The longest streets go first, and a
+ * corner once placed stays put.
+ */
+export function straightened(streets, tol) {
+  const edges = cornered(streets).map((e) => ({ ...e, path: e.st.path.map((p) => [...p]) }));
+  const at = new Map();
+  edges.forEach((e, i) => { if (e.a !== e.b) for (const k of [e.a, e.b]) at.set(k, [...(at.get(k) ?? []), i]); });
+  const pos = new Map();
+  for (const e of edges) for (const [k, p] of [[e.a, e.path[0]], [e.b, e.path.at(-1)]]) if (!pos.has(k)) pos.set(k, [...p]);
+  const leaves = (e, k) => {
+    const path = e.a === k ? e.path : [...e.path].reverse();
+    const q = pointAlong(path, Math.min(12, e.len));
+    const d = dist(path[0], q) || 1;
+    return [(q[0] - path[0][0]) / d, (q[1] - path[0][1]) / d];
+  };
+  // At each corner the pieces pair off with the one most nearly straight ahead.
+  const on = new Map();
+  for (const [k, list] of at) {
+    const pairs = [];
+    for (let x = 0; x < list.length; x++) for (let y = x + 1; y < list.length; y++) {
+      const [u, v] = [leaves(edges[list[x]], k), leaves(edges[list[y]], k)];
+      const straight = -(u[0] * v[0] + u[1] * v[1]);
+      if (straight > 0.97) pairs.push({ x: list[x], y: list[y], straight });
+    }
+    const used = new Set();
+    for (const { x, y } of pairs.sort((m, n) => n.straight - m.straight)) {
+      if (used.has(x) || used.has(y)) continue;
+      used.add(x).add(y);
+      on.set(`${x}@${k}`, y);
+      on.set(`${y}@${k}`, x);
+    }
+  }
+  // Streets: runs of pieces that carry straight on, each piece with the corner it is entered by.
+  const seen = new Set();
+  const chains = [];
+  edges.forEach((e, i) => {
+    if (seen.has(i) || e.a === e.b) return;
+    seen.add(i);
+    const walk = (from, k) => {
+      const out = [];
+      for (let j = on.get(`${from}@${k}`); j !== undefined && !seen.has(j); j = on.get(`${j}@${k}`)) {
+        seen.add(j);
+        out.push({ i: j, from: k });
+        k = edges[j].a === k ? edges[j].b : edges[j].a;
+      }
+      return out;
+    };
+    const back = walk(i, e.a).reverse().map(({ i: j, from }) => ({ i: j, from: edges[j].a === from ? edges[j].b : edges[j].a }));
+    chains.push([...back, { i, from: e.a }, ...walk(i, e.b)]);
+  });
+  const pinned = new Set();
+  const total = (c) => c.reduce((s, x) => s + edges[x.i].len, 0);
+  for (const chain of chains.sort((m, n) => total(n) - total(m))) {
+    // The street as one line: its corners, and the points of each piece between them.
+    const corners = [chain[0].from];
+    const pieces = [];
+    for (const { i, from } of chain) {
+      const e = edges[i];
+      const fwd = e.a === from;
+      pieces.push({ e, fwd, inner: (fwd ? e.path : [...e.path].reverse()).slice(1, -1) });
+      corners.push(fwd ? e.b : e.a);
+    }
+    if (corners[0] === corners.at(-1)) continue;
+    const near = (from, to) => {
+      const [a, b] = [pos.get(corners[from]), pos.get(corners[to])];
+      const len = dist(a, b);
+      if (len < 1e-6) return false;
+      const off = (p) => Math.abs((p[0] - a[0]) * (b[1] - a[1]) - (p[1] - a[1]) * (b[0] - a[0])) / len;
+      for (let c = from; c < to; c++) {
+        if (c > from && off(pos.get(corners[c])) > tol) return false;
+        if (pieces[c].inner.some((p) => off(p) > tol)) return false;
+      }
+      return true;
+    };
+    const onto = (p, a, b) => {
+      const d = [b[0] - a[0], b[1] - a[1]];
+      const t = ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1]);
+      return [a[0] + d[0] * t, a[1] + d[1] * t];
+    };
+    for (let from = 0; from < pieces.length;) {
+      let to = from + 1;
+      while (to < pieces.length && !pinned.has(corners[to]) && near(from, to + 1)) to++;
+      if (near(from, to)) {
+        const [a, b] = [pos.get(corners[from]), pos.get(corners[to])];
+        for (let c = from; c < to; c++) {
+          pieces[c].inner = pieces[c].inner.map((p) => onto(p, a, b));
+          if (c > from) pos.set(corners[c], onto(pos.get(corners[c]), a, b));
+        }
+      }
+      from = to;
+    }
+    for (const k of corners) pinned.add(k);
+    for (const { e, fwd, inner } of pieces) e.path = [e.path[0], ...(fwd ? inner : [...inner].reverse()), e.path.at(-1)];
+  }
+  return edges.map((e) => {
+    const path = [...e.path];
+    path[0] = pos.get(e.a);
+    path[path.length - 1] = pos.get(e.b);
+    return { ...e.st, path };
+  });
+}
+
+/**
  * Streets of one weight. A street is cut at every corner and each piece is weighed on its own,
  * so along a street that nothing else meets, a few pieces can come out a class apart from the
  * rest: a short dark tick on the end of a pale street. Along such a street, a stretch of one
@@ -1236,7 +1347,7 @@ export function busStreets(streets, sheet, walls = []) {
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
   const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
-  return evened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busRing);
+  return evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing);
 }
 
 /**
