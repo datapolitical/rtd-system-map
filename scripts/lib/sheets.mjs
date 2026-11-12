@@ -42,6 +42,10 @@ export const SIZES = {
   // A name whose best spot still sits on this much line is left for a closer sheet.
   nameCrowd: 26,
   nameShorten: 3,
+  // A station's other bar this far from its first is named too, so each end of a long station says what it is.
+  nameAgain: 120,
+  // Where two or more lines end at a bar, its name carries their letters in a row: each disc this big, this far apart.
+  nameLetter: { 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 },
   // Bus streets: a stretch shorter than this takes the class of the stretches
   // it joins, and a loop or stub smaller than this is not drawn.
   busBlip: 14,
@@ -62,7 +66,7 @@ export const SIZES = {
   // Bus streets closer together than this can't be told apart: they are drawn as one.
   busMerge: { 1: 4, 2: 7, 3: 7, 4: 24 },
   // A street's label lists this many routes; a street with more lists one fewer, then how many more.
-  busListed: 4,
+  busListed: { 1: 4, 2: 4, 3: 4, 4: 7 },
   // Along one street, the blocks that carry its label are at least this far apart.
   busLabelEvery: { 1: 150, 2: 170, 3: 240, 4: 320 },
   busLabelSize: { 1: 8.5, 2: 8.5, 3: 10, 4: 11.5 },
@@ -71,6 +75,8 @@ export const SIZES = {
   // A bus station's hall is drawn where it is at least this wide; a street that ends this near its wall ends on it.
   hallWide: 5,
   hallReach: 10,
+  // The size of the lettering that says what a hall is.
+  hallLetter: 9.5,
   // The sheet from which bus stops are drawn, each a ring.
   stopSheet: 4,
 };
@@ -460,10 +466,14 @@ export function stationMarks(stations, lines, sheet) {
         });
       }
       const ss = g.map((h) => h.s);
+      // Each side's lines together, in the order a reader meets them at the bar, left to right.
+      g.ending = sets.flatMap((set) => set.filter((h) => h.at).sort((x, y) => x.at[0] - y.at[0] || x.at[1] - y.at[1])).map((h) => ({ route: h.line.route, color: h.line.color }));
       return [Math.min(...ss), Math.max(...ss)].map((v) => [c[0] + n[0] * v, c[1] + n[1] * v]);
     });
     const ends = bars[0];
-    marks.push({ id: q.id, name: q.label ?? q.name, hub: !!q.hub, end: !!q.end, lines: q.lines, count: hits.length, ends, span: dist(ends[0], ends[1]), more: bars.slice(1), fat: !!groups[0].fat });
+    marks.push({ id: q.id, name: q.label ?? q.name, hub: !!q.hub, end: !!q.end, lines: q.lines, count: hits.length, ends, span: dist(ends[0], ends[1]), more: bars.slice(1), fat: !!groups[0].fat,
+      // Each bar with the lines that end at it, for its name.
+      bars: bars.map((ends, i) => ({ ends, ending: groups[i].ending })) });
   }
   // Marks need room. The hub first, then line ends, then stations with more lines; a mark
   // that would touch one already drawn is left for a closer sheet.
@@ -565,16 +575,27 @@ export function names(marks, lines, discs, sheet, streets = []) {
   ];
   const set = [];
   const rank = (m) => (m.hub ? 0 : m.end ? 1 : 2) * 100 - m.count;
-  for (const m of [...marks].sort((a, b) => rank(a) - rank(b) || a.id - b.id)) {
+  const r = SIZES.nameLetter[sheet.id];
+  for (const m of [...marks].sort((a, b) => rank(a) - rank(b) || a.id - b.id)) for (const [bi, bar] of (m.bars ?? [{ ends: m.ends, ending: [] }]).entries()) {
+    const mid = lerp(bar.ends[0], bar.ends[1], 0.5);
+    const again = (b) => dist(lerp(b.ends[0], b.ends[1], 0.5), lerp(m.ends[0], m.ends[1], 0.5)) >= SIZES.nameAgain;
+    if (bi && !again(bar)) continue;
     const must = m.hub || m.end;
+    // The letters of the lines that end here together, which no letter on the line can sit near.
+    // A bar too near the first for a name of its own has its letters on the first's.
+    const ending = bi ? bar.ending : (m.bars ?? [bar]).filter((b, i) => !i || !again(b)).flatMap((b) => b.ending);
+    const row = ending.length >= 2 ? ending : [];
     // Where not every name fits, the hub and line ends are lettered larger than the rest.
     const minor = !must && !SIZES.nameAll[sheet.id];
     const size = minor ? SIZES.nameMinor : SIZES.name[sheet.id];
-    const c = lerp(m.ends[0], m.ends[1], 0.5);
-    const half = [(m.ends[1][0] - m.ends[0][0]) / 2, (m.ends[1][1] - m.ends[0][1]) / 2];
+    const c = mid;
+    const half = [(bar.ends[1][0] - bar.ends[0][0]) / 2, (bar.ends[1][1] - bar.ends[0][1]) / 2];
     const placed = (text) => {
       const rows = text.split('\n');
-      const [w, h] = [Math.max(...rows.map((r) => r.length)) * size * 0.56, rows.length * size * 1.12];
+      const wide = Math.max(...rows.map((t) => t.length)) * size * 0.56;
+      const tall = rows.length * size * 1.12;
+      // The row of letters sits under the name, and the name's room includes it.
+      const [w, h] = [Math.max(wide, row.length * (2 * r + 2)), tall + (row.length ? 2 * r + 5 : 0)];
       let best = null;
       for (const reach of [1, 1.8, 2.8]) {
         for (const [dx, dy, anchor, cost] of sides) {
@@ -584,9 +605,11 @@ export function names(marks, lines, discs, sheet, streets = []) {
           const x0 = at[0] + (dx > 0 ? 0 : dx < 0 ? -w : -w / 2);
           const y0 = at[1] + (dy > 0 ? 0 : dy < 0 ? -h : -h / 2);
           const box = [x0, y0, x0 + w, y0 + h];
+          // The name keeps its own anchor: where the row makes the box taller, the text sits at its top.
+          const ty = dy > 0 ? at[1] : dy < 0 ? y0 + tall : y0 + tall / 2;
           const hits = set.filter((o) => touch(box, o.box)).length;
           const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2;
-          if (!best || score < best.score) best = { text, score, hits, box, anchor, offset: [(at[0] - c[0]) / size, (at[1] - c[1]) / size] };
+          if (!best || score < best.score) best = { text, score, hits, box, anchor, tall, offset: [(at[0] - c[0]) / size, (ty - c[1]) / size] };
         }
       }
       return best;
@@ -604,7 +627,11 @@ export function names(marks, lines, discs, sheet, streets = []) {
     // not, it also gives way to lines.
     if (!must && (best.hits || (minor && best.score >= SIZES.nameCrowd))) continue;
     const justify = best.anchor.includes('left') ? 'left' : best.anchor.includes('right') ? 'right' : 'center';
-    set.push({ mark: m, text, minor, box: best.box, anchor: best.anchor, offset: best.offset, justify });
+    const [x0, , x1] = best.box;
+    const span = row.length * (2 * r + 2) - 2;
+    const left = justify === 'left' ? x0 : justify === 'right' ? x1 - span : (x0 + x1 - span) / 2;
+    const letters = row.map((l, i) => ({ route: l.route, color: l.color, ink: inkOn(l.color), at: [left + r + i * (2 * r + 2), best.box[1] + best.tall + 3 + r] }));
+    set.push({ mark: m, at: c, text, minor, box: best.box, anchor: best.anchor, offset: best.offset, justify, letters });
   }
   return set;
 }
@@ -1910,10 +1937,24 @@ export function halls(terminals, sheet) {
       for (let i = 1; i < ring.length; i++) area += ring[i - 1][0] * ring[i][1] - ring[i][0] * ring[i - 1][1];
       // How wide it is: its area over its longest reach.
       const far = Math.max(...ring.map((p) => Math.max(...ring.map((q) => dist(p, q)))));
-      if (Math.abs(area) / 2 / (far || 1) >= SIZES.hallWide) out.push({ id: f.properties.id, name: f.properties.name, ring: squared(ring) });
+      if (Math.abs(area) / 2 / (far || 1) >= SIZES.hallWide) out.push({ id: f.properties.id, name: f.properties.name, underground: !!f.properties.underground, ring: squared(ring) });
     }
   }
   return out;
+}
+
+/** A hall's long axis: through its middle, the way its longest wall runs, three fifths of its length, reading left to right. */
+export function hallAxis(ring) {
+  let wall = [ring[0], ring[1]];
+  for (let i = 1; i < ring.length; i++) if (dist(ring[i - 1], ring[i]) > dist(...wall)) wall = [ring[i - 1], ring[i]];
+  const d = dist(...wall) || 1;
+  let u = [(wall[1][0] - wall[0][0]) / d, (wall[1][1] - wall[0][1]) / d];
+  if (u[0] < 0) u = [-u[0], -u[1]];
+  const along = ring.map((p) => p[0] * u[0] + p[1] * u[1]);
+  const across = ring.map((p) => p[1] * u[0] - p[0] * u[1]);
+  const [a, c] = [(Math.min(...along) + Math.max(...along)) / 2, (Math.min(...across) + Math.max(...across)) / 2];
+  const len = Math.max(...along) - Math.min(...along);
+  return [-0.3, 0.3].map((k) => [(a + len * k) * u[0] - c * u[1], (a + len * k) * u[1] + c * u[0]]);
 }
 
 /**
@@ -2037,11 +2078,18 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const back = (p) => toLonLat(p, sheet.zoom);
   const feature = (properties, geometry) => ({ type: 'Feature', properties, geometry });
   const features = [];
-  for (const h of walls) features.push(feature({ kind: 'hall', id: h.id, name: h.name }, { type: 'Polygon', coordinates: [h.ring.map(back)] }));
+  for (const h of walls) {
+    features.push(feature({ kind: 'hall', id: h.id, name: h.name }, { type: 'Polygon', coordinates: [h.ring.map(back)] }));
+    // What the room is, lettered down its length where it is long enough to hold the words.
+    const text = h.underground ? 'Bus concourse' : 'Bus station';
+    const axis = hallAxis(h.ring);
+    if (dist(...axis) >= text.length * SIZES.hallLetter * 1.1) features.push(feature({ kind: 'hall-name', text }, { type: 'LineString', coordinates: axis.map(back) }));
+  }
   // Along the street: its first few routes; a tap gives them all.
+  const most = SIZES.busListed[sheet.id];
   const listed = (s) => {
     const list = String(s.routes).split(' ');
-    return list.length > SIZES.busListed ? `${list.slice(0, SIZES.busListed - 1).join(', ')} +${list.length - SIZES.busListed + 1}` : list.join(', ');
+    return list.length > most ? `${list.slice(0, most - 1).join(', ')} +${list.length - most + 1}` : list.join(', ');
   };
   const size = SIZES.busLabelSize[sheet.id];
   const sides = new Map();
@@ -2071,7 +2119,8 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   for (const n of names(marks, lines, discs, sheet, bus)) {
     const m = n.mark;
     features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: n.text, anchor: n.anchor, offset: n.offset, justify: n.justify },
-      { type: 'Point', coordinates: back(lerp(m.ends[0], m.ends[1], 0.5)) }));
+      { type: 'Point', coordinates: back(n.at) }));
+    for (const b of n.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink }, { type: 'Point', coordinates: back(b.at) }));
   }
   if (sheet.id >= SIZES.stopSheet) {
     for (const f of busStops(stops, routes)) features.push(feature({ kind: 'stop', id: f.properties.id }, f.geometry));

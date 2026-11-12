@@ -630,3 +630,44 @@ test("a turnaround's bow is drawn in one sweep: no bulge or pinch from the route
   assert.ok(turns.every((t) => t >= -0.01) || turns.every((t) => t <= 0.01), 'it bends one way only');
   assert.ok(Math.abs(Math.min(...out.path.map((p) => p[1])) + 85) < 12, 'and reaches out about as far as it did');
 });
+
+test("where lines end together at a bar its name carries their letters, and a station's far bar is named too", () => {
+  // A and B end side by side at Mill; C passes through Ford alone.
+  const two = (y, route, color) => line({ mode: 'rail', route, color, slot: 0 }, [at(0, y), at(300, y)]);
+  const lines = railLines(all([two(0, 'A', '#57C1E9'), two(0, 'B', '#4E9D2D')]), sheet);
+  const marks = stationMarks(all([point({ id: 1, name: 'Mill', served: true, lines: 'A B', end: true }, at(300, 0)), point({ id: 2, name: 'Ford', served: true, lines: 'A B' }, at(150, 0))]), lines, sheet);
+  const set = names(marks, lines, [], sheet);
+  const mill = set.find((n) => n.mark.name === 'Mill');
+  assert.deepEqual(mill.letters.map((l) => l.route).sort(), ['A', 'B']);
+  assert.equal(set.find((n) => n.mark.name === 'Ford').letters.length, 0, 'lines running through need no letters at the name');
+  // The letters sit in a row under the name, inside the room the name took.
+  for (const l of mill.letters) assert.ok(l.at[0] >= mill.box[0] && l.at[0] <= mill.box[2] && l.at[1] <= mill.box[3] && l.at[1] > mill.box[1]);
+  assert.ok(Math.abs(mill.letters[0].at[1] - mill.letters[1].at[1]) < 1e-6, 'one row');
+  // A second bar far from the first is named as well, with the lines that end at it; a near one puts its letters on the first name.
+  const ink = (route) => ({ route, color: '#57C1E9' });
+  const far = { ...marks[0], bars: [{ ends: marks[0].ends, ending: [ink('A'), ink('B')] }, { ends: marks[0].ends.map((p) => [p[0] - 2 * SIZES.nameAgain, p[1]]), ending: [ink('E'), ink('W')] }] };
+  const twice = names([far], lines, [], sheet).filter((n) => n.mark.name === 'Mill');
+  assert.equal(twice.length, 2);
+  assert.deepEqual(twice.map((n) => n.letters.map((l) => l.route).join('')), ['AB', 'EW']);
+  const close = { ...far, bars: [far.bars[0], { ...far.bars[1], ends: marks[0].ends.map((p) => [p[0] - 20, p[1]]) }] };
+  const once = names([close], lines, [], sheet);
+  assert.equal(once.length, 1);
+  assert.equal(once[0].letters.map((l) => l.route).join(''), 'ABEW');
+});
+
+test('a long hall says what it is down its length; a place that shares a station\'s name is not lettered twice; the closest sheet lists more routes', async () => {
+  const data = { routes: all([]), stations: all([]), streets: all([]), stops: null };
+  const room = (w, more) => ({ type: 'Feature', properties: { id: 1, name: 'Hall', ...more }, geometry: { type: 'Polygon', coordinates: [[at3(0, 0), at3(w, 0), at3(w, 20), at3(0, 20), at3(0, 0)]] } });
+  const label = (w, more) => drawSheet({ ...data, terminals: all([room(w, more)]) }, near).features.find((f) => f.properties.kind === 'hall-name');
+  assert.equal(label(400, { underground: 1 }).properties.text, 'Bus concourse');
+  assert.equal(label(400).properties.text, 'Bus station');
+  assert.equal(label(60), undefined, 'too short for the words');
+  const [a, b] = label(400).geometry.coordinates;
+  assert.ok(a[0] < b[0] && Math.abs(a[1] - b[1]) < 1e-9, 'along its length, reading left to right');
+  const { sheetStyle } = await import('../public/js/sheets/style.js');
+  const style = sheetStyle('dark', ['Union Station']);
+  assert.ok(JSON.stringify(style.layers.find((l) => l.id === 'place-4').filter).includes('UNION STATION'));
+  const ids = style.layers.map((l) => l.id);
+  assert.ok(ids.indexOf('hall-name-4') > ids.indexOf('street-name-4'), 'placed before street names, which give way');
+  assert.ok(SIZES.busListed[4] > SIZES.busListed[3]);
+});

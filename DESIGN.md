@@ -2001,7 +2001,15 @@ How it is built:
   square. Lines that end at one bar coming in from either side meet back to
   back on it, each set centred: that bar is drawn about half again as thick,
   with a thin divider down its middle, so the sets read as one station's two
-  platforms and not as lines running through. The two halves of a divided road are one straight line down the
+  platforms and not as lines running through. Where two or more lines end
+  together at a bar, no letter can sit on a line near it, so the station's
+  name carries their letters in a small row beneath it, in the order the
+  lines meet the bar; a bar far from the station's first is named again with
+  its own lines, and a near one puts its letters on the first name. A hall
+  long enough is lettered down its length with what it is ("Bus concourse"
+  where the data says underground, "Bus station" otherwise), and street
+  names give way to it. A place the ground map names the same as a station
+  is not lettered twice. The two halves of a divided road are one straight line down the
   middle. A short break in a bus street between two ends that share a route
   is bridged. A line weight holds for a few blocks: a short stretch takes the
   weight of the longer stretch it runs into, so a street is never dashes of
@@ -4169,6 +4177,16 @@ work against the real structure before asking for evaluation.
   on to a rail station. Reason: route 15's few trips out of Union Station's
   hall were drawn back across to the light rail bar, a line that isn't
   there, beside the FreeRide loop on sheet 4.
+- 2026-11-12: Sheets say which trains end where, and what a hall is. Where
+  two or more lines end together at a bar, the station's name carries their
+  letters in a row; a station's bar far from its first is named too; a long
+  hall is lettered "Bus concourse" (underground) or "Bus station" down its
+  length; a place that shares a station's name is not lettered by the ground
+  map; the closest sheet lists up to seven routes on a street before "+N";
+  street names sit beside their street on the closest sheet, where the bus
+  street's own marks had kept them off. Reason: Chris's red-team of Union
+  Station on sheet 4: no line letters in view, no name at the light rail
+  end, the hall read as a road, no street names, routes hidden behind "+N".
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.

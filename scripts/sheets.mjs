@@ -9,14 +9,18 @@ export async function writeSheets(dir) {
   const read = async (name) => JSON.parse(await readFile(path.join(dir, `${name}.geojson`), 'utf8'));
   // Bus stations' halls are drawn where the build found them; a build without them draws none.
   const data = { routes: await read('routes'), stations: await read('stations'), streets: await read('streets'), terminals: await read('terminals').catch(() => null), stops: await read('stops').catch(() => null) };
+  // Where the page opens (the hub), and the names the sheets give their stations.
+  let hub = null;
+  const named = new Set();
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
-    // Where the page opens: on the hub.
-    if (sheet.id === 1) await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ hub: drawn.hub }));
+    if (sheet.id === 1) hub = drawn.hub;
+    for (const f of drawn.features) if (f.properties.shape === 'name') named.add(f.properties.name);
     await writeFile(path.join(dir, `sheet-${sheet.id}.geojson`), JSON.stringify(drawn));
     const count = (kind) => drawn.features.filter((f) => f.properties.kind === kind).length;
     console.log(`sheet ${sheet.id} (zoom ${sheet.zoom}): ${count('rail')} rail lines, ${drawn.features.filter((f) => f.properties.shape === 'name').length} station names, ${count('letter')} letters, ${count('bus')} bus streets`);
   }
+  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ hub, stations: [...named] }));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

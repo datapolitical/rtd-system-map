@@ -59,7 +59,9 @@ const ROUND = { 'line-cap': 'round', 'line-join': 'round' };
 const FLAT = { 'line-cap': 'butt', 'line-join': 'round' };
 
 /** The whole style: the ground, then each sheet's layers, each shown only around its own zoom. */
-export function sheetStyle(theme) {
+export function sheetStyle(theme, stations = []) {
+  // A place that shares a station's name is not lettered twice: the station's own name says it.
+  const named = stations.map((s) => s.toUpperCase());
   const c = PALETTES[theme];
   const layers = [
     { id: 'ground', type: 'background', paint: { 'background-color': c.ground } },
@@ -118,10 +120,10 @@ export function sheetStyle(theme) {
       paint: { 'text-color': c.place, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
     if (n >= 3) layers.push({ id: `street-name-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band,
       filter: ['in', ['get', 'class'], ['literal', n === 3 ? ['primary', 'secondary', 'tertiary', 'trunk'] : ['primary', 'secondary', 'tertiary', 'trunk', 'minor']]],
-      layout: { 'symbol-placement': 'line', 'symbol-spacing': 420, 'text-field': ['get', 'name'], 'text-font': FONT.regular, 'text-size': n === 3 ? 9 : 10.5, 'text-max-angle': 25, 'text-padding': 14 },
+      layout: { 'symbol-placement': 'line', 'symbol-spacing': 420, 'text-field': ['get', 'name'], 'text-font': FONT.regular, 'text-size': n === 3 ? 9 : 10.5, 'text-max-angle': 25, 'text-padding': 14, 'text-offset': [0, n === 4 ? 1.3 : 0] },
       paint: { 'text-color': c.streetName, 'text-halo-color': c.ground, 'text-halo-width': 1.2 } });
     layers.push({ id: `place-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'place', ...band,
-      filter: ['in', ['get', 'class'], ['literal', n < 3 ? ['city', 'town'] : ['suburb', 'neighbourhood', 'quarter']]],
+      filter: ['all', ['in', ['get', 'class'], ['literal', n < 3 ? ['city', 'town'] : ['suburb', 'neighbourhood', 'quarter']]], ['!', ['in', ['upcase', ['get', 'name']], ['literal', named]]]],
       layout: { 'text-field': ['upcase', ['get', 'name']], 'text-font': FONT.medium, 'text-size': 10.5, 'text-letter-spacing': 0.22, 'text-padding': 4, 'text-max-width': 8 },
       paint: { 'text-color': c.place, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
     const unseen = { layout: { 'symbol-placement': 'line', 'symbol-spacing': 6, 'text-field': 'o', 'text-font': FONT.medium, 'text-size': 7, 'text-allow-overlap': true, 'text-padding': 0, 'text-rotation-alignment': 'viewport' }, paint: { 'text-opacity': 0 } };
@@ -144,14 +146,20 @@ export function sheetStyle(theme) {
       paint: { 'text-color': c.name, 'text-halo-color': c.ground, 'text-halo-width': 2 } });
     // Line letters, placed by the build where each line runs alone: a disc in the line's colour.
     const disc = [7.4, 8.2, 9.4, 10.6][i];
-    layer('letter-disc', 'circle', { filter: kind('letter'), paint: { 'circle-radius': disc, 'circle-color': ['get', 'color'], 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
+    // Beside a station's name the letters are smaller (scripts/lib/sheets.mjs, SIZES.nameLetter).
+    const small = [5.6, 6, 6.6, 7.4][i];
+    layer('letter-disc', 'circle', { filter: kind('letter'), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': ['get', 'color'], 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
     layer('letter', 'symbol', { filter: kind('letter'),
-      layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': disc * 1.42, 'text-allow-overlap': true, 'text-offset': [0, 0.06] },
+      layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * 1.42, disc * 1.42], 'text-allow-overlap': true, 'text-offset': [0, 0.06] },
       paint: { 'text-color': ['get', 'ink'] } });
     // Lettering keeps off the lines: unseen marks along rail and the busiest streets hold their
     // ground. MapLibre places the last layer first: rail's marks, then the route numbers (which
     // sit on their own streets but never on rail), then the streets' marks, then everything above.
     layer('keep-off', 'symbol', { filter: kind('rail'), ...unseen });
+    // What a hall is, down its length; placed first, so a street's name gives way to it.
+    layer('hall-name', 'symbol', { filter: kind('hall-name'),
+      layout: { 'symbol-placement': 'line-center', 'text-field': ['upcase', ['get', 'text']], 'text-font': FONT.medium, 'text-size': 9.5, 'text-letter-spacing': 0.18, 'text-padding': 6 },
+      paint: { 'text-color': c.place } });
     // A stop's ring holds its ground too: a route number never sits on a stop. One unseen
     // mark the size of the ring and a little air, placed before the numbers.
     if (n >= 4) layers.push({ id: `keep-off-stop-${n}`, type: 'symbol', source: `sheet-${n}`, filter: ['==', ['get', 'kind'], 'stop'], ...band,
