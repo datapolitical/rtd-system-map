@@ -42,6 +42,8 @@ export const SIZES = {
   // A name whose best spot still sits on this much line is left for a closer sheet.
   nameCrowd: 26,
   nameShorten: 3,
+  // What it costs a last station's name to stand beside its bar when the station before is closer than the name is tall.
+  nameBeside: 20,
   // A station's other bar this far from its first is named too, so each end of a long station says what it is.
   nameAgain: 120,
   // Where two or more lines end at a bar, its name carries their letters in a row: each disc this big, this far apart.
@@ -408,6 +410,7 @@ export function stationMarks(stations, lines, sheet, walls = []) {
       const others = (stopsOf.get(h.line.route) ?? []).filter((o) => o !== f)
         .map((o) => nearest(path, o.px)).filter((o) => o.d <= walk).map((o) => o.along);
       const open = (side) => !others.some((a) => (side ? a > h.along + pitch : a < h.along - pitch));
+      h.others = others;
       // Never while another of its stations lies beyond: on a wide sheet a few pitches is
       // farther than the last two stations are apart.
       const near = (left) => left < 3 * pitch || left <= walk;
@@ -434,7 +437,10 @@ export function stationMarks(stations, lines, sheet, walls = []) {
       for (const h of g) h.s = dot([h.at[0] - c[0], h.at[1] - c[1]], n);
       // A line that ends here is drawn into the bar square-on and stops at it, whatever the
       // track does in its last few yards; lines ending side by side keep their pitch.
-      const reach = (h) => Math.min(14 * pitch, h.total / 3);
+      // The curve never reaches back to the line's station before: there the line is where
+      // its track is, under that station's bar.
+      const before = (h) => Math.min(...h.others.map((a) => (h.end ? h.along - a : a - h.along)).filter((d) => d > pitch), Infinity);
+      const reach = (h) => Math.min(14 * pitch, h.total / 3, Math.max(pitch, before(h) - 2 * pitch));
       // Where a line's lead-in begins: that far back along it from the station, not from the end of any tail track.
       const start = (h) => (h.end ? Math.max(0, Math.min(h.along, h.total) - reach(h)) : Math.min(h.total, h.along + reach(h)));
       const inward = (h) => {
@@ -641,6 +647,13 @@ export function names(marks, lines, discs, sheet, streets = []) {
     const size = minor ? SIZES.nameMinor : SIZES.name[sheet.id];
     const c = mid;
     const half = [(bar.ends[1][0] - bar.ends[0][0]) / 2, (bar.ends[1][1] - bar.ends[0][1]) / 2];
+    // Where every line at the bar ends and the station before stands closer than the name is
+    // tall, a name beside the bar would stand beside that station too: it goes beyond the end
+    // of the line instead, the way the line was heading.
+    const mine = String(m.lines ?? '').split(' ');
+    const before = bars.filter((o) => o.m !== m && String(o.m.lines ?? '').split(' ').some((l) => mine.includes(l))).map((o) => o.pts[1])
+      .reduce((near, p) => (!near || dist(p, c) < dist(near, c) ? p : near), null);
+    const last = bar.ending.length > 0 && bar.ending.length === m.count && before;
     const placed = (text) => {
       const rows = text.split('\n');
       const wide = Math.max(...rows.map((t) => t.length)) * size * 0.56;
@@ -663,7 +676,9 @@ export function names(marks, lines, discs, sheet, streets = []) {
           const own = gap(lettering, bars.find((o) => o.m === m).pts);
           const strays = bars.some((o) => o.m !== m && gap(lettering, o.pts) < own);
           const hits = set.filter((o) => touch(box, o.box)).length + (strays ? 1 : 0);
-          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2;
+          const beyond = last && ((c[0] - before[0]) * dx + (c[1] - before[1]) * dy) / n / dist(c, before) > 0.9;
+          const crowded = last && dist(c, before) < tall && !beyond;
+          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0);
           if (!best || score < best.score) best = { text, score, hits, box, anchor, tall, offset: [(at[0] - c[0]) / size, (ty - c[1]) / size] };
         }
       }

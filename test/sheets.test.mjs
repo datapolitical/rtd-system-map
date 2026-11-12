@@ -860,3 +860,37 @@ test('a line does not end at a station while another of its stations lies beyond
   assert.deepEqual(ending('City'), [], 'nothing ends at the station before the last');
   assert.deepEqual(ending('Gate'), ['E', 'R']);
 });
+
+test('the curve into a last station never reaches back past the station before: that bar stays on its line', () => {
+  // The widest sheet. The track doglegs through City 30 px before it ends at Gate.
+  const s1 = SHEETS[0];
+  const o1 = toPx([-105, 39.75], s1.zoom);
+  const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
+  const rail = line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(-300, 0), at1(0, 0), at1(10, 30), at1(40, 30)]);
+  const lines = railLines(all([rail]), s1);
+  const marks = stationMarks(all([
+    point({ id: 1, name: 'City', served: true, lines: 'E' }, at1(10, 30)),
+    point({ id: 2, name: 'Gate', served: true, lines: 'E', end: true }, at1(40, 30)),
+  ]), lines, s1);
+  const city = marks.find((m) => m.name === 'City');
+  const mid = [(city.ends[0][0] + city.ends[1][0]) / 2, (city.ends[0][1] + city.ends[1][1]) / 2];
+  assert.ok(nearest(lines[0].paths[0], mid).d < 1, `the line runs under the bar, not ${nearest(lines[0].paths[0], mid).d.toFixed(1)} px from it`);
+});
+
+test('a last station whose neighbour is closer than its name is tall is named beyond the end of the line', () => {
+  const s1 = SHEETS[0];
+  const o1 = toPx([-105, 39.75], s1.zoom);
+  const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
+  const named = (cityAt) => {
+    const lines = railLines(all([line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(0, -300), at1(0, 40)])]), s1);
+    const marks = stationMarks(all([
+      point({ id: 1, name: 'City', served: true, lines: 'E' }, at1(0, cityAt)),
+      point({ id: 2, name: 'Gate/Park', served: true, lines: 'E', end: true }, at1(0, 40)),
+    ]), lines, s1);
+    return names(marks, lines, [], s1).find((n) => n.mark.name === 'Gate/Park');
+  };
+  // City 12 px before the end: a two-row name beside the bar would stand beside City too.
+  assert.equal(named(28).anchor, 'top', 'the name hangs below the end of a line heading down the sheet');
+  // With the station before far off, the name stands beside its bar as everywhere else.
+  assert.equal(named(-150).anchor, 'left');
+});

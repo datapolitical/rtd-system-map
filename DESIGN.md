@@ -2005,7 +2005,8 @@ How it is built:
   drawing, the drawing wins by a few pixels. A station bar is square across
   its lines. The platforms of one station where lines end are drawn parallel,
   and each ending line is led into its bar in a smooth curve so it arrives
-  square. Lines that end at one bar coming in from either side meet back to
+  square. The curve never reaches back to the line's station before: there
+  the line is where its track is, under that station's bar. Lines that end at one bar coming in from either side meet back to
   back on it, each set centred: that bar is drawn about half again as thick,
   with a thin divider down its middle, so the sets read as one station's two
   platforms and not as lines running through. Where two or more lines end
@@ -2056,7 +2057,10 @@ How it is built:
   its bar is level with it, the letters of lines that end there hanging
   below. A name is never nearer another station's bar than its own: it
   moves, is set in one row, or (where not every station is named) is left
-  off.
+  off. Where every line at a bar ends and the station before stands closer
+  than the name is tall, the name goes beyond the end of the line, the way
+  the line was heading: beside the bar it would stand beside that station
+  too.
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
   The quietest bus street reads clearly in both themes (in the dark, where
   a hairline of light reads faint, more so), and each busier class stands a
@@ -4276,6 +4280,13 @@ work against the real structure before asking for evaluation.
   than its own. On sheet 1 the E line was said to end at Lone Tree City
   Center, and "RidgeGate Parkway" and "Lone Tree City Center" each sat
   beside the other's bar (Chris: "this looks ugly and inaccurate").
+- 2026-11-12: Sheets: bars at the last stations of a line sit on their
+  lines, and a crowded last station is named beyond the line's end. Chris,
+  of the south end of E and R on sheet 1 after the fix above: "this still
+  looks ugly". The curve into RidgeGate reached fourteen pitches back, 70 px
+  on sheet 1, through Sky Ridge and Lone Tree City Center, and pulled the
+  lines up to 6 px off those stations' bars; and the large two-row
+  "RidgeGate Parkway" stood beside the small names of the stations before.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.
