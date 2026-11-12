@@ -933,6 +933,51 @@ export function unjogged(streets, most) {
 }
 
 /**
+ * Loops drawn in one sweep. Where two streets run between the same two corners and one bows out
+ * well past the other (a turnaround: out one way, back the other), the route data along the bow
+ * wanders, bulging and pinching. The bow is drawn as one smooth curve that leaves each corner the
+ * way the street does and reaches out as far as it did.
+ */
+export function arced(streets) {
+  const edges = cornered(streets);
+  const out = streets.map((st) => st);
+  const pairs = new Map();
+  edges.forEach((e, i) => {
+    if (e.a === e.b) return;
+    const k = [e.a, e.b].sort().join('|');
+    pairs.set(k, [...(pairs.get(k) ?? []), i]);
+  });
+  for (const list of pairs.values()) {
+    if (list.length !== 2) continue;
+    const [i, j] = edges[list[0]].len >= edges[list[1]].len ? list : [list[1], list[0]];
+    const path = edges[i].st.path;
+    const [A, B] = [path[0], path.at(-1)];
+    const chord = dist(A, B);
+    if (chord < 1 || edges[i].len < 1.25 * Math.max(chord, edges[j].len)) continue;
+    const dir = (pts) => {
+      const q = pointAlong(pts, Math.min(12, length(pts) / 4));
+      const d = dist(pts[0], q) || 1;
+      return [(q[0] - pts[0][0]) / d, (q[1] - pts[0][1]) / d];
+    };
+    const [uA, uB] = [dir(path), dir([...path].reverse())];
+    const nrm = [-(B[1] - A[1]) / chord, (B[0] - A[0]) / chord];
+    const off = (p) => (p[0] - A[0]) * nrm[0] + (p[1] - A[1]) * nrm[1];
+    const far = path.reduce((m, p) => (Math.abs(off(p)) > Math.abs(m) ? off(p) : m), 0);
+    const pull = 0.375 * ((uA[0] + uB[0]) * nrm[0] + (uA[1] + uB[1]) * nrm[1]);
+    if (Math.abs(pull) < 0.05 || Math.sign(pull) !== Math.sign(far)) continue;
+    const h = Math.min(1.5 * chord, far / pull);
+    const [c1, c2] = [[A[0] + uA[0] * h, A[1] + uA[1] * h], [B[0] + uB[0] * h, B[1] + uB[1] * h]];
+    const curve = Array.from({ length: 33 }, (_, n) => {
+      const t = n / 32;
+      const w = 1 - t;
+      return [0, 1].map((k) => w * w * w * A[k] + 3 * w * w * t * c1[k] + 3 * w * t * t * c2[k] + t * t * t * B[k]);
+    });
+    out[i] = { ...edges[i].st, path: curve };
+  }
+  return out;
+}
+
+/**
  * Streets turned as a pen turns them. Where the two pieces at a corner that carry on most nearly
  * straight still bend (an L, a loop's corner), the bend is rounded: both are cut back by up to
  * `radius` pixels and joined by a curve, and a third street meeting them there ends on its
@@ -1460,7 +1505,7 @@ export function busStreets(streets, sheet, walls = [], marks = []) {
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
   const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
-  return toStations(filleted(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre);
+  return toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing)), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre);
 }
 
 /**

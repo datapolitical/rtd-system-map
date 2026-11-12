@@ -2085,6 +2085,11 @@ How it is built:
   them there ends on the curve; each street's own bends are smoothed over
   half that, so a curve has no facets. A street that carries straight on, or
   a corner where four or more meet, is left.
+  Where two streets run between the same two corners and one bows well out
+  past the other (a turnaround, out one way and back the other), the bow is
+  drawn as one smooth curve that leaves each corner the way the street does
+  and reaches as far out as it did: the route data along it bulges and
+  pinches.
 - **Route numbers are said once, not every block.** A street is cut at every
   corner and each piece's list differs a little from the next. Pieces that
   carry straight on from each other are one street; along it the longest
@@ -4156,6 +4161,9 @@ work against the real structure before asking for evaluation.
   the FreeRide loop beside Union Station's light rail on sheet 4 turned in
   sharp angles where its pieces met and was faceted between them; Chris
   said it did not look hand drawn.
+- 2026-11-12: Sheets draw a turnaround's bow in one sweep. Reason: rounding
+  corners left the FreeRide loop by Union Station with a bulge and a pinch
+  from the route data; Chris saw a bend that made no sense.
 - 2026-11-12: A branch preview named after a page opens on that page.
   Reason: the `sheets` preview's root opened the main map, and Chris was
   sent there for the sheets.

@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, halls, labelled, nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -610,4 +610,19 @@ test('a street that turns at a corner turns as a pen would: the bend is rounded,
   assert.ok(nearest([...a.path, ...b.path], [100, 0]).d > 1, 'the curve cuts inside the corner');
   assert.deepEqual([c.path.at(-1), d.path[0]], [[100, 200], [100, 200]], 'straight on: left as it is');
   assert.equal(c.path.length, 2);
+});
+
+test("a turnaround's bow is drawn in one sweep: no bulge or pinch from the route data", () => {
+  // A straight way back between two corners, and a bow out that bulges and pinches.
+  const bow = [[0, 0], [-10, -20], [5, -45], [-5, -60], [20, -80], [60, -85], [100, 0]];
+  const [out, back] = arced([st(bow), st([[0, 0], [100, 0]])]);
+  assert.deepEqual(back.path, [[0, 0], [100, 0]], 'the straight way stays');
+  assert.deepEqual([out.path[0], out.path.at(-1)], [[0, 0], [100, 0]], 'the bow keeps its corners');
+  const turns = out.path.slice(2).map((p, i) => {
+    const [a, b] = [out.path[i], out.path[i + 1]];
+    const [u, v] = [[b[0] - a[0], b[1] - a[1]], [p[0] - b[0], p[1] - b[1]]];
+    return Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]);
+  });
+  assert.ok(turns.every((t) => t >= -0.01) || turns.every((t) => t <= 0.01), 'it bends one way only');
+  assert.ok(Math.abs(Math.min(...out.path.map((p) => p[1])) + 85) < 12, 'and reaches out about as far as it did');
 });
