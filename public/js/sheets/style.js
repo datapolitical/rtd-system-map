@@ -23,7 +23,7 @@ export const PALETTES = {
   },
   light: {
     ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
-    bus: { c60: '#d3d6dc', c30: '#bcc2cc', c15: '#8a94a6', c10: '#566179', c5: '#232d45', c3: '#232d45' },
+    bus: { c60: '#c0c5ce', c30: '#a5adbb', c15: '#7d889c', c10: '#566179', c5: '#232d45', c3: '#232d45' },
     mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', streetName: '#a3a6ad', number: '#3a4560', stop: '#566179',
   },
 };
