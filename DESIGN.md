@@ -2000,6 +2000,9 @@ How it is built:
   end is left off; this is the one thing not drawn, and it is under half a
   percent of route length on any sheet.
   A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
+  Where a full name would sit on lines or stand off from its mark, common
+  words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
+  shorter name sits better; a name with room is written out.
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.

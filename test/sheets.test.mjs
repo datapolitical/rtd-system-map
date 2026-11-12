@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, drawSheet, inkOn } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, busStreets, drawSheet, inkOn, shortened } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -150,4 +150,13 @@ test('a short break between two ends that share a route is bridged, and a short 
   const xs = drawn.flatMap((s) => [s.path[0][0], s.path.at(-1)[0]]).map((x) => Math.round(x - origin[0])).sort((a, b) => a - b);
   assert.ok(xs.includes(208) && !xs.includes(200), 'the first street reaches the second');
   assert.deepEqual([...new Set(drawn.map((s) => s.cls))], ['c15']);
+});
+
+test('a name is shortened only where the full name sits badly, and the short form stays plain', () => {
+  assert.equal(shortened('Mill Station'), 'Mill Stn');
+  assert.equal(shortened('Orchard'), 'Orchard');
+  const rail = line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at(0, 0), at(300, 0)]);
+  const lines = railLines(all([rail]), sheet);
+  const marks = stationMarks(all([point({ id: 1, name: 'Mill Station', served: true, lines: 'A', end: true }, at(150, 0))]), lines, sheet);
+  assert.equal(names(marks, lines, [], sheet)[0].text, 'Mill Station', 'open ground: written out');
 });

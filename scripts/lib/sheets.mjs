@@ -41,6 +41,7 @@ export const SIZES = {
   nameMinor: 10,
   // A name whose best spot still sits on this much line is left for a closer sheet.
   nameCrowd: 26,
+  nameShorten: 3,
   // Bus streets: a stretch shorter than this takes the class of the stretches
   // it joins, and a loop or stub smaller than this is not drawn.
   busBlip: 14,
@@ -528,25 +529,36 @@ export function names(marks, lines, discs, sheet, streets = []) {
     // Where not every name fits, the hub and line ends are lettered larger than the rest.
     const minor = !must && !SIZES.nameAll[sheet.id];
     const size = minor ? SIZES.nameMinor : SIZES.name[sheet.id];
-    const text = wrapped(m.name);
-    const rows = text.split('\n');
-    const [w, h] = [Math.max(...rows.map((r) => r.length)) * size * 0.56, rows.length * size * 1.12];
     const c = lerp(m.ends[0], m.ends[1], 0.5);
     const half = [(m.ends[1][0] - m.ends[0][0]) / 2, (m.ends[1][1] - m.ends[0][1]) / 2];
-    let best = null;
-    for (const reach of [1, 1.8, 2.8]) {
-      for (const [dx, dy, anchor, cost] of sides) {
-        const n = Math.hypot(dx, dy);
-        const off = (rail / 2 + 5 + Math.abs((half[0] * dx + half[1] * dy) / n)) * reach;
-        const at = [c[0] + (dx / n) * off, c[1] + (dy / n) * off];
-        const x0 = at[0] + (dx > 0 ? 0 : dx < 0 ? -w : -w / 2);
-        const y0 = at[1] + (dy > 0 ? 0 : dy < 0 ? -h : -h / 2);
-        const box = [x0, y0, x0 + w, y0 + h];
-        const hits = set.filter((o) => touch(box, o.box)).length;
-        const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2;
-        if (!best || score < best.score) best = { score, hits, box, anchor, offset: [(at[0] - c[0]) / size, (at[1] - c[1]) / size] };
+    const placed = (text) => {
+      const rows = text.split('\n');
+      const [w, h] = [Math.max(...rows.map((r) => r.length)) * size * 0.56, rows.length * size * 1.12];
+      let best = null;
+      for (const reach of [1, 1.8, 2.8]) {
+        for (const [dx, dy, anchor, cost] of sides) {
+          const n = Math.hypot(dx, dy);
+          const off = (rail / 2 + 5 + Math.abs((half[0] * dx + half[1] * dy) / n)) * reach;
+          const at = [c[0] + (dx / n) * off, c[1] + (dy / n) * off];
+          const x0 = at[0] + (dx > 0 ? 0 : dx < 0 ? -w : -w / 2);
+          const y0 = at[1] + (dy > 0 ? 0 : dy < 0 ? -h : -h / 2);
+          const box = [x0, y0, x0 + w, y0 + h];
+          const hits = set.filter((o) => touch(box, o.box)).length;
+          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2;
+          if (!best || score < best.score) best = { text, score, hits, box, anchor, offset: [(at[0] - c[0]) / size, (at[1] - c[1]) / size] };
+        }
       }
+      return best;
+    };
+    // A name is written out where it has room; where it would sit on lines or stand off from
+    // its mark, the shortened name is used if that sits better.
+    let best = placed(wrapped(m.name));
+    const brief = wrapped(shortened(m.name));
+    if (brief !== best.text && best.score >= SIZES.nameShorten) {
+      const other = placed(brief);
+      if (other.score < best.score - 1) best = other;
     }
+    const text = best.text;
     // Where every station is named, a name gives way only to another name; where they are
     // not, it also gives way to lines.
     if (!must && (best.hits || (minor && best.score >= SIZES.nameCrowd))) continue;
@@ -554,6 +566,12 @@ export function names(marks, lines, discs, sheet, streets = []) {
     set.push({ mark: m, text, minor, box: best.box, anchor: best.anchor, offset: best.offset, justify });
   }
   return set;
+}
+
+/** A name with its common words in their usual short forms, still plain to read. */
+const SHORT = { Station: 'Stn', Avenue: 'Ave', Street: 'St', Boulevard: 'Blvd', Parkway: 'Pkwy', Road: 'Rd', Center: 'Ctr', Junction: 'Jct', University: 'Univ', Government: 'Govt' };
+export function shortened(name) {
+  return String(name).replace(/[A-Za-z]+/g, (word) => SHORT[word] ?? word);
 }
 
 /** A long name on two rows: broken at its slash, or at the space nearest its middle. */
