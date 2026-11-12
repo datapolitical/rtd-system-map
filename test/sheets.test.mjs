@@ -403,4 +403,12 @@ test('a street that meets a cross street at two corners a little apart goes stra
   assert.equal(crossing.length, 2, 'the cross street stays, in its two pieces');
   const quiet = unjogged([st([[-200, 0], [0, 0]], { cls: 'c60', routes: '9' }), st([[0, 4], [200, 4]], { cls: 'c60', routes: '9' }), st([[0, 0], [0, 4]], { cls: 'c10', routes: '0' }), north, south], 18);
   assert.equal(quiet.length, 5, 'but not where the link is busier than the halves');
+  // A ladder: two streets side by side, each carrying on past the rung that ties them.
+  const ladder = unjogged([
+    st([[-200, 0], [0, 0]], { cls: 'c10', routes: '8' }), st([[0, 0], [200, 0]], { cls: 'c10', routes: '8' }),
+    st([[-200, 6], [0, 6]], { cls: 'c10', routes: '8' }), st([[0, 6], [200, 6]], { cls: 'c10', routes: '8' }),
+    st([[0, 0], [0, 6]], { cls: 'c30', routes: '0' }),
+  ], 18);
+  assert.equal(ladder.length, 5, 'nor where the two are streets of a ladder that carry on past the rung');
+  assert.ok(ladder.every((s) => s.path.every((p) => p[1] === 0 || p[1] === 6 || s.routes === '0')), 'which stay where they are');
 });

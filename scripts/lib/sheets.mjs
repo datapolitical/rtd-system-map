@@ -873,7 +873,11 @@ export function unjogged(streets, most) {
     const others = (k) => at.get(k).filter((o) => o !== e && o.a !== o.b && !gone.has(o));
     const halves = others(e.a).some((x) => others(e.b).some((y) => {
       const [u, v] = [leaves(x, e.a), leaves(y, e.b)];
+      // Each half ends at its corner: nothing there carries it on past (as two streets of a
+      // ladder do, tied by a rung).
+      const ends = (k, w, half) => !others(k).some((o) => o !== half && o.a !== o.b && (() => { const t = leaves(o, k); return t[0] * w[0] + t[1] * w[1] < -0.9; })());
       return u[0] * v[0] + u[1] * v[1] < -0.9 && Math.abs(u[0] * link[0] + u[1] * link[1]) < 0.5
+        && ends(e.a, u, x) && ends(e.b, v, y)
         && Math.min(rank(x), rank(y)) >= rank(e) && [...routes(x)].some((r) => routes(y).has(r));
     }));
     if (!halves) continue;
