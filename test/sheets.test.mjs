@@ -109,3 +109,45 @@ test('a second track beside a line is not drawn, and a line that never runs alon
   const set = letters(lines, [], sheet);
   assert.deepEqual([...new Set(set.map((l) => l.route))].sort(), ['A', 'B']);
 });
+
+test('a station bar is square across its line, and a line that ends at a station ends on its bar', () => {
+  const rail = line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at(0, 0), at(300, 120)]);
+  const lines = railLines(all([rail]), sheet);
+  const marks = stationMarks(all([
+    point({ id: 1, name: 'Mill', served: true, lines: 'A' }, at(150, 60)),
+    point({ id: 2, name: 'Orchard', served: true, lines: 'A', end: true }, at(300, 120)),
+  ]), lines, sheet);
+  const along = [300, 120].map((v) => v / Math.hypot(300, 120));
+  for (const mark of marks) {
+    const [a, b] = mark.ends;
+    const across = [(b[0] - a[0]) / (mark.span || 1), (b[1] - a[1]) / (mark.span || 1)];
+    assert.ok(Math.abs(across[0] * along[0] + across[1] * along[1]) < 0.1, `${mark.name} bar is square to the line`);
+  }
+  const last = marks.find((mark) => mark.name === 'Orchard');
+  const mid = [(last.ends[0][0] + last.ends[1][0]) / 2, (last.ends[0][1] + last.ends[1][1]) / 2];
+  const tip = lines[0].paths[0].at(-1);
+  const head = lines[0].paths[0][0];
+  const off = Math.min(Math.hypot(tip[0] - mid[0], tip[1] - mid[1]), Math.hypot(head[0] - mid[0], head[1] - mid[1]));
+  assert.ok(off < 1.5, `the line ends ${off.toFixed(1)} px from its bar`);
+});
+
+test('the two halves of a divided road are one line down the middle with the routes of both', () => {
+  const street = (routes, y) => line({ mode: 'bus', cls: 'c15', routes, n: 1, hw: 15, zoom: 'far' }, [at(0, y), at(300, y)]);
+  const drawn = busStreets(all([street('1', 0), street('2', 4)]), sheet);
+  assert.equal(drawn.length, 1);
+  assert.deepEqual(drawn[0].routes.split(' ').sort(), ['1', '2']);
+  const ys = drawn[0].path.map((p) => p[1] - origin[1]);
+  assert.ok(Math.min(...ys) > 0.5 && Math.max(...ys) < 3.5, `drawn between the two, at ${ys[0].toFixed(1)}`);
+});
+
+test('a short break between two ends that share a route is bridged, and a short stretch takes the weight of the street it runs into', () => {
+  const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  const drawn = busStreets(all([
+    street('c15', '1', [at(0, 0), at(200, 0)]),
+    street('c15', '1', [at(208, 0), at(400, 0)]),
+    street('c60', '1 2', [at(400, 0), at(430, 0)]),
+  ]), sheet);
+  const xs = drawn.flatMap((s) => [s.path[0][0], s.path.at(-1)[0]]).map((x) => Math.round(x - origin[0])).sort((a, b) => a - b);
+  assert.ok(xs.includes(208) && !xs.includes(200), 'the first street reaches the second');
+  assert.deepEqual([...new Set(drawn.map((s) => s.cls))], ['c15']);
+});

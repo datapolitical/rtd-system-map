@@ -1969,7 +1969,7 @@ nearest one. Issue #117 holds the work.
 |---|---|---|
 | 1 | 10 | The network: rail lines whole, every bus street by how often a bus comes, the hub and line ends named. Tap a line for its routes. |
 | 2 | 12 | Every station named, route numbers along bus streets. |
-| 3 | 14 | One-way pairs on their own streets, street names, a hint of stops. |
+| 3 | 14 | One-way pairs on their own streets, names of the main streets. |
 | 4 | 16 | Every stop, buildings, platforms apart from each other. |
 
 How it is built:
@@ -1988,6 +1988,18 @@ How it is built:
   set beside it so a pack turns as one, and a line ends square at its last
   station. On the first sheet the hub and line ends are named large and other
   stations small, where a name has open ground.
+- **Drawn, not traced.** Where the true position of a thing makes an ugly
+  drawing, the drawing wins by a few pixels. A station bar is square across
+  its lines. The platforms of one station where lines end are drawn parallel,
+  and each ending line is led into its bar in a smooth curve so it arrives
+  square. The two halves of a divided road are one straight line down the
+  middle. A short break in a bus street between two ends that share a route
+  is bridged. A line weight holds for a few blocks: a short stretch takes the
+  weight of the longer stretch it runs into, so a street is never dashes of
+  different weights. A stub a few pixels long with nothing at its far
+  end is left off; this is the one thing not drawn, and it is under half a
+  percent of route length on any sheet.
+  A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
@@ -3963,6 +3975,14 @@ work against the real structure before asking for evaluation.
   colours and widths. Reason: the continuous map kept gaining per-zoom special
   cases and was never finished at any one zoom. Continuous zoom comes back
   later as drawing between sheets.
+- 2026-11-12: Sheets are drawn, not traced (#117). Station bars are squared
+  and the platforms of one terminal made parallel, ending lines curve into
+  their bar, divided roads and streets too close to tell apart are one
+  midline, short breaks in bus streets are bridged, and a bus line's weight
+  holds for a few blocks. Stops show only on sheet 4, and sheet 3 names only
+  main streets. Reason: Chris's phone review found each view had things that
+  were true to the ground and not beautiful; he asked for small fudges of
+  place and shape where they make the drawing clean.
 
 ## Sources
 

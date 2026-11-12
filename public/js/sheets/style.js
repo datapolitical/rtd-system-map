@@ -16,7 +16,7 @@ const GAP = { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
 
 export const PALETTES = {
   dark: {
-    ground: '#0e141d', water: '#15202f', park: '#101a1c', freeway: '#1b2535', road: '#131a25', street: '#121923', building: '#121924',
+    ground: '#0e141d', water: '#15202f', park: '#101a1c', freeway: '#1b2535', road: '#131a25', street: '#151d2a', building: '#121924',
     // Bus streets, quietest to busiest: one family, brighter as buses come more often.
     bus: { c60: '#39465e', c30: '#51617f', c15: '#8291ae', c10: '#aab5cb', c5: '#ccd4e3', c3: '#ccd4e3' },
     mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', streetName: '#4b566b', number: '#c9d2e4', stop: '#aab6cf',
@@ -78,8 +78,8 @@ export function sheetStyle(theme) {
     layer('bus', 'line', { filter: kind('bus'), layout: { ...ROUND, 'line-sort-key': ['match', ['get', 'cls'], ...order.flatMap((k, j) => [k, j]), 0] },
       paint: { 'line-color': byClass(c.bus), 'line-width': byClass(BUS_WIDTH[n]) } });
 
-    // Bus stops: a hint on the third sheet, each one a ring on the fourth.
-    if (n >= 3) layers.push({ id: `stop-${n}`, type: 'circle', source: 'stops', ...band,
+    // Bus stops: each one a ring, on the closest sheet.
+    if (n >= 4) layers.push({ id: `stop-${n}`, type: 'circle', source: 'stops', ...band,
       paint: n === 3 ? { 'circle-radius': 1.3, 'circle-color': c.stop, 'circle-opacity': 0.7 } : { 'circle-radius': 3, 'circle-color': c.ground, 'circle-stroke-color': c.stop, 'circle-stroke-width': 1.4 } });
 
     // Rail: every line whole, with a rim of ground so lines side by side stay apart.
@@ -98,17 +98,20 @@ export function sheetStyle(theme) {
       layout: { 'symbol-placement': 'line', 'symbol-spacing': 260, 'text-field': ['concat', ['match', ['get', 'network'], 'us-interstate', 'I-', 'us-highway', 'US ', ['case', ['>=', ['to-number', ['get', 'ref'], -1], 0], 'Hwy ', '']], ['get', 'ref']], 'text-font': FONT.medium, 'text-size': 9, 'text-letter-spacing': 0.04, 'text-rotation-alignment': 'viewport', 'text-padding': 6 },
       paint: { 'text-color': c.place, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
     if (n >= 3) layers.push({ id: `street-name-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band,
-      layout: { 'symbol-placement': 'line', 'symbol-spacing': 320, 'text-field': ['get', 'name'], 'text-font': FONT.regular, 'text-size': n === 3 ? 9 : 10.5, 'text-max-angle': 25, 'text-padding': 8 },
+      filter: ['in', ['get', 'class'], ['literal', n === 3 ? ['primary', 'secondary', 'tertiary', 'trunk'] : ['primary', 'secondary', 'tertiary', 'trunk', 'minor']]],
+      layout: { 'symbol-placement': 'line', 'symbol-spacing': 420, 'text-field': ['get', 'name'], 'text-font': FONT.regular, 'text-size': n === 3 ? 9 : 10.5, 'text-max-angle': 25, 'text-padding': 14 },
       paint: { 'text-color': c.streetName, 'text-halo-color': c.ground, 'text-halo-width': 1.2 } });
+    layers.push({ id: `place-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'place', ...band,
+      filter: ['in', ['get', 'class'], ['literal', n < 3 ? ['city', 'town'] : ['suburb', 'neighbourhood', 'quarter']]],
+      layout: { 'text-field': ['upcase', ['get', 'name']], 'text-font': FONT.medium, 'text-size': 10.5, 'text-letter-spacing': 0.22, 'text-padding': 4, 'text-max-width': 8 },
+      paint: { 'text-color': c.place, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
+    const unseen = { layout: { 'symbol-placement': 'line', 'symbol-spacing': 6, 'text-field': 'o', 'text-font': FONT.medium, 'text-size': 7, 'text-allow-overlap': true, 'text-padding': 0, 'text-rotation-alignment': 'viewport' }, paint: { 'text-opacity': 0 } };
+    layer('keep-off-bus', 'symbol', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]]), ...unseen });
     // Route numbers along each bus street, from the second sheet.
     if (n >= 2) layer('bus-number', 'symbol', { filter: kind('bus'),
       layout: { 'symbol-placement': 'line', 'symbol-spacing': [0, 200, 260, 320][i], 'text-field': ['get', 'label'], 'text-font': FONT.semibold, 'text-size': [0, 8.5, 10, 11.5][i], 'text-max-angle': 25, 'text-padding': 4,
         'text-letter-spacing': 0.02, 'symbol-sort-key': ['-', 0, ['get', 'n']] },
       paint: { 'text-color': c.number, 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
-    layers.push({ id: `place-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'place', ...band,
-      filter: ['in', ['get', 'class'], ['literal', n < 3 ? ['city', 'town'] : ['suburb', 'neighbourhood', 'quarter']]],
-      layout: { 'text-field': ['upcase', ['get', 'name']], 'text-font': FONT.medium, 'text-size': 10.5, 'text-letter-spacing': 0.22, 'text-padding': 4, 'text-max-width': 8 },
-      paint: { 'text-color': c.place, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
     layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name']),
       layout: { 'text-field': ['get', 'text'], 'text-font': ['case', ['get', 'minor'], ['literal', FONT.medium], ['literal', FONT.semibold]], 'text-size': ['case', ['get', 'minor'], 10, NAME_SIZE[n]], 'text-max-width': 40, 'text-line-height': 1.12,
@@ -120,11 +123,10 @@ export function sheetStyle(theme) {
     layer('letter', 'symbol', { filter: kind('letter'),
       layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': disc * 1.42, 'text-allow-overlap': true, 'text-offset': [0, 0.06] },
       paint: { 'text-color': ['get', 'ink'] } });
-    // Names keep off the lines: unseen marks along rail and the busiest streets hold their ground.
-    // (MapLibre places the last layer first, so this comes after the names.)
-    layer('keep-off', 'symbol', { filter: ['any', kind('rail'), kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]])],
-      layout: { 'symbol-placement': 'line', 'symbol-spacing': 6, 'text-field': 'o', 'text-font': FONT.medium, 'text-size': 7, 'text-allow-overlap': true, 'text-padding': 0, 'text-rotation-alignment': 'viewport' },
-      paint: { 'text-opacity': 0 } });
+    // Lettering keeps off the lines: unseen marks along rail and the busiest streets hold their
+    // ground. MapLibre places the last layer first: rail's marks, then the route numbers (which
+    // sit on their own streets but never on rail), then the streets' marks, then everything above.
+    layer('keep-off', 'symbol', { filter: kind('rail'), ...unseen });
   });
   return {
     version: 8,
