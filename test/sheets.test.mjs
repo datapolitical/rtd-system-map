@@ -460,3 +460,20 @@ test('a route number never sits on a stop: each stop holds its ground, placed be
     assert.ok(rings.length && STOP_ROOM > 0);
   }
 });
+
+test('the quietest bus street reads clearly in both themes and each busier class stands above the one below', async () => {
+  const { PALETTES } = await import('../public/js/sheets/style.js');
+  const lum = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  // A hairline of light on dark ground reads fainter than the same contrast in ink on paper.
+  const least = { light: 1.8, dark: 2.6 };
+  for (const theme of ['light', 'dark']) {
+    const c = PALETTES[theme];
+    const steps = ['c60', 'c30', 'c15', 'c10', 'c5'].map((k) => ratio(c.bus[k], c.ground));
+    assert.ok(steps[0] >= least[theme], `${theme}: the quietest street reads (${steps[0].toFixed(2)})`);
+    for (let i = 1; i < steps.length; i++) assert.ok(steps[i] >= steps[i - 1] * 1.25, `${theme}: class ${i} stands above class ${i - 1}`);
+  }
+});

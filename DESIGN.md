@@ -2012,6 +2012,9 @@ How it is built:
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
   shorter name sits better; a name with room is written out.
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
+  The quietest bus street reads clearly in both themes (in the dark, where
+  a hairline of light reads faint, more so), and each busier class stands a
+  clear step above it.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
@@ -4086,6 +4089,9 @@ work against the real structure before asking for evaluation.
 - 2026-11-12: Sheets pair a slim loop's two sides by nearness. Reason: long
   out-and-back loops whose way back ran a little longer were left as a
   doubled line two pixels apart (on sheets 3 and 4).
+- 2026-11-12: Sheets draw the quietest bus streets brighter in the dark and a
+  shade darker in the light, each class still well above the one below.
+  Reason: on dark ground the hairline streets with a bus an hour faded out.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
 

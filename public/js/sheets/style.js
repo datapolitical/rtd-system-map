@@ -18,13 +18,13 @@ export const PALETTES = {
   dark: {
     ground: '#0e141d', water: '#15202f', park: '#101a1c', freeway: '#1b2535', road: '#131a25', street: '#151d2a', building: '#121924',
     // Bus streets, quietest to busiest: one family, brighter as buses come more often.
-    bus: { c60: '#39465e', c30: '#51617f', c15: '#8291ae', c10: '#aab5cb', c5: '#ccd4e3', c3: '#ccd4e3' },
+    bus: { c60: '#4f5d79', c30: '#64759a', c15: '#8291ae', c10: '#aab5cb', c5: '#ccd4e3', c3: '#ccd4e3' },
     hall: '#243147', hallEdge: '#6a7a98',
     mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', streetName: '#4b566b', number: '#c9d2e4', stop: '#aab6cf',
   },
   light: {
     ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
-    bus: { c60: '#c6c8cd', c30: '#adb0b7', c15: '#868a93', c10: '#5f636c', c5: '#3c4048', c3: '#3c4048' },
+    bus: { c60: '#b3b6bd', c30: '#9ca0a8', c15: '#868a93', c10: '#5f636c', c5: '#3c4048', c3: '#3c4048' },
     hall: '#dcd8cf', hallEdge: '#979ba3',
     mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', streetName: '#a3a6ad', number: '#3a4560', stop: '#566179',
   },
