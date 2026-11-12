@@ -2,19 +2,22 @@
 //
 // The page assembles it in public/js/main.js:
 //   layers: [...lettersFirst([...basemapBelow(), ...transitLines(lines),
-//            ...basemapLabels(), ...transitMarks(lines)]), ...vehicleLayers(lines)]
+//            ...basemapLabels(served), ...transitMarks(lines)]), ...vehicleLayers(lines)]
 // with sources from BASEMAP_SOURCES + dataSources().
 //
 // palette.js reads the system theme through matchMedia at load, so the two
 // themes cannot be built in one process; this script builds one theme per
 // run and prints the style JSON on stdout.
 //
-//   node qa/drawn/style.mjs --theme dark [--root /path/to/checkout] [--meta FILE]
+//   node qa/drawn/style.mjs --theme dark [--root /path/to/checkout] [--meta FILE] [--served FILE]
 //   node qa/drawn/style.mjs --sources [--root DIR]   # the page's DATA_SOURCES
 //
 // It is the drawn model's style source: qa/drawn/model.mjs reads this file's
 // output (the model never re-implements the style, it evaluates it). --meta
 // points at a meta.json from a deployed build, when the checkout has none.
+// --served points at a JSON list of the served stations' labels, which the
+// page passes to basemapLabels (main.js) so a place with a station's name is
+// left to the station; without it every place is named.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -77,6 +80,9 @@ const shared = await import(js('shared.js'));
 // (panel, select) are UI only.
 const { vehicleLayers } = await import(js('live.js'));
 
+const servedIdx = process.argv.indexOf('--served');
+const served = servedIdx >= 0 ? JSON.parse(fs.readFileSync(process.argv[servedIdx + 1], 'utf8')) : [];
+
 const lines = railStyle(meta.rail);
 const style = {
   version: 8,
@@ -87,7 +93,7 @@ const style = {
   // and the tiers it draws as part-time (shared.js), for qa/recall/plant.mjs.
   metadata: { 'rtd:data-sources': network.DATA_SOURCES ?? null, 'rtd:part-time': shared.PART_TIME ?? null },
   layers: [
-    ...lettersFirst([...basemapBelow(), ...transitLines(lines), ...basemapLabels(), ...transitMarks(lines)]),
+    ...lettersFirst([...basemapBelow(), ...transitLines(lines), ...basemapLabels(served), ...transitMarks(lines)]),
     ...vehicleLayers(lines),
   ],
 };

@@ -29,7 +29,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { layout as layoutText } from './glyphs.mjs';
+import { hasGlyphs, layout as layoutText } from './glyphs.mjs';
 import { icons } from './icons.mjs';
 import { css, filterOf, inZoom, property, setState } from './expressions.mjs';
 import { bbox, clipLine, tileAt, tileSpan, toWorld } from './mercator.mjs';
@@ -73,9 +73,10 @@ const readJSON = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 // `root` is the site whose public/js is read: a checkout, or a frozen build
 // (qa/recall); style.mjs itself is always this folder's. `metaFile` points
 // style.mjs at a meta.json other than the root's own.
-export async function buildStyle(root = ROOT, theme = 'dark', metaFile = null) {
+export async function buildStyle(root = ROOT, theme = 'dark', metaFile = null, servedFile = null) {
   const args = [path.join(HERE, 'style.mjs'), '--theme', theme, '--root', path.resolve(root)];
   if (metaFile) args.push('--meta', metaFile);
+  if (servedFile) args.push('--served', servedFile);
   const { stdout } = await run(process.execPath, args, {
     cwd: root,
     maxBuffer: 64 * 1024 * 1024,
@@ -111,7 +112,17 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
     metaFile = path.join(metaDir, 'meta.json');
     fs.writeFileSync(metaFile, JSON.stringify(meta));
   }
-  const style = await buildStyle(root, theme, metaFile);
+  // The names of the served stations, which the page hands to the basemap's
+  // labels (main.js) so a place with a station's name is left to the station.
+  let servedFile = null;
+  try {
+    const stations = given?.stations ?? readJSON(path.join(root, 'public', 'data', 'stations.geojson'));
+    const labels = stations.features.filter((f) => f.properties?.served && f.properties.label).map((f) => f.properties.label);
+    metaDir ??= fs.mkdtempSync(path.join(os.tmpdir(), 'drawn-meta-'));
+    servedFile = path.join(metaDir, 'served.json');
+    fs.writeFileSync(servedFile, JSON.stringify(labels));
+  } catch { /* no stations to read: every place is named, as before */ }
+  const style = await buildStyle(root, theme, metaFile, servedFile);
   if (metaDir) fs.rmSync(metaDir, { recursive: true, force: true });
   setState(style.state);
   // The build files to read are the page's own list. Every GeoJSON source the
@@ -324,6 +335,10 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
           offset,
           opacity: property(layer, 'icon-opacity', 'paint', z, props, 1),
           box: markBox(at, w, h, rot, anchor, offset, padding),
+          // For the placement replay (place.mjs).
+          sortKey: property(layer, 'symbol-sort-key', 'layout', z, props, 0),
+          allowOverlap: property(layer, 'icon-allow-overlap', 'layout', z, props, false) === true,
+          ignorePlacement: property(layer, 'icon-ignore-placement', 'layout', z, props, false) === true,
         });
       }
     }
@@ -348,6 +363,88 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
 
   const BASELINE = 7; // font units; the baseline sits below the em box top
 
+  // A frozen build vendors only the fonts its own labels use (qa/recall/
+  // fixtures); the basemap's names are set in others of the same family.
+  // Measure those from this checkout's glyph files.
+  const fontRoot = (font) => (hasGlyphs(root, font) ? root : hasGlyphs(ROOT, font) ? ROOT : root);
+
+  // One text label of a layer: its block, and a collision box (and the ink
+  // box of the text as drawn) at each anchor the layer lets it take. `x` is
+  // `{ index, source, properties }`; `at` is the label's point in world px.
+  function labelEntry(layer, x, at, z) {
+    // Read per feature: a layer can place each feature its own way (a
+    // rail letter's text-offset puts it on its own line, #56).
+    const variable = property(layer, 'text-variable-anchor-offset', 'layout', z, x.properties, null);
+    const anchor = property(layer, 'text-anchor', 'layout', z, x.properties, 'center');
+    const offset = property(layer, 'text-offset', 'layout', z, x.properties, [0, 0]);
+    const padding = pad(property(layer, 'text-padding', 'layout', z, x.properties, 2));
+    // Collision boxes are built at the bucket's layout size (the text size
+    // at the next whole zoom, symbol_layout.ts `sizes.layoutTextSize`), so
+    // they are a touch larger than the ink below it.
+    const boxSize = property(layer, 'text-size', 'layout', Math.floor(z) + 1, x.properties, 16);
+    const raw = property(layer, 'text-field', 'layout', z, x.properties, null);
+    let value = typeof raw === 'string' ? raw : raw?.toString?.();
+    if (!value) return null;
+    if (property(layer, 'text-transform', 'layout', z, x.properties, 'none') === 'uppercase') value = value.toUpperCase();
+    const size = property(layer, 'text-size', 'layout', z, x.properties, 16);
+    const font = property(layer, 'text-font', 'layout', z, x.properties, ['Overpass Regular'])[0];
+    const lineHeight = property(layer, 'text-line-height', 'layout', z, x.properties, 1.2);
+    const letterSpacing = property(layer, 'text-letter-spacing', 'layout', z, x.properties, 0);
+    // A name set along a line is never wrapped (symbol_layout.ts).
+    const maxWidth = layer.layout?.['symbol-placement'] === 'line' ? 0 : property(layer, 'text-max-width', 'layout', z, x.properties, 10);
+    const block = layoutText(fontRoot(font), value, { fontstack: font, size, letterSpacing, lineHeight, maxWidth });
+    const box = layoutText(fontRoot(font), value, { fontstack: font, size: boxSize, letterSpacing, lineHeight, maxWidth });
+    const baseline = (BASELINE / 24) * boxSize;
+    const inkBaseline = (BASELINE / 24) * size;
+    const candidates = [];
+    const anchors = Array.isArray(variable) ? variable : variable?.values;
+    if (Array.isArray(anchors) && anchors.length) {
+      for (let i = 0; i < anchors.length; i += 2) {
+        const a = anchors[i];
+        const [dx, dy] = anchors[i + 1];
+        const shift = a.startsWith('top') ? -baseline : a.startsWith('bottom') ? baseline : 0;
+        const inkShift = a.startsWith('top') ? -inkBaseline : a.startsWith('bottom') ? inkBaseline : 0;
+        candidates.push({
+          anchor: a,
+          offset: [dx, dy],
+          box: textBox(at, box, a, [dx * boxSize, dy * boxSize + shift], padding),
+          ink: textBox(at, block, a, [dx * size, dy * size + inkShift], 0),
+        });
+      }
+    } else {
+      const shift = anchor.startsWith('top') ? -baseline : anchor.startsWith('bottom') ? baseline : 0;
+      const inkShift = anchor.startsWith('top') ? -inkBaseline : anchor.startsWith('bottom') ? inkBaseline : 0;
+      candidates.push({
+        anchor,
+        offset: [offset[0], offset[1]],
+        box: textBox(at, box, anchor, [offset[0] * boxSize, offset[1] * boxSize + shift], padding),
+        ink: textBox(at, block, anchor, [offset[0] * size, offset[1] * size + inkShift], 0),
+      });
+    }
+    return {
+      kind: 'text',
+      layer: layer.id,
+      source: x.source ?? layer.source,
+      index: x.index,
+      properties: x.properties,
+      at,
+      text: value,
+      size,
+      font,
+      block,
+      box,
+      candidates,
+      opacity: property(layer, 'text-opacity', 'paint', z, x.properties, 1),
+      color: css(property(layer, 'text-color', 'paint', z, x.properties, null)),
+      // What the placement replay (place.mjs) needs: the order within a
+      // layer and whether the label takes room and gives way.
+      sortKey: property(layer, 'symbol-sort-key', 'layout', z, x.properties, 0),
+      allowOverlap: property(layer, 'text-allow-overlap', 'layout', z, x.properties, false) === true,
+      ignorePlacement: property(layer, 'text-ignore-placement', 'layout', z, x.properties, false) === true,
+      haloWidth: property(layer, 'text-halo-width', 'paint', z, x.properties, 0),
+    };
+  }
+
   function labelsAt(z) {
     const out = [];
     for (const layer of style.layers) {
@@ -359,56 +456,8 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
         if (f && !f(z, x.properties)) continue;
         const at = point(x, z);
         if (!at) continue;
-        // Read per feature: a layer can place each feature its own way (a
-        // rail letter's text-offset puts it on its own line, #56).
-        const variable = property(layer, 'text-variable-anchor-offset', 'layout', z, x.properties, null);
-        const anchor = property(layer, 'text-anchor', 'layout', z, x.properties, 'center');
-        const offset = property(layer, 'text-offset', 'layout', z, x.properties, [0, 0]);
-        const padding = pad(property(layer, 'text-padding', 'layout', z, x.properties, 2));
-        // Collision boxes are built at the bucket's layout size (the text size
-        // at the next whole zoom, symbol_layout.ts `sizes.layoutTextSize`), so
-        // they are a touch larger than the ink below it.
-        const boxSize = property(layer, 'text-size', 'layout', Math.floor(z) + 1, x.properties, 16);
-        const raw = property(layer, 'text-field', 'layout', z, x.properties, null);
-        const value = typeof raw === 'string' ? raw : raw?.toString?.();
-        if (!value) continue;
-        const size = property(layer, 'text-size', 'layout', z, x.properties, 16);
-        const font = property(layer, 'text-font', 'layout', z, x.properties, ['Overpass Regular'])[0];
-        const lineHeight = property(layer, 'text-line-height', 'layout', z, x.properties, 1.2);
-        const letterSpacing = property(layer, 'text-letter-spacing', 'layout', z, x.properties, 0);
-        const maxWidth = property(layer, 'text-max-width', 'layout', z, x.properties, 10);
-        const block = layoutText(root, value, { fontstack: font, size, letterSpacing, lineHeight, maxWidth });
-        const box = layoutText(root, value, { fontstack: font, size: boxSize, letterSpacing, lineHeight, maxWidth });
-        const baseline = (BASELINE / 24) * boxSize;
-        const candidates = [];
-        const anchors = Array.isArray(variable) ? variable : variable?.values;
-        if (Array.isArray(anchors) && anchors.length) {
-          for (let i = 0; i < anchors.length; i += 2) {
-            const a = anchors[i];
-            const [dx, dy] = anchors[i + 1];
-            const shift = a.startsWith('top') ? -baseline : a.startsWith('bottom') ? baseline : 0;
-            candidates.push({ anchor: a, offset: [dx, dy], box: textBox(at, box, a, [dx * boxSize, dy * boxSize + shift], padding) });
-          }
-        } else {
-          const shift = anchor.startsWith('top') ? -baseline : anchor.startsWith('bottom') ? baseline : 0;
-          candidates.push({ anchor, offset: [offset[0], offset[1]], box: textBox(at, box, anchor, [offset[0] * boxSize, offset[1] * boxSize + shift], padding) });
-        }
-        out.push({
-          kind: 'text',
-          layer: layer.id,
-          source: layer.source,
-          index: x.index,
-          properties: x.properties,
-          at,
-          text: value,
-          size,
-          font,
-          block,
-          box,
-          candidates,
-          opacity: property(layer, 'text-opacity', 'paint', z, x.properties, 1),
-          color: css(property(layer, 'text-color', 'paint', z, x.properties, null)),
-        });
+        const entry = labelEntry(layer, x, at, z);
+        if (entry) out.push(entry);
       }
     }
     return out;
@@ -431,6 +480,50 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
   // (park-and-ride marks start at z12.5, halls at z13).
   function places(z, sources) {
     return { marks: marksAt(z, { only: sources, anyZoom: true }), areas: areasAt(z, { only: sources, anyZoom: true }) };
+  }
+
+  // The keep-out layers (basemap.js): symbols that take up room and draw
+  // nothing, placed along a line every few px. Their points are not features
+  // the model can list, so each line feature is given as a band: the line's
+  // parts and the half side of the invisible square set along it. The
+  // placement replay (place.mjs) treats a band as the whole strip the squares
+  // cover, which they do at the spacing the style gives them.
+  const bandCache = new Map();
+  function linePlaced(z) {
+    if (bandCache.has(z)) return bandCache.get(z);
+    const out = [];
+    for (const layer of style.layers) {
+      if (layer.type !== 'symbol' || layer.layout?.['icon-image'] === undefined) continue;
+      if (layer.layout?.['symbol-placement'] !== 'line') continue;
+      const list = sourceFor(layer);
+      if (!list || !inZoom(layer, z)) continue;
+      const f = filterOf(layer);
+      for (const x of features[layer.source]) {
+        if (x.feature.geometry.type !== 'LineString' && x.feature.geometry.type !== 'MultiLineString') continue;
+        if (f && !f(z, x.properties)) continue;
+        const resolved = property(layer, 'icon-image', 'layout', z, x.properties, null);
+        const image = resolved?.name ?? (typeof resolved === 'string' ? resolved : null);
+        if (image !== 'clear') continue;
+        const boxSize = property(layer, 'icon-size', 'layout', Math.floor(z) + 1, x.properties, 1);
+        const img = imageSizes.size(image);
+        const padding = pad(property(layer, 'icon-padding', 'layout', z, x.properties, 2));
+        out.push({
+          kind: 'band',
+          layer: layer.id,
+          source: layer.source,
+          index: x.index,
+          properties: x.properties,
+          parts: project(x, z),
+          half: (img.width * boxSize) / 2 + padding,
+          allowOverlap: property(layer, 'icon-allow-overlap', 'layout', z, x.properties, false) === true,
+          ignorePlacement: property(layer, 'icon-ignore-placement', 'layout', z, x.properties, false) === true,
+          sortKey: 0,
+        });
+      }
+    }
+    if (bandCache.size > 24) bandCache.clear();
+    bandCache.set(z, out);
+    return out;
   }
 
   // --- the basemap, from tiles -------------------------------------------
@@ -506,6 +599,105 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
     return { streets, fills, tiles: seen.size };
   }
 
+  // --- the basemap's names (qa/rules LN05, LN06, LN07) -----------------------
+  //
+  // The basemap's symbol layers (places, water, landmarks, airports, street
+  // names, highway shields) as labels, for every tile that holds network at
+  // this zoom. A point name is a `text` entry like the page's own, with a box
+  // at each anchor the layer allows; a street name or shield is a `line-text`
+  // entry: the stretch of line it is set along (clipped to its tile, as the
+  // page's tiles clip it), the spacing, offset and bend limit the layer gives,
+  // and, for a shield, its picture. The placement replay (place.mjs) lays them
+  // along the line.
+  const nameLayers = style.layers.filter((l) => l.type === 'symbol' && style.sources[l.source]?.type === 'vector' && l['source-layer'] && l.layout?.['text-field'] !== undefined);
+  const namesCache = new Map();
+
+  async function namesAt(z) {
+    if (namesCache.has(z)) return namesCache.get(z);
+    const t = tileSource();
+    if (!t) return [];
+    const tz = Math.min(Math.floor(z), await t.maxzoom());
+    const span = tileSpan(tz, z);
+    // The tiles the network crosses.
+    const cells = new Set();
+    const mark = (x, y) => cells.add(`${Math.floor(x / span)},${Math.floor(y / span)}`);
+    for (const line of zoom(z).lines) {
+      if (line.source === 'flexride') continue;
+      for (const part of line.parts) {
+        for (let i = 0; i < part.length; i++) {
+          mark(part[i][0], part[i][1]);
+          if (!i) continue;
+          const n = Math.ceil(Math.hypot(part[i][0] - part[i - 1][0], part[i][1] - part[i - 1][1]) / (span / 2));
+          for (let k = 1; k < n; k++) mark(part[i - 1][0] + ((part[i][0] - part[i - 1][0]) * k) / n, part[i - 1][1] + ((part[i][1] - part[i - 1][1]) * k) / n);
+        }
+      }
+    }
+    const wanted = [...cells].map((c) => c.split(',').map(Number)).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const out = [];
+    const seen = new Set();
+    for (let from = 0; from < wanted.length; from += 12) {
+      const batch = await Promise.all(wanted.slice(from, from + 12).map(async ([tx, ty]) => [tx, ty, await t.tile(tz, tx, ty)]));
+      for (const [tx, ty, tile] of batch) {
+        if (!tile) continue;
+        const rect = [tx * span, ty * span, (tx + 1) * span, (ty + 1) * span];
+        for (const layer of nameLayers) {
+          if (!inZoom(layer, z)) continue;
+          const vt = tile.layers[layer['source-layer']];
+          if (!vt) continue;
+          const f = filterOf(layer);
+          const placement = layer.layout?.['symbol-placement'] ?? 'point';
+          for (let i = 0; i < vt.length; i++) {
+            const feature = vt.feature(i);
+            const properties = { ...feature.properties, $type: feature.type };
+            if (f && !f(z, properties)) continue;
+            const x = { index: `${tz}/${tx}/${ty}:${i}`, source: layer.source, properties };
+            const rings = geometry(feature, tz, z, tx, ty);
+            if (placement !== 'line') {
+              const at = rings[0]?.[0];
+              if (!at) continue;
+              const entry = labelEntry(layer, x, at, z);
+              if (!entry) continue;
+              entry.sourceLayer = layer['source-layer'];
+              const key = `${layer.id}|${entry.text}|${Math.round(at[0])}|${Math.round(at[1])}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              out.push(entry);
+              continue;
+            }
+            for (const ring of rings) {
+              for (const run of clipLine(ring, rect)) {
+                const entry = labelEntry(layer, x, run[0], z);
+                if (!entry) continue;
+                const edge = (p) => Math.abs(p[0] - rect[0]) < 1e-6 || Math.abs(p[0] - rect[2]) < 1e-6 || Math.abs(p[1] - rect[1]) < 1e-6 || Math.abs(p[1] - rect[3]) < 1e-6;
+                const resolved = layer.layout?.['icon-image'] !== undefined ? property(layer, 'icon-image', 'layout', z, properties, null) : null;
+                const image = resolved?.name ?? (typeof resolved === 'string' ? resolved : null);
+                const img = image ? imageSizes.size(image) : null;
+                const iconSize = image ? property(layer, 'icon-size', 'layout', Math.floor(z) + 1, properties, 1) : 1;
+                out.push({
+                  ...entry,
+                  kind: 'line-text',
+                  sourceLayer: layer['source-layer'],
+                  candidates: [],
+                  at: run[0],
+                  parts: [run],
+                  continued: edge(run[0]),
+                  spacing: property(layer, 'symbol-spacing', 'layout', z, properties, 250),
+                  textOffset: property(layer, 'text-offset', 'layout', z, properties, [0, 0]),
+                  maxAngle: property(layer, 'text-max-angle', 'layout', z, properties, 45),
+                  padding: pad(property(layer, 'text-padding', 'layout', z, properties, 2)),
+                  icon: img ? { image, w: img.width * iconSize, h: img.height * iconSize, padding: pad(property(layer, 'icon-padding', 'layout', z, properties, 2)) } : null,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+    if (namesCache.size > 6) namesCache.clear();
+    namesCache.set(z, out);
+    return out;
+  }
+
   // --- a frame: the model on a screen ------------------------------------
 
   async function frame({ zoom: z, center, width, height, basemap = false }) {
@@ -546,5 +738,5 @@ export async function openModel({ root = ROOT, theme = 'dark', tileCache = true,
     for (const z of zooms) yield zoom(z);
   }
 
-  return { root, theme, style, data, zoom, places, frame, district, ZOOMS, icons: imageSizes };
+  return { root, theme, style, data, zoom, places, frame, district, linePlaced, names: namesAt, ZOOMS, icons: imageSizes };
 }
