@@ -160,3 +160,15 @@ test('a name is shortened only where the full name sits badly, and the short for
   const marks = stationMarks(all([point({ id: 1, name: 'Mill Station', served: true, lines: 'A', end: true }, at(150, 0))]), lines, sheet);
   assert.equal(names(marks, lines, [], sheet)[0].text, 'Mill Station', 'open ground: written out');
 });
+
+test('a turnaround too small to read as a ring is drawn as the point its streets meet at', () => {
+  const street = (coords) => line({ mode: 'bus', cls: 'c15', routes: '1', n: 1, hw: 15, zoom: 'far' }, coords);
+  const drawn = busStreets(all([
+    street([at(0, 0), at(200, 0)]),
+    street([at(200, 0), at(208, -5)]),
+    street([at(208, -5), at(208, 5)]),
+    street([at(208, 5), at(200, 0)]),
+  ]), sheet);
+  assert.equal(drawn.length, 1, 'only the street that led to the ring is left');
+  assert.ok(length(drawn[0].path) > 195, 'and it is still whole');
+});

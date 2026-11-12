@@ -1999,6 +1999,8 @@ How it is built:
   different weights. A stub a few pixels long with nothing at its far
   end is left off; this is the one thing not drawn, and it is under half a
   percent of route length on any sheet.
+  A turnaround loop too small to read as a ring is drawn as the point where
+  its streets meet.
   A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
   Where a full name would sit on lines or stand off from its mark, common
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the

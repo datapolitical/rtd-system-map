@@ -47,6 +47,7 @@ export const SIZES = {
   busBlip: 14,
   busBlipMetres: 120,
   busRun: 45,
+  busRing: 32,
   busBridgeMetres: 110,
   busRunMetres: 220,
   busSpeck: 10,
@@ -568,6 +569,63 @@ export function names(marks, lines, discs, sheet, streets = []) {
   return set;
 }
 
+/**
+ * Streets with every ring too small to read as a ring drawn as the point where its streets
+ * meet: a turnaround at a station or the end of a route is a dot's width on the sheet, and
+ * drawn true it is a knot of hooks. The streets that led into the ring now meet at its middle.
+ */
+function unringed(streets, most) {
+  // Ends within a pixel and a half of each other are one corner.
+  const seen = new Map();
+  const key = (p) => {
+    const [x, y] = [Math.round(p[0] / 2), Math.round(p[1] / 2)];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      for (const q of seen.get(`${x + dx},${y + dy}`) ?? []) if (dist(q.p, p) <= 1.5) return q.id;
+    }
+    const id = `${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+    seen.set(`${x},${y}`, [...(seen.get(`${x},${y}`) ?? []), { p, id }]);
+    return id;
+  };
+  const edges = streets.map((st) => ({ st, a: key(st.path[0]), b: key(st.path.at(-1)), len: length(st.path) }));
+  const small = edges.filter((e) => e.len < most && e.a !== e.b);
+  const at = new Map();
+  for (const e of small) for (const k of [e.a, e.b]) at.set(k, [...(at.get(k) ?? []), e]);
+  const group = new Map();
+  const find = (k) => { while (group.has(k) && group.get(k) !== k) k = group.get(k); return k; };
+  for (const e of small) {
+    // The shortest way round from one end of this street to the other without using it.
+    const far = new Map([[e.a, { d: 0, via: [] }]]);
+    const open = [e.a];
+    while (open.length) {
+      const k = open.sort((x, y) => far.get(y).d - far.get(x).d).pop();
+      for (const o of at.get(k) ?? []) {
+        if (o === e) continue;
+        const to = o.a === k ? o.b : o.a;
+        const d = far.get(k).d + o.len;
+        if (d + e.len < most && (!far.has(to) || d < far.get(to).d)) { far.set(to, { d, via: [...far.get(k).via, to] }); open.push(to); }
+      }
+    }
+    if (!far.has(e.b)) continue;
+    for (const k of [e.a, ...far.get(e.b).via]) { if (!group.has(k)) group.set(k, k); group.set(find(k), find(e.a)); }
+  }
+  if (!group.size) return streets;
+  const members = new Map();
+  for (const e of edges) for (const [k, p] of [[e.a, e.st.path[0]], [e.b, e.st.path.at(-1)]]) {
+    if (group.has(k)) members.set(find(k), [...(members.get(find(k)) ?? []), p]);
+  }
+  const middle = new Map([...members].map(([k, ps]) => [k, [ps.reduce((x, q) => x + q[0], 0) / ps.length, ps.reduce((y, q) => y + q[1], 0) / ps.length]]));
+  const out = [];
+  for (const e of edges) {
+    const [ga, gb] = [group.has(e.a) ? find(e.a) : null, group.has(e.b) ? find(e.b) : null];
+    if (ga && ga === gb && e.len < most) continue;
+    const path = [...e.st.path];
+    if (ga) path[0] = middle.get(ga);
+    if (gb) path[path.length - 1] = middle.get(gb);
+    out.push({ ...e.st, path });
+  }
+  return out;
+}
+
 /** A name with its common words in their usual short forms, still plain to read. */
 const SHORT = { Station: 'Stn', Avenue: 'Ave', Street: 'St', Boulevard: 'Blvd', Parkway: 'Pkwy', Road: 'Rd', Center: 'Ctr', Junction: 'Jct', University: 'Univ', Government: 'Govt' };
 export function shortened(name) {
@@ -804,7 +862,7 @@ export function busStreets(streets, sheet) {
     e.path = rounded(path, cell);
     e.len = length(e.path);
   }
-  return kept
+  return unringed(kept
     .filter((e) => {
       const closed = dist(e.path[0], e.path.at(-1)) < 1;
       const reachOf = Math.max(...e.path.map((p) => dist(p, e.path[0])));
@@ -812,7 +870,7 @@ export function busStreets(streets, sheet) {
       // A short spur off a street reads as a barb, not a route.
       return !(e.free && e.len < 2.5 * SIZES.busSpeck);
     })
-    .map((e) => ({ cls: CLASS_ORDER[e.rank], routes: e.routes, n: e.n, hw: e.hw, path: simplify(rounded(simplify(e.path, 2), 2), 0.3) }));
+    .map((e) => ({ cls: CLASS_ORDER[e.rank], routes: e.routes, n: e.n, hw: e.hw, path: simplify(rounded(simplify(e.path, 2), 2), 0.3) })), SIZES.busRing);
 }
 
 // --- One sheet, as GeoJSON -------------------------------------------------------
