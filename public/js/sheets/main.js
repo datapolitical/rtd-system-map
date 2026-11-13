@@ -1,22 +1,34 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
-import { SHEETS, sheetStyle } from './style.js';
+import { SHEETS, sheetData, sheetStyle } from './style.js';
 import { settle } from './settle.js';
+
+// Start the map's worker downloading while the two small files below load.
+maplibregl.prewarm();
 
 const scheme = matchMedia('(prefers-color-scheme: dark)');
 const forced = new URLSearchParams(location.search).get('theme');
 const theme = () => forced ?? (scheme.matches ? 'dark' : 'light');
 const zooms = SHEETS.map((s) => s.zoom);
 
-const meta = await fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json());
+// Both at once: neither needs the other (index.html has already asked for them).
+const [meta, { hub, stations, colors } = {}] = await Promise.all([
+  fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json()),
+  fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({})),
+]);
 const [[west, south], [east, north]] = meta.bounds.core;
-// The page opens on the hub, a little above the middle so the lines south of it show.
-const { hub, stations, colors } = await fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({}));
+
+// Only the sheet the page opens on loads first: the others are most of the page's weight and
+// none of them shows until the reader zooms (DESIGN.md, "Quality floor"). The page opens at
+// the widest sheet unless its address names a zoom (`#zoom/lat/lon`).
+const asked = parseFloat(location.hash.slice(1));
+const wanted = new Set([SHEETS[nearest(Number.isFinite(asked) ? asked : zooms[0])].id]);
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: sheetStyle(theme(), stations, colors),
+  // The page opens on the hub, a little above the middle so the lines south of it show.
+  style: sheetStyle(theme(), stations, colors, wanted),
   center: hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2],
   zoom: zooms[0],
   minZoom: zooms[0] - 0.6,
@@ -31,7 +43,31 @@ const map = new maplibregl.Map({
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
-scheme.addEventListener('change', () => { if (!forced) map.setStyle(sheetStyle(theme(), stations, colors)); });
+scheme.addEventListener('change', () => { if (!forced) map.setStyle(sheetStyle(theme(), stations, colors, wanted)); });
+
+// --- The other sheets, once the first is drawn ----------------------------------
+
+// Hand a sheet's drawing to the map, if it hasn't had it.
+function want(index) {
+  const s = SHEETS[index];
+  if (!s || wanted.has(s.id)) return;
+  wanted.add(s.id);
+  map.getSource(`sheet-${s.id}`)?.setData(sheetData(s.id));
+}
+// One at a time, nearest the sheet shown first, so each gets the whole connection and the one
+// the reader will reach next comes soonest. A zoom asks for its sheet straight away (show).
+function fillIn() {
+  const next = SHEETS.map((_, i) => i).filter((i) => !wanted.has(SHEETS[i].id)).sort((a, b) => Math.abs(a - sheet) - Math.abs(b - sheet))[0];
+  if (next === undefined) { window.sheetsAll = true; return; }
+  const id = `sheet-${SHEETS[next].id}`;
+  const done = (e) => {
+    if (e.sourceId !== id || !map.isSourceLoaded(id)) return;
+    map.off('sourcedata', done);
+    fillIn();
+  };
+  map.on('sourcedata', done);
+  want(next);
+}
 
 // --- Resting only on a sheet -------------------------------------------------
 
@@ -41,6 +77,7 @@ function nearest(zoom) {
 }
 function show(index, around) {
   sheet = Math.max(0, Math.min(zooms.length - 1, index));
+  want(sheet);
   map.easeTo({ zoom: zooms[sheet], around, duration: 380 }, { settling: true });
   for (const [i, dot] of [...document.querySelectorAll('#sheets i')].entries()) dot.classList.toggle('on', i === sheet);
   document.querySelector('#out').disabled = sheet === 0;
@@ -55,7 +92,12 @@ map.getContainer().addEventListener('wheel', (e) => { input = { wheel: [e.client
 map.getContainer().addEventListener('touchstart', () => { input = { touch: true }; }, { passive: true, capture: true });
 let last = map.getZoom();
 let began = null;
-map.on('zoomstart', (e) => { if (!e.settling && began === null) began = last; });
+map.on('zoomstart', (e) => {
+  // A pinch shows the next sheet before it ends: ask for the sheets either side now.
+  want(sheet - 1);
+  want(sheet + 1);
+  if (!e.settling && began === null) began = last;
+});
 map.on('zoom', () => { last = map.getZoom(); });
 map.on('zoomend', (e) => {
   if (e.settling || began === null) return;
@@ -106,5 +148,19 @@ function inkOn(color) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#10151d' : '#ffffff';
 }
 
-map.once('idle', () => { window.sheetsReady = true; });
+// --- The picture shown while the map loads (index.html, #poster) -----------------
+
+// It goes once the map has drawn the same view, fading so the few labels the two place
+// differently near the screen's edges change softly. A step the reader takes before then
+// clears it at once: the map is moving away from the view it shows.
+const poster = document.querySelector('#poster');
+function reveal() {
+  if (!poster?.isConnected || poster.classList.contains('gone')) return;
+  poster.classList.add('gone');
+  setTimeout(() => poster.remove(), 300);
+}
+for (const button of document.querySelectorAll('#steps button')) button.addEventListener('click', reveal);
+
+// The opening view is drawn: then the other sheets (sheetsAll once they all have).
+map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });
 window.sheetsMap = map;

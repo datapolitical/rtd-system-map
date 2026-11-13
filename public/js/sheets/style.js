@@ -109,8 +109,16 @@ const ROUND = { 'line-cap': 'round', 'line-join': 'round' };
 // Rail ends square, so a line stops at its last station's mark and doesn't poke past it.
 const FLAT = { 'line-cap': 'butt', 'line-join': 'round' };
 
-/** The whole style: the ground, then each sheet's layers, each shown only around its own zoom. */
-export function sheetStyle(theme, stations = [], colors = []) {
+/** Where a sheet's drawing is; the page hands it to the map when the sheet is wanted. */
+export const sheetData = (n) => new URL(`../../data/sheet-${n}.geojson`, import.meta.url).href;
+const NOTHING = { type: 'FeatureCollection', features: [] };
+
+/**
+ * The whole style: the ground, then each sheet's layers, each shown only around its own zoom.
+ * `wanted` is the sheets whose drawings load now (all of them when not given); the rest start
+ * empty, so the opening view doesn't wait on sheets it can't show (DESIGN.md, "Quality floor").
+ */
+export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
   // A place that shares a station's name is not lettered twice: the station's own name says it.
   const named = stations.map((s) => s.toUpperCase());
   const c = PALETTES[theme];
@@ -256,7 +264,7 @@ export function sheetStyle(theme, stations = [], colors = []) {
     glyphs: new URL('../../vendor/glyphs/{fontstack}/{range}.pbf', import.meta.url).href.replace(/%7B/g, '{').replace(/%7D/g, '}'),
     sources: {
       ground: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
-      ...Object.fromEntries(SHEETS.map((s) => [`sheet-${s.id}`, { type: 'geojson', data: new URL(`../../data/sheet-${s.id}.geojson`, import.meta.url).href, tolerance: 0.1,
+      ...Object.fromEntries(SHEETS.map((s) => [`sheet-${s.id}`, { type: 'geojson', data: !wanted || wanted.has(s.id) ? sheetData(s.id) : NOTHING, tolerance: 0.1,
         // Big tiles with a wide margin, so a label's stretch of street is whole in the tile that places it.
         maxzoom: s.zoom - 1, buffer: 256 }])),
     },
