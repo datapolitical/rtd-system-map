@@ -2470,7 +2470,8 @@ shared or bookmarked.
 
 A link to the site shows the title "RTD system map", the page's description
 and a picture (`public/og.png`, 1200x630): central Denver on sheet 2 in the
-light theme, with the buttons and credit hidden. A link to the classic map
+dark theme, the rail lines fanning out from Union Station past Ball Arena and
+Empower Field, with the buttons and credit hidden. A link to the classic map
 shows its own (`public/classic/og.png`): central Denver at zoom 11 in the
 light theme, with the interface and route letters hidden.
 `node scripts/og-image.mjs` makes either again from the live site (`sheets`
@@ -4471,6 +4472,12 @@ work against the real structure before asking for evaluation.
   sheet 1 named Thornton and Niwot but not Denver, Aurora, Lakewood or
   Boulder, sheet 2 named no town at all, and sheet 3 named "Quality Hill
   Historic District" instead of Capitol Hill.
+- 2026-11-12: The front page's link preview is sheet 2 in the dark theme,
+  framed so every station name on the lines is whole. Reason: Chris asked
+  for "whichever one you think is the most captivating"; against the dark
+  ground the coloured lines are what the eye goes to, and the stadiums and
+  station names make it recognisably Denver. Sheet 3 at Union Station, the
+  first try at more detail, was mostly grey bus streets.
 - 2026-11-12: Sheets name bus streets from their stops' names, beside the
   street after its route numbers, and shorten the ground map's street
   names (#117). Reason: the ground map's names were kept off bus streets,

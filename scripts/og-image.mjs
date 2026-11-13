@@ -1,6 +1,8 @@
 // Makes the picture a link to the site shows in messages and social posts:
 // a 600x315 view at twice the pixels (1200x630, the size Open Graph previews
-// use), light theme, with the interface hidden. `sheets` is the front page
+// use), with the interface hidden: the front page in the dark theme, where
+// the rail lines stand out most, and the classic map in the light. OG_THEME
+// overrides the theme. `sheets` is the front page
 // (public/og.png); `classic` is the classic map (public/classic/og.png),
 // whose route letters are hidden too: at this size they stack at Union
 // Station (#114), and the lines' colours say enough.
@@ -11,12 +13,12 @@ import { fileURLToPath } from 'node:url';
 
 const site = process.argv[2] ?? 'https://rtd-system-map.pages.dev/';
 const classic = process.argv[3] === 'classic';
-const view = process.argv[4] ?? (classic ? '#11/39.7400/-104.9700' : '#12/39.7500/-104.9965');
+const view = process.argv[4] ?? (classic ? '#11/39.7400/-104.9700' : '#12/39.7500/-105.0085');
 const out = fileURLToPath(new URL(classic ? '../public/classic/og.png' : '../public/og.png', import.meta.url));
 
 const browser = await chromium.launch();
 try {
-  const page = await browser.newPage({ viewport: { width: 600, height: 315 }, deviceScaleFactor: 2, colorScheme: 'light' });
+  const page = await browser.newPage({ viewport: { width: 600, height: 315 }, deviceScaleFactor: 2, colorScheme: process.env.OG_THEME ?? (classic ? 'light' : 'dark') });
   if (classic) {
     await page.route('**/js/main.js', async (route) => {
       const res = await route.fetch();
