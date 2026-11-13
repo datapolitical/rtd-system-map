@@ -2,6 +2,7 @@
 // table per sheet; nothing here depends on the zoom except which sheet shows.
 // The build draws the geometry for each sheet (scripts/lib/sheets.mjs); this
 // file is only ink.
+import { contrast, darkenTo, liftTo, lightness } from '../color.js';
 
 export const SHEETS = [
   { id: 1, zoom: 10 },
@@ -14,29 +15,72 @@ export const SHEETS = [
 const RAIL = { 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 };
 const GAP = { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
 
+// The build's six headway classes are drawn as three steps: a bus every 10 minutes or better,
+// every 15, and every 30 or less often. More steps than three don't read as steps (DESIGN.md, "Four sheets").
+export const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
+// Each step is this many times as wide as the one below; the top one is as wide as rail. The opening
+// sheet's job is where service is frequent, and there the quiet step covers the whole outer street grid,
+// so its steps are steeper: the quiet step a one-pixel hairline, the frequent step plainly first.
+export const STEP_RATIO = { 1: 1.9, 2: 1.6, 3: 1.6, 4: 1.6 };
+const steps = (quiet, mid, top) => Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, [quiet, mid, top][s]]));
+
 export const PALETTES = {
   dark: {
     ground: '#0e141d', water: '#15202f', park: '#101a1c', freeway: '#1b2535', road: '#131a25', street: '#151d2a', building: '#121924',
-    // Bus streets, quietest to busiest: one family, brighter as buses come more often.
-    bus: { c60: '#4f5d79', c30: '#64759a', c15: '#8291ae', c10: '#aab5cb', c5: '#ccd4e3', c3: '#ccd4e3' },
+    // Bus streets, quietest to busiest: one cool grey, evenly spaced in lightness (OKLab L 0.43, 0.515, 0.60).
+    // The busiest stays under the dimmest rail line (railInk), so rail reads first by its colour; it is no
+    // brighter than that, so a deep red lifted over it is still red, not salmon.
+    bus: steps('#49505b', '#606873', '#79818d'),
+    // The quiet step on the opening sheet, half a step nearer the ground (OKLab L 0.3875): there it is the
+    // whole outer street grid, which should sit back behind the frequent streets, not read as chart gridlines.
+    busHairline: '#3e454f',
     hall: '#243147', hallEdge: '#6a7a98',
     mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', streetName: '#4b566b', number: '#c9d2e4', stop: '#aab6cf',
   },
   light: {
     ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
-    bus: { c60: '#b3b6bd', c30: '#9ca0a8', c15: '#868a93', c10: '#5f636c', c5: '#3c4048', c3: '#3c4048' },
+    // OKLab L 0.74, 0.65, 0.56.
+    bus: steps('#a6abb3', '#8b8f97', '#70757c'),
+    // OKLab L 0.785.
+    busHairline: '#b4b9c1',
     hall: '#dcd8cf', hallEdge: '#979ba3',
     mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', streetName: '#a3a6ad', number: '#3a4560', stop: '#566179',
   },
 };
 
-// Bus street widths by class, per sheet.
-export const BUS_WIDTH = {
-  1: { c60: 0.8, c30: 1, c15: 1.4, c10: 1.8, c5: 2.1, c3: 2.1 },
-  2: { c60: 0.9, c30: 1.2, c15: 1.8, c10: 2.4, c5: 3.1, c3: 3.1 },
-  3: { c60: 1.4, c30: 1.8, c15: 2.4, c10: 3, c5: 3.6, c3: 3.6 },
-  4: { c60: 2.2, c30: 2.8, c15: 3.6, c10: 4.4, c5: 5.2, c3: 5.2 },
+// Bus street widths by class, per sheet: the top step at the sheet's rail width, each step below 1/STEP_RATIO of it.
+export const BUS_WIDTH = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n,
+  Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, Math.round((w / STEP_RATIO[n] ** (2 - s)) * 100) / 100]))]));
+
+// Rail stands out from the busiest bus street by at least this much more contrast with the ground.
+export const RAIL_OVER_BUS = 1.15;
+// In the light, a colour is darkened no more than this (OKLab L) to reach the floor; past it,
+// orange turns brown and lime olive, so the line keeps RTD's colour and gets a casing instead.
+export const LIGHT_SHADE_MOST = 0.12;
+// A cased line's casing, each side, per sheet: it sits in the gap between lines that share track.
+const CASING = { 1: 0.6, 2: 0.7, 3: 0.8, 4: 1 };
+
+/** Each bus class's grey on one sheet: the opening sheet draws its quiet step as a faint hairline. */
+export const busInk = (theme, n) => {
+  const c = PALETTES[theme];
+  return n === 1 ? Object.fromEntries(Object.entries(c.bus).map(([k, x]) => [k, BUS_STEP[k] === 0 ? c.busHairline : x])) : c.bus;
 };
+
+/** How each theme inks one of RTD's line colours: `{ line, casing, ink }`. No colour is named here. */
+export function railInk(theme, color) {
+  const c = PALETTES[theme];
+  const floor = contrast(c.bus.c3, c.ground) * RAIL_OVER_BUS;
+  if (theme === 'dark') return withInk({ line: liftTo(color, c.ground, floor), casing: null });
+  const darker = darkenTo(color, c.ground, floor);
+  if (lightness(color) - lightness(darker) <= LIGHT_SHADE_MOST) return withInk({ line: darker, casing: null });
+  return withInk({ line: color, casing: darker });
+}
+const withInk = (x) => ({ ...x, ink: inkOn(x.line) });
+// Dark or white lettering on a disc of this colour (the build's own rule, inkOn in scripts/lib/sheets.mjs).
+function inkOn(color) {
+  const [r, g, b] = [1, 3, 5].map((at) => parseInt(String(color).slice(at, at + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#10151d' : '#ffffff';
+}
 
 // Route number size per sheet, and how far off its street's middle a number is set, in ems:
 // the street's half width, a pixel and a half of air, and half the figures' height.
@@ -47,7 +91,8 @@ export const numberOffset = (n, width) => -((width / 2 + 1.5) / NUMBER_SIZE[n] +
 // lettering off it (a letter's box is about as tall as its size: the ring's width and some air).
 // Stacked rows of route numbers are this far apart, in ems (scripts/lib/sheets.mjs, SIZES.busRowHeight).
 export const ROW_HEIGHT = 1.15;
-export const STOP_RING = { radius: 3, stroke: 1.4 };
+// The ring is wider than the busiest street on that sheet (BUS_WIDTH[4].c3), so it reads as a mark on it, not a hole in it.
+export const STOP_RING = { radius: 4, stroke: 1.5 };
 export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 
 // Station name size per sheet (SIZES.name in the build).
@@ -69,10 +114,16 @@ const NOTHING = { type: 'FeatureCollection', features: [] };
  * `wanted` is the sheets whose drawings load now (all of them when not given); the rest start
  * empty, so the opening view doesn't wait on sheets it can't show (DESIGN.md, "Quality floor").
  */
-export function sheetStyle(theme, stations = [], wanted = null) {
+export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
   // A place that shares a station's name is not lettered twice: the station's own name says it.
   const named = stations.map((s) => s.toUpperCase());
   const c = PALETTES[theme];
+  // Each line's ink in this theme, from the colours the build found in RTD's data (sheets.json).
+  const inks = colors.map((color) => ({ color, ...railInk(theme, color) }));
+  const byColor = (key, fallback) => (inks.length ? ['match', ['get', 'color'], ...inks.flatMap((x) => [x.color, x[key] ?? x.line]), fallback] : fallback);
+  const lineInk = byColor('line', ['get', 'color']);
+  const letterInk = byColor('ink', ['get', 'ink']);
+  const cased = inks.filter((x) => x.casing);
   const layers = [
     { id: 'ground', type: 'background', paint: { 'background-color': c.ground } },
     { id: 'park', type: 'fill', source: 'ground', 'source-layer': 'park', paint: { 'fill-color': c.park } },
@@ -101,7 +152,7 @@ export function sheetStyle(theme, stations = [], wanted = null) {
     layer('bus-rim', 'line', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c10', 'c5', 'c3']]]), layout: ROUND,
       paint: { 'line-color': c.ground, 'line-width': ['+', byClass(BUS_WIDTH[n]), 1.6] } });
     layer('bus', 'line', { filter: kind('bus'), layout: { ...ROUND, 'line-sort-key': ['match', ['get', 'cls'], ...order.flatMap((k, j) => [k, j]), 0] },
-      paint: { 'line-color': byClass(c.bus), 'line-width': byClass(BUS_WIDTH[n]) } });
+      paint: { 'line-color': byClass(busInk(theme, n)), 'line-width': byClass(BUS_WIDTH[n]) } });
 
     // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses
     // end on. It is drawn over them, so a street ends flat on the wall, not in a round blob across it.
@@ -114,7 +165,10 @@ export function sheetStyle(theme, stations = [], wanted = null) {
 
     // Rail: every line whole, with a rim of ground so lines side by side stay apart.
     layer('rail-rim', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
-    layer('rail', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': ['get', 'color'], 'line-width': w } });
+    // A pale line that can't stand off the ground in its own hue has a thin casing of its own colour, darker.
+    if (cased.length) layer('rail-casing', 'line', { filter: kind('rail', ['in', ['get', 'color'], ['literal', cased.map((x) => x.color)]]), layout: FLAT,
+      paint: { 'line-color': byColor('casing', c.ground), 'line-width': w + 2 * CASING[n] } });
+    layer('rail', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': lineInk, 'line-width': w } });
 
     // Stations: one white bar across the lines that stop there; the hub's is heavier.
     const bar = kind('station', ['==', ['get', 'shape'], 'bar']);
@@ -170,10 +224,10 @@ export function sheetStyle(theme, stations = [], wanted = null) {
     const disc = [7.4, 8.2, 9.4, 10.6][i];
     // Beside a station's name the letters are smaller (scripts/lib/sheets.mjs, SIZES.nameLetter).
     const small = [5.6, 6, 6.6, 7.4][i];
-    layer('letter-disc', 'circle', { filter: kind('letter'), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': ['get', 'color'], 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
+    layer('letter-disc', 'circle', { filter: kind('letter'), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': lineInk, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
     layer('letter', 'symbol', { filter: kind('letter'),
       layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * 1.42, disc * 1.42], 'text-allow-overlap': true, 'text-offset': [0, 0.06] },
-      paint: { 'text-color': ['get', 'ink'] } });
+      paint: { 'text-color': letterInk } });
     // Lettering keeps off the lines: unseen marks along rail and the busiest streets hold their
     // ground. MapLibre places the last layer first: rail's marks, then the route numbers (which
     // sit on their own streets but never on rail), then the streets' marks, then everything above.

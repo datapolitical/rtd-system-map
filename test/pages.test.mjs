@@ -49,7 +49,7 @@ test('the front page asks at once for what its opening view needs, and only that
 
 test('a sheet not yet wanted starts with no drawing, and its layers are there to take one', async () => {
   const { SHEETS, sheetStyle, sheetData } = await import('../public/js/sheets/style.js');
-  const style = sheetStyle('dark', [], new Set([SHEETS[0].id]));
+  const style = sheetStyle('dark', [], [], new Set([SHEETS[0].id]));
   assert.equal(style.sources['sheet-1'].data, sheetData(1));
   for (const s of SHEETS.slice(1)) {
     assert.deepEqual(style.sources[`sheet-${s.id}`].data, { type: 'FeatureCollection', features: [] });

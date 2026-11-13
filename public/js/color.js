@@ -51,6 +51,9 @@ function fromOklab([L, a, b]) {
   );
 }
 
+// A color's lightness, 0 to 1 (OKLab L).
+export const lightness = (color) => toOklab(color)[0];
+
 // The color itself if it already stands out from `background` by `ratio`;
 // otherwise the same hue, darkened only as far as it needs to.
 export function darkenTo(color, background, ratio) {
@@ -71,6 +74,48 @@ export function lightenTo(color, background, ratio) {
   const [L, a, b] = toOklab(color);
   for (let k = 1; k <= 100; k++) {
     const next = fromOklab([L + ((1 - L) * k) / 100, a, b]);
+    if (contrast(next, background) >= ratio) return next;
+  }
+  return '#ffffff';
+}
+
+const inGamut = (lab) => {
+  const [L, a, b] = lab;
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ].every((v) => v >= -1e-4 && v <= 1 + 1e-4);
+};
+
+// The most chroma a screen can show at this lightness and hue (OKLCh, radians).
+function maxChroma(L, h) {
+  let lo = 0;
+  let hi = 0.5;
+  for (let i = 0; i < 24; i++) {
+    const c = (lo + hi) / 2;
+    if (inGamut([L, c * Math.cos(h), c * Math.sin(h)])) lo = c;
+    else hi = c;
+  }
+  return lo;
+}
+
+// Like lightenTo, but the lifted colour keeps its share of the most chroma
+// its hue can have at each lightness, so it stays as strong a colour as it
+// was: a deep red lifts to a bright red, not to salmon, and a purple to a
+// violet, not lavender.
+export function liftTo(color, background, ratio) {
+  if (contrast(color, background) >= ratio) return color;
+  const [L, a, b] = toOklab(color);
+  const h = Math.atan2(b, a);
+  const share = Math.min(1, Math.hypot(a, b) / (maxChroma(L, h) || 1));
+  for (let k = 1; k <= 200; k++) {
+    const L2 = L + ((1 - L) * k) / 200;
+    const c = maxChroma(L2, h) * share;
+    const next = fromOklab([L2, c * Math.cos(h), c * Math.sin(h)]);
     if (contrast(next, background) >= ratio) return next;
   }
   return '#ffffff';

@@ -13,7 +13,7 @@ const theme = () => forced ?? (scheme.matches ? 'dark' : 'light');
 const zooms = SHEETS.map((s) => s.zoom);
 
 // Both at once: neither needs the other (index.html has already asked for them).
-const [meta, { hub, stations } = {}] = await Promise.all([
+const [meta, { hub, stations, colors } = {}] = await Promise.all([
   fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json()),
   fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({})),
 ]);
@@ -28,7 +28,7 @@ const wanted = new Set([SHEETS[nearest(Number.isFinite(asked) ? asked : zooms[0]
 const map = new maplibregl.Map({
   container: 'map',
   // The page opens on the hub, a little above the middle so the lines south of it show.
-  style: sheetStyle(theme(), stations, wanted),
+  style: sheetStyle(theme(), stations, colors, wanted),
   center: hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2],
   zoom: zooms[0],
   minZoom: zooms[0] - 0.6,
@@ -43,7 +43,7 @@ const map = new maplibregl.Map({
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
-scheme.addEventListener('change', () => { if (!forced) map.setStyle(sheetStyle(theme(), stations, wanted)); });
+scheme.addEventListener('change', () => { if (!forced) map.setStyle(sheetStyle(theme(), stations, colors, wanted)); });
 
 // --- The other sheets, once the first is drawn ----------------------------------
 

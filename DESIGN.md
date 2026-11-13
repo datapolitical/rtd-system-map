@@ -2088,9 +2088,24 @@ How it is built:
   the line was heading: beside the bar it would stand beside that station
   too.
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
-  The quietest bus street reads clearly in both themes (in the dark, where
-  a hairline of light reads faint, more so), and each busier class stands a
-  clear step above it.
+  The build's six bus classes are drawn as three steps: a bus every 10
+  minutes or better, every 15, and every 30 or less often (more steps than
+  three don't read as steps). Each step is 1.6 times as wide as the one
+  below, the busiest as wide as the sheet's rail, none under a pixel; their
+  greys are evenly spaced in lightness, and the quietest reads clearly in
+  both themes (in the dark, where a thin line of light reads faint, more
+  so). The opening sheet steps more steeply (1.9), so its quiet step is a
+  one-pixel hairline, half a lightness step nearer the ground: there it is
+  the whole outer street grid, and the sheet's job is where service is
+  frequent, so the frequent streets read first and the grid sits back. Rail reads first by its colour: in each theme the busiest bus grey
+  has less contrast with the ground than any rail line, by at least 15%.
+  The page takes each line's colour from RTD's data (the build lists them
+  in `sheets.json`) and, where one is too dim for that, lifts it in the dark
+  (lighter, same hue, keeping its share of the most chroma that hue can
+  have, so deep red lifts to a bright red, not salmon) or, in the light, darkens it by at most a shade; a
+  colour that would need more (lime, gold, orange, sky blue on cream) keeps
+  RTD's colour and gets a thin casing of itself, darker. Pure white is for
+  station marks. A stop's ring on sheet 4 is wider than the busiest street.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
@@ -2176,8 +2191,13 @@ How it is built:
   holds it and runs on across cross streets only where none does. A run too
   short for its list in one row has it in two, stacked beside the street
   and turned the way it runs, where the street is straight for their
-  length; one too short for that is not labelled on that sheet, and a tap
-  gives the list anywhere.
+  length. Where routes join and leave a street block by block (15th and
+  17th downtown), no run of one list holds it: there the label runs on
+  across runs and lists every route on the stretch it is lettered along,
+  grown from the longest unlabelled run one run at a time, taking the
+  neighbour that adds the fewest routes, in one row where the street can
+  hold it and two stacked only where it can't. A street too short even for
+  that is not labelled on that sheet, and a tap gives the list anywhere.
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
@@ -4290,6 +4310,13 @@ work against the real structure before asking for evaluation.
   lighter than one of the two that fed it, the same "15, 19" was heavy on
   one side of the hall and faint on the other, and a sliver of a stop ring
   showed from under the light rail.
+- 2026-11-12: Sheets label a street across runs where no run of one list
+  holds it, listing every route on the lettered stretch. Reason: Chris saw
+  15th and 17th downtown unlabelled on sheet 3. Their lists change by a
+  route or two at almost every cross street, so no run of one list was
+  long enough for its sixteen or so routes. One row is preferred to two
+  stacked: a stack turned with the street claims a square around itself
+  on the page, and pushed the FreeRide and nearby labels off.
 - 2026-11-12: Sheets list every route on a street's label, or leave the
   stretch unlabelled: no "+N". Reason: Chris, "it's absurd to have that on a
   map". This replaces the three-routes-and-a-count rule and the seven-route
@@ -4399,6 +4426,23 @@ work against the real structure before asking for evaluation.
   its bars on sheet 4.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
+- 2026-11-12: Sheets draw bus streets in three steps, the busiest as wide
+  as rail and below every rail line's contrast, with dim rail colours lifted
+  in the dark and pale ones cased in the light (#117, review items 1 to 3;
+  #114). Reason: in the dark the busiest streets were nearly white and the
+  downtown grid outshone the purple and red lines; five classes at 0.9 to
+  3.1 px in close greys read as gridlines, not steps; in the light lime,
+  gold and sky blue faded into the cream. Sheet 4's stop rings grow to stay
+  wider than the busiest street. The dark street grid is left as it was: at
+  1.09:1 against the ground it is well under the quietest bus step (2.27:1).
+- 2026-11-12: The opening sheet steps its bus streets more steeply (1.9, the
+  quiet step a 1 px hairline in a fainter grey), and in the dark the busiest
+  bus grey drops from OKLab L 0.63 to 0.60 and dim rail lifts keep their
+  chroma (#117). Reason: at 1.41 px the quiet step made the opening view's
+  outer grid read like chart gridlines; and no red bright enough to clear
+  the old floor (6.1:1) is still red, so T lifted to salmon #fe6156 and E
+  and N to lavender and orchid. Now T is #fb4b43, E #a673e3, N #d84af3, all
+  over a 5.4:1 floor.
 - 2026-11-12: The sheets page loads only the sheet it opens on first, and
   asks for the opening view's files from its HTML (#125). Reason: on slow 4G
   the page was blank for about 9 s, waiting on sheets that don't show at the
