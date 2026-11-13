@@ -246,9 +246,19 @@ test('a street is labelled with its whole list, only where the list fits, and la
   assert.equal(long.length, 1);
   assert.ok(ends(long)[0][1] - ends(long)[0][0] >= 300);
   assert.equal(long[0].routes, '1');
-  // Where the list changes the run ends: a list longer than its run is not labelled at all.
+  // Where the list changes the run ends. A list longer than its run runs on into the next run,
+  // and the label then lists every route on the stretch it is lettered along.
   const mixed = [st(0, 100, '1 2'), st(100, 220, '2 1'), st(220, 300, '1 2 3'), st(300, 420, '1')];
-  assert.deepEqual(labelRuns(mixed, 100, () => 150).map((r) => r.routes), ['1 2']);
+  const set = labelRuns(mixed, 100, () => 150);
+  assert.deepEqual(set.map((r) => r.routes), ['1 2', '1 2 3']);
+  assert.ok(Math.min(set[1].path[0][0], set[1].path.at(-1)[0]) >= 220, 'the joined label lies on the runs whose routes it lists');
+  // Downtown: routes join and leave block by block, so no block's list fits it. One label spans
+  // the fewest blocks that hold their routes together, and names them all.
+  const shifting = [st(0, 100, '1 2 3'), st(100, 200, '1 2 3 4'), st(200, 300, '2 3 4'), st(300, 400, '1 2 3 4 5')];
+  const [joined, ...rest] = labelRuns(shifting, 1000, (s) => String(s.routes).split(' ').length * 60);
+  assert.equal(rest.length, 0);
+  assert.equal(joined.routes, '1 2 3 4');
+  assert.ok(Math.max(joined.path[0][0], joined.path.at(-1)[0]) <= 300, 'and stays off the block with a route it does not name');
   // A stretch with no room beside it gives its turn to another.
   assert.equal(labelRuns(streets.slice(0, 4), 200, () => 60, (path) => path[0][0] > 250).length, 1);
   assert.deepEqual(inOrder(['FreeRide', '15L', '120X', '9', '15', 'FF']), ['9', '15', '15L', '120X', 'FF', 'FreeRide']);

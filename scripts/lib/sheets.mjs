@@ -2267,12 +2267,13 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true) {
       along += len;
     });
     const set = [];
-    for (const run of runs.sort((a, b) => b.len - a.len)) {
+    const place = (run) => {
       const top = run.of.reduce((a, b) => (CLASS_ORDER.indexOf(b.cls) > CLASS_ORDER.indexOf(a.cls) ? b : a));
+      const label = { ...top, routes: run.list };
       // In one row where the run holds the list that way; in two, stacked, where it holds only that.
-      const rows = [1, 2].find((r) => run.len >= width(top, r));
-      if (!rows) continue;
-      const need = width(top, rows);
+      const rows = [1, 2].find((r) => run.len >= width(label, r));
+      if (!rows) return;
+      const need = width(label, rows);
       const count = Math.max(1, Math.floor(run.len / every));
       // A little slack past the figures, so the page's own measure of them still fits.
       const span = Math.min(run.len, need * 1.15);
@@ -2293,6 +2294,37 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true) {
         set.push(run.at + mid);
         out.push({ path, rows, routes: run.list, cls: top.cls, n: Math.max(...run.of.map((o) => o.n ?? 0)) });
       }
+    };
+    for (const run of [...runs].sort((a, b) => b.len - a.len)) place(run);
+    // Where routes join and leave a street block by block (downtown's one-way pairs), no run of
+    // one list may hold it. There a label runs on across runs and lists every route on the
+    // stretch it is lettered along, grown from the longest unlabelled run a run at a time,
+    // taking the neighbour that adds the fewest routes, until the stretch holds its list.
+    const union = (lo, hi) => inOrder([...new Set(runs.slice(lo, hi + 1).flatMap((r) => r.list.split(' ')))]).join(' ');
+    const span = (lo, hi) => runs.slice(lo, hi + 1).reduce((s, r) => s + r.len, 0);
+    // One row along the street where the stretch can grow to hold it, as every other street reads;
+    // two stacked only where it can't.
+    const fits = (lo, hi, rows) => span(lo, hi) >= width({ routes: union(lo, hi) }, rows);
+    const grow = (from, rows) => {
+      let [lo, hi] = [from, from];
+      while (!fits(lo, hi, rows)) {
+        const ways = [lo > 0 && [lo - 1, hi], hi < runs.length - 1 && [lo, hi + 1]].filter(Boolean);
+        if (!ways.length) return null;
+        [lo, hi] = ways.sort((x, y) => union(...x).length - union(...y).length || span(...y) - span(...x))[0];
+      }
+      return [lo, hi];
+    };
+    for (const seed of [...runs].sort((a, b) => b.len - a.len)) {
+      if (set.some((o) => Math.abs(o - (seed.at + seed.len / 2)) < every)) continue;
+      const [lo, hi] = grow(runs.indexOf(seed), 1) ?? grow(runs.indexOf(seed), 2) ?? [];
+      if (lo === undefined || lo === hi) continue;
+      const part = runs.slice(lo, hi + 1);
+      place({
+        list: union(lo, hi), at: part[0].at, len: span(lo, hi),
+        path: part.flatMap((r, k) => (k ? r.path.slice(1) : r.path)),
+        pieces: part.flatMap((r) => r.pieces.map((q) => ({ from: q.from + r.at - part[0].at, len: q.len }))),
+        of: part.flatMap((r) => r.of),
+      });
     }
   });
   return out;

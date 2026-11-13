@@ -2176,8 +2176,13 @@ How it is built:
   holds it and runs on across cross streets only where none does. A run too
   short for its list in one row has it in two, stacked beside the street
   and turned the way it runs, where the street is straight for their
-  length; one too short for that is not labelled on that sheet, and a tap
-  gives the list anywhere.
+  length. Where routes join and leave a street block by block (15th and
+  17th downtown), no run of one list holds it: there the label runs on
+  across runs and lists every route on the stretch it is lettered along,
+  grown from the longest unlabelled run one run at a time, taking the
+  neighbour that adds the fewest routes, in one row where the street can
+  hold it and two stacked only where it can't. A street too short even for
+  that is not labelled on that sheet, and a tap gives the list anywhere.
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
@@ -4272,6 +4277,13 @@ work against the real structure before asking for evaluation.
   lighter than one of the two that fed it, the same "15, 19" was heavy on
   one side of the hall and faint on the other, and a sliver of a stop ring
   showed from under the light rail.
+- 2026-11-12: Sheets label a street across runs where no run of one list
+  holds it, listing every route on the lettered stretch. Reason: Chris saw
+  15th and 17th downtown unlabelled on sheet 3. Their lists change by a
+  route or two at almost every cross street, so no run of one list was
+  long enough for its sixteen or so routes. One row is preferred to two
+  stacked: a stack turned with the street claims a square around itself
+  on the page, and pushed the FreeRide and nearby labels off.
 - 2026-11-12: Sheets list every route on a street's label, or leave the
   stretch unlabelled: no "+N". Reason: Chris, "it's absurd to have that on a
   map". This replaces the three-routes-and-a-count rule and the seven-route
