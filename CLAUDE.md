@@ -128,3 +128,17 @@ step changes:
 `state` is `working`, `waiting` or `done`. A `working` file not updated for
 15 minutes shows as quiet, and files older than a day drop off. Captures must
 be PNGs under `qa/.scratch/`.
+
+## Review page
+
+`review/` (README there) is where Chris reviews map work on his phone: a
+session posts a review request with `shotctl publish manifest.json` (before/
+after pictures, an `ask` saying what he must do, and optional `choices` he can
+tap instead of typing), and he answers with picks, comments and screenshots. A
+Claude Code hook (`review/hook.py`) hands what he sends to the main session
+working in an `rtd-system-map*` checkout at its next tool call. When it does,
+read any images named, tell Chris what you will do, and mark each item handled
+with `shotctl done ID --note "..."` (the note is his reply). Ask through the
+review page whenever you need his eyes or a decision. The service runs on
+127.0.0.1:8796 behind `tailscale serve`; its data and settings stay out of
+git.

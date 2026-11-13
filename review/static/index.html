@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-title" content="Map review">
+<title>RTD map — review</title>
+<!-- Review what Claude asks you to look at, pick between options, comment on each item, send screenshots.
+     Served by review/app.py with its data and assets (/shots/*); see review/README.md. -->
+<link rel="stylesheet" href="/shots/assets/style.css">
+<script src="/shots/assets/app.js" defer></script>
+</head>
+<body>
+<main>
+  <header>
+    <span class="home">RTD system map <span>/ review</span></span>
+    <span class="private"><span aria-hidden="true">●</span> Tailscale only</span>
+  </header>
+
+  <section class="intro">
+    <h1>Review</h1>
+    <p>Answer what Claude asks you to look at, or send it what you notice. Your answers reach the working session at its next step.</p>
+  </section>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button type="button" role="tab" id="tab-review" data-tab="review" aria-selected="true">To review <span class="n" id="n-review"></span></button>
+    <button type="button" role="tab" id="tab-issues" data-tab="issues" aria-selected="false">Issues <span class="n" id="n-issues"></span></button>
+    <button type="button" role="tab" id="tab-send" data-tab="send" aria-selected="false">Screenshots</button>
+  </nav>
+
+  <p id="error" class="error banner" role="alert" hidden></p>
+
+  <div class="panel" data-panel="review" role="tabpanel" aria-labelledby="tab-review">
+    <div id="reviews"></div>
+    <p id="reviews-empty" class="empty" hidden>Nothing needs you right now.</p>
+    <section id="answered-section" class="block" hidden>
+      <details>
+        <summary>You've answered <span id="answered-count" class="count"></span><span class="summary-note">Claude is working through your comments; nothing more needed from you.</span></summary>
+        <div id="answered"></div>
+      </details>
+    </section>
+    <section id="closed-section" class="block" hidden>
+      <details>
+        <summary>Closed <span id="closed-count" class="count"></span></summary>
+        <div id="closed"></div>
+      </details>
+    </section>
+  </div>
+
+  <div class="panel" data-panel="issues" role="tabpanel" aria-labelledby="tab-issues" hidden>
+    <div class="info-note"><strong>Nothing for you to do here.</strong> These are known problems on the live map that are not fixed yet, each with a picture of how it looks there now. Comment only if one is wrong, missing something, or matters more than the others. When one is fixed it moves to <em>Recently fixed</em> with a before and after.</div>
+    <div id="issues" class="cards"></div>
+    <p id="issues-empty" class="empty" hidden>No open issues that name a place on the map.</p>
+    <section id="fixed-section" class="block" hidden>
+      <div class="section-heading"><h2>Recently fixed</h2></div>
+      <div id="fixed" class="cards"></div>
+    </section>
+    <p class="small tab-note" id="issues-synced"></p>
+  </div>
+
+  <div class="panel" data-panel="send" role="tabpanel" aria-labelledby="tab-send" hidden>
+    <section class="block first">
+      <div class="section-heading"><h2>Send a screenshot</h2></div>
+      <form id="shot-form" method="post" action="/shots/api/items" enctype="multipart/form-data">
+        <div class="field">
+          <label for="files">Screenshots</label>
+          <input id="files" name="files" type="file" accept="image/*" multiple required>
+          <div id="previews" class="previews" aria-live="polite"></div>
+          <p class="hint">PNG, JPEG, WebP, HEIC or GIF. Up to 12 at a time, 25 MB each.</p>
+        </div>
+        <div class="field">
+          <label for="note">What should Claude look at? <span class="optional">optional</span></label>
+          <textarea id="note" name="note" rows="3" maxlength="4000" placeholder="e.g. The Red line jogs at Federal Center at z14"></textarea>
+          <p class="hint">One note covers every image in this upload.</p>
+        </div>
+        <button class="primary" id="send" type="submit"><span class="label">Send to Claude</span> <span aria-hidden="true">→</span></button>
+        <p id="sent" class="sent" role="status" hidden></p>
+      </form>
+    </section>
+
+    <section class="block">
+      <div class="section-heading"><h2>Sent</h2><button type="button" id="refresh" class="text-button">Refresh</button></div>
+      <ul id="shots" class="cards"></ul>
+      <p id="shots-empty" class="small" hidden>Nothing sent yet.</p>
+    </section>
+  </div>
+
+  <footer>
+    <strong>new</strong>: no session has it yet · <strong>seen</strong>: a working session has it · <strong>done</strong>: Claude handled it and left a note.
+  </footer>
+</main>
+</body>
+</html>

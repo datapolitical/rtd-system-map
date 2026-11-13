@@ -1,0 +1,4 @@
+.venv/
+__pycache__/
+# Inbox, comments, reviews, claims and issue pictures (RTD_REVIEW_HOME).
+data/
