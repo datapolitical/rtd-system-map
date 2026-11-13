@@ -12,9 +12,9 @@ const read = (page) => fs.readFileSync(path.join(PUBLIC, page, 'index.html'), 'u
 const refs = (page) => [...read(page).matchAll(/(?:href|src)="([^"#]+)"|url\(([^)]+)\)/g)].map((m) => m[1] ?? m[2]).filter((ref) => !/^[a-z]+:/.test(ref));
 const asked = (page) => refs(page).map((ref) => new URL(ref, `http://site/${page}`).pathname);
 
-test('the front page is the four sheets, and the classic map is one link from it', () => {
+test('the front page is the four sheets, and the classic map is at /classic/ with no link from it', () => {
   assert.ok(asked('').includes('/js/sheets/main.js'), 'the front page runs the sheets');
-  assert.ok(asked('').includes('/classic/'), 'and links to the classic map');
+  assert.ok(!asked('').some((p) => p.startsWith('/classic')), 'and does not link to the classic map');
   assert.ok(asked('classic/').includes('/js/main.js') && !asked('classic/').includes('/js/sheets/main.js'), 'the classic page runs the classic map');
   assert.match(read('classic/'), /<title>[^<]*classic[^<]*<\/title>/i, 'and says which it is');
 });

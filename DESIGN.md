@@ -7,7 +7,7 @@ decision log at the bottom.
 
 The site has two pages. The front page is the four sheets ("Four sheets").
 The continuous map the rest of this document describes is the Classic map, at
-`/classic/`, one link from the front page.
+`/classic/`. The front page does not link to it: it is reached by its address.
 
 ## Principles
 
@@ -1976,8 +1976,8 @@ its way to a sheet carries on to that sheet and never sends it back. Issue
 #117 holds the work.
 
 The sheets are `public/index.html`. The map they took the front page from is
-the Classic map, `public/classic/index.html`, and the sheets' credit line
-links to it. Each page finds its files wherever it is served from: the front
+the Classic map, `public/classic/index.html`; the sheets do not link to it.
+Each page finds its files wherever it is served from: the front
 page asks for them from the site's root, so it also works at any address
 Cloudflare answers with it (the site has no 404 page, so that is every address
 with no page of its own, the old `/sheets/` among them), and the classic
@@ -4368,6 +4368,9 @@ work against the real structure before asking for evaluation.
   `<base>` tag would have sent it to the root. The checks still read the
   classic map and find it on each site, so they also run on builds from
   before the move.
+- 2026-11-12: The sheets' credit line no longer links to the Classic map.
+  Reason: Chris: "Remove the classic map from the credit line". The classic
+  map stays at `/classic/`, reached by its address.
 - 2026-11-12: The row of letters under a station's name lists each side's
   lines by letter. Reason: Chris: "The order of the lines should be ABGNCEW
   when you list them at Union Station like that". The row read G B N A W C E,
