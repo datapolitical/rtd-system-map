@@ -108,14 +108,13 @@ export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 
 // A stop-group table (scripts/lib/sheets.mjs, SIZES.group, which lays it out at these sizes): a
 // plate in the ground's colour with a hairline edge in the numbers' ink at `edge` opacity, a title
-// in that ink at `titleInk`, and a row per letter, its letter in a small square of ink. The
-// bracket across the streets is `bracket` wide, in that ink at `bracketInk`. On sheet 3, which
-// draws no stops, each lettered stop's letter sits on its street in the table's own square, with
+// in that ink at `titleInk`, and a row per letter, its letter in a small square of ink. On sheet
+// 3, which draws no stops, each lettered stop's letter sits on its street in the table's own square, with
 // a rim of ground `streetRim` wide, as a line's letter sits on its line (SIZES.groupStreetRim).
 // On sheet 4 a lettered stop shows its letter in a square `stopBadge` wide in the stops' grey,
 // with a rim of ground `stopRim` wide so it stands off its street as a stop's ring does.
 export const GROUP = { title: 9, titleSpacing: 0.12, titleInk: 0.7, row: 10.5, rowSpacing: 0.02, letter: 8.5, badge: 12, badgeCorner: 3,
-  corner: 5, edge: 0.35, bracket: 1.5, bracketInk: 0.8, streetRim: 1.5, stopBadge: 11, stopRim: 1, stopLetter: 8 };
+  corner: 5, edge: 0.35, streetRim: 1.5, stopBadge: 11, stopRim: 1, stopLetter: 8 };
 const GROUP_FONT = { title: ['Overpass Bold'], row: ['Overpass SemiBold'] };
 
 // Station name size per sheet (SIZES.name in the build).
@@ -236,11 +235,8 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     layer('station', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.mark, 'line-width': mark } });
     layer('station-divider', 'line', { filter: ['all', bar, ['==', ['get', 'fat'], true]], layout: FLAT, paint: { 'line-color': c.markEdge, 'line-width': 1.2 } });
 
-    // A stop-group table's bracket across its streets, its ticks and the leader to its plate.
     // Where a tap finds a stop-group table: its plate's ground, unseen (the plate itself is lettering, below).
     if (n >= 2) layer('group-area', 'fill', { filter: kind('group-area'), paint: { 'fill-color': c.ground, 'fill-opacity': 0 } });
-    if (n >= 2) layer('group-bracket', 'line', { filter: kind('group-bracket'), layout: { 'line-cap': 'butt', 'line-join': 'round' },
-      paint: { 'line-color': c.number, 'line-width': GROUP.bracket, 'line-opacity': GROUP.bracketInk } });
 
     // Lettering, least important first (MapLibre places the last layer first).
     if (n <= 2) layers.push({ id: `freeway-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band, filter: ['all', ['==', ['get', 'class'], 'motorway'], ['has', 'ref'], ['==', ['geometry-type'], 'LineString']],
@@ -337,9 +333,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
       paint: { 'text-opacity': 0 } });
     // Stop-group tables, placed before everything else: the build found each one room clear of
     // rail, bus streets, station names and route numbers, so place and street names give way to
-    // it. Each piece hangs off one point, the leader's end, by an offset in pixels or ems, so the
-    // table holds together as the map zooms. The plate and badges are drawn by the page
-    // (main.js, groupImage); unseen marks along the bracket keep other lettering off it.
+    // it. Each piece hangs off one point, the plate's middle, by an offset in pixels or ems, so
+    // the table holds together as the map zooms. The plate and badges are drawn by the page
+    // (main.js, groupImage).
     if (n >= 2) {
       const fixed = { 'icon-allow-overlap': true, 'text-allow-overlap': true, 'text-max-width': 60, 'text-anchor': 'left', 'icon-anchor': 'top-left' };
       layer('group-plate', 'symbol', { filter: kind('group-plate'),
@@ -354,7 +350,6 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
           'text-size': ['case', ['==', ['get', 'role'], 'title'], GROUP.title, GROUP.row],
           'text-letter-spacing': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleSpacing, GROUP.rowSpacing] },
         paint: { 'text-color': c.number, 'text-opacity': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleInk, 1] } });
-      layer('group-keep-off', 'symbol', { filter: kind('group-bracket'), ...unseen });
       // A lettered stop's letter on its street, in the table's square: placed first of all, so
       // nothing is set over it (the build kept route numbers and names off it).
       layer('group-stop', 'symbol', { filter: kind('group-stop'),

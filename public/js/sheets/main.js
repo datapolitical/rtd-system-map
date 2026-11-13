@@ -135,7 +135,7 @@ map.on('click', (e) => {
   const reach = 9;
   const box = [[e.point.x - reach, e.point.y - reach], [e.point.x + reach, e.point.y + reach]];
   const hit = (ids) => map.queryRenderedFeatures(box, { layers: ids.map((id) => `${id}-${n}`).filter((id) => map.getLayer(id)) });
-  const table = hit(['group-area', 'group-bracket'])[0];
+  const table = hit(['group-area'])[0];
   if (table) return tell(esc(table.properties.title), '', groupRows(table.properties.rows), 'Each stop serves the routes of its letter');
   const station = hit(['station', 'name'])[0];
   if (station) return tell(esc(station.properties.name), `Rail station · ${String(station.properties.lines).split(' ').join(', ')}`);

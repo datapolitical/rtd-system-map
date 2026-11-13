@@ -2243,30 +2243,24 @@ How it is built:
   are one table (a one-way pair), titled with their names ("15th & 17th
   St"), with a row for each letter: the letter in a small dark square, then
   its routes, spaced, no commas. The table is a level plate in the ground's
-  colour with a hairline edge, which the build places beside its streets
-  clear of rail, bus streets, station names and route lists; place and
-  street names give way to it. A thin bracket runs square across the
-  streets mid-block, with a short tick at each end and a short leader to
-  the plate. It keeps at least 8 px of ground (ink to ink) off every drawn
-  street it doesn't cross, and where no block gives that, it takes the
-  block that gives the most: a bracket a few pixels beside a cross street
-  reads as a doubled street or a ladder. On sheet 3 the table replaces the
-  lists along those streets, and each lettered stop shows its letter on its
-  street, in the table's small dark square with a thin rim of ground,
-  centred on the line at the stop's place as a rail line's letter sits on
-  its line, so the street reads X Y Z block by block and matches the
-  table. A square keeps off cross streets, rail, route numbers and names,
-  moving along its street within its block as little as it must, and two
-  that would touch both stay, moved apart: none is dropped. Downtown the
-  squares fill the blocks between bus cross streets, so the bracket crosses
-  where the streets run on past them. On sheet 2 the table is set where
-  it fits, and the streets carry no numbers where it doesn't. On sheet 4
-  each lettered stop shows its letter in a small square in the stops'
-  grey in place of its ring, and the table is set once near the middle of
-  the lettered stops where it fits, without a bracket when the streets lie
-  farther apart than it is wide. A tap on these streets, a lettered stop or
-  the table lists the routes by letter. Routes on those streets that stop
-  at no lettered stop are still listed along the street.
+  colour with a hairline edge, which the build places on open ground
+  nearest the middle of the lettered stops, clear of rail, bus streets,
+  station names, route lists and the letters on the streets; place and
+  street names give way to it. No bracket or leader ties it to the
+  streets: the letters on them, in the table's squares, do that. On sheet 3
+  the table replaces the lists along those streets, and each lettered stop
+  shows its letter on its street, in the table's small dark square with a
+  thin rim of ground, centred on the line at the stop's place as a rail
+  line's letter sits on its line, so the street reads X Y Z block by block
+  and matches the table. A square keeps off cross streets, rail, route
+  numbers and names, moving along its street within its block as little as
+  it must, and two that would touch both stay, moved apart: none is
+  dropped. On sheet 2 the table is set where it fits, and the streets
+  carry no numbers where it doesn't. On sheet 4 each lettered stop shows
+  its letter in a small square in the stops' grey in place of its ring,
+  and the table is set once where it fits. A tap on these streets, a
+  lettered stop or the table lists the routes by letter. Routes on those
+  streets that stop at no lettered stop are still listed along the street.
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
@@ -4586,6 +4580,10 @@ work against the real structure before asking for evaluation.
   block, matching the table. With the letters in the blocks, the bracket
   has about 5 px at its best place on sheet 3, and a version without it
   went to Chris to choose between.
+- 2026-11-13: Bracket removed: the table has no bracket or leader on any
+  sheet, and stays where it was (#126). Reason: with each stop's letter on
+  its street, the matching squares tie the table to the streets, and the
+  bracket was too faint to see on a phone.
 
 ## Sources
 

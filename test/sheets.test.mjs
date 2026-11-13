@@ -1146,7 +1146,7 @@ test("RTD's stop groups: a stop's letter from its name, and a pair of streets th
   assert.deepEqual(stopGroups(all([stop('Oak St & 1st Ave', '5')])), [], 'no letters: no tables');
 });
 
-test('on sheet 3 a lettered pair gets one table with a bracket in place of its route lists; with no letters, the lists stay', () => {
+test('on sheet 3 a lettered pair gets one table in place of its route lists, tied to its streets by their letters, with no bracket; with no letters, the lists stay', () => {
   // Two one-way streets 50 px apart carrying the same six routes, each stop serving two of them.
   const routes = '1 2 3 4 5 6';
   const street = (y) => line({ mode: 'bus', cls: 'c10', routes, n: 6, hw: 5, zoom: 'near' }, [at3(0, y), at3(900, y)]);
@@ -1163,7 +1163,8 @@ test('on sheet 3 a lettered pair gets one table with a bracket in place of its r
 
   const grouped = draw(true);
   assert.equal(kinds(grouped, 'group-plate').length, 1, 'one table for the pair');
-  assert.equal(kinds(grouped, 'group-bracket').length, 1, 'tied to its streets by a bracket');
+  assert.equal(kinds(grouped, 'group-bracket').length, 0, 'no bracket: the letters on the streets tie the table to them');
+  assert.equal(kinds(grouped, 'group-stop').length, 12, 'each lettered stop shows its letter on its street');
   assert.equal(kinds(grouped, 'group-area').length, 1, 'a tap on the plate finds the table');
   assert.deepEqual(kinds(grouped, 'group-badge').map((f) => f.properties.letter), ['X', 'Y', 'Z']);
   const rows = kinds(grouped, 'group-text').filter((f) => f.properties.role === 'row').map((f) => f.properties.text);
@@ -1171,14 +1172,13 @@ test('on sheet 3 a lettered pair gets one table with a bracket in place of its r
   assert.equal(kinds(grouped, 'group-text').find((f) => f.properties.role === 'title').properties.text, 'ELM & OAK ST');
   assert.equal(kinds(grouped, 'bus-label').length, 0, 'the long lists are gone');
   assert.ok(kinds(grouped, 'bus').every((f) => f.properties.groups === 'X 1 2 | Y 3 4 | Z 5 6'), 'a tap on either street gives its routes by letter');
-  // The plate is level, clear of both streets, and the bracket crosses both.
+  // The plate is level, clear of both streets, and near its stops.
   const plate = kinds(grouped, 'group-plate')[0];
   const at = toPx(plate.geometry.coordinates, near.zoom);
   const box = [at[0] + plate.properties.off[0] - origin3[0], at[1] + plate.properties.off[1] - origin3[1]];
   const [w, h] = [plate.properties.w, plate.properties.h];
   assert.ok(box[1] + h < -2 || box[1] > 52 || (box[1] > 2 && box[1] + h < 48), 'the plate keeps off both streets');
-  const ys = kinds(grouped, 'group-bracket')[0].geometry.coordinates[0].slice(1).map((p) => toPx(p, near.zoom)[1] - origin3[1]);
-  assert.ok(Math.min(...ys) < 0 && Math.max(...ys) > 50, 'the bracket runs across both streets');
+  assert.ok(Math.hypot(box[0] + w / 2 - 425, box[1] + h / 2 - 25) <= SIZES.groupReach, 'near the middle of its stops');
   assert.ok(w > 40 && h > 40);
 });
 
@@ -1198,22 +1198,6 @@ const lettered3 = ({ across = [], xs = [150, 260, 370, 480, 590, 700], extra = [
 const kinds3 = (features, kind) => features.filter((f) => f.properties.kind === kind);
 const px3 = (f) => { const p = toPx(f.geometry.coordinates, near.zoom); return [p[0] - origin3[0], p[1] - origin3[1]]; };
 
-test('a table\'s bracket crosses its streets mid-block, keeping its air off the cross streets beside it', () => {
-  // Cross streets every 18 px, where a bracket between two keeps less than its air off them,
-  // but for one block 60 px wide.
-  const across = [];
-  for (let x = 60; x <= 840; x += 18) if (x <= 420 || x >= 480) across.push(x);
-  across.push(480);
-  const features = lettered3({ across });
-  const [bracket] = kinds3(features, 'group-bracket');
-  assert.ok(bracket, 'the table keeps its bracket');
-  const [, a, b] = bracket.geometry.coordinates[0].map((p) => toPx(p, near.zoom)[0] - origin3[0]);
-  // Ink to ink: from the bracket's stroke to each cross street's.
-  const air = Math.min(...across.map((x) => Math.min(Math.abs(x - a), Math.abs(x - b)))) - SIZES.groupBracket / 2 - busWide('c30', near) / 2;
-  assert.ok(air >= SIZES.groupAir, `${air.toFixed(1)} px off the nearest cross street`);
-  assert.ok(a > 420 && a < 480 && b > 420 && b < 480, 'in the one block wide enough');
-});
-
 test('on sheet 3 every lettered stop shows its letter in a square on its street, off the cross streets, and none is dropped', () => {
   // A cross street right at the first stops' place, and two Oak St stops a few pixels apart.
   const features = lettered3({ across: [150], extra: [[1, 405]] });
@@ -1230,6 +1214,8 @@ test('on sheet 3 every lettered stop shows its letter in a square on its street,
   assert.ok(Math.abs(close[0] - close[1]) >= side + SIZES.groupStreetApart, 'moved apart along the street');
   const tap = squares.find((f) => f.properties.letter === 'Y');
   assert.equal(tap.properties.routes, '3, 4', 'a tap gives its routes');
-  // The fourth sheet draws its stops, with their own letters, and no squares.
-  assert.equal(kinds3(lettered3({ across: [150] }, SHEETS[3]), 'group-stop').length, 0);
+  // The fourth sheet draws its stops, with their own letters, and no squares; no sheet draws a bracket.
+  const s4 = lettered3({ across: [150] }, SHEETS[3]);
+  assert.equal(kinds3(s4, 'group-stop').length, 0);
+  assert.equal(kinds3(s4, 'group-bracket').length + kinds3(features, 'group-bracket').length, 0);
 });
