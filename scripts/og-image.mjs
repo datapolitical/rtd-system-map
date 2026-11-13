@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const site = process.argv[2] ?? 'https://rtd-system-map.pages.dev/';
 const classic = process.argv[3] === 'classic';
-const view = process.argv[4] ?? (classic ? '#11/39.7400/-104.9700' : '#12/39.7500/-104.9965');
+const view = process.argv[4] ?? (classic ? '#11/39.7400/-104.9700' : '#14/39.7526/-104.9962');
 const out = fileURLToPath(new URL(classic ? '../public/classic/og.png' : '../public/og.png', import.meta.url));
 
 const browser = await chromium.launch();

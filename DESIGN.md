@@ -2462,8 +2462,10 @@ shared or bookmarked.
 ### Link preview
 
 A link to the site shows the title "RTD system map", the page's description
-and a picture (`public/og.png`, 1200x630): central Denver on sheet 2 in the
-light theme, with the buttons and credit hidden. A link to the classic map
+and a picture (`public/og.png`, 1200x630): downtown Denver around Union
+Station on sheet 3, close enough to show each rail line's letter, the bus
+streets' route numbers and the neighbourhood names, in the light theme with
+the buttons and credit hidden. A link to the classic map
 shows its own (`public/classic/og.png`): central Denver at zoom 11 in the
 light theme, with the interface and route letters hidden.
 `node scripts/og-image.mjs` makes either again from the live site (`sheets`
@@ -4464,6 +4466,10 @@ work against the real structure before asking for evaluation.
   sheet 1 named Thornton and Niwot but not Denver, Aurora, Lakewood or
   Boulder, sheet 2 named no town at all, and sheet 3 named "Quality Hill
   Historic District" instead of Capitol Hill.
+- 2026-11-12: The front page's link preview moves in from sheet 2 to sheet
+  3 at Union Station. Reason: Chris: "do something a little zoomed in to show
+  off a little bit more detail in the preview"; sheet 2 showed the lines but
+  not the route numbers and neighbourhood names that set the map apart.
 
 ## Sources
 
