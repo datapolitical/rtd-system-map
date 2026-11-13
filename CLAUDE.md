@@ -74,11 +74,10 @@ we are" section from them (closed issues show as done).
   score goes up, update `qa/recall/baseline.json` in the same commit.
 - When you or Chris find a fault the checks missed, pin it in
   `qa/recall/finds.json` on the build it was seen on, then fix it.
-- A branch's preview runs `npm run check:map` against main's and posts a
-  commit status, `checks/map`, that fails when the branch adds a map fault
-  main doesn't have; the run's summary lists each with a link. Ask Chris for
-  a phone check only when `checks/map` passes, or when each new fault has an
-  answer in the issue (fixed, or why it is not a fault).
+- Branch previews no longer run the map checks: Chris turned the "Checks
+  (branch preview)" workflow off on 2026-11-13 because waiting on it slowed
+  work down. Don't wait for a `checks/map` status before merging or asking
+  for a phone check. The nightly and baseline check workflows still run.
 
 ## Status page
 
