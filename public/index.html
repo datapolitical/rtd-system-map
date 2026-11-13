@@ -21,6 +21,20 @@
 <meta property="og:image:alt" content="Map of central Denver with the colored rail lines meeting at Union Station and the bus streets beside them.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="/vendor/maplibre-gl.css">
+<!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
+     for the one that names it (DESIGN.md, "Quality floor"). The sheet and the glyphs are fetched
+     by the map's worker, which finds them in the browser's cache. -->
+<link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
+<link rel="modulepreload" href="/js/sheets/style.js">
+<link rel="modulepreload" href="/js/sheets/settle.js">
+<link rel="preload" href="/data/meta.json" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="/data/sheets.json" as="fetch" crossorigin="anonymous">
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="preload" href="https://tiles.openfreemap.org/planet" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="/data/sheet-1.geojson" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="/vendor/glyphs/Overpass%20Medium/0-255.pbf" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="/vendor/glyphs/Overpass%20SemiBold/0-255.pbf" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="/vendor/glyphs/Overpass%20ExtraBold/0-255.pbf" as="fetch" crossorigin="anonymous">
 <style>
   @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: block; }
   :root { --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; }

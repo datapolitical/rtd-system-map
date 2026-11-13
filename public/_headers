@@ -1,0 +1,6 @@
+# Cloudflare Pages response headers (https://developers.cloudflare.com/pages/configuration/headers/).
+
+# The map's glyphs. Served as application/octet-stream they go uncompressed, and a range of
+# one font is about 80 KB; as protobuf Cloudflare compresses them to about a third.
+/vendor/glyphs/*
+  Content-Type: application/x-protobuf

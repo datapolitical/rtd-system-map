@@ -2654,6 +2654,14 @@ are deferred, not ruled out. See "Open questions".
   - The schedule summary loads after the map first draws, and a route's
     timetable only when its panel opens. Live feeds are fetched only while
     Live is on (or a stop panel is open) and the tab is visible.
+  - The sheets page (the front page) loads only the sheet it opens on. The
+    other three, about half its weight, follow one at a time once that view
+    is drawn, nearest first, and a zoom asks for its sheet straight away.
+    Its HTML asks at once for the modules, `meta.json`, `sheets.json`, the
+    opening sheet, the tile index and the glyphs the opening view letters
+    with; the glyphs are served as protobuf so Cloudflare compresses them
+    (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
+    CPU): drawn at 5.9 s, was 8.9 s; opening view settled at 6.5 s, was 12 s.
   - MapLibre and the Overpass font are served from the site itself: no extra
     connections to a CDN or Google before the map can start.
   - Symbols are drawn on canvases kept in memory, not on the GPU
@@ -4381,6 +4389,10 @@ work against the real structure before asking for evaluation.
   its bars on sheet 4.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
+- 2026-11-12: The sheets page loads only the sheet it opens on first, and
+  asks for the opening view's files from its HTML (#125). Reason: on slow 4G
+  the page was blank for about 9 s, waiting on sheets that don't show at the
+  opening zoom.
 
 ## Sources
 
