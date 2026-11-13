@@ -107,8 +107,36 @@ map.on('zoomend', (e) => {
   const box = map.getContainer().getBoundingClientRect();
   show(to, input.wheel ? map.unproject([input.wheel[0] - box.left, input.wheel[1] - box.top]) : undefined);
 });
+// A double tap or double click shows the next sheet, about the point tapped. MapLibre's own
+// double-tap zoom is off (it would stop between sheets), and Safari on a phone never turns a
+// double tap into a dblclick, so taps are counted here: two one-finger taps that didn't move,
+// close in time and place. A mouse's double click still arrives as dblclick.
 map.doubleClickZoom.disable();
-map.on('dblclick', (e) => show(sheet + 1, e.lngLat));
+const canvas = map.getCanvasContainer();
+let press = null;
+let lastTap = null;
+let tappedAt = -Infinity;
+canvas.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  press = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+}, { passive: true });
+canvas.addEventListener('touchend', (e) => {
+  const t = e.changedTouches[0];
+  const tap = press && !e.touches.length && Math.hypot(t.clientX - press.x, t.clientY - press.y) < 10;
+  press = null;
+  if (!tap) { lastTap = null; return; }
+  const now = performance.now();
+  if (lastTap && now - lastTap.at < 350 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 40) {
+    // No mouse events after this tap: their mousedown would stop the move to the next sheet.
+    e.preventDefault();
+    lastTap = null;
+    tappedAt = now;
+    const box = canvas.getBoundingClientRect();
+    show(sheet + 1, map.unproject([t.clientX - box.left, t.clientY - box.top]));
+  } else lastTap = { at: now, x: t.clientX, y: t.clientY };
+}, { passive: false });
+// A browser that does make a dblclick of the same two taps is not counted twice.
+map.on('dblclick', (e) => { if (performance.now() - tappedAt > 600) show(sheet + 1, e.lngLat); });
 document.querySelector('#in').addEventListener('click', () => show(sheet + 1));
 document.querySelector('#out').addEventListener('click', () => show(sheet - 1));
 show(sheet);
