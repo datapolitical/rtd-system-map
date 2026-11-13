@@ -20,6 +20,18 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Map of central Denver with the colored rail lines meeting at Union Station and the bus streets beside them.">
 <meta name="twitter:card" content="summary_large_image">
+<script>
+  // The loading picture (#poster below) is asked for first, before anything the map needs: it is
+  // what the reader sees until the map is drawn. Only on a plain visit; a link to a view, or a theme
+  // the address forces, shows no picture. Before the stylesheet, so this runs without waiting for it.
+  if (!location.hash && !new URLSearchParams(location.search).has('theme')) {
+    const theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    const link = Object.assign(document.createElement('link'), { rel: 'preload', as: 'image', fetchPriority: 'high' });
+    if (matchMedia('(max-width: 600px)').matches) link.href = `/poster/phone-${theme}.webp`;
+    else link.imageSrcset = `/poster/wide-${theme}-1x.webp 1x, /poster/wide-${theme}-2x.webp 2x`;
+    document.head.append(link);
+  }
+</script>
 <link rel="stylesheet" href="/vendor/maplibre-gl.css">
 <!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
      for the one that names it (DESIGN.md, "Quality floor"). The sheet and the glyphs are fetched
@@ -60,13 +72,15 @@
   #card i { display: inline-block; min-width: 1.5em; height: 1.5em; margin-right: 6px; border-radius: 0.75em; text-align: center; font-style: normal; line-height: 1.55em; }
   /* While the map loads: a picture of the view it opens on, centred as the map is, and a line saying so (scripts/poster.mjs). */
   #poster { position: absolute; inset: 0; overflow: hidden; background: var(--ground); transition: opacity 250ms ease-out; }
-  #poster img { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: none; user-select: none; -webkit-user-drag: none; }
+  #poster img { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: none; user-select: none; -webkit-user-drag: none;
+    opacity: 0; transition: opacity 200ms ease-out; }
+  #poster img.whole { opacity: 1; }
   #poster.gone { opacity: 0; pointer-events: none; }
   #loading { position: absolute; left: 50%; top: max(16px, calc(env(safe-area-inset-top) + 10px)); transform: translateX(-50%); margin: 0; padding: 7px 15px 6px;
     background: var(--card); color: var(--ink); border-radius: 16px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
   #loading span { animation: breathe 1.4s ease-in-out infinite; }
   @keyframes breathe { 50% { opacity: 0.45; } }
-  @media (prefers-reduced-motion: reduce) { #poster { transition: none; } #loading span { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #poster, #poster img { transition: none; } #loading span { animation: none; } }
 </style>
 </head>
 <body>
@@ -104,6 +118,10 @@
     };
     place();
     addEventListener('resize', place);
+    // Shown whole, not drawn in strips as it arrives.
+    const whole = () => img.classList.add('whole');
+    if (img.complete && img.naturalWidth) whole();
+    else img.addEventListener('load', whole);
   })();
 </script>
 <div id="steps" role="group" aria-label="Map sheet">
