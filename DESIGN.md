@@ -2111,18 +2111,20 @@ How it is built:
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
   The build's six bus classes are drawn as three steps: a bus every 10
   minutes or better, every 15, and every 30 or less often (more steps than
-  three don't read as steps). A street with a bus every 10 minutes is a
-  band at least 7 pixels wide, or as wide as the sheet's rail where that is
-  wider (sheet 4), so the frequent network reads as corridors at a glance:
-  on the wider sheets the band is wider than rail, which still reads first
-  by its colour, drawn on top in a colour no grey comes near. The quiet step
-  is the sheet's rail width over 1.6 twice, and on the opening sheet a
-  one-pixel hairline, half a lightness step nearer the ground: there it is
-  the whole outer street grid, and the sheet's job is where service is
-  frequent, so the grid sits back. The middle step (a bus every 15 minutes,
-  the Flatiron Flyer's) sits evenly between, the same ratio up from the
-  quiet step as the busiest is up from it, so the wider the view the steeper
-  the steps (2.6 on sheet 1 down to 1.6 on sheet 4). Their greys are evenly
+  three don't read as steps). A street with a bus every 10 minutes is as
+  wide as the sheet's rail, never wider: wider bands made downtown, where
+  every street is frequent, a heavy grey mat. The frequent network reads
+  as corridors by a lit core instead: a thin line (0.36 of rail's width)
+  down the middle of each busiest street, near white in the dark and near
+  black in the light, and a thinner, dimmer one down each street with a
+  bus every 15 minutes (the Flatiron Flyer's), so the two steps read in
+  order and both read above the grid without adding width. The core is
+  grey and thinner than any rail line, so rail still reads first by its
+  colour and width. The quiet step is the sheet's rail width over 1.6
+  twice, and on the opening sheet a one-pixel hairline, half a lightness
+  step nearer the ground: there it is the whole outer street grid, and the
+  sheet's job is where service is frequent, so the grid sits back. The
+  middle step is rail's width over 1.4. Their greys are evenly
   spaced in lightness, and the quietest reads clearly in both themes (in
   the dark, where a thin line of light reads faint, more so). Rail reads first by its colour: in each theme the busiest bus grey
   has less contrast with the ground than any rail line, by at least 15%.
@@ -2133,6 +2135,15 @@ How it is built:
   colour that would need more (lime, gold, orange, sky blue on cream) keeps
   RTD's colour and gets a thin casing of itself, darker. Pure white is for
   station marks. A stop's ring on sheet 4 is wider than the busiest street.
+  A bus line never ends in the open. Where it ends (no other street, rail
+  station or bus station's hall meets it) and a stop of one of its routes is
+  within 320 m, it is led on to that stop and ends on a ring there: ground
+  inside, in the line's own grey, a little wider than the line. Lines that
+  end at one stop, or at stops a ring's width apart (gates either side of a
+  highway), share one ring. An end with none of its stops that near is a
+  spur in the data, and the run back to the street it leaves is not drawn
+  when it is shorter than 1.6 km. Sheet 4 draws every stop, so its lines
+  already end on one.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
@@ -4507,6 +4518,20 @@ work against the real structure before asking for evaluation.
   Anschutz along I-70 and I-225, and through downtown to Civic Center) are
   its peak-only legs, 4 to 17 trips a weekday with none at midday, so they
   stay quiet.
+- 2026-11-13: The busiest bus step is back to rail's width, never wider,
+  and the two frequent steps read by a lit core down their middle instead
+  (#117). Reason: Chris found the 7 px band too heavy downtown, where
+  every street is frequent, and asked for a better way than width. A core
+  adds contrast without width, so Colfax and US 36 stand out on the
+  opening sheet while downtown weighs about what it did before the band.
+- 2026-11-13: Bus lines end on a mark: the ring of the stop their route
+  ends at, or, for a short spur near none of its stops, not drawn (#117).
+  Reason: Chris found line ends around US 36 and Interlocken that "don't
+  make any sense": AB and 228 stopped short of the US 36 & Flatiron
+  station, AB with a hook. Ends in the open went from 25 to 2 on sheet 1
+  and from 27 to 1 on sheet 2. The three left (the airport, Evergreen and
+  Parker) are where RTD's route data stops 400 m to 1 km short of the
+  stop, too far to lead on to by rule.
 - 2026-11-12: Sheet 4 names its bus streets: a name leads its street's
   route list where the block holds both, and a name of its own slides along
   its street to a stretch between stops and within one of the page's tiles

@@ -61,6 +61,11 @@ export const SIZES = {
   busBridgeMetres: 110,
   busRunMetres: 220,
   busSpeck: 10,
+  // A bus line ends on a mark: the stop of its routes it ends at, if one is this near its end.
+  // A loose end with none of its stops this near is a spur in the data, and a spur shorter than
+  // busSpurMetres back to the street it leaves is not drawn.
+  busEndMetres: 320,
+  busSpurMetres: 1600,
   // Two ways round that enclose a strip thinner than this are drawn as one street.
   busSlim: 6,
   // A street's end this near another street is on it.
@@ -1933,6 +1938,77 @@ export function noded(streets, snap, reach = snap) {
 }
 
 /**
+ * Where bus lines end. Each loose end (no other street meets it, and it stops on no rail
+ * station's bar and no hall) is where a route turns round, and is drawn ending on a mark at it,
+ * when a stop of one of its routes is within `busEndMetres`. One with none of its stops near is
+ * where the data stops short or wanders off a street: the run from it back to the street it
+ * leaves goes, when shorter than `busSpurMetres`. Returns the streets and the ends' marks.
+ */
+export function termini(streets, stops, perMetre, bars = [], walls = []) {
+  // With no stops to go by, every end is left as the data has it.
+  if (!stops.length) return { streets, ends: [] };
+  const key = (p) => `${Math.round(p[0])},${Math.round(p[1])}`;
+  const near = (p) => [-1, 0, 1].flatMap((dx) => [-1, 0, 1].map((dy) => `${Math.round(p[0]) + dx},${Math.round(p[1]) + dy}`));
+  const onPath = (p, path) => path.length > 1 ? nearest(path, p).d : dist(p, path[0]);
+  const room = SIZES.busSnap + 1;
+  let live = [...streets];
+  const looseEnds = () => {
+    const at = new Map();
+    for (const st of live) for (const e of [st.path[0], st.path.at(-1)]) at.set(key(e), [...(at.get(key(e)) ?? []), st]);
+    const out = [];
+    for (const st of live) for (const end of [0, 1]) {
+      const p = end ? st.path.at(-1) : st.path[0];
+      if (near(p).reduce((n, k) => n + (at.get(k)?.length ?? 0), 0) > 1) continue;
+      if (live.some((o) => o !== st && onPath(p, o.path) < 1.5)) continue;
+      if (bars.some((b) => onPath(p, b) <= room + SIZES.rail[1])) continue;
+      if (walls.some((w) => onPath(p, w.ring) <= room)) continue;
+      out.push({ st, end, p });
+    }
+    return { out, at };
+  };
+  const ends = [];
+  const reach = SIZES.busEndMetres * perMetre;
+  const spur = SIZES.busSpurMetres * perMetre;
+  for (let pass = 0; pass < 3; pass++) {
+    const { out, at } = looseEnds();
+    const gone = new Set();
+    for (const x of out) {
+      const mine = new Set(String(x.st.routes).split(' '));
+      let stop = null;
+      for (const s of stops) if (s.routes.some((r) => mine.has(r)) && dist(s.at, x.p) <= reach && (!stop || dist(s.at, x.p) < dist(stop.at, x.p))) stop = s;
+      if (stop) {
+        // Led on to the stop itself, so lines that end at one stop share one mark.
+        const to = ends.find((e) => dist(e.at, stop.at) < 2 * SIZES.stopRing) ?? null;
+        const at = to ? to.at : stop.at;
+        if (dist(at, x.p) >= 0.5) { if (x.end) x.st.path.push(at); else x.st.path.unshift(at); }
+        if (to) { if (CLASS_ORDER.indexOf(x.st.cls) > CLASS_ORDER.indexOf(to.cls)) to.cls = x.st.cls; to.routes = [...new Set([...String(to.routes).split(' '), ...mine])].join(' '); }
+        else ends.push({ at, cls: x.st.cls, routes: x.st.routes });
+        continue;
+      }
+      // Back along the street from the loose end to the first corner where streets part.
+      const run = [x.st];
+      let far = length(x.st.path);
+      let here = x.end ? x.st.path[0] : x.st.path.at(-1);
+      let from = x.st;
+      while (far < spur) {
+        const next = near(here).flatMap((k) => at.get(k) ?? []).filter((o) => o !== from);
+        if (next.length !== 1 || run.includes(next[0])) break;
+        from = next[0];
+        run.push(from);
+        far += length(from.path);
+        here = dist(from.path[0], here) < 1.5 ? from.path.at(-1) : from.path[0];
+      }
+      if (far < spur) for (const o of run) gone.add(o);
+    }
+    if (!gone.size) break;
+    live = live.filter((st) => !gone.has(st));
+    // A mark set on a run that went goes with it.
+    for (let i = ends.length - 1; i >= 0; i--) if (!live.some((st) => [st.path[0], st.path.at(-1)].some((q) => dist(q, ends[i].at) < 1))) ends.splice(i, 1);
+  }
+  return { streets: live, ends };
+}
+
+/**
  * Streets without stubs: a short run from a corner to an end where nothing else is (no
  * street, no hall's wall) reads as a barb on the street it leaves, not as a route.
  */
@@ -2517,7 +2593,10 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const lines = railLines(routes, sheet);
   const walls = halls(terminals, sheet);
   const marks = stationMarks(stations, lines, sheet, walls);
-  const bus = busStreets(streets, sheet, walls, marks, lines);
+  const lat0 = streets.features.find((f) => f.geometry.type === 'LineString')?.geometry.coordinates[0][1] ?? 0;
+  const endStops = (stops?.features ?? []).map((f) => ({ at: toPx(f.geometry.coordinates, sheet.zoom), routes: String(f.properties.lines ?? f.properties.routes ?? '').split(/[ ,]+/).filter(Boolean) }));
+  const { streets: bus, ends } = termini(busStreets(streets, sheet, walls, marks, lines), endStops, 1 / metresPerPixel(lat0, sheet.zoom),
+    marks.flatMap((m) => [m.ends, ...(m.more ?? [])]), walls);
   const discs = letters(lines, marks, sheet);
   const back = (p) => toLonLat(p, sheet.zoom);
   const feature = (properties, geometry) => ({ type: 'Feature', properties, geometry });
@@ -2652,6 +2731,8 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
       { type: 'Point', coordinates: back(n.at) }));
     for (const b of n.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink }, { type: 'Point', coordinates: back(b.at) }));
   }
+  // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.
+  if (sheet.id <= 3) for (const e of ends) features.push(feature({ kind: 'bus-end', cls: e.cls, routes: listed(e.routes) }, { type: 'Point', coordinates: back(e.at) }));
   for (const r of rings) features.push(feature({ kind: 'stop', id: r.id, name: r.name, heading: r.heading, routes: r.routes.join(', ') }, { type: 'Point', coordinates: back(r.at) }));
   const hub = marks.find((m) => m.hub);
   return { type: 'FeatureCollection', hub: hub ? back(lerp(hub.ends[0], hub.ends[1], 0.5)) : null, features };

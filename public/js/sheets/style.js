@@ -18,16 +18,16 @@ const GAP = { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
 // The build's six headway classes are drawn as three steps: a bus every 10 minutes or better,
 // every 15, and every 30 or less often. More steps than three don't read as steps (DESIGN.md, "Four sheets").
 export const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
-// Widths, per sheet. The quiet step is the sheet's rail width over 1.6 twice (on the opening sheet a
-// one-pixel hairline: there it is the whole outer street grid). The busiest step is a band at least
-// BUS_BAND wide, or as wide as rail where the sheet's rail is wider, so a street with a bus every 10
-// minutes reads as a corridor at a glance; rail still reads first by its colour, drawn on top in a
-// colour no grey comes near. The middle step sits evenly between, the same ratio up from the quiet
-// step as the busiest is up from it, so the wider the view the steeper the steps: the overview's job
-// is where service is frequent.
-export const BUS_BAND = 7;
+// Widths, per sheet. The busiest step is as wide as the sheet's rail, never wider: where frequent
+// streets lie a block apart downtown, anything wider fills the grid. It reads first among the bus
+// streets by a lit core (BUS_CORE), not by width. The middle step (a bus every 15 minutes) is a
+// little under it, so a corridor such as the Flatiron Flyer reads as a corridor; the quiet step is
+// rail's width over 1.6 twice, and on the opening sheet a one-pixel hairline (there it is the whole
+// outer street grid).
+export const MID_UNDER_TOP = 1.4;
 const QUIET = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n, n === '1' ? 1 : w / 1.6 ** 2]));
-export const STEP_RATIO = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n, Math.sqrt(Math.max(w, BUS_BAND) / QUIET[n])]));
+// The busiest step's core: this share of its width, in a grey with more contrast than the band's.
+export const BUS_CORE = 0.36;
 const steps = (quiet, mid, top) => Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, [quiet, mid, top][s]]));
 
 export const PALETTES = {
@@ -40,6 +40,8 @@ export const PALETTES = {
     // The quiet step on the opening sheet, half a step nearer the ground (OKLab L 0.3875): there it is the
     // whole outer street grid, which should sit back behind the frequent streets, not read as chart gridlines.
     busHairline: '#3e454f',
+    // The lit core of the busiest step: a stripe of light down the band.
+    busCore: '#b3bbc7', busCoreMid: '#959daa',
     hall: '#243147', hallEdge: '#6a7a98',
     mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', city: '#9ba5b8', streetName: '#5c6780', busStreetName: '#7b869b', number: '#c9d2e4', stop: '#aab6cf',
   },
@@ -49,14 +51,15 @@ export const PALETTES = {
     bus: steps('#a6abb3', '#8b8f97', '#70757c'),
     // OKLab L 0.785.
     busHairline: '#b4b9c1',
+    busCore: '#3b4047', busCoreMid: '#575c64',
     hall: '#dcd8cf', hallEdge: '#979ba3',
     mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', city: '#555a63', streetName: '#8a8d95', busStreetName: '#73777f', number: '#3a4560', stop: '#566179',
   },
 };
 
-// Bus street widths by class, per sheet: the quiet step, and each step above it STEP_RATIO times as wide.
-export const BUS_WIDTH = Object.fromEntries(Object.entries(RAIL).map(([n]) => [n,
-  Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, Math.round(QUIET[n] * STEP_RATIO[n] ** s * 100) / 100]))]));
+// Bus street widths by class, per sheet.
+export const BUS_WIDTH = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n,
+  Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, Math.round([QUIET[n], w / MID_UNDER_TOP, w][s] * 100) / 100]))]));
 
 // Rail stands out from the busiest bus street by at least this much more contrast with the ground.
 export const RAIL_OVER_BUS = 1.15;
@@ -99,6 +102,8 @@ export const numberOffset = (n, width) => -((width / 2 + 1.5) / NUMBER_SIZE[n] +
 export const ROW_HEIGHT = 1.15;
 // The ring is wider than the busiest street on that sheet (BUS_WIDTH[4].c3), so it reads as a mark on it, not a hole in it.
 export const STOP_RING = { radius: 4, stroke: 1.5 };
+// Where a bus line ends on the sheets that draw no stops: a ring this thick, around the line's end.
+export const BUS_END = { stroke: 1.4 };
 export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 
 // Station name size per sheet (SIZES.name in the build).
@@ -177,6 +182,15 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
       paint: { 'line-color': c.ground, 'line-width': ['+', byClass(BUS_WIDTH[n]), 1.6] } });
     layer('bus', 'line', { filter: kind('bus'), layout: { ...ROUND, 'line-sort-key': ['match', ['get', 'cls'], ...order.flatMap((k, j) => [k, j]), 0] },
       paint: { 'line-color': byClass(busInk(theme, n)), 'line-width': byClass(BUS_WIDTH[n]) } });
+    // The two frequent steps carry a lit core down their middle: more contrast than the band, no more width.
+    // The middle step's is thinner and a step dimmer, so the steps still read in order.
+    layer('bus-core', 'line', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]]), layout: ROUND,
+      paint: { 'line-color': ['match', ['get', 'cls'], 'c15', c.busCoreMid, c.busCore], 'line-width': ['match', ['get', 'cls'], 'c15', RAIL[n] * BUS_CORE * 0.7, RAIL[n] * BUS_CORE] } });
+    // Where a bus line ends: a ring on its end, ground inside, in the line's own grey, a little
+    // wider than the line, so the line stops on something (a stop) rather than in the open.
+    if (n <= 3) layer('bus-end', 'circle', { filter: kind('bus-end'), paint: {
+      'circle-radius': ['+', ['/', byClass(BUS_WIDTH[n]), 2], BUS_END.stroke + 0.9], 'circle-color': c.ground,
+      'circle-stroke-color': byClass(busInk(theme, n)), 'circle-stroke-width': BUS_END.stroke } });
 
     // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses
     // end on. It is drawn over them, so a street ends flat on the wall, not in a round blob across it.

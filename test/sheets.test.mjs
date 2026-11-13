@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -587,22 +587,25 @@ test('the page inks each line from the colours the build found: pale ones cased 
   assert.deepEqual(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], ['get', 'color'], 'without the list, RTD\'s own colours');
 });
 
-test('bus widths: the busiest a band at least BUS_BAND wide (or rail\'s width), the middle step evenly between, the quiet step as before; numbers still clear the widest', async () => {
-  const { BUS_WIDTH, BUS_STEP, STEP_RATIO, BUS_BAND } = await import('../public/js/sheets/style.js');
+test('bus widths: the busiest as wide as rail and never wider, the middle step under it, the quiet step as before; the frequent steps read by a lit core, not width', async () => {
+  const { sheetStyle, BUS_WIDTH, BUS_STEP, MID_UNDER_TOP, BUS_CORE } = await import('../public/js/sheets/style.js');
   for (const sheet of SHEETS) {
     const w = BUS_WIDTH[sheet.id];
     const steps = [0, 1, 2].map((s) => [...new Set(Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => w[cls]))]);
     assert.ok(steps.every((x) => x.length === 1), `sheet ${sheet.id}: one width per step`);
     const [q, m, t] = steps.map((x) => x[0]);
     const rail = SIZES.rail[sheet.id];
-    assert.ok(Math.abs(t - Math.max(rail, BUS_BAND)) < 0.01, `sheet ${sheet.id}: the busiest step is a band, or as wide as rail`);
-    assert.ok(t >= BUS_BAND, `sheet ${sheet.id}: a street every 10 minutes reads as a corridor`);
+    assert.ok(Math.abs(t - rail) < 0.01, `sheet ${sheet.id}: the busiest step is as wide as rail, never wider`);
+    assert.ok(Math.abs(m - rail / MID_UNDER_TOP) < 0.01 && m > q, `sheet ${sheet.id}: the middle step sits between`);
     assert.ok(q >= 1, `sheet ${sheet.id}: no line under a pixel`);
     if (sheet.id === 1) assert.ok(q <= 1.05, 'the opening sheet\'s quiet step is a hairline');
     else assert.ok(Math.abs(q - rail / 1.6 ** 2) < 0.01, `sheet ${sheet.id}: the quiet step is rail over 1.6 twice`);
-    const ratio = STEP_RATIO[sheet.id];
-    for (const [lo, hi] of [[q, m], [m, t]]) assert.ok(Math.abs(hi / lo - ratio) < 0.05, `sheet ${sheet.id}: each step ${ratio.toFixed(2)} times the one below`);
-    if (sheet.id > 1) assert.ok(ratio <= STEP_RATIO[sheet.id - 1], `sheet ${sheet.id}: steps no steeper than on the wider sheet before`);
+    assert.ok(rail * BUS_CORE < m, `sheet ${sheet.id}: the core sits inside the line`);
+  }
+  for (const theme of ['dark', 'light']) {
+    const core = sheetStyle(theme).layers.find((l) => l.id === 'bus-core-2');
+    assert.ok(core, `${theme}: the frequent steps carry a core`);
+    assert.ok(!JSON.stringify(core.filter).match(/c30|c60/), `${theme}: the quiet steps carry none`);
   }
 });
 
@@ -1098,4 +1101,22 @@ test('a label run takes its street from the names of the stops its routes serve 
   assert.equal(runStreet(run, [stop(10, 'Colfax Ave'), stop(100, 'Colfax Ave'), stop(150, 'Broadway', ['0']), stop(200, 'Broadway', ['0'])], 8), 'Colfax Ave', "another route's stops don't vote");
   assert.equal(runStreet(run, [stop(10, 'Colfax Ave'), stop(100, 'Colfax Ave'), stop(150, 'Broadway'), stop(200, 'Broadway')], 8), null, 'no clear majority, no name');
   assert.equal(runStreet(run, [stop(10, 'Colfax Ave', ['15']), { at: [100, 40], routes: ['15'], street: 'Colfax Ave' }], 8), null, 'a stop off the run does not count');
+});
+
+test('a bus line ends on a mark: led on to the stop its route ends at, lines ending at one stop share it; a spur near none of its stops goes', () => {
+  const st = (path, routes) => ({ cls: 'c30', routes, path });
+  const main = st([[0, 0], [400, 0]], 'FF');
+  const ab = st([[100, 0], [100, 60]], 'AB');
+  const ab2 = st([[100, 60], [106, 6]], 'AB');
+  const twoTwoEight = st([[200, 0], [200, 50], [112, 8]], '228');
+  const spur = st([[300, 0], [300, 20]], 'X');
+  const stops = [{ at: [108, 4], routes: ['AB'] }, { at: [110, 5], routes: ['228'] }, { at: [0, 0], routes: ['FF'] }, { at: [400, 0], routes: ['FF'] }];
+  const { streets, ends } = termini([main, ab, ab2, twoTwoEight, spur], stops, 1);
+  assert.ok(!streets.includes(spur), 'the spur near none of its stops is not drawn');
+  assert.equal(ends.filter((e) => e.at[0] > 50 && e.at[0] < 150).length, 1, 'AB and 228 end on one mark at their stop');
+  const mark = ends.find((e) => e.at[0] > 50 && e.at[0] < 150);
+  assert.deepEqual(mark.at, [108, 4], 'the mark is on the stop');
+  assert.deepEqual(twoTwoEight.path.at(-1), [108, 4], '228 is led on to it');
+  assert.ok(String(mark.routes).includes('228') && String(mark.routes).includes('AB'));
+  assert.equal(ends.length, 3, 'each end of the line along the street is on its stop');
 });
