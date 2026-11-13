@@ -2094,11 +2094,15 @@ How it is built:
   below, the busiest as wide as the sheet's rail, none under a pixel; their
   greys are evenly spaced in lightness, and the quietest reads clearly in
   both themes (in the dark, where a thin line of light reads faint, more
-  so). Rail reads first by its colour: in each theme the busiest bus grey
+  so). The opening sheet steps more steeply (1.9), so its quiet step is a
+  one-pixel hairline, half a lightness step nearer the ground: there it is
+  the whole outer street grid, and the sheet's job is where service is
+  frequent, so the frequent streets read first and the grid sits back. Rail reads first by its colour: in each theme the busiest bus grey
   has less contrast with the ground than any rail line, by at least 15%.
   The page takes each line's colour from RTD's data (the build lists them
   in `sheets.json`) and, where one is too dim for that, lifts it in the dark
-  (lighter, same hue) or, in the light, darkens it by at most a shade; a
+  (lighter, same hue, keeping its share of the most chroma that hue can
+  have, so deep red lifts to a bright red, not salmon) or, in the light, darkens it by at most a shade; a
   colour that would need more (lime, gold, orange, sky blue on cream) keeps
   RTD's colour and gets a thin casing of itself, darker. Pure white is for
   station marks. A stop's ring on sheet 4 is wider than the busiest street.
@@ -4413,6 +4417,14 @@ work against the real structure before asking for evaluation.
   gold and sky blue faded into the cream. Sheet 4's stop rings grow to stay
   wider than the busiest street. The dark street grid is left as it was: at
   1.09:1 against the ground it is well under the quietest bus step (2.27:1).
+- 2026-11-12: The opening sheet steps its bus streets more steeply (1.9, the
+  quiet step a 1 px hairline in a fainter grey), and in the dark the busiest
+  bus grey drops from OKLab L 0.63 to 0.60 and dim rail lifts keep their
+  chroma (#117). Reason: at 1.41 px the quiet step made the opening view's
+  outer grid read like chart gridlines; and no red bright enough to clear
+  the old floor (6.1:1) is still red, so T lifted to salmon #fe6156 and E
+  and N to lavender and orchid. Now T is #fb4b43, E #a673e3, N #d84af3, all
+  over a 5.4:1 floor.
 
 ## Sources
 

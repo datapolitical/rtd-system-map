@@ -2,7 +2,7 @@
 // table per sheet; nothing here depends on the zoom except which sheet shows.
 // The build draws the geometry for each sheet (scripts/lib/sheets.mjs); this
 // file is only ink.
-import { contrast, darkenTo, lightenTo, lightness } from '../color.js';
+import { contrast, darkenTo, liftTo, lightness } from '../color.js';
 
 export const SHEETS = [
   { id: 1, zoom: 10 },
@@ -18,16 +18,22 @@ const GAP = { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
 // The build's six headway classes are drawn as three steps: a bus every 10 minutes or better,
 // every 15, and every 30 or less often. More steps than three don't read as steps (DESIGN.md, "Four sheets").
 export const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
-// Each step is this many times as wide as the one below; the top one is as wide as rail.
-export const STEP_RATIO = 1.6;
+// Each step is this many times as wide as the one below; the top one is as wide as rail. The opening
+// sheet's job is where service is frequent, and there the quiet step covers the whole outer street grid,
+// so its steps are steeper: the quiet step a one-pixel hairline, the frequent step plainly first.
+export const STEP_RATIO = { 1: 1.9, 2: 1.6, 3: 1.6, 4: 1.6 };
 const steps = (quiet, mid, top) => Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, [quiet, mid, top][s]]));
 
 export const PALETTES = {
   dark: {
     ground: '#0e141d', water: '#15202f', park: '#101a1c', freeway: '#1b2535', road: '#131a25', street: '#151d2a', building: '#121924',
-    // Bus streets, quietest to busiest: one cool grey, evenly spaced in lightness (OKLab L 0.43, 0.53, 0.63).
-    // The busiest stays under the dimmest rail line (railInk), so rail reads first by its colour.
-    bus: steps('#49505b', '#656c78', '#828a96'),
+    // Bus streets, quietest to busiest: one cool grey, evenly spaced in lightness (OKLab L 0.43, 0.515, 0.60).
+    // The busiest stays under the dimmest rail line (railInk), so rail reads first by its colour; it is no
+    // brighter than that, so a deep red lifted over it is still red, not salmon.
+    bus: steps('#49505b', '#606873', '#79818d'),
+    // The quiet step on the opening sheet, half a step nearer the ground (OKLab L 0.3875): there it is the
+    // whole outer street grid, which should sit back behind the frequent streets, not read as chart gridlines.
+    busHairline: '#3e454f',
     hall: '#243147', hallEdge: '#6a7a98',
     mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', streetName: '#4b566b', number: '#c9d2e4', stop: '#aab6cf',
   },
@@ -35,14 +41,16 @@ export const PALETTES = {
     ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
     // OKLab L 0.74, 0.65, 0.56.
     bus: steps('#a6abb3', '#8b8f97', '#70757c'),
+    // OKLab L 0.785.
+    busHairline: '#b4b9c1',
     hall: '#dcd8cf', hallEdge: '#979ba3',
     mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', streetName: '#a3a6ad', number: '#3a4560', stop: '#566179',
   },
 };
 
-// Bus street widths by class, per sheet: the top step at the sheet's rail width, each step below 1/1.6 of it.
+// Bus street widths by class, per sheet: the top step at the sheet's rail width, each step below 1/STEP_RATIO of it.
 export const BUS_WIDTH = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n,
-  Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, Math.round((w / STEP_RATIO ** (2 - s)) * 100) / 100]))]));
+  Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, Math.round((w / STEP_RATIO[n] ** (2 - s)) * 100) / 100]))]));
 
 // Rail stands out from the busiest bus street by at least this much more contrast with the ground.
 export const RAIL_OVER_BUS = 1.15;
@@ -52,11 +60,17 @@ export const LIGHT_SHADE_MOST = 0.12;
 // A cased line's casing, each side, per sheet: it sits in the gap between lines that share track.
 const CASING = { 1: 0.6, 2: 0.7, 3: 0.8, 4: 1 };
 
+/** Each bus class's grey on one sheet: the opening sheet draws its quiet step as a faint hairline. */
+export const busInk = (theme, n) => {
+  const c = PALETTES[theme];
+  return n === 1 ? Object.fromEntries(Object.entries(c.bus).map(([k, x]) => [k, BUS_STEP[k] === 0 ? c.busHairline : x])) : c.bus;
+};
+
 /** How each theme inks one of RTD's line colours: `{ line, casing, ink }`. No colour is named here. */
 export function railInk(theme, color) {
   const c = PALETTES[theme];
   const floor = contrast(c.bus.c3, c.ground) * RAIL_OVER_BUS;
-  if (theme === 'dark') return withInk({ line: lightenTo(color, c.ground, floor), casing: null });
+  if (theme === 'dark') return withInk({ line: liftTo(color, c.ground, floor), casing: null });
   const darker = darkenTo(color, c.ground, floor);
   if (lightness(color) - lightness(darker) <= LIGHT_SHADE_MOST) return withInk({ line: darker, casing: null });
   return withInk({ line: color, casing: darker });
@@ -130,7 +144,7 @@ export function sheetStyle(theme, stations = [], colors = []) {
     layer('bus-rim', 'line', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c10', 'c5', 'c3']]]), layout: ROUND,
       paint: { 'line-color': c.ground, 'line-width': ['+', byClass(BUS_WIDTH[n]), 1.6] } });
     layer('bus', 'line', { filter: kind('bus'), layout: { ...ROUND, 'line-sort-key': ['match', ['get', 'cls'], ...order.flatMap((k, j) => [k, j]), 0] },
-      paint: { 'line-color': byClass(c.bus), 'line-width': byClass(BUS_WIDTH[n]) } });
+      paint: { 'line-color': byClass(busInk(theme, n)), 'line-width': byClass(BUS_WIDTH[n]) } });
 
     // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses
     // end on. It is drawn over them, so a street ends flat on the wall, not in a round blob across it.

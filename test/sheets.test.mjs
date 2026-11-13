@@ -524,6 +524,46 @@ test('bus streets are three steps, evenly spaced in lightness, the busiest under
   }
 });
 
+test('the opening sheet draws its quiet step fainter than the quiet step elsewhere, still above the ground', async () => {
+  const { PALETTES, busInk } = await import('../public/js/sheets/style.js');
+  const { contrast } = await import('../public/js/color.js');
+  for (const theme of ['light', 'dark']) {
+    const c = PALETTES[theme];
+    const one = busInk(theme, 1);
+    assert.equal(one.c60, c.busHairline);
+    assert.equal(one.c15, c.bus.c15, `${theme}: only the quiet step changes`);
+    assert.deepEqual(busInk(theme, 2), c.bus, `${theme}: the other sheets keep the three greys`);
+    const faint = contrast(c.busHairline, c.ground);
+    assert.ok(faint < contrast(c.bus.c60, c.ground) && faint >= 1.6, `${theme}: fainter, still seen (${faint.toFixed(2)})`);
+  }
+  const { sheetStyle } = await import('../public/js/sheets/style.js');
+  const bus1 = sheetStyle('dark').layers.find((l) => l.id === 'bus-1').paint['line-color'];
+  assert.equal(bus1[bus1.indexOf('c60') + 1], PALETTES.dark.busHairline, 'sheet 1 paints it');
+});
+
+test('in the dark a lifted line keeps its hue and stays a strong colour: red stays red, not salmon', async () => {
+  const { railInk } = await import('../public/js/sheets/style.js');
+  const hsl = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    const h = d === 0 ? 0 : max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    const l = (max + min) / 2;
+    return { h: (h * 60 + 360) % 360, s: d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1)) };
+  };
+  // Deep red, purple and magenta as RTD gives them: each lifted one is still that hue and as saturated.
+  for (const color of ['#B71318', '#552683', '#9F26B5']) {
+    const lifted = railInk('dark', color).line;
+    const [a, b] = [hsl(color), hsl(lifted)];
+    const dh = Math.min(Math.abs(a.h - b.h), 360 - Math.abs(a.h - b.h));
+    assert.ok(dh < 12, `${color} -> ${lifted}: hue kept (${dh.toFixed(0)} degrees off)`);
+    assert.ok(b.s >= 0.65, `${color} -> ${lifted}: still a strong colour (saturation ${b.s.toFixed(2)})`);
+  }
+  // Red is lifted only as far as a red can go: its green and blue stay well under its red.
+  const red = railInk('dark', '#B71318').line;
+  const [r, g] = [1, 3].map((i) => parseInt(red.slice(i, i + 2), 16));
+  assert.ok(g < r * 0.35, `red stays red (${red})`);
+});
+
 test('the page inks each line from the colours the build found: pale ones cased in the light, dim ones lifted in the dark', async () => {
   const { sheetStyle, railInk } = await import('../public/js/sheets/style.js');
   const colors = ['#C4D600', '#552683'];
@@ -539,7 +579,7 @@ test('the page inks each line from the colours the build found: pale ones cased 
   assert.deepEqual(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], ['get', 'color'], 'without the list, RTD\'s own colours');
 });
 
-test('bus widths step up by about 1.6 to the rail width, none under a pixel, and numbers still clear the widest', async () => {
+test('bus widths step up by about 1.6 to the rail width (steeper on the opening sheet), none under a pixel, and numbers still clear the widest', async () => {
   const { BUS_WIDTH, BUS_STEP, STEP_RATIO } = await import('../public/js/sheets/style.js');
   for (const sheet of SHEETS) {
     const w = BUS_WIDTH[sheet.id];
@@ -548,7 +588,10 @@ test('bus widths step up by about 1.6 to the rail width, none under a pixel, and
     const [q, m, t] = steps.map((x) => x[0]);
     assert.equal(t, SIZES.rail[sheet.id], `sheet ${sheet.id}: the busiest step is as wide as rail`);
     assert.ok(q >= 1, `sheet ${sheet.id}: no line under a pixel`);
-    for (const [lo, hi] of [[q, m], [m, t]]) assert.ok(Math.abs(hi / lo - STEP_RATIO) < 0.05 && STEP_RATIO >= 1.5 && STEP_RATIO <= 1.7, `sheet ${sheet.id}: each step about 1.6 times the one below`);
+    const ratio = STEP_RATIO[sheet.id];
+    for (const [lo, hi] of [[q, m], [m, t]]) assert.ok(Math.abs(hi / lo - ratio) < 0.05, `sheet ${sheet.id}: each step ${ratio} times the one below`);
+    if (sheet.id === 1) assert.ok(ratio > STEP_RATIO[2] && q <= 1.05, 'the opening sheet steps more steeply, its quiet step a hairline');
+    else assert.ok(ratio >= 1.5 && ratio <= 1.7, `sheet ${sheet.id}: about 1.6`);
   }
 });
 
