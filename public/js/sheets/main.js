@@ -144,7 +144,7 @@ map.on('click', (e) => {
     const bullets = rail.map((r) => `<i style="background:${esc(r.color)};color:${esc(inkOn(r.color))}">${esc(r.route)}</i>`).join('');
     return tell(`${bullets}${rail.length > 1 ? 'Lines' : 'Line'}`, 'Rail');
   }
-  const stop = hit(['stop', 'stop-letter'])[0];
+  const stop = hit(['group-stop', 'stop', 'stop-letter'])[0];
   if (stop?.properties.letter) {
     const q = stop.properties;
     return tell(esc(q.name), `Bus stop ${q.letter}${q.heading ? ` · ${q.heading}` : ''}`, groupRows(`${q.letter} ${String(q.routes).split(', ').join(' ')}`));
@@ -185,14 +185,16 @@ map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });
 // --- The stop-group tables' plates and letter squares (style.js, GROUP) -------------
 
 // Drawn here, in the theme's colours, the first time the map asks for one: a plate of the
-// size the build laid its table out at, a letter's square, or a lettered stop's square. At
+// size the build laid its table out at, a letter's square, a letter's square on its street (with
+// a rim of ground), or a lettered stop's square. At
 // least twice the screen's pixels, so their edges stay crisp.
 const ratio = Math.max(2, Math.ceil(window.devicePixelRatio || 1));
 function groupImage(id) {
-  const m = /^stopgroup-(plate|badge|stop)-(light|dark)(?:-(\d+)x(\d+))?$/.exec(id);
+  const m = /^stopgroup-(plate|badge|street|stop)-(light|dark)(?:-(\d+)x(\d+))?$/.exec(id);
   if (!m) return null;
   const c = PALETTES[m[2]];
-  const [w, h] = m[1] === 'plate' ? [Number(m[3]), Number(m[4])] : Array(2).fill(m[1] === 'badge' ? GROUP.badge : GROUP.stopBadge + 2 * GROUP.stopRim);
+  const square = { badge: GROUP.badge, street: GROUP.badge + 2 * GROUP.streetRim, stop: GROUP.stopBadge + 2 * GROUP.stopRim }[m[1]];
+  const [w, h] = m[1] === 'plate' ? [Number(m[3]), Number(m[4])] : [square, square];
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(w * ratio);
   canvas.height = Math.round(h * ratio);
@@ -212,13 +214,13 @@ function groupImage(id) {
     ctx.fillStyle = c.number;
     ctx.fill();
   } else {
-    const rim = GROUP.stopRim;
+    const rim = m[1] === 'street' ? GROUP.streetRim : GROUP.stopRim;
     ctx.roundRect(0, 0, w, h, GROUP.badgeCorner + rim);
     ctx.fillStyle = c.ground;
     ctx.fill();
     ctx.beginPath();
     ctx.roundRect(rim, rim, w - 2 * rim, h - 2 * rim, GROUP.badgeCorner);
-    ctx.fillStyle = c.stop;
+    ctx.fillStyle = m[1] === 'street' ? c.number : c.stop;
     ctx.fill();
   }
   return { width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data };

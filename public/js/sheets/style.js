@@ -109,11 +109,13 @@ export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 // A stop-group table (scripts/lib/sheets.mjs, SIZES.group, which lays it out at these sizes): a
 // plate in the ground's colour with a hairline edge in the numbers' ink at `edge` opacity, a title
 // in that ink at `titleInk`, and a row per letter, its letter in a small square of ink. The
-// bracket across the streets is `bracket` wide, in that ink at `bracketInk`. On sheet 4 a
-// lettered stop shows its letter in a square `stopBadge` wide in the stops' grey, with a rim of
-// ground `stopRim` wide so it stands off its street as a stop's ring does.
+// bracket across the streets is `bracket` wide, in that ink at `bracketInk`. On sheet 3, which
+// draws no stops, each lettered stop's letter sits on its street in the table's own square, with
+// a rim of ground `streetRim` wide, as a line's letter sits on its line (SIZES.groupStreetRim).
+// On sheet 4 a lettered stop shows its letter in a square `stopBadge` wide in the stops' grey,
+// with a rim of ground `stopRim` wide so it stands off its street as a stop's ring does.
 export const GROUP = { title: 9, titleSpacing: 0.12, titleInk: 0.7, row: 10.5, rowSpacing: 0.02, letter: 8.5, badge: 12, badgeCorner: 3,
-  corner: 5, edge: 0.35, bracket: 1.5, bracketInk: 0.8, stopBadge: 11, stopRim: 1, stopLetter: 8 };
+  corner: 5, edge: 0.35, bracket: 1.5, bracketInk: 0.8, streetRim: 1.5, stopBadge: 11, stopRim: 1, stopLetter: 8 };
 const GROUP_FONT = { title: ['Overpass Bold'], row: ['Overpass SemiBold'] };
 
 // Station name size per sheet (SIZES.name in the build).
@@ -353,6 +355,12 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
           'text-letter-spacing': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleSpacing, GROUP.rowSpacing] },
         paint: { 'text-color': c.number, 'text-opacity': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleInk, 1] } });
       layer('group-keep-off', 'symbol', { filter: kind('group-bracket'), ...unseen });
+      // A lettered stop's letter on its street, in the table's square: placed first of all, so
+      // nothing is set over it (the build kept route numbers and names off it).
+      layer('group-stop', 'symbol', { filter: kind('group-stop'),
+        layout: { 'icon-image': `stopgroup-street-${theme}`, 'icon-allow-overlap': true, 'text-allow-overlap': true,
+          'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.letter },
+        paint: { 'text-color': c.ground } });
     }
   });
   return {

@@ -127,6 +127,18 @@ export const SIZES = {
   groupLeader: [5, 90],
   groupPast: 3,
   groupTick: 3,
+  // The bracket is this wide (public/js/sheets/style.js, GROUP.bracket). It crosses where it keeps
+  // at least `groupAir` (ink to ink) off every drawn line it doesn't cross.
+  groupBracket: 1.5,
+  groupAir: 8,
+  // From this sheet until stops are drawn, each lettered stop's letter sits on its street in the
+  // table's square, with a rim of ground this wide (public/js/sheets/style.js, GROUP.streetRim).
+  // Squares keep this far apart, and move at most this far along their street, within their
+  // block, to keep off cross streets, rail and lettering.
+  groupStreetSheet: 3,
+  groupStreetRim: 1.5,
+  groupStreetApart: 1,
+  groupStreetNudge: 24,
 };
 
 // --- Screen pixels at a zoom (512-pixel tiles, as MapLibre draws) -----------
@@ -2690,9 +2702,9 @@ export function groupRows(rows) {
  * with one of its routes (as a stop's ring is), and the street (through) most of one street's
  * stops land on is that street. Along it, the stretch from its first lettered stop to its last is
  * the table's, and so are the blocks past each end that carry only the table's routes, out to a
- * walk. Returns `{ streets, covered }`: for each street `{ street, path, lettered, corners, stops }`
- * (the table's stretch, the part between its lettered stops, where its corners are along `path`,
- * and its stops' places), and for each piece of street on a stretch, the street it is on.
+ * walk. Returns `{ streets, covered }`: for each street `{ street, path, lettered, chain, stops }`
+ * (the table's stretch, the part between its lettered stops, the pieces of `bus` the whole street
+ * is drawn as, and its stops' places), and for each piece of street on a stretch, the street it is on.
  */
 export function groupStretches(table, bus, sheet, chains = through(bus)) {
   const reach = 2 * SIZES.busMerge[sheet.id];
@@ -2736,8 +2748,7 @@ export function groupStretches(table, bus, sheet, chains = through(bus)) {
     const from = ends[first][0];
     for (let n = first; n <= last; n++) covered.set(chain[n], street);
     streets.push({
-      street, path: whole, lettered: partOf(whole, lo - from, hi - from),
-      corners: ends.slice(first, last + 1).flatMap(([a, b]) => [a - from, b - from]),
+      street, path: whole, lettered: partOf(whole, lo - from, hi - from), chain,
       stops: on.map((h) => ({ at: h.at, letter: h.stop.letter, along: h.along - from })),
     });
   }
@@ -2802,17 +2813,25 @@ export class Raster {
     const [i, j] = [Math.floor(x - this.x0), Math.floor(y - this.y0)];
     return i >= 0 && j >= 0 && i < this.w && j < this.h ? this.px[j * this.w + i] : 0;
   }
-  /** Whether nothing is set in the box `w` by `h` with its top-left at (x, y) (whole pixels). */
-  clear(x, y, w, h) {
+  #sum(i0, j0, i1, j1) {
+    const W = this.w + 1;
     if (!this.sums) {
-      const W = this.w + 1;
       this.sums = new Int32Array(W * (this.h + 1));
       for (let j = 0; j < this.h; j++) for (let i = 0; i < this.w; i++) this.sums[(j + 1) * W + i + 1] = this.px[j * this.w + i] + this.sums[j * W + i + 1] + this.sums[(j + 1) * W + i] - this.sums[j * W + i];
     }
+    return this.sums[j1 * W + i1] - this.sums[j0 * W + i1] - this.sums[j1 * W + i0] + this.sums[j0 * W + i0];
+  }
+  /** Whether nothing is set in the box `w` by `h` with its top-left at (x, y) (whole pixels). */
+  clear(x, y, w, h) {
     const [i0, j0] = [x - this.x0, y - this.y0];
     if (i0 < 0 || j0 < 0 || i0 + w > this.w || j0 + h > this.h) return false;
-    const W = this.w + 1;
-    return this.sums[(j0 + h) * W + i0 + w] - this.sums[j0 * W + i0 + w] - this.sums[(j0 + h) * W + i0] + this.sums[j0 * W + i0] === 0;
+    return this.#sum(i0, j0, i0 + w, j0 + h) === 0;
+  }
+  /** How many pixels are set in that box (outside the raster counts as clear). */
+  count(x, y, w, h) {
+    const [i0, j0] = [Math.max(0, x - this.x0), Math.max(0, y - this.y0)];
+    const [i1, j1] = [Math.min(this.w, x - this.x0 + w), Math.min(this.h, y - this.y0 + h)];
+    return i1 > i0 && j1 > j0 ? this.#sum(i0, j0, i1, j1) : 0;
   }
 }
 
@@ -2836,6 +2855,51 @@ function crossAt(path, p, u) {
   return best;
 }
 
+/** Whether segments ab and cd cross or touch. */
+function segmentsMeet(a, b, c, d) {
+  const side = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const [d1, d2, d3, d4] = [side(c, d, a), side(c, d, b), side(a, b, c), side(a, b, d)];
+  return ((d1 > 0) !== (d2 > 0) || !d1 || !d2) && ((d3 > 0) !== (d4 > 0) || !d3 || !d4);
+}
+
+/** The gap between segments ab and cd: 0 where they meet. */
+function segmentGap(a, b, c, d) {
+  if (segmentsMeet(a, b, c, d)) return 0;
+  return Math.min(toSegment(a, c, d).d, toSegment(b, c, d).d, toSegment(c, a, b).d, toSegment(d, a, b).d);
+}
+
+/** The gap between segment ab and a box [x0, y0, x1, y1]: 0 where it reaches in. */
+function boxGap([x0, y0, x1, y1], a, b) {
+  if ([a, b].some((p) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1)) return 0;
+  const cs = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  return Math.min(...cs.map((c, i) => segmentGap(a, b, c, cs[(i + 1) % 4])));
+}
+
+/**
+ * How far a bracket keeps off the drawn lines it doesn't cross, ink to ink: `lines` are its
+ * strokes (the bracket across the streets, then its ticks), `drawn` each `{ path, half }` with
+ * the half width of its ink, and `own` set on the streets the bracket ties together, which it
+ * may run beside. A drawn line the bracket crosses is one of the streets it spans.
+ */
+function bracketAir(lines, drawn) {
+  const half = SIZES.groupBracket / 2;
+  const far = 4 * SIZES.groupAir;
+  const [from, to] = lines[0];
+  const xs = lines.flat().map((p) => p[0]);
+  const ys = lines.flat().map((p) => p[1]);
+  let least = far;
+  for (const { path, half: wide, own } of drawn) {
+    if (own) continue;
+    const reach = far + wide + half;
+    if (!path.some((p) => p[0] > Math.min(...xs) - reach && p[0] < Math.max(...xs) + reach && p[1] > Math.min(...ys) - reach && p[1] < Math.max(...ys) + reach)) continue;
+    let crossed = false;
+    for (let i = 1; i < path.length && !crossed; i++) crossed = segmentsMeet(from, to, path[i - 1], path[i]);
+    if (crossed) continue;
+    for (let i = 1; i < path.length; i++) for (const [a, b] of lines) least = Math.min(least, segmentGap(a, b, path[i - 1], path[i]) - wide - half);
+  }
+  return least;
+}
+
 /** How far a point is from a box with round corners, and the nearest point of its edge. */
 function toPlate(p, [x, y, w, h], r) {
   const c = [Math.min(Math.max(p[0], x + r), x + w - r), Math.min(Math.max(p[1], y + r), y + h - r)];
@@ -2848,26 +2912,34 @@ function toPlate(p, [x, y, w, h], r) {
  * of everything `solid` (lines and lettering, each grown by the table's margin), tied to its
  * streets by a bracket square across them where they carry their lettered stops, with a tick
  * at each end, and a short leader from the bracket's nearer end to the plate. The bracket
- * crosses mid-block where it can, and it and the leader keep off rail and lettering (`ink`); a
- * leader that crosses a bus street (`bus`) costs as much as a longer one round it. The plate
- * goes where the leader is shortest. Where the streets lie farther apart than the plate is wide
- * there is no bracket, and the plate goes nearest the middle of the lettered stops. Returns
- * `{ box: [x, y, w, h], at, bracket, ticks }` in the sheet's pixels (`at` is the leader's end on
- * the plate, or the plate's middle), or null where it doesn't fit.
+ * crosses mid-block, where it keeps farthest off the drawn lines it doesn't cross (`drawn`,
+ * each `{ path, half, own }`, bracketAir), at least `groupAir` off them where any place does,
+ * so it never runs beside a cross street as a second one; it and the leader keep off rail and
+ * lettering (`ink`); a leader that crosses a bus street (`bus`) costs as much as a longer one
+ * round it. Where the streets carry their stops' letters, `fit` moves them off a bracket's
+ * strokes (`{ squares, moved }`, or null where they can't make room). The plate goes where the
+ * leader is shortest. Where the streets lie farther apart than the plate is wide there is no
+ * bracket, and the plate goes nearest the middle of the lettered stops. Returns `{ box: [x, y,
+ * w, h], at, bracket, ticks, air, squares }` in the sheet's pixels (`at` is the leader's end on
+ * the plate, or the plate's middle; `air` the bracket's; `squares` the letters as they moved
+ * for it), or null where it doesn't fit.
  */
-export function placeGroup(stretches, { w, h }, sheet, { solid, ink, bus }) {
+export function placeGroup(stretches, { w, h }, sheet, { solid, ink, bus, drawn = [], fit = null }) {
   const [least, most] = SIZES.groupLeader;
   const corner = SIZES.group.corner;
   const past = busWide('c3', sheet) / 2 + SIZES.groupPast;
   const inked = (a, b) => { const n = Math.ceil(dist(a, b) * 2); for (let k = 0; k <= n; k++) if (ink.at(lerp(a, b, k / (n || 1)))) return true; return false; };
-  // Where a bracket can go: every two pixels along the longest stretch of lettered stops.
+  // Where a bracket can go: every two pixels along the longest stretch of lettered stops, or,
+  // where the streets carry their letters (which fill the blocks between their cross streets),
+  // along the whole of that street's stretch.
   const base = [...stretches].sort((a, b) => length(b.lettered) - length(a.lettered))[0];
-  const total = length(base.lettered);
+  const span = fit ? base.path : base.lettered;
+  const total = length(span);
   const brackets = [];
   let long = false;
   for (let t = 0; t <= total; t += 2) {
-    const p = pointAlong(base.lettered, t);
-    const d = headingAt(base.lettered, t, total);
+    const p = pointAlong(span, t);
+    const d = headingAt(span, t, total);
     const n = [-d[1], d[0]];
     const hits = stretches.map((s) => ({ s, hit: crossAt(s.path, p, n) }));
     if (hits.some(({ s, hit }) => !hit || Math.abs(headingAt(s.path, hit.along).reduce((sum, v, k) => sum + v * d[k], 0)) < 0.94)) continue;
@@ -2876,10 +2948,18 @@ export function placeGroup(stretches, { w, h }, sheet, { solid, ink, bus }) {
     if (dist(...ends) > w) { long = true; continue; }
     const ticks = ends.map((e) => [[e[0] - d[0] * SIZES.groupTick, e[1] - d[1] * SIZES.groupTick], [e[0] + d[0] * SIZES.groupTick, e[1] + d[1] * SIZES.groupTick]]);
     if (inked(...ends) || ticks.some((tk) => inked(...tk))) continue;
-    // Mid-block: as far as it can be from the corners it crosses between.
-    const room = Math.min(...hits.map(({ s, hit }) => Math.min(...s.corners.map((c) => Math.abs(c - hit.along)))));
-    brackets.push({ ends, ticks, cost: Math.max(0, 8 - room) * 3 });
+    // The letters on the streets make room for the bracket, where they can within their blocks.
+    const fitted = fit ? fit([ends, ...ticks]) : { squares: null, moved: 0 };
+    if (!fitted) continue;
+    brackets.push({ ends, ticks, air: bracketAir([ends, ...ticks], drawn), ...fitted });
   }
+  // Mid-block: where the bracket keeps farthest off the cross streets, and at least `groupAir`
+  // off them where any place does (a bracket that runs a few pixels beside a street reads as a
+  // doubled street). Each pixel short of the most air found costs as much as a leader 20 pixels
+  // longer, and each pixel a letter moves for it two.
+  const airiest = Math.max(...brackets.map((b) => b.air));
+  const roomy = brackets.filter((b) => b.air >= SIZES.groupAir);
+  for (const b of brackets) b.cost = (airiest - b.air) * 20 + b.moved * 2;
   const target = (() => { const all = stretches.flatMap((s) => s.stops.map((x) => x.at)); return [all.reduce((s, p) => s + p[0], 0) / all.length, all.reduce((s, p) => s + p[1], 0) / all.length]; })();
   const free = [];
   for (let y = solid.y0; y + h <= solid.y0 + solid.h; y += 2) for (let x = solid.x0; x + w <= solid.x0 + solid.w; x += 2) if (solid.clear(x, y, w, h)) free.push([x, y]);
@@ -2895,39 +2975,130 @@ export function placeGroup(stretches, { w, h }, sheet, { solid, ink, bus }) {
     return best && { box: best.box, at: best.at, bracket: null, ticks: [] };
   }
   // Each free place's nearest bracket end, then the leaders checked shortest first.
-  const tries = [];
-  for (const [x, y] of free) {
-    let best = null;
-    for (const b of brackets) for (const e of [0, 1]) {
-      const { d } = toPlate(b.ends[e], [x, y, w, h], corner);
-      if (d < least || d > most) continue;
-      const cost = d + b.cost;
-      if (!best || cost < best.cost) best = { cost, b, e };
+  const seat = (pool) => {
+    const tries = [];
+    for (const [x, y] of free) {
+      let best = null;
+      for (const b of pool) for (const e of [0, 1]) {
+        const { d } = toPlate(b.ends[e], [x, y, w, h], corner);
+        if (d < least || d > most) continue;
+        const cost = d + b.cost;
+        if (!best || cost < best.cost) best = { cost, b, e };
+      }
+      if (best) tries.push({ ...best, box: [x, y, w, h] });
     }
-    if (best) tries.push({ ...best, box: [x, y, w, h] });
-  }
-  tries.sort((a, b) => a.cost - b.cost);
-  let chosen = null;
-  for (const t of tries.slice(0, 600)) {
-    if (chosen && t.cost >= chosen.cost) break;
-    const from = t.b.ends[t.e];
-    const { at } = toPlate(from, t.box, corner);
-    if (inked(from, at)) continue;
-    // The bracket stays clear of the plate.
-    const [x, y] = t.box;
-    const off = (q) => q[0] < x - 2 || q[0] > x + w + 2 || q[1] < y - 2 || q[1] > y + h + 2;
-    if (!resample(t.b.ends, 1).every(off)) continue;
-    let crossings = 0;
-    let was = 0;
-    const n = Math.ceil(dist(from, at) * 2);
-    for (let k = 0; k <= n; k++) { const now = bus.at(lerp(from, at, k / (n || 1))); if (now && !was) crossings++; was = now; }
-    const cost = t.cost + 30 * crossings;
-    if (!chosen || cost < chosen.cost) chosen = { ...t, cost, at };
-  }
+    tries.sort((a, b) => a.cost - b.cost);
+    let chosen = null;
+    for (const t of tries.slice(0, 600)) {
+      if (chosen && t.cost >= chosen.cost) break;
+      const from = t.b.ends[t.e];
+      const { at } = toPlate(from, t.box, corner);
+      if (inked(from, at)) continue;
+      // The bracket stays clear of the plate.
+      const [x, y] = t.box;
+      const off = (q) => q[0] < x - 2 || q[0] > x + w + 2 || q[1] < y - 2 || q[1] > y + h + 2;
+      if (!resample(t.b.ends, 1).every(off)) continue;
+      // So do the letters, where they moved for the bracket: off the plate and the leader.
+      const g = SIZES.groupClear;
+      if ((t.b.squares ?? []).some((q) => (q.box[2] > x - g && q.box[0] < x + w + g && q.box[3] > y - g && q.box[1] < y + h + g) || boxGap(q.box, from, at) < 1.5)) continue;
+      let crossings = 0;
+      let was = 0;
+      const n = Math.ceil(dist(from, at) * 2);
+      for (let k = 0; k <= n; k++) { const now = bus.at(lerp(from, at, k / (n || 1))); if (now && !was) crossings++; was = now; }
+      const cost = t.cost + 30 * crossings;
+      if (!chosen || cost < chosen.cost) chosen = { ...t, cost, at };
+    }
+    return chosen;
+  };
+  const chosen = (roomy.length && seat(roomy)) || seat(brackets);
   if (!chosen) return null;
   const { b, e, box, at } = chosen;
   // The leader, then the bracket from its nearer end to its far one.
-  return { box, at, bracket: [at, b.ends[e], b.ends[1 - e]], ticks: b.ticks };
+  return { box, at, bracket: [at, b.ends[e], b.ends[1 - e]], ticks: b.ticks, air: b.air, squares: b.squares };
+}
+
+/** Where other lines cross a path (or end on it), in pixels along it, in order. */
+function crossingsAlong(path, others) {
+  const out = [];
+  let run = 0;
+  for (let i = 1; i < path.length; i++) {
+    const [a, b] = [path[i - 1], path[i]];
+    const e = [b[0] - a[0], b[1] - a[1]];
+    const len = Math.hypot(...e);
+    for (const o of others) for (let k = 1; k < o.length; k++) {
+      // Each of the other's pieces a pixel and a half longer at each end, so one that ends on the path meets it.
+      const [c0, d0] = [o[k - 1], o[k]];
+      const f = [d0[0] - c0[0], d0[1] - c0[1]];
+      const fl = Math.hypot(...f) || 1;
+      const c = [c0[0] - (f[0] / fl) * 1.5, c0[1] - (f[1] / fl) * 1.5];
+      const g = [f[0] * (1 + 3 / fl), f[1] * (1 + 3 / fl)];
+      const den = e[0] * g[1] - e[1] * g[0];
+      if (Math.abs(den) < 1e-9) continue;
+      const w = [c[0] - a[0], c[1] - a[1]];
+      const t = (w[0] * g[1] - w[1] * g[0]) / den;
+      const u = (w[0] * e[1] - w[1] * e[0]) / den;
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1) out.push(run + t * len);
+    }
+    run += len;
+  }
+  return out.sort((x, y) => x - y);
+}
+
+/**
+ * Where a street's lettered stops show their letters on a sheet that draws no stops: each in the
+ * table's square, on the street's line at the stop's place, as a line's letter sits on its line.
+ * A square keeps off everything set in `solid` (cross streets, rail and lettering), moving along
+ * its street as little as it must, at most `groupStreetNudge`, and never past a cross street
+ * (`across`, where each crosses the stretch, in pixels along it) into the next block; and it keeps
+ * `groupStreetApart` off the squares beside it, and `air` off each of `avoid` (`{ line: [a, b],
+ * air }`, a table's bracket). None is dropped: where no place is clear, a square takes the one
+ * least in the way. `stops` are each `{ px, ... }`; returns each with `at` and `box` ([x0, y0,
+ * x1, y1]) in the sheet's pixels, how far it moved (`nudge`), how many of its pixels are in the
+ * way (`hit`) and whether it is too near a line to avoid (`blocked`), in order along the street.
+ */
+export function placeStreetLetters(stretch, stops, solid, across = [], avoid = []) {
+  if (!stops.length) return [];
+  const side = SIZES.group.badge + 2 * SIZES.groupStreetRim;
+  const reach = SIZES.groupStreetNudge;
+  const total = length(stretch.path);
+  const places = stops.map((stop) => ({ stop, t: nearest(stretch.path, stop.px).along })).sort((a, b) => a.t - b.t);
+  const corner = (p) => [Math.round(p[0] - side / 2), Math.round(p[1] - side / 2)];
+  const options = places.map(({ t }) => {
+    const lo = Math.max(0, t - reach, ...across.filter((c) => c < t));
+    const hi = Math.min(total, t + reach, ...across.filter((c) => c > t));
+    const us = [t];
+    for (let u = Math.ceil(lo); u <= hi; u++) if (u !== t) us.push(u);
+    return us.map((u) => {
+      const p = pointAlong(stretch.path, u);
+      const [x, y] = corner(p);
+      const hit = solid.count(x, y, side, side);
+      const blocked = avoid.some(({ line, air }) => boxGap([x, y, x + side, y + side], ...line) < air);
+      // A pixel in the way costs far more than a pixel's move.
+      return { u, p, hit, blocked, nudge: Math.abs(u - t), cost: 1000 * hit + (blocked ? 1e6 : 0) + Math.abs(u - t) };
+    });
+  });
+  // Squares side by side, in order along the street, each a square's side and its air off the last.
+  const apart = side + SIZES.groupStreetApart;
+  const touch = (p, q) => Math.max(Math.abs(p[0] - q[0]), Math.abs(p[1] - q[1])) < apart;
+  const best = options.map((list) => list.map(() => ({ cost: Infinity, from: -1 })));
+  options[0].forEach((o, j) => { best[0][j].cost = o.cost; });
+  for (let i = 1; i < options.length; i++) options[i].forEach((o, j) => {
+    options[i - 1].forEach((q, k) => {
+      if (q.u > o.u) return;
+      const cost = best[i - 1][k].cost + o.cost + (touch(q.p, o.p) ? 1e7 : 0);
+      if (cost < best[i][j].cost) best[i][j] = { cost, from: k };
+    });
+  });
+  const last = best.at(-1);
+  let j = last.indexOf(last.reduce((m, x) => (x.cost < m.cost ? x : m)));
+  const out = [];
+  for (let i = options.length - 1; i >= 0; i--) {
+    const { p, hit, blocked, nudge } = options[i][j];
+    const [x, y] = corner(p);
+    out.unshift({ ...places[i].stop, at: p, box: [x, y, x + side, y + side], hit, blocked, nudge });
+    j = best[i][j].from;
+  }
+  return out;
 }
 
 // --- One sheet, as GeoJSON -------------------------------------------------------
@@ -2989,6 +3160,48 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const width = (s, rows = 1) => Math.max(...(rows > 1 ? stacked(s.routes) : [listed(s.routes)]).map((row) => row.length)) * size * 0.5 + 2 * SIZES.busLabelAir;
   const sides = new Map();
   const side = (path, rows) => { if (!sides.has(path)) sides.set(path, labelSide({ path }, bus, size, rows)); return sides.get(path); };
+  const stationNames = names(marks, lines, discs, sheet, bus);
+  // On the sheets between the table's and the stops', each lettered stop's letter in a square on
+  // its street, placed before the route lists and street names, which keep off it (placeStreetLetters).
+  let squares = [];
+  const letterings = [];
+  if (sheet.id >= SIZES.groupStreetSheet && sheet.id < SIZES.stopSheet) for (const [ti, g] of grouped.entries()) for (const s of g.streets) {
+    const pad = SIZES.groupStreetNudge + 30;
+    const window = [Math.min(...s.path.map((p) => p[0])) - pad, Math.min(...s.path.map((p) => p[1])) - pad, Math.max(...s.path.map((p) => p[0])) + pad, Math.max(...s.path.map((p) => p[1])) + pad];
+    const near = (path, r) => path.some((p) => p[0] > window[0] - r && p[0] < window[2] + r && p[1] > window[1] - r && p[1] < window[3] + r);
+    const solid = new Raster(window);
+    const own = new Set(s.chain);
+    const across = [];
+    bus.forEach((b, i) => { if (!own.has(i) && near(b.path, 12)) { solid.line(b.path, busWide(b.cls, sheet) / 2 + 0.5); across.push(b.path); } });
+    for (const l of lines) for (const path of l.paths) if (near(path, 12)) { solid.line(path, SIZES.rail[sheet.id] / 2 + SIZES.gap[sheet.id] + 0.5); across.push(path); }
+    for (const m of marks) for (const bar of [m.ends, ...(m.more ?? [])]) if (near(bar, 20)) solid.line(bar, SIZES.rail[sheet.id] + 2.5);
+    for (const d of discs) solid.dot(d.at, SIZES.letterDisc[sheet.id] + 0.5);
+    for (const n of stationNames) {
+      solid.box(n.box, 0.5);
+      for (const b of n.letters) solid.dot(b.at, SIZES.nameLetter[sheet.id] + 0.5);
+    }
+    for (const e of ends) solid.dot(e.at, busWide(e.cls, sheet) / 2 + 2.8);
+    for (const hall of walls) solid.room(hall.ring, 0.5);
+    for (const q of squares) solid.box(q.box, SIZES.groupStreetApart);
+    const stops = g.table.stops.filter((x) => x.street === s.street).map((x) => ({ ...x, group: ti, px: toPx(x.feature.geometry.coordinates, sheet.zoom) }));
+    const lettering = { ti, s, stops, solid, across: crossingsAlong(s.path, across) };
+    letterings.push(lettering);
+    squares.push(...placeStreetLetters(s, stops, solid, lettering.across));
+  }
+  // Lettering keeps off the squares: a list's or a name's stretch with its lettering on its side
+  // (labelSide's `up`, or below) and its halo, off each square.
+  const squareRoom = SIZES.group.badge / 2 + SIZES.groupStreetRim + 2;
+  const onSquare = (path, rows = 1) => {
+    if (!squares.length) return false;
+    const [a, b] = [path[0], path.at(-1)];
+    const run = a[0] > b[0] ? [a[0] - b[0], a[1] - b[1]] : [b[0] - a[0], b[1] - a[1]];
+    const l = Math.hypot(...run) || 1;
+    const k = side(path, rows) < 0 ? -1 : 1;
+    const up = [(k * run[1]) / l, (-k * run[0]) / l];
+    const tall = 4 + 2.5 + (0.72 + SIZES.busRowHeight * (rows - 1)) * size + 2;
+    const pts = resample(path, 2).flatMap((p) => [0, 0.25, 0.5, 0.75, 1].map((f) => [p[0] + up[0] * tall * f, p[1] + up[1] * tall * f]));
+    return squares.some((q) => pts.some((p) => Math.abs(p[0] - q.at[0]) < squareRoom && Math.abs(p[1] - q.at[1]) < squareRoom));
+  };
   // Bus stops with the street each is on, in the sheet's pixels, asked for once.
   let stopsPx = null;
   const onStreets = () => (stopsPx ??= busStops(stops, routes).map((f) => ({ at: toPx(f.geometry.coordinates, sheet.zoom),
@@ -3024,7 +3237,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const listedRuns = [];
   // Every list set, as drawn: its stretch, its rows and its street's class (the tables keep off them).
   const numbered = [];
-  for (const run of labelRuns(toLabel, SIZES.busLabelEvery[sheet.id], width, (path, rows) => side(path, rows) !== 0)) {
+  for (const run of labelRuns(toLabel, SIZES.busLabelEvery[sheet.id], width, (path, rows) => side(path, rows) !== 0 && !onSquare(path, rows))) {
     listedRuns.push(run.path);
     const below = side(run.path, run.rows) < 0 ? { side: -1 } : {};
     if (run.rows === 1) {
@@ -3041,7 +3254,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
           let path = partOf(run.run.path, mid - span / 2, mid + span / 2);
           const [a, b] = [path[0], path.at(-1)];
           if (a[0] > b[0] + 1e-6 || (Math.abs(a[0] - b[0]) <= 1e-6 && a[1] < b[1])) path = [...path].reverse();
-          if (path.length > 1 && oneTile(path) && !onStop(path) && side(path, 1) === side(run.path, 1)) lead = { name, path };
+          if (path.length > 1 && oneTile(path) && !onStop(path) && side(path, 1) === side(run.path, 1) && !onSquare(path, 1)) lead = { name, path };
         }
       }
       if (lead) named.push({ name: lead.name, at: pointAlong(lead.path, length(lead.path) / 2) });
@@ -3059,7 +3272,30 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // Each stop-group table, placed after the route lists and clear of them, of rail, of the bus
   // streets and of station names and line letters; the page sets district and street names after
   // it, so they give way (placeGroup).
-  const stationNames = names(marks, lines, discs, sheet, bus);
+  // A list's lettering, on the side of its street the page sets it (labelSide's `up`, or below):
+  // a band `reach` either side of `band`, and its street's half width.
+  const listInk = (q) => {
+    const half = busWide(q.cls, sheet) / 2;
+    const reach = (half + 2.5 + (0.72 + SIZES.busRowHeight * (q.rows - 1)) * size + 2) / 2;
+    const [a, b] = [q.path[0], q.path.at(-1)];
+    const run = a[0] > b[0] ? [a[0] - b[0], a[1] - b[1]] : [b[0] - a[0], b[1] - a[1]];
+    const l = Math.hypot(...run) || 1;
+    const up = [(q.side * run[1]) / l, (-q.side * run[0]) / l];
+    return { half, reach, band: q.path.map((p) => [p[0] + up[0] * reach, p[1] + up[1] * reach]) };
+  };
+  // The letters on the streets again, with the lists that now keep off them in their way: a
+  // letter moves only if a list's lettering came nearer it than the lists' own check saw.
+  for (const c of letterings) {
+    const r = c.solid;
+    for (const q of numbered) if (q.path.some((p) => p[0] > r.x0 - 30 && p[0] < r.x0 + r.w + 30 && p[1] > r.y0 - 30 && p[1] < r.y0 + r.h + 30)) {
+      const { reach, band } = listInk(q);
+      c.solid.line(band, reach + 0.5);
+    }
+    c.base = placeStreetLetters(c.s, c.stops, c.solid, c.across);
+    c.hit = c.base.reduce((n, q) => n + q.hit, 0);
+    c.nudge = c.base.reduce((n, q) => n + q.nudge, 0);
+  }
+  if (letterings.length) squares = letterings.flatMap((c) => c.base);
   const plates = [];
   for (const [ti, g] of grouped.entries()) {
     if (!g.streets.length) continue;
@@ -3081,23 +3317,36 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
       both((r, m) => r.box(n.box, m));
       for (const b of n.letters) both((r, m) => r.dot(b.at, SIZES.nameLetter[sheet.id] + 1.5 + m));
     }
-    // A list's lettering, on the side of its street the page sets it (labelSide's `up`, or below).
     for (const q of numbered) if (near(q.path, 30)) {
-      const half = busWide(q.cls, sheet) / 2;
-      const reach = (half + 2.5 + (0.72 + SIZES.busRowHeight * (q.rows - 1)) * size + 2) / 2;
-      const [a, b] = [q.path[0], q.path.at(-1)];
-      const run = a[0] > b[0] ? [a[0] - b[0], a[1] - b[1]] : [b[0] - a[0], b[1] - a[1]];
-      const l = Math.hypot(...run) || 1;
-      const up = [(q.side * run[1]) / l, (-q.side * run[0]) / l];
-      const band = q.path.map((p) => [p[0] + up[0] * reach, p[1] + up[1] * reach]);
+      const { half, reach, band } = listInk(q);
       both((r, m) => { r.line(q.path, half + m); r.line(band, reach + m); });
     }
     for (const e of ends) both((r, m) => r.dot(e.at, busWide(e.cls, sheet) / 2 + 2.3 + m));
     for (const r0 of rings) both((r, m) => r.dot(r0.at, SIZES.stopRing + m));
     for (const hall of walls) both((r, m) => r.room(hall.ring, m));
     for (const p of plates) both((r, m) => r.box([p[0], p[1], p[0] + p[2], p[1] + p[3]], m + 6));
-    const place = placeGroup(g.streets, layout, sheet, { solid, ink, bus: onBus });
+    // The plate keeps off the letters on the streets; the bracket may cross where they make room (fit).
+    for (const q of squares) solid.box(q.box, clear);
+    const mine = letterings.filter((c) => c.ti === ti);
+    const fit = mine.length ? (strokes) => {
+      const avoid = strokes.map((line) => ({ line, air: SIZES.groupBracket / 2 + 2 }));
+      const moved = [];
+      let far = 0;
+      for (const c of mine) {
+        const r = placeStreetLetters(c.s, c.stops, c.solid, c.across, avoid);
+        if (r.some((q) => q.blocked) || r.reduce((n, q) => n + q.hit, 0) > c.hit) return null;
+        far += r.reduce((n, q) => n + q.nudge, 0) - c.nudge;
+        moved.push(...r);
+      }
+      return { squares: moved, moved: far };
+    } : null;
+    // The lines the bracket keeps its air off: bus streets and rail, less its own streets.
+    const own = new Set(g.streets.flatMap((s) => s.chain));
+    const drawn = [...bus.flatMap((s, i) => (near(s.path, 40) ? [{ path: s.path, half: busWide(s.cls, sheet) / 2, own: own.has(i) }] : [])),
+      ...lines.flatMap((l) => l.paths.filter((path) => near(path, 40)).map((path) => ({ path, half: SIZES.rail[sheet.id] / 2 })))];
+    const place = placeGroup(g.streets, layout, sheet, { solid, ink, bus: onBus, drawn, fit });
     if (!place) continue;
+    if (place.squares) squares = [...squares.filter((q) => q.group !== ti), ...place.squares];
     plates.push(place.box);
     const [x, y] = place.box;
     const at = place.at;
@@ -3114,6 +3363,11 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
       features.push(feature({ kind: 'group-text', ...common, role: 'row', text: row.text, off: off(row.at, G.row) }, here));
     }
     if (place.bracket) features.push(feature({ kind: 'group-bracket', ...common }, { type: 'MultiLineString', coordinates: [place.bracket, ...place.ticks].map((path) => path.map(back)) }));
+  }
+  // Each lettered stop's square on its street: its letter, and for a tap its name and routes.
+  for (const q of squares) {
+    const p = q.feature.properties;
+    features.push(feature({ kind: 'group-stop', group: q.group, letter: q.letter, name: stopName(p.name), heading: p.heading ?? '', routes: inOrder(q.routes).join(', ') }, { type: 'Point', coordinates: back(q.at) }));
   }
   const onPlate = (path) => plates.some(([x, y, w, h]) => resample(path, 2).some((p) => p[0] > x - size / 2 && p[0] < x + w + size / 2 && p[1] > y - size / 2 && p[1] < y + h + size / 2));
   // From sheet 3 the bus streets are named, from their stops (runStreet): each piece takes the name its
@@ -3139,7 +3393,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     // A street named at the head of a list nearby is not named again there.
     const again = (name, path) => { const m = pointAlong(path, length(path) / 2); return named.some((o) => o.name === name && dist(o.at, m) < SIZES.streetEvery[sheet.id]); };
     // Nor on a stop: a name slides along its street to a stretch between stops.
-    for (const run of labelRuns(byName, SIZES.streetEvery[sheet.id], wide, (path) => oneTile(path) && side(path, 1) !== 0 && !listedOn(path) && !onStop(path) && !onPlate(path), { slide: true })) {
+    for (const run of labelRuns(byName, SIZES.streetEvery[sheet.id], wide, (path) => oneTile(path) && side(path, 1) !== 0 && !listedOn(path) && !onStop(path) && !onPlate(path) && !onSquare(path, 1), { slide: true })) {
       if (run.rows !== 1 || run.routes === NONE || run.routes.includes(' ')) continue;
       const label = run.routes.replace(/ /g, ' ');
       if (again(label, run.path)) continue;

@@ -2246,9 +2246,20 @@ How it is built:
   colour with a hairline edge, which the build places beside its streets
   clear of rail, bus streets, station names and route lists; place and
   street names give way to it. A thin bracket runs square across the
-  streets where their lettered stops are, mid-block where it can, with a
-  short tick at each end and a short leader to the plate. On sheet 3 the
-  table replaces the lists along those streets; on sheet 2 it is set where
+  streets mid-block, with a short tick at each end and a short leader to
+  the plate. It keeps at least 8 px of ground (ink to ink) off every drawn
+  street it doesn't cross, and where no block gives that, it takes the
+  block that gives the most: a bracket a few pixels beside a cross street
+  reads as a doubled street or a ladder. On sheet 3 the table replaces the
+  lists along those streets, and each lettered stop shows its letter on its
+  street, in the table's small dark square with a thin rim of ground,
+  centred on the line at the stop's place as a rail line's letter sits on
+  its line, so the street reads X Y Z block by block and matches the
+  table. A square keeps off cross streets, rail, route numbers and names,
+  moving along its street within its block as little as it must, and two
+  that would touch both stay, moved apart: none is dropped. Downtown the
+  squares fill the blocks between bus cross streets, so the bracket crosses
+  where the streets run on past them. On sheet 2 the table is set where
   it fits, and the streets carry no numbers where it doesn't. On sheet 4
   each lettered stop shows its letter in a small square in the stops'
   grey in place of its ring, and the table is set once near the middle of
@@ -4566,6 +4577,15 @@ work against the real structure before asking for evaluation.
   Reason: the long row of every route on those streets was hard to read
   and misleading, since any one stop serves one group. Chris approved the
   table after a mock.
+- 2026-11-13: The table's bracket crosses its streets mid-block, at least
+  8 px off any street it doesn't cross, or where it has the most room if no
+  block gives that; and sheet 3 shows each lettered stop's letter in a
+  square on its street (#126). Reason: on sheet 3 the bracket ran about
+  3 px beside a cross street and read as a doubled street; and Chris asked
+  for the letters along 15th and 17th so the streets read X Y Z block by
+  block, matching the table. With the letters in the blocks, the bracket
+  has about 5 px at its best place on sheet 3, and a version without it
+  went to Chris to choose between.
 
 ## Sources
 
