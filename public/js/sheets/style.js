@@ -234,7 +234,10 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     if (n >= 2) layer('bus-number', 'symbol', { filter: kind('bus-label'),
       // Set just beside the street, not on it: on it, the line shows between the figures and a
       // comma reads as a dash. The offset is the street's half width and a little air, in ems.
-      layout: { 'symbol-placement': 'line', 'symbol-spacing': [0, 200, 260, 320][i], 'text-field': ['get', 'label'], 'text-font': FONT.semibold, 'text-size': NUMBER_SIZE[n], 'text-max-angle': 25, 'text-padding': 4,
+      // Where the build found room, the street's name leads its list, in the names' quieter grey and weight.
+      layout: { 'symbol-placement': 'line', 'symbol-spacing': [0, 200, 260, 320][i],
+        'text-field': ['case', ['has', 'street'], ['format', ['get', 'street'], { 'text-color': c.busStreetName, 'text-font': ['literal', FONT.regular] }, '\u2003', {}, ['get', 'label'], {}], ['get', 'label']],
+        'text-font': FONT.semibold, 'text-size': NUMBER_SIZE[n], 'text-max-angle': 25, 'text-padding': 4,
         // The build says which side has room (`side` -1: below the figures, where a street runs close above).
         'text-offset': ['case', ['==', ['get', 'side'], -1],
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n, w)]]]))),

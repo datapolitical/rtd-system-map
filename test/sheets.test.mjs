@@ -261,6 +261,14 @@ test('a street is labelled with its whole list, only where the list fits, and la
   assert.ok(Math.max(joined.path[0][0], joined.path.at(-1)[0]) <= 300, 'and stays off the block with a route it does not name');
   // A stretch with no room beside it gives its turn to another.
   assert.equal(labelRuns(streets.slice(0, 4), 200, () => 60, (path) => path[0][0] > 250).length, 1);
+  // Sliding (a street's name): one turned down where it would sit moves along its run, within a block
+  // first, to the nearest place it is taken; without sliding it is simply left off.
+  const stopAt = 50;
+  const offStop = (path) => !path.some((p, k) => k && Math.min(path[k - 1][0], p[0]) - 8 < stopAt && Math.max(path[k - 1][0], p[0]) + 8 > stopAt);
+  assert.equal(labelRuns([st(0, 100)], 1000, () => 30, offStop).length, 0);
+  const [slid] = labelRuns([st(0, 100)], 1000, () => 30, offStop, { slide: true });
+  const [lo, hi] = ends([slid])[0];
+  assert.ok(lo >= stopAt + 8 || hi <= stopAt - 8, `slid off the stop (${lo}-${hi})`);
   assert.deepEqual(inOrder(['FreeRide', '15L', '120X', '9', '15', 'FF']), ['9', '15', '15L', '120X', 'FF', 'FreeRide']);
 });
 

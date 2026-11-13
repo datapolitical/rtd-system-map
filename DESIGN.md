@@ -2051,8 +2051,15 @@ How it is built:
   From sheet 3 a bus street is named from its stops: the street most of
   the stops its routes serve along it give (RTD names a stop "Colfax Ave &
   Hudson St"), set beside the street like its route list, in a quieter
-  grey, on a stretch no list is on, about once a screen. Route lists are
-  placed first, so a name never costs one. The streets between bus streets
+  grey, on a stretch no list is on, about once a screen (on sheet 4 a little
+  more often than a phone is wide, so a street across the screen is named
+  on it). Where a list's block holds both, the street's name leads the list
+  ("Colfax  15, 15L"), the name in the names' grey; otherwise the name takes
+  a stretch of its own, half a line of type clear of any list, sliding along
+  its street to the nearest stretch between stop rings (which keep lettering
+  off them) and inside one of the page's tiles (MapLibre may drop a label
+  across a tile's edge). Route lists are placed first, and a list a name
+  leads stays in its block, so a name never costs one. The streets between bus streets
   keep the ground map's names, shortened ("W 13th Ave"), on the centreline,
   at about 3:1. Lines that end over a bus station's hall end at the
   wall they come in through, with their bar on it, not at a point inside the
@@ -4500,6 +4507,14 @@ work against the real structure before asking for evaluation.
   Anschutz along I-70 and I-225, and through downtown to Civic Center) are
   its peak-only legs, 4 to 17 trips a weekday with none at midday, so they
   stay quiet.
+- 2026-11-12: Sheet 4 names its bus streets: a name leads its street's
+  route list where the block holds both, and a name of its own slides along
+  its street to a stretch between stops and within one of the page's tiles
+  (#117). Reason: on sheet 4 a stop's ring every half block keeps lettering
+  off the street, so almost no name was set (none at Colfax and Broadway).
+  Over eight sheet-4 views names went from 7 to 17 and over three sheet-3
+  views from 6 to 14, with no route list lost. Colfax between Broadway and
+  Lincoln still has no room: two stops and its list fill the block.
 
 ## Sources
 

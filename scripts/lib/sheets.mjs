@@ -90,9 +90,22 @@ export const SIZES = {
   // How far past each end of a labelled run its street's stops still say which street it is (about 600 m).
   streetAhead: { 1: 0, 2: 0, 3: 80, 4: 320 },
   // No two names of one street closer than this (px): about one a screen.
-  streetEvery: { 1: 0, 2: 0, 3: 520, 4: 640 },
+  // On sheet 4 a street is a few blocks a screen, so its name comes a little more often than the
+  // phone's width (393 px): a street across the screen is named on it.
+  streetEvery: { 1: 0, 2: 0, 3: 520, 4: 360 },
   // A stop's ring, out to its edge (public/js/sheets/style.js, STOP_RING).
   stopRing: 4.75,
+  // The page keeps lettering this far off a ring's middle (public/js/sheets/style.js, STOP_ROOM and its padding).
+  stopRoom: 7.25,
+  // A street's name that would sit on a stop is tried this many pixels at a time along its street.
+  labelSlide: 4,
+  // A street's name keeps a line of its type and this much more (the page's padding) off every route list.
+  nameListPad: 6,
+  // Between a street's name and the list it leads, this many ems.
+  nameGap: 1,
+  // The page cuts each sheet into tiles this many of the sheet's pixels across (public/js/sheets/style.js:
+  // the source's maxzoom is a zoom under the sheet's, at 512 px a tile). A name across a tile's edge is not set.
+  sourceTile: 1024,
 };
 
 // --- Screen pixels at a zoom (512-pixel tiles, as MapLibre draws) -----------
@@ -2212,8 +2225,10 @@ export function hallAxis(ring) {
  * where a block holds it, and runs on across cross streets only where none does. Returns
  * `{ path, rows, routes, cls, n }` for each; `width(street, rows)` is the room a list needs in
  * one row or stacked in two, and `ok(path, rows)` can turn a stretch down (no room beside it).
+ * With `slide`, a label turned down where it would sit is moved along its run, a few pixels at
+ * a time, nearest first and within a block before across one, to the first place `ok` takes.
  */
-export function labelRuns(streets, every, width = () => 0, ok = () => true) {
+export function labelRuns(streets, every, width = () => 0, ok = () => true, { slide = false } = {}) {
   const key = (p) => `${Math.round(p[0])},${Math.round(p[1])}`;
   const at = new Map();
   streets.forEach((st, i) => { for (const end of [0, 1]) { const k = key(end ? st.path.at(-1) : st.path[0]); at.set(k, [...(at.get(k) ?? []), { i, end }]); } });
@@ -2284,21 +2299,32 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true) {
       // A little slack past the figures, so the page's own measure of them still fits.
       const span = Math.min(run.len, need * 1.15);
       for (let c = 0; c < count; c++) {
-        let mid = (run.len * (c + 0.5)) / count;
-        const blocks = run.pieces.filter((q) => q.len >= span).sort((a, b) => Math.abs(a.from + a.len / 2 - mid) - Math.abs(b.from + b.len / 2 - mid));
+        const want = (run.len * (c + 0.5)) / count;
+        const blocks = run.pieces.filter((q) => q.len >= span).sort((a, b) => Math.abs(a.from + a.len / 2 - want) - Math.abs(b.from + b.len / 2 - want));
         const [lo, hi] = blocks.length ? [blocks[0].from, blocks[0].from + blocks[0].len] : [0, run.len];
-        mid = Math.min(hi - span / 2, Math.max(lo + span / 2, mid));
-        if (set.some((o) => Math.abs(o - (run.at + mid)) < every)) continue;
-        let path = partOf(run.path, mid - span / 2, mid + span / 2);
-        if (path.length < 2) continue;
-        // Read left to right; a stretch straight up the sheet, bottom to top.
-        const [a, b] = [path[0], path.at(-1)];
-        if (a[0] > b[0] + 1e-6 || (Math.abs(a[0] - b[0]) <= 1e-6 && a[1] < b[1])) path = [...path].reverse();
-        // Stacked rows are set straight, so they go only where the street is.
-        if (rows > 1 && path.some((q) => toSegment(q, path[0], path.at(-1)).d > 2)) continue;
-        if (!ok(path, rows)) continue;
-        set.push(run.at + mid);
-        out.push({ path, rows, routes: run.list, cls: top.cls, n: Math.max(...run.of.map((o) => o.n ?? 0)) });
+        const first = Math.min(hi - span / 2, Math.max(lo + span / 2, want));
+        // Where it may go: its place, then (sliding) every few pixels of each block that holds it,
+        // nearest first, then anywhere along the run.
+        const tries = [first];
+        if (slide) {
+          const along = (from, to) => { const xs = []; for (let x = from; x <= to + 1e-6; x += SIZES.labelSlide) xs.push(x); return xs; };
+          const near = (xs) => xs.sort((x, y) => Math.abs(x - want) - Math.abs(y - want));
+          tries.push(...near(blocks.flatMap((q) => along(q.from + span / 2, q.from + q.len - span / 2))), ...near(along(span / 2, run.len - span / 2)));
+        }
+        for (const mid of tries) {
+          if (set.some((o) => Math.abs(o - (run.at + mid)) < every)) continue;
+          let path = partOf(run.path, mid - span / 2, mid + span / 2);
+          if (path.length < 2) continue;
+          // Read left to right; a stretch straight up the sheet, bottom to top.
+          const [a, b] = [path[0], path.at(-1)];
+          if (a[0] > b[0] + 1e-6 || (Math.abs(a[0] - b[0]) <= 1e-6 && a[1] < b[1])) path = [...path].reverse();
+          // Stacked rows are set straight, so they go only where the street is.
+          if (rows > 1 && path.some((q) => toSegment(q, path[0], path.at(-1)).d > 2)) continue;
+          if (!ok(path, rows)) continue;
+          set.push(run.at + mid);
+          out.push({ path, rows, routes: run.list, cls: top.cls, n: Math.max(...run.of.map((o) => o.n ?? 0)), run: { path: run.path, pieces: run.pieces, mid } });
+          break;
+        }
       }
     };
     for (const run of [...runs].sort((a, b) => b.len - a.len)) place(run);
@@ -2516,12 +2542,58 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   let stopsPx = null;
   const onStreets = () => (stopsPx ??= busStops(stops, routes).map((f) => ({ at: toPx(f.geometry.coordinates, sheet.zoom),
     routes: String(f.properties.lines ?? f.properties.routes ?? '').split(/[ ,]+/).filter(Boolean), street: stopStreet(f.properties.name) })));
+  // The stops' rings, from the sheet that draws them. A ring half under a rail line can't be read
+  // as a stop: one that close to a line is not drawn.
+  const clear = SIZES.rail[sheet.id] / 2 + SIZES.stopRing;
+  const rings = sheet.id < SIZES.stopSheet ? [] : stopRings(busStops(stops, routes), bus, sheet)
+    .filter((r) => !lines.some((l) => l.paths.some((path) => boxed(path, r.at, clear) && nearest(path, r.at).d < clear)));
+  // A name or a list keeps off each stop's ring, where the page keeps lettering off it.
+  const cell = 64;
+  const ringGrid = new Map();
+  for (const r of rings) { const k = `${Math.floor(r.at[0] / cell)},${Math.floor(r.at[1] / cell)}`; ringGrid.set(k, [...(ringGrid.get(k) ?? []), r.at]); }
+  // The ring's room and the lettering's own padding, less the air already at each end of its stretch.
+  const room = SIZES.stopRoom + SIZES.nameListPad - SIZES.busLabelAir;
+  const onStop = (path) => {
+    const xs = path.map((p) => p[0]), ys = path.map((p) => p[1]);
+    for (let gx = Math.floor((Math.min(...xs) - room) / cell); gx <= Math.floor((Math.max(...xs) + room) / cell); gx++)
+      for (let gy = Math.floor((Math.min(...ys) - room) / cell); gy <= Math.floor((Math.max(...ys) + room) / cell); gy++)
+        for (const p of ringGrid.get(`${gx},${gy}`) ?? []) if (nearest(path, p).d < room) return true;
+    return false;
+  };
+  // Nor across an edge of the page's tiles: there MapLibre may not set it.
+  const oneTile = (path) => [0, 1].every((k) => {
+    const xs = path.map((p) => Math.floor(p[k] / SIZES.sourceTile));
+    return Math.min(...xs) === Math.max(...xs);
+  });
+  const naming = sheet.id >= SIZES.streetSheet;
+  const reach = Math.max(SIZES.busMerge[sheet.id], 8);
+  // Mixed-case words run wider than route figures: about 0.58 em a letter.
+  const wordsWide = (text) => String(text).length * size * 0.58;
+  const named = [];
   const listedRuns = [];
   for (const run of labelRuns(bus, SIZES.busLabelEvery[sheet.id], width, (path, rows) => side(path, rows) !== 0)) {
     listedRuns.push(run.path);
     const below = side(run.path, run.rows) < 0 ? { side: -1 } : {};
     if (run.rows === 1) {
-      features.push(feature({ kind: 'bus-label', cls: run.cls, label: listed(run.routes), n: run.n, ...below }, { type: 'LineString', coordinates: run.path.map(back) }));
+      // From the sheet that names bus streets, the street's name leads its list where the block
+      // the list sits in holds both, clear of stops and of a tile's edge: the list itself is
+      // never moved off a place it had.
+      let lead = null;
+      if (naming) {
+        const name = runStreet({ path: run.path, routes: run.routes }, onStreets(), reach, SIZES.streetAhead[sheet.id]);
+        const piece = run.run.pieces.find((q) => q.from <= run.run.mid && run.run.mid <= q.from + q.len) ?? { from: 0, len: length(run.run.path) };
+        const span = (wordsWide(name ?? '') + size * SIZES.nameGap + listed(run.routes).length * size * 0.5 + 2 * SIZES.busLabelAir) * 1.15;
+        if (name && span <= piece.len) {
+          const mid = Math.min(piece.from + piece.len - span / 2, Math.max(piece.from + span / 2, run.run.mid));
+          let path = partOf(run.run.path, mid - span / 2, mid + span / 2);
+          const [a, b] = [path[0], path.at(-1)];
+          if (a[0] > b[0] + 1e-6 || (Math.abs(a[0] - b[0]) <= 1e-6 && a[1] < b[1])) path = [...path].reverse();
+          if (path.length > 1 && oneTile(path) && !onStop(path) && side(path, 1) === side(run.path, 1)) lead = { name, path };
+        }
+      }
+      if (lead) named.push({ name: lead.name, at: pointAlong(lead.path, length(lead.path) / 2) });
+      features.push(feature({ kind: 'bus-label', cls: run.cls, label: listed(run.routes), n: run.n, ...below, ...(lead ? { street: lead.name } : {}) },
+        { type: 'LineString', coordinates: (lead?.path ?? run.path).map(back) }));
       continue;
     }
     // Two rows stacked beside the street: one piece of lettering, turned the way the street runs.
@@ -2532,17 +2604,32 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // From sheet 3 the bus streets are named, from their stops (runStreet): each piece takes the name its
   // stops give, and pieces that carry straight on under one name are one run, labelled like route lists.
   // The page sets these after the route numbers, so a name takes only room the numbers left.
-  if (sheet.id >= SIZES.streetSheet) {
-    const reach = Math.max(SIZES.busMerge[sheet.id], 8);
+  if (naming) {
     const NONE = '-';
-    const byName = bus.map((st) => ({ ...st, routes: runStreet(st, onStreets(), reach, SIZES.streetAhead[sheet.id])?.replace(/ /g, '\u00a0') ?? NONE }));
-    const wide = (st) => String(st.routes).length * size * 0.5 * 0.92 + 2 * SIZES.busLabelAir;
-    // A name takes a stretch no route list is on: the page places the lists first.
-    const listedOn = (path) => listedRuns.some((q) => [path[0], pointAlong(path, length(path) / 2), path.at(-1)].some((p) => boxed(q, p, 3) && nearest(q, p).d < 3));
-    for (const run of labelRuns(byName, SIZES.streetEvery[sheet.id], wide, (path) => side(path, 1) !== 0 && !listedOn(path))) {
+    const byName = bus.map((st) => ({ ...st, routes: runStreet(st, onStreets(), reach, SIZES.streetAhead[sheet.id])?.replace(/ /g, ' ') ?? NONE }));
+    const wide = (st) => wordsWide(st.routes) + 2 * SIZES.busLabelAir;
+    // A name takes a stretch no route list is on: it keeps half a line of its type off every list's
+    // street, along its length and at its ends (both stretches already carry air at their ends; the
+    // page, which places lists first, drops a name that would still touch one). The lists' streets
+    // are on a grid, every two pixels, so each try asks only the lists near it.
+    const clearOf = size / 2;
+    const listGrid = new Map();
+    for (const q of listedRuns) for (const p of resample(q, 2)) { const k = `${Math.floor(p[0] / cell)},${Math.floor(p[1] / cell)}`; listGrid.set(k, [...(listGrid.get(k) ?? []), p]); }
+    const listedOn = (path) => resample(path, 2).some(([x, y]) => {
+      for (let gx = Math.floor((x - clearOf) / cell); gx <= Math.floor((x + clearOf) / cell); gx++)
+        for (let gy = Math.floor((y - clearOf) / cell); gy <= Math.floor((y + clearOf) / cell); gy++)
+          for (const q of listGrid.get(`${gx},${gy}`) ?? []) if (Math.hypot(q[0] - x, q[1] - y) < clearOf) return true;
+      return false;
+    });
+    // A street named at the head of a list nearby is not named again there.
+    const again = (name, path) => { const m = pointAlong(path, length(path) / 2); return named.some((o) => o.name === name && dist(o.at, m) < SIZES.streetEvery[sheet.id]); };
+    // Nor on a stop: a name slides along its street to a stretch between stops.
+    for (const run of labelRuns(byName, SIZES.streetEvery[sheet.id], wide, (path) => oneTile(path) && side(path, 1) !== 0 && !listedOn(path) && !onStop(path), { slide: true })) {
       if (run.rows !== 1 || run.routes === NONE || run.routes.includes(' ')) continue;
+      const label = run.routes.replace(/ /g, ' ');
+      if (again(label, run.path)) continue;
       const below = side(run.path, 1) < 0 ? { side: -1 } : {};
-      features.push(feature({ kind: 'bus-street', cls: run.cls, label: run.routes.replace(/\u00a0/g, ' '), ...below }, { type: 'LineString', coordinates: run.path.map(back) }));
+      features.push(feature({ kind: 'bus-street', cls: run.cls, label, ...below }, { type: 'LineString', coordinates: run.path.map(back) }));
     }
   }
   for (const l of lines) {
@@ -2565,15 +2652,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
       { type: 'Point', coordinates: back(n.at) }));
     for (const b of n.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink }, { type: 'Point', coordinates: back(b.at) }));
   }
-  if (sheet.id >= SIZES.stopSheet) {
-    // A ring half under a rail line can't be read as a stop: one that close to a line is not drawn.
-    const clear = SIZES.rail[sheet.id] / 2 + SIZES.stopRing;
-    for (const r of stopRings(busStops(stops, routes), bus, sheet)) {
-      const p = r.at;
-      if (lines.some((l) => l.paths.some((path) => boxed(path, p, clear) && nearest(path, p).d < clear))) continue;
-      features.push(feature({ kind: 'stop', id: r.id, name: r.name, heading: r.heading, routes: r.routes.join(', ') }, { type: 'Point', coordinates: back(p) }));
-    }
-  }
+  for (const r of rings) features.push(feature({ kind: 'stop', id: r.id, name: r.name, heading: r.heading, routes: r.routes.join(', ') }, { type: 'Point', coordinates: back(r.at) }));
   const hub = marks.find((m) => m.hub);
   return { type: 'FeatureCollection', hub: hub ? back(lerp(hub.ends[0], hub.ends[1], 0.5)) : null, features };
 }
