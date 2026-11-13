@@ -3312,9 +3312,21 @@ Decided 2026-11-13. The site is called launched at **v1.0**, when the
 his phone in both themes, the sheets can highlight one route, and the
 version is closed (#14: domain, share links, screen reader, offline). V1 to
 V3 above are the names of the design stages that led there, not releases.
-What is planned but not needed to launch (other times, Live tiers, alerts
-and departures, route numbers, Classic map fixes) is in "After launch
-(v1.1+)".
+What comes after launch is in four milestones, in this order (decided
+2026-11-13):
+
+1. **v1.1: Sheets polish.** Faults on the sheets and in the bus data they
+   draw from.
+2. **v2: One zoomable map.** The sheets' drawing at every zoom, one map
+   that zooms smoothly, with the classic map's features carried over
+   (#129). The classic map is paused until the sheets launch; its open
+   issues carry the `classic` label.
+3. **v2.x: Other times and Live.** Saturday, Sunday and evening in the
+   Key, Live tiers, alerts, departures and vehicles, on the zoomable map.
+4. **Later.** Ideas with no date.
+
+Every open issue is labelled `sheets`, `classic` or `both` (the shared data
+pipeline or the site as a whole).
 
 A release is a tag on `main` (`v1.0`, `v1.1`, ...) with a GitHub Release
 listing the milestone's closed issues, made only after Chris's sign-off.
@@ -4514,6 +4526,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   University drawn every 16 to 30 between stretches drawn every 15. Its wait
   came out at 15 minutes and a few seconds (stop times filled in between
   RTD's timepoints), so the line said every 30 while the panel said 15.
+- 2026-11-13: The roadmap after launch is v1.1 (sheets polish), v2 (one
+  zoomable map built from the sheets, carrying the classic map's
+  features), v2.x (other times and Live), then Later. The classic map is
+  paused until the sheets launch. Reason: Chris: the classic map waits
+  "until we get the sheets version working", and the goal is to make the
+  sheets infinitely zoomable and merge in the classic map's features.
 
 ## Sources
 
