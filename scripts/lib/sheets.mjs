@@ -25,6 +25,8 @@ export const SIZES = {
   round: { 1: 2.5, 2: 3, 3: 3, 4: 3 },
   // Where a line changes its place beside others, it slides across over about this far each side.
   ease: 26,
+  // Lines whose paths in the data run this close (in metres) are on one track, drawn beside one rounded track.
+  sharedMetres: 2,
   // A bend that moves the track less than this many line widths (a line and its gap) is drawn
   // straight: the track is rounded over this many line widths each way there.
   bend: 0.7,
@@ -284,11 +286,111 @@ export function railLines(routes, sheet) {
     runs: whole(chained(apart(chained(pieces, 0.75, turned), 4 * pitch), 4 * pitch, turned), SIZES.busBlip),
   }));
   carriedOn(joined, sheet, pitch);
-  return joined.map(({ route, color, runs }) => ({
+  const tracks = joined.map(({ runs }) => runs.map((run) => tracked(run, pitch)));
+  shareTracks(tracks, sheet, pitch);
+  return joined.map(({ route, color }, k) => ({
     route,
     color,
-    paths: runs.map((run) => simplify(rounded(slotted(run, pitch, SIZES.ease), SIZES.round[sheet.id]))),
+    paths: tracks[k].map((t) => simplify(rounded(slotted(t, pitch, SIZES.ease), SIZES.round[sheet.id]))),
   }));
+}
+
+/**
+ * Lines that share track are set beside one track, not each beside its own. Each line's track
+ * is rounded on its own, and where one line goes another way after a fork its rounding leans
+ * that way early, so on the sheet it pulled away from the pack before the fork (the C line
+ * between Alameda and I-25 / Broadway, issue #128). Where the data has two or more lines on the
+ * same track, each takes the mean of their rounded tracks there; past the end of the shared
+ * track it eases back to its own over a few pitches, so it leaves the pack at the fork itself.
+ * `tracks` holds each line's runs as `{ pts, track }` (see tracked); tracks are changed in place.
+ */
+function shareTracks(tracks, sheet, pitch) {
+  const all = tracks.flatMap((runs, line) => runs.map((t) => Object.assign(t, { line })));
+  if (all.length < 2) return;
+  // Lines on shared track are on one path in the data (the build moves them onto its middle).
+  const p0 = all[0].pts[0];
+  const tol = Math.max(0.05, SIZES.sharedMetres / metresPerPixel(toLonLat(p0, sheet.zoom)[1], sheet.zoom));
+  // Every one-pixel step of every run, filed by the cells it touches.
+  const cell = 2;
+  const grid = new Map();
+  const key = (cx, cy) => cx * 1e6 + cy;
+  all.forEach((t, r) => {
+    for (let i = 1; i < t.pts.length; i++) {
+      const [a, b] = [t.pts[i - 1], t.pts[i]];
+      const [x0, x1] = [Math.floor(Math.min(a[0], b[0]) / cell), Math.floor(Math.max(a[0], b[0]) / cell)];
+      const [y0, y1] = [Math.floor(Math.min(a[1], b[1]) / cell), Math.floor(Math.max(a[1], b[1]) / cell)];
+      for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+        const k = key(cx, cy);
+        if (!grid.has(k)) grid.set(k, []);
+        grid.get(k).push([r, i]);
+      }
+    }
+  });
+  const moves = all.map((t) => {
+    const shift = t.pts.map(() => null);
+    t.pts.forEach((p, i) => {
+      // The nearest point of each other line's track within `tol`.
+      const found = new Map();
+      const [cx, cy] = [Math.floor(p[0] / cell), Math.floor(p[1] / cell)];
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        for (const [r, j] of grid.get(key(cx + dx, cy + dy)) ?? []) {
+          const o = all[r];
+          if (o.line === t.line) continue;
+          const hit = toSegment(p, o.pts[j - 1], o.pts[j]);
+          if (hit.d > tol || (found.has(o.line) && found.get(o.line).d <= hit.d)) continue;
+          found.set(o.line, { d: hit.d, at: lerp(o.track[j - 1], o.track[j], hit.t) });
+        }
+      }
+      if (!found.size) return;
+      const own = t.track[i];
+      let [x, y] = own;
+      for (const { at } of found.values()) [x, y] = [x + at[0], y + at[1]];
+      const n = found.size + 1;
+      shift[i] = [x / n - own[0], y / n - own[1]];
+    });
+    return shift;
+  });
+  // Off the shared track, a line eases from the pack's track back to its own: slowly at
+  // both ends of the ease, so a straight line doesn't show a corner where it starts or ends.
+  const fade = (s, span) => {
+    if (s >= span) return 0;
+    const u = s / span;
+    return 1 - u * u * u * (10 - 15 * u + 6 * u * u);
+  };
+  all.forEach((t, r) => {
+    const shift = moves[r];
+    if (shift.every((s) => !s)) return;
+    const n = shift.length;
+    // The nearest shared point before and after each point, and how far along the run it is.
+    const near = [Array(n).fill(null), Array(n).fill(null)];
+    for (let i = 0, last = null; i < n; i++) near[0][i] = last = shift[i] ? i : last;
+    for (let i = n - 1, last = null; i >= 0; i--) near[1][i] = last = shift[i] ? i : last;
+    const out = shift.map((s, i) => {
+      if (s) return s;
+      let [x, y, w] = [0, 0, 0];
+      for (const j of [near[0][i], near[1][i]]) {
+        if (j === null) continue;
+        const d = Math.hypot(...shift[j]);
+        const f = fade(Math.abs(i - j), Math.max(8 * pitch, 16 * d));
+        [x, y, w] = [x + shift[j][0] * f, y + shift[j][1] * f, w + f];
+      }
+      return w > 1 ? [x / w, y / w] : [x, y];
+    });
+    // Where another line joins or leaves the shared track the pack's mean steps; the step
+    // is spread over a pitch or so each way.
+    let even = out;
+    const reach = Math.round(pitch);
+    for (let pass = 0; pass < 2; pass++) {
+      const was = even;
+      even = was.map((_, i) => {
+        const k = Math.min(reach, i, n - 1 - i);
+        let [x, y] = [0, 0];
+        for (let j = i - k; j <= i + k; j++) [x, y] = [x + was[j][0], y + was[j][1]];
+        return [x / (2 * k + 1), y / (2 * k + 1)];
+      });
+    }
+    t.track = t.track.map((p, i) => [p[0] + even[i][0], p[1] + even[i][1]]);
+  });
 }
 
 /**
@@ -353,8 +455,11 @@ function whole(runs, scrap) {
   return long.length ? long : runs;
 }
 
-/** A run of [x, y, slot] points, each moved `slot * pitch` to its right, the slot eased along the run. */
-function slotted(run, pitch, ease) {
+/**
+ * A run of [x, y, slot] points as `{ pts, track }`: a point every pixel, each with the slot of
+ * the piece it is on, and the rounded track under each (see slotted).
+ */
+function tracked(run, pitch) {
   // A point every pixel, each with the slot of the piece it is on.
   const pts = [];
   for (let i = 1; i < run.length; i++) {
@@ -397,9 +502,12 @@ function slotted(run, pitch, ease) {
       return sum / (2 * k + 1);
     });
   }
-  pts.forEach((p, i) => {
-    [p[0], p[1]] = lerp(near[i], far[i], part[i]);
-  });
+  return { pts, track: pts.map((_, i) => lerp(near[i], far[i], part[i])) };
+}
+
+/** A tracked run (see tracked), each point moved `slot * pitch` to the right of its track, the slot eased along the run. */
+function slotted({ pts: raw, track }, pitch, ease) {
+  const pts = raw.map((p, i) => [track[i][0], track[i][1], p[2]]);
   let slots = pts.map((p) => p[2]);
   for (let pass = 0; pass < 2; pass++) {
     slots = slots.map((_, i) => {

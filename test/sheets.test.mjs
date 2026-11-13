@@ -39,6 +39,25 @@ test('a rail line is one whole path however its pieces come, and two lines on on
   assert.ok(Math.abs(Math.abs(apart) - pitch) < 0.2, `lines are ${apart} apart, want ${pitch}`);
 });
 
+test('lines on one track stay a pitch apart up to the fork where one goes another way', () => {
+  // A and B share 60 pixels of track (about one rounding reach), then A turns hard
+  // and B carries straight on: B used to pull away from A well before the fork.
+  const rail = (route, slot, coords) => line({ mode: 'rail', route, color: '#57C1E9', slot }, coords);
+  const routes = all([
+    rail('A', -0.5, [at(0, 0), at(60, 0)]),
+    rail('B', 0.5, [at(0, 0), at(60, 0)]),
+    rail('A', 0, [at(60, 0), at(120, 45)]),
+    rail('B', 0, [at(60, 0), at(200, 0)]),
+  ]);
+  const [a, b] = railLines(routes, sheet);
+  const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
+  for (const x of [10, 20, 30, 40]) {
+    const p = nearest(a.paths[0], [origin[0] + x, origin[1]]).at;
+    const d = Math.min(...b.paths.map((q) => nearest(q, p).d));
+    assert.ok(Math.abs(d - pitch) < 0.15 * pitch, `${x} px along, the lines are ${d.toFixed(2)} apart, want ${pitch}`);
+  }
+});
+
 test('a piece run the other way keeps its side of the track', () => {
   const rail = (slot, coords) => line({ mode: 'rail', route: 'A', color: '#57C1E9', slot }, coords);
   // Second piece runs right to left with the opposite slot: the same side on the ground.

@@ -2008,7 +2008,8 @@ How it is built:
   runs alone, or among its neighbours where it shares track for a long way;
   each station's name goes on the clearest side of its mark. A second track
   of the same line is not drawn, the shared track is rounded before lines are
-  set beside it so a pack turns as one, and a line ends square at its last
+  set beside it so a pack turns as one (lines on one track share one rounded
+  track, and a line leaves it at the fork, not before), and a line ends square at its last
   station. A bend that moves the track less than about two thirds of a
   line's width (a line and its gap) is too small to draw on that sheet: the
   track is drawn straight through it, the station bars with it, and it
@@ -4506,6 +4507,18 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   tags on `main` after Chris's sign-off. Reason: the V3 milestone no longer
   matched the work after the four-sheets decision, and nothing said what
   launch meant.
+- 2026-11-13: Sheets: lines that share track are set beside one rounded
+  track (#128). Chris, of sheet 2: "the alignment for the C line at I-25 and
+  Broadway looks wrong". Each line's track was rounded on its own over up to
+  nine line widths, so past a fork its rounding leaned its own way early: C
+  pulled away from T and E between Alameda and I-25 / Broadway, 1.1 to 2.6
+  pitches from T where the data has them on one track. Where the data has
+  lines on one track, each now takes the mean of their rounded tracks, and
+  past the shared track a line eases back to its own over at least eight
+  line widths (slowly at both ends, so a straight line shows no corner). On
+  sheets 2 to 4, C, T and E stay a pitch apart (0.94 to 1.03) to the fork;
+  the other forks (Union Station, the B/G split, W at Decatur, Nine Mile)
+  also leave the pack at the fork, moving lines by at most 10 px on sheet 4.
 
 ## Sources
 
