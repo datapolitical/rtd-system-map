@@ -18,10 +18,16 @@ const GAP = { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
 // The build's six headway classes are drawn as three steps: a bus every 10 minutes or better,
 // every 15, and every 30 or less often. More steps than three don't read as steps (DESIGN.md, "Four sheets").
 export const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
-// Each step is this many times as wide as the one below; the top one is as wide as rail. The opening
-// sheet's job is where service is frequent, and there the quiet step covers the whole outer street grid,
-// so its steps are steeper: the quiet step a one-pixel hairline, the frequent step plainly first.
-export const STEP_RATIO = { 1: 1.9, 2: 1.6, 3: 1.6, 4: 1.6 };
+// Widths, per sheet. The quiet step is the sheet's rail width over 1.6 twice (on the opening sheet a
+// one-pixel hairline: there it is the whole outer street grid). The busiest step is a band at least
+// BUS_BAND wide, or as wide as rail where the sheet's rail is wider, so a street with a bus every 10
+// minutes reads as a corridor at a glance; rail still reads first by its colour, drawn on top in a
+// colour no grey comes near. The middle step sits evenly between, the same ratio up from the quiet
+// step as the busiest is up from it, so the wider the view the steeper the steps: the overview's job
+// is where service is frequent.
+export const BUS_BAND = 7;
+const QUIET = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n, n === '1' ? 1 : w / 1.6 ** 2]));
+export const STEP_RATIO = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n, Math.sqrt(Math.max(w, BUS_BAND) / QUIET[n])]));
 const steps = (quiet, mid, top) => Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, [quiet, mid, top][s]]));
 
 export const PALETTES = {
@@ -48,9 +54,9 @@ export const PALETTES = {
   },
 };
 
-// Bus street widths by class, per sheet: the top step at the sheet's rail width, each step below 1/STEP_RATIO of it.
-export const BUS_WIDTH = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n,
-  Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, Math.round((w / STEP_RATIO[n] ** (2 - s)) * 100) / 100]))]));
+// Bus street widths by class, per sheet: the quiet step, and each step above it STEP_RATIO times as wide.
+export const BUS_WIDTH = Object.fromEntries(Object.entries(RAIL).map(([n]) => [n,
+  Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, Math.round(QUIET[n] * STEP_RATIO[n] ** s * 100) / 100]))]));
 
 // Rail stands out from the busiest bus street by at least this much more contrast with the ground.
 export const RAIL_OVER_BUS = 1.15;
@@ -167,7 +173,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
 
     // Bus streets, quietest first so the busiest are on top; the busiest get a rim of ground to sit clear.
     const order = ['c60', 'c30', 'c15', 'c10', 'c5', 'c3'];
-    layer('bus-rim', 'line', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c10', 'c5', 'c3']]]), layout: ROUND,
+    layer('bus-rim', 'line', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]]), layout: ROUND,
       paint: { 'line-color': c.ground, 'line-width': ['+', byClass(BUS_WIDTH[n]), 1.6] } });
     layer('bus', 'line', { filter: kind('bus'), layout: { ...ROUND, 'line-sort-key': ['match', ['get', 'cls'], ...order.flatMap((k, j) => [k, j]), 0] },
       paint: { 'line-color': byClass(busInk(theme, n)), 'line-width': byClass(BUS_WIDTH[n]) } });

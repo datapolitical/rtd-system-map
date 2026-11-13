@@ -579,19 +579,22 @@ test('the page inks each line from the colours the build found: pale ones cased 
   assert.deepEqual(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], ['get', 'color'], 'without the list, RTD\'s own colours');
 });
 
-test('bus widths step up by about 1.6 to the rail width (steeper on the opening sheet), none under a pixel, and numbers still clear the widest', async () => {
-  const { BUS_WIDTH, BUS_STEP, STEP_RATIO } = await import('../public/js/sheets/style.js');
+test('bus widths: the busiest a band at least BUS_BAND wide (or rail\'s width), the middle step evenly between, the quiet step as before; numbers still clear the widest', async () => {
+  const { BUS_WIDTH, BUS_STEP, STEP_RATIO, BUS_BAND } = await import('../public/js/sheets/style.js');
   for (const sheet of SHEETS) {
     const w = BUS_WIDTH[sheet.id];
     const steps = [0, 1, 2].map((s) => [...new Set(Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => w[cls]))]);
     assert.ok(steps.every((x) => x.length === 1), `sheet ${sheet.id}: one width per step`);
     const [q, m, t] = steps.map((x) => x[0]);
-    assert.equal(t, SIZES.rail[sheet.id], `sheet ${sheet.id}: the busiest step is as wide as rail`);
+    const rail = SIZES.rail[sheet.id];
+    assert.ok(Math.abs(t - Math.max(rail, BUS_BAND)) < 0.01, `sheet ${sheet.id}: the busiest step is a band, or as wide as rail`);
+    assert.ok(t >= BUS_BAND, `sheet ${sheet.id}: a street every 10 minutes reads as a corridor`);
     assert.ok(q >= 1, `sheet ${sheet.id}: no line under a pixel`);
+    if (sheet.id === 1) assert.ok(q <= 1.05, 'the opening sheet\'s quiet step is a hairline');
+    else assert.ok(Math.abs(q - rail / 1.6 ** 2) < 0.01, `sheet ${sheet.id}: the quiet step is rail over 1.6 twice`);
     const ratio = STEP_RATIO[sheet.id];
-    for (const [lo, hi] of [[q, m], [m, t]]) assert.ok(Math.abs(hi / lo - ratio) < 0.05, `sheet ${sheet.id}: each step ${ratio} times the one below`);
-    if (sheet.id === 1) assert.ok(ratio > STEP_RATIO[2] && q <= 1.05, 'the opening sheet steps more steeply, its quiet step a hairline');
-    else assert.ok(ratio >= 1.5 && ratio <= 1.7, `sheet ${sheet.id}: about 1.6`);
+    for (const [lo, hi] of [[q, m], [m, t]]) assert.ok(Math.abs(hi / lo - ratio) < 0.05, `sheet ${sheet.id}: each step ${ratio.toFixed(2)} times the one below`);
+    if (sheet.id > 1) assert.ok(ratio <= STEP_RATIO[sheet.id - 1], `sheet ${sheet.id}: steps no steeper than on the wider sheet before`);
   }
 });
 

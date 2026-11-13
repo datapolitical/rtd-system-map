@@ -2104,14 +2104,20 @@ How it is built:
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
   The build's six bus classes are drawn as three steps: a bus every 10
   minutes or better, every 15, and every 30 or less often (more steps than
-  three don't read as steps). Each step is 1.6 times as wide as the one
-  below, the busiest as wide as the sheet's rail, none under a pixel; their
-  greys are evenly spaced in lightness, and the quietest reads clearly in
-  both themes (in the dark, where a thin line of light reads faint, more
-  so). The opening sheet steps more steeply (1.9), so its quiet step is a
+  three don't read as steps). A street with a bus every 10 minutes is a
+  band at least 7 pixels wide, or as wide as the sheet's rail where that is
+  wider (sheet 4), so the frequent network reads as corridors at a glance:
+  on the wider sheets the band is wider than rail, which still reads first
+  by its colour, drawn on top in a colour no grey comes near. The quiet step
+  is the sheet's rail width over 1.6 twice, and on the opening sheet a
   one-pixel hairline, half a lightness step nearer the ground: there it is
   the whole outer street grid, and the sheet's job is where service is
-  frequent, so the frequent streets read first and the grid sits back. Rail reads first by its colour: in each theme the busiest bus grey
+  frequent, so the grid sits back. The middle step (a bus every 15 minutes,
+  the Flatiron Flyer's) sits evenly between, the same ratio up from the
+  quiet step as the busiest is up from it, so the wider the view the steeper
+  the steps (2.6 on sheet 1 down to 1.6 on sheet 4). Their greys are evenly
+  spaced in lightness, and the quietest reads clearly in both themes (in
+  the dark, where a thin line of light reads faint, more so). Rail reads first by its colour: in each theme the busiest bus grey
   has less contrast with the ground than any rail line, by at least 15%.
   The page takes each line's colour from RTD's data (the build lists them
   in `sheets.json`) and, where one is too dim for that, lifts it in the dark
@@ -4484,6 +4490,16 @@ work against the real structure before asking for evaluation.
   so sheet 3 named West 14th Avenue and Pine Street but not Colfax or
   Broadway; set on a bus street's centreline they cut its line and read
   muddy, and set ahead of the route lists they took 8 of 18 downtown.
+- 2026-11-12: On the sheets a street with a bus every 10 minutes is a band
+  at least 7 pixels wide, wider than rail on sheets 1 to 3, and the middle
+  step sits evenly between it and the quiet step (#117). Reason: Chris
+  asked why the Flatiron Flyer was "so insubstantial" and for the very
+  frequent lines to be more significant; at rail's width in a grey kept
+  under rail's contrast the frequent streets read as no more than the
+  grid. The pieces of the Flatiron Flyer still drawn as a hairline (to
+  Anschutz along I-70 and I-225, and through downtown to Civic Center) are
+  its peak-only legs, 4 to 17 trips a weekday with none at midday, so they
+  stay quiet.
 
 ## Sources
 
