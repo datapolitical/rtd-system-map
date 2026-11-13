@@ -486,7 +486,7 @@ test('a route number never sits on a stop: each stop holds its ground, placed be
   for (const theme of ['light', 'dark']) {
     const layers = sheetStyle(theme).layers;
     const isStop = (l) => JSON.stringify(l.filter) === JSON.stringify(['==', ['get', 'kind'], 'stop']);
-    const rings = layers.filter((l) => isStop(l) && l.type === 'circle');
+    const rings = layers.filter((l) => /^stop-\d+$/.test(l.id) && l.type === 'circle');
     assert.ok(rings.length, 'the closest sheet rings its stops');
     for (const ring of rings) {
       const n = ring.id.split('-').pop();
@@ -1119,4 +1119,65 @@ test('a bus line ends on a mark: led on to the stop its route ends at, lines end
   assert.deepEqual(twoTwoEight.path.at(-1), [108, 4], '228 is led on to it');
   assert.ok(String(mark.routes).includes('228') && String(mark.routes).includes('AB'));
   assert.equal(ends.length, 3, 'each end of the line along the street is on its stop');
+});
+
+test("RTD's stop groups: a stop's letter from its name, and a pair of streets that share letters and routes is one table", async () => {
+  const { stopLetter, stopName, stopGroups, groupTitle, groupRows } = await import('../scripts/lib/sheets.mjs');
+  assert.equal(stopLetter('Oak St & 1st Ave [ X Stop ]'), 'X');
+  assert.equal(stopLetter('Oak St & 1st Ave'), null, 'a stop RTD names without a letter has none');
+  assert.equal(stopName('Oak St & 1st Ave [ X Stop ]'), 'Oak St & 1st Ave');
+  const stop = (name, lines) => point({ name, lines }, [-105, 39.75]);
+  const groups = stopGroups(all([
+    stop('Oak St & 1st Ave [ X Stop ]', '5 7'), stop('Oak St & 2nd Ave [ Y Stop ]', '9'), stop('Oak St & 3rd Ave', '21'),
+    stop('Elm St & 1st Ave [ X Stop ]', '7 11'), stop('Elm St & 2nd Ave [ Y Stop ]', '9 13'),
+    // Another street with lettered stops but no route in common with these: a table of its own.
+    stop('Pine St & 1st Ave [ A Stop ]', '40'),
+  ]));
+  assert.equal(groups.length, 2);
+  const [pair] = groups.filter((g) => g.streets.length === 2);
+  assert.deepEqual(pair.streets, ['Elm St', 'Oak St']);
+  assert.equal(pair.title, 'Elm & Oak St');
+  assert.deepEqual(pair.rows, [{ letter: 'X', routes: ['5', '7', '11'] }, { letter: 'Y', routes: ['9', '13'] }]);
+  assert.equal(groupRows(pair.rows), 'X 5 7 11 | Y 9 13');
+  assert.deepEqual(pair.byStreet['Oak St'], [{ letter: 'X', routes: ['5', '7'] }, { letter: 'Y', routes: ['9'] }]);
+  assert.equal(pair.stops.length, 4, 'the unlettered stop is in no table');
+  assert.equal(groups.find((g) => g !== pair).title, 'Pine St');
+  assert.equal(groupTitle(['Oak Street', 'Elm Avenue']), 'Oak St & Elm Ave', 'streets of different kinds keep their own');
+  assert.deepEqual(stopGroups(all([stop('Oak St & 1st Ave', '5')])), [], 'no letters: no tables');
+});
+
+test('on sheet 3 a lettered pair gets one table with a bracket in place of its route lists; with no letters, the lists stay', () => {
+  // Two one-way streets 50 px apart carrying the same six routes, each stop serving two of them.
+  const routes = '1 2 3 4 5 6';
+  const street = (y) => line({ mode: 'bus', cls: 'c10', routes, n: 6, hw: 5, zoom: 'near' }, [at3(0, y), at3(900, y)]);
+  const lettered = (named) => ['Oak', 'Elm'].flatMap((name, k) => [0, 1, 2, 3, 4, 5].map((i) => {
+    const letter = 'XYZ'[i % 3];
+    return point({ id: `${name}${i}`, name: `${name} St & ${i + 1}th Ave${named ? ` [ ${letter} Stop ]` : ''}`, lines: ['1 2', '3 4', '5 6'][i % 3] }, at3(150 + i * 110, k * 50));
+  }));
+  const draw = (named) => drawSheet({ routes: all([]), stations: all([]), terminals: null, streets: all([street(0), street(50)]), stops: all(lettered(named)) }, near).features;
+  const kinds = (features, kind) => features.filter((f) => f.properties.kind === kind);
+
+  const plain = draw(false);
+  assert.equal(plain.filter((f) => String(f.properties.kind).startsWith('group')).length, 0, 'no letters: no table');
+  assert.ok(kinds(plain, 'bus-label').some((f) => f.properties.label === '1, 2, 3, 4, 5, 6'), "no letters: today's lists");
+
+  const grouped = draw(true);
+  assert.equal(kinds(grouped, 'group-plate').length, 1, 'one table for the pair');
+  assert.equal(kinds(grouped, 'group-bracket').length, 1, 'tied to its streets by a bracket');
+  assert.equal(kinds(grouped, 'group-area').length, 1, 'a tap on the plate finds the table');
+  assert.deepEqual(kinds(grouped, 'group-badge').map((f) => f.properties.letter), ['X', 'Y', 'Z']);
+  const rows = kinds(grouped, 'group-text').filter((f) => f.properties.role === 'row').map((f) => f.properties.text);
+  assert.deepEqual(rows, ['1 2', '3 4', '5 6'], 'routes spaced, no commas');
+  assert.equal(kinds(grouped, 'group-text').find((f) => f.properties.role === 'title').properties.text, 'ELM & OAK ST');
+  assert.equal(kinds(grouped, 'bus-label').length, 0, 'the long lists are gone');
+  assert.ok(kinds(grouped, 'bus').every((f) => f.properties.groups === 'X 1 2 | Y 3 4 | Z 5 6'), 'a tap on either street gives its routes by letter');
+  // The plate is level, clear of both streets, and the bracket crosses both.
+  const plate = kinds(grouped, 'group-plate')[0];
+  const at = toPx(plate.geometry.coordinates, near.zoom);
+  const box = [at[0] + plate.properties.off[0] - origin3[0], at[1] + plate.properties.off[1] - origin3[1]];
+  const [w, h] = [plate.properties.w, plate.properties.h];
+  assert.ok(box[1] + h < -2 || box[1] > 52 || (box[1] > 2 && box[1] + h < 48), 'the plate keeps off both streets');
+  const ys = kinds(grouped, 'group-bracket')[0].geometry.coordinates[0].slice(1).map((p) => toPx(p, near.zoom)[1] - origin3[1]);
+  assert.ok(Math.min(...ys) < 0 && Math.max(...ys) > 50, 'the bracket runs across both streets');
+  assert.ok(w > 40 && h > 40);
 });

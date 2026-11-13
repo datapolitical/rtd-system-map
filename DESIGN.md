@@ -2229,13 +2229,33 @@ How it is built:
   holds it and runs on across cross streets only where none does. A run too
   short for its list in one row has it in two, stacked beside the street
   and turned the way it runs, where the street is straight for their
-  length. Where routes join and leave a street block by block (15th and
-  17th downtown), no run of one list holds it: there the label runs on
-  across runs and lists every route on the stretch it is lettered along,
-  grown from the longest unlabelled run one run at a time, taking the
-  neighbour that adds the fewest routes, in one row where the street can
-  hold it and two stacked only where it can't. A street too short even for
-  that is not labelled on that sheet, and a tap gives the list anywhere.
+  length. Where routes join and leave a street block by block and no run
+  of one list holds it, the label runs on across runs and lists every
+  route on the stretch it is lettered along, grown from the longest
+  unlabelled run one run at a time, taking the neighbour that adds the
+  fewest routes, in one row where the street can hold it and two stacked
+  only where it can't. A street too short even for that is not labelled on
+  that sheet, and a tap gives the list anywhere.
+  Where RTD letters a street's stops ("... [ X Stop ]", 15th and 17th
+  downtown), a bus stops only at its letter's stops, so a stop serves one
+  group, not the whole list. There the routes are said once in a table, not
+  along the street. Streets whose lettered stops share a letter and a route
+  are one table (a one-way pair), titled with their names ("15th & 17th
+  St"), with a row for each letter: the letter in a small dark square, then
+  its routes, spaced, no commas. The table is a level plate in the ground's
+  colour with a hairline edge, which the build places beside its streets
+  clear of rail, bus streets, station names and route lists; place and
+  street names give way to it. A thin bracket runs square across the
+  streets where their lettered stops are, mid-block where it can, with a
+  short tick at each end and a short leader to the plate. On sheet 3 the
+  table replaces the lists along those streets; on sheet 2 it is set where
+  it fits, and the streets carry no numbers where it doesn't. On sheet 4
+  each lettered stop shows its letter in a small square in the stops'
+  grey in place of its ring, and the table is set once near the middle of
+  the lettered stops where it fits, without a bracket when the streets lie
+  farther apart than it is wide. A tap on these streets, a lettered stop or
+  the table lists the routes by letter. Routes on those streets that stop
+  at no lettered stop are still listed along the street.
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
@@ -4540,6 +4560,12 @@ work against the real structure before asking for evaluation.
   Over eight sheet-4 views names went from 7 to 17 and over three sheet-3
   views from 6 to 14, with no route list lost. Colfax between Broadway and
   Lincoln still has no room: two stops and its list fill the block.
+- 2026-11-13: Where RTD letters a street's stops (15th and 17th downtown),
+  the sheets give the routes in one table by letter, tied to the streets by
+  a bracket, and on sheet 4 each lettered stop shows its letter (#126).
+  Reason: the long row of every route on those streets was hard to read
+  and misleading, since any one stop serves one group. Chris approved the
+  table after a mock.
 
 ## Sources
 

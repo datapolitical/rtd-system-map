@@ -70,6 +70,10 @@
   #card b { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; }
   #card span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--quiet); line-height: 1.3; }
   #card i { display: inline-block; min-width: 1.5em; height: 1.5em; margin-right: 6px; border-radius: 0.75em; text-align: center; font-style: normal; line-height: 1.55em; }
+  /* A stop group's routes, a row per letter: the letter in a small square of ink, as on the map. */
+  #card .rows { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 5px 8px; margin-top: 8px; font-size: 14px; font-weight: 600; }
+  #card .rows i { min-width: 18px; height: 18px; margin: 0; border-radius: 4px; background: var(--ink); color: var(--card); font-size: 11.5px; font-weight: 700; line-height: 19px; }
+  #card .rows em { font-style: normal; word-spacing: 0.15em; }
   /* While the map loads: a picture of the view it opens on, centred as the map is, and a line saying so (scripts/poster.mjs). */
   #poster { position: absolute; inset: 0; overflow: hidden; background: var(--ground); transition: opacity 250ms ease-out; }
   #poster img { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: none; user-select: none; -webkit-user-drag: none;

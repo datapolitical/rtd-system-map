@@ -38,7 +38,10 @@ class NodeSDF extends TinySDF {
   }
 }
 
+let registered = false;
 function registerFonts() {
+  if (registered) return;
+  registered = true;
   for (const [file, family] of [
     ['overpass-latin-wght-normal.woff2', 'OverpassGlyphs'],
     ['overpass-latin-ext-wght-normal.woff2', 'OverpassGlyphs'],
@@ -96,6 +99,30 @@ function rangeFile(name, { weight, italic }, start) {
   const pbf = new PbfWriter();
   pbf.writeMessage(1, writeStack, { name, range: `${start}-${start + 255}`, glyphs });
   return pbf.finish();
+}
+
+/**
+ * How wide MapLibre sets `text` in one of the map's fonts at `size` px: each glyph's advance as
+ * the glyph files hold it (whole pixels at 24 px), and `spacing` ems between letters, as
+ * MapLibre's text-letter-spacing adds it. The build sizes lettering it places with this.
+ */
+const measures = new Map();
+export function textWidth(text, font, size, spacing = 0) {
+  registerFonts();
+  if (!measures.has(font)) {
+    const { weight, italic } = STACKS[font];
+    const ctx = createCanvas(8, 8).getContext('2d');
+    ctx.font = `${italic ? 'italic' : 'normal'} ${weight} ${SIZE}px ${italic ? 'OverpassGlyphsItalic' : 'OverpassGlyphs'}`;
+    measures.set(font, { ctx, advance: new Map() });
+  }
+  const m = measures.get(font);
+  const chars = [...String(text)];
+  let sum = 0;
+  for (const ch of chars) {
+    if (!m.advance.has(ch)) m.advance.set(ch, Math.round(m.ctx.measureText(ch).width));
+    sum += m.advance.get(ch);
+  }
+  return ((sum + spacing * SIZE * Math.max(0, chars.length - 1)) * size) / SIZE;
 }
 
 export async function buildGlyphs(out) {

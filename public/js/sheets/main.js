@@ -1,7 +1,7 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
-import { SHEETS, sheetData, sheetStyle } from './style.js';
+import { SHEETS, sheetData, sheetStyle, PALETTES, GROUP } from './style.js';
 import { settle } from './settle.js';
 
 // Start the map's worker downloading while the two small files below load.
@@ -117,15 +117,26 @@ show(sheet);
 
 const card = document.querySelector('#card');
 const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
-function tell(title, note) {
-  card.innerHTML = `<b>${title}</b>${note ? `<span>${esc(note)}</span>` : ''}`;
+function tell(title, note, rows = '', lead = '') {
+  card.innerHTML = `<b>${title}</b>${lead ? `<span>${esc(lead)}</span>` : ''}${rows}${note ? `<span>${esc(note)}</span>` : ''}`;
   card.hidden = false;
+}
+// A stop group's rows ("X 1 15 | Y 10 28", scripts/lib/sheets.mjs, groupRows): each letter in a
+// square like the map's, then its routes.
+function groupRows(rows) {
+  const html = String(rows).split(' | ').map((row) => {
+    const [letter, ...routes] = row.split(' ');
+    return `<i>${esc(letter)}</i><em>${esc(routes.join(' '))}</em>`;
+  }).join('');
+  return `<div class="rows">${html}</div>`;
 }
 map.on('click', (e) => {
   const n = SHEETS[sheet].id;
   const reach = 9;
   const box = [[e.point.x - reach, e.point.y - reach], [e.point.x + reach, e.point.y + reach]];
   const hit = (ids) => map.queryRenderedFeatures(box, { layers: ids.map((id) => `${id}-${n}`).filter((id) => map.getLayer(id)) });
+  const table = hit(['group-area', 'group-bracket'])[0];
+  if (table) return tell(esc(table.properties.title), '', groupRows(table.properties.rows), 'Each stop serves the routes of its letter');
   const station = hit(['station', 'name'])[0];
   if (station) return tell(esc(station.properties.name), `Rail station · ${String(station.properties.lines).split(' ').join(', ')}`);
   const rail = [...new Map(hit(['rail']).map((f) => [f.properties.route, f.properties])).values()];
@@ -133,12 +144,19 @@ map.on('click', (e) => {
     const bullets = rail.map((r) => `<i style="background:${esc(r.color)};color:${esc(inkOn(r.color))}">${esc(r.route)}</i>`).join('');
     return tell(`${bullets}${rail.length > 1 ? 'Lines' : 'Line'}`, 'Rail');
   }
-  const stop = hit(['stop'])[0];
+  const stop = hit(['stop', 'stop-letter'])[0];
+  if (stop?.properties.letter) {
+    const q = stop.properties;
+    return tell(esc(q.name), `Bus stop ${q.letter}${q.heading ? ` · ${q.heading}` : ''}`, groupRows(`${q.letter} ${String(q.routes).split(', ').join(' ')}`));
+  }
   if (stop) return tell(esc(stop.properties.name), `Bus stop · ${stop.properties.heading ?? ''} · ${stop.properties.routes}`.replace(' ·  · ', ' · '));
   const bus = hit(['bus']).sort((a, b) => b.properties.n - a.properties.n)[0];
   if (bus) {
     const q = bus.properties;
-    return tell(`${q.n > 1 ? 'Routes' : 'Route'} ${esc(q.routes)}`, q.hw ? `A bus about every ${Math.round(q.hw)} minutes on this street, weekday midday` : 'Bus');
+    const often = q.hw ? `A bus about every ${Math.round(q.hw)} minutes on this street, weekday midday` : '';
+    // On a street RTD letters its stops by, its routes by the letter of the stop each one uses.
+    if (q.groups) return tell(esc(q.street), [q.others && `Also on this street: ${q.others}`, often].filter(Boolean).join(' · '), groupRows(q.groups), 'Routes by the letter of their stop');
+    return tell(`${q.n > 1 ? 'Routes' : 'Route'} ${esc(q.routes)}`, often || 'Bus');
   }
   card.hidden = true;
 });
@@ -163,4 +181,50 @@ for (const button of document.querySelectorAll('#steps button')) button.addEvent
 
 // The opening view is drawn: then the other sheets (sheetsAll once they all have).
 map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });
+
+// --- The stop-group tables' plates and letter squares (style.js, GROUP) -------------
+
+// Drawn here, in the theme's colours, the first time the map asks for one: a plate of the
+// size the build laid its table out at, a letter's square, or a lettered stop's square. At
+// least twice the screen's pixels, so their edges stay crisp.
+const ratio = Math.max(2, Math.ceil(window.devicePixelRatio || 1));
+function groupImage(id) {
+  const m = /^stopgroup-(plate|badge|stop)-(light|dark)(?:-(\d+)x(\d+))?$/.exec(id);
+  if (!m) return null;
+  const c = PALETTES[m[2]];
+  const [w, h] = m[1] === 'plate' ? [Number(m[3]), Number(m[4])] : Array(2).fill(m[1] === 'badge' ? GROUP.badge : GROUP.stopBadge + 2 * GROUP.stopRim);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * ratio);
+  canvas.height = Math.round(h * ratio);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(ratio, ratio);
+  ctx.beginPath();
+  if (m[1] === 'plate') {
+    ctx.roundRect(0.5, 0.5, w - 1, h - 1, GROUP.corner - 0.5);
+    ctx.fillStyle = c.ground;
+    ctx.fill();
+    ctx.globalAlpha = GROUP.edge;
+    ctx.strokeStyle = c.number;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  } else if (m[1] === 'badge') {
+    ctx.roundRect(0, 0, w, h, GROUP.badgeCorner);
+    ctx.fillStyle = c.number;
+    ctx.fill();
+  } else {
+    const rim = GROUP.stopRim;
+    ctx.roundRect(0, 0, w, h, GROUP.badgeCorner + rim);
+    ctx.fillStyle = c.ground;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(rim, rim, w - 2 * rim, h - 2 * rim, GROUP.badgeCorner);
+    ctx.fillStyle = c.stop;
+    ctx.fill();
+  }
+  return { width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data };
+}
+map.setMissingStyleImageResolver((id) => {
+  const image = !map.hasImage(id) && groupImage(id);
+  if (image) map.addImage(id, image, { pixelRatio: ratio });
+});
 window.sheetsMap = map;

@@ -106,6 +106,16 @@ export const STOP_RING = { radius: 4, stroke: 1.5 };
 export const BUS_END = { stroke: 1.4 };
 export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 
+// A stop-group table (scripts/lib/sheets.mjs, SIZES.group, which lays it out at these sizes): a
+// plate in the ground's colour with a hairline edge in the numbers' ink at `edge` opacity, a title
+// in that ink at `titleInk`, and a row per letter, its letter in a small square of ink. The
+// bracket across the streets is `bracket` wide, in that ink at `bracketInk`. On sheet 4 a
+// lettered stop shows its letter in a square `stopBadge` wide in the stops' grey, with a rim of
+// ground `stopRim` wide so it stands off its street as a stop's ring does.
+export const GROUP = { title: 9, titleSpacing: 0.12, titleInk: 0.7, row: 10.5, rowSpacing: 0.02, letter: 8.5, badge: 12, badgeCorner: 3,
+  corner: 5, edge: 0.35, bracket: 1.5, bracketInk: 0.8, stopBadge: 11, stopRim: 1, stopLetter: 8 };
+const GROUP_FONT = { title: ['Overpass Bold'], row: ['Overpass SemiBold'] };
+
 // Station name size per sheet (SIZES.name in the build).
 const NAME_SIZE = { 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 };
 
@@ -198,8 +208,14 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     layer('hall-edge', 'line', { filter: kind('hall'), layout: ROUND, paint: { 'line-color': c.hallEdge, 'line-width': [0, 1, 1.2, 1.6][i] } });
 
     // Bus stops: each one a ring, on the closest sheet.
-    if (n >= 4) layers.push({ id: `stop-${n}`, type: 'circle', source: `sheet-${n}`, filter: ['==', ['get', 'kind'], 'stop'], ...band,
+    if (n >= 4) layers.push({ id: `stop-${n}`, type: 'circle', source: `sheet-${n}`, filter: ['all', ['==', ['get', 'kind'], 'stop'], ['!', ['has', 'letter']]], ...band,
       paint: n === 3 ? { 'circle-radius': 1.3, 'circle-color': c.stop, 'circle-opacity': 0.7 } : { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': c.stop, 'circle-stroke-width': STOP_RING.stroke } });
+    // A stop RTD letters (one of a street's stop groups, scripts/lib/sheets.mjs, stopGroups) shows
+    // its letter in place of the ring: a small square in the stops' grey, the letter in the ground's.
+    if (n >= 4) layer('stop-letter', 'symbol', { filter: kind('stop', ['has', 'letter']),
+      layout: { 'icon-image': `stopgroup-stop-${theme}`, 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+        'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.stopLetter, 'text-allow-overlap': true, 'text-ignore-placement': true },
+      paint: { 'text-color': c.ground } });
 
     // Rail: every line whole, with a rim of ground so lines side by side stay apart.
     layer('rail-rim', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
@@ -217,6 +233,12 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     layer('station-edge', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.markEdge, 'line-width': ['+', mark, 2.6] } });
     layer('station', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.mark, 'line-width': mark } });
     layer('station-divider', 'line', { filter: ['all', bar, ['==', ['get', 'fat'], true]], layout: FLAT, paint: { 'line-color': c.markEdge, 'line-width': 1.2 } });
+
+    // A stop-group table's bracket across its streets, its ticks and the leader to its plate.
+    // Where a tap finds a stop-group table: its plate's ground, unseen (the plate itself is lettering, below).
+    if (n >= 2) layer('group-area', 'fill', { filter: kind('group-area'), paint: { 'fill-color': c.ground, 'fill-opacity': 0 } });
+    if (n >= 2) layer('group-bracket', 'line', { filter: kind('group-bracket'), layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      paint: { 'line-color': c.number, 'line-width': GROUP.bracket, 'line-opacity': GROUP.bracketInk } });
 
     // Lettering, least important first (MapLibre places the last layer first).
     if (n <= 2) layers.push({ id: `freeway-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band, filter: ['all', ['==', ['get', 'class'], 'motorway'], ['has', 'ref'], ['==', ['geometry-type'], 'LineString']],
@@ -311,6 +333,27 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     if (n >= 4) layers.push({ id: `keep-off-stop-${n}`, type: 'symbol', source: `sheet-${n}`, filter: ['==', ['get', 'kind'], 'stop'], ...band,
       layout: { 'text-field': 'O', 'text-font': FONT.medium, 'text-size': STOP_ROOM, 'text-allow-overlap': true, 'text-padding': 1.5, 'text-rotation-alignment': 'viewport' },
       paint: { 'text-opacity': 0 } });
+    // Stop-group tables, placed before everything else: the build found each one room clear of
+    // rail, bus streets, station names and route numbers, so place and street names give way to
+    // it. Each piece hangs off one point, the leader's end, by an offset in pixels or ems, so the
+    // table holds together as the map zooms. The plate and badges are drawn by the page
+    // (main.js, groupImage); unseen marks along the bracket keep other lettering off it.
+    if (n >= 2) {
+      const fixed = { 'icon-allow-overlap': true, 'text-allow-overlap': true, 'text-max-width': 60, 'text-anchor': 'left', 'icon-anchor': 'top-left' };
+      layer('group-plate', 'symbol', { filter: kind('group-plate'),
+        layout: { ...fixed, 'icon-image': ['concat', `stopgroup-plate-${theme}-`, ['to-string', ['get', 'w']], 'x', ['to-string', ['get', 'h']]], 'icon-offset': ['get', 'off'] } });
+      layer('group-badge', 'symbol', { filter: kind('group-badge'),
+        layout: { ...fixed, 'icon-anchor': 'center', 'text-anchor': 'center', 'icon-image': `stopgroup-badge-${theme}`, 'icon-offset': ['get', 'off'],
+          'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.letter, 'text-offset': ['get', 'toff'] },
+        paint: { 'text-color': c.ground } });
+      layer('group-text', 'symbol', { filter: kind('group-text'),
+        layout: { ...fixed, 'text-field': ['get', 'text'], 'text-offset': ['get', 'off'],
+          'text-font': ['case', ['==', ['get', 'role'], 'title'], ['literal', GROUP_FONT.title], ['literal', GROUP_FONT.row]],
+          'text-size': ['case', ['==', ['get', 'role'], 'title'], GROUP.title, GROUP.row],
+          'text-letter-spacing': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleSpacing, GROUP.rowSpacing] },
+        paint: { 'text-color': c.number, 'text-opacity': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleInk, 1] } });
+      layer('group-keep-off', 'symbol', { filter: kind('group-bracket'), ...unseen });
+    }
   });
   return {
     version: 8,
