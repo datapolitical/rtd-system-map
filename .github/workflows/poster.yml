@@ -1,0 +1,68 @@
+# The pictures the front page shows while its map loads (scripts/poster.mjs, DESIGN.md
+# "Quality floor"). They are taken from the live site, so they stay the map the page then
+# draws: after a change to how the sheets look reaches main (once Cloudflare has deployed it),
+# and daily for RTD's data and the basemap, which change without a commit. Only pictures
+# that changed are committed. A commit made here starts no workflow (GitHub's rule for its
+# own token), so this never runs itself again; Cloudflare deploys it like any other.
+name: Poster
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - public/js/sheets/**
+      - scripts/sheets.mjs
+      - scripts/lib/sheets.mjs
+      - scripts/poster.mjs
+  schedule:
+    - cron: '37 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: poster
+  cancel-in-progress: true
+
+jobs:
+  poster:
+    # Pinned: Playwright 1.55.1 has no build for Ubuntu 26.04, which ubuntu-latest now is.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for the live site to serve this commit's sheets
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf https://rtd-system-map.pages.dev/js/sheets/style.js | cmp -s - public/js/sheets/style.js &&
+               curl -sf https://rtd-system-map.pages.dev/js/sheets/main.js | cmp -s - public/js/sheets/main.js; then
+              echo "The live site has this commit's sheets."; exit 0
+            fi
+            sleep 20
+          done
+          echo "The live site never served this commit's sheets; no pictures taken." >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+      - name: Take the pictures from the live site
+        run: node scripts/poster.mjs https://rtd-system-map.pages.dev/
+      - name: Commit the pictures that changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/poster public/index.html
+          if git diff --cached --quiet; then
+            echo "No picture changed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          { echo "Pictures committed to main:"; git diff --cached --name-only; } >> "$GITHUB_STEP_SUMMARY"
+          git commit -q -m "Poster: the opening view, taken from the live site"
+          git pull --rebase --autostash origin main
+          git push origin HEAD:main

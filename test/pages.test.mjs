@@ -58,6 +58,24 @@ test('a sheet not yet wanted starts with no drawing, and its layers are there to
   assert.equal(sheetStyle('dark').sources['sheet-4'].data, sheetData(4), 'with nothing said, every sheet loads');
 });
 
+test('the front page shows a picture of its opening view while the map loads', () => {
+  const html = read('');
+  const [, view, bounds] = html.match(/<div id="poster" data-view="([^"]*)" data-bounds="([^"]*)">/) ?? [];
+  // scripts/poster.mjs writes these: the view the pictures show, and the map's bounds the page shifts them by.
+  assert.match(view ?? '', /^\d+(\.\d+)?\/-?\d+\.\d+\/-?\d+\.\d+$/, 'the view the pictures show');
+  const [w, s, e, n] = (bounds ?? '').split(',').map(Number);
+  assert.ok(w < e && s < n, 'the map bounds');
+  const [, lat, lon] = view.split('/').map(Number);
+  assert.ok(w < lon && lon < e && s < lat && lat < n, 'the view is inside them');
+  // Every picture the page can choose is there, one per theme and screen.
+  const pictures = [...html.matchAll(/\/poster\/[\w-]+\.webp/g)].map((m) => m[0]);
+  assert.ok(pictures.length >= 4);
+  for (const p of pictures) assert.ok(fs.existsSync(path.join(PUBLIC, p)), `${p} is in public/`);
+  // The buttons start as they are on the opening sheet, so nothing changes under the picture when the script runs.
+  assert.match(html, /<button id="out"[^>]* disabled>/);
+  assert.match(html, /<div id="sheets"[^>]*><i class="on"><\/i>(<i><\/i>){3}<\/div>/);
+});
+
 test('the front page works at any address the host answers with it', () => {
   // The site has no 404 page, so Cloudflare answers a path it does not have (the old /sheets/) with the front page.
   for (const ref of refs('')) assert.ok(ref.startsWith('/'), `${ref} is asked for from the root`);

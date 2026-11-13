@@ -148,6 +148,19 @@ function inkOn(color) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#10151d' : '#ffffff';
 }
 
+// --- The picture shown while the map loads (index.html, #poster) -----------------
+
+// It goes once the map has drawn the same view, fading so the few labels the two place
+// differently near the screen's edges change softly. A step the reader takes before then
+// clears it at once: the map is moving away from the view it shows.
+const poster = document.querySelector('#poster');
+function reveal() {
+  if (!poster?.isConnected || poster.classList.contains('gone')) return;
+  poster.classList.add('gone');
+  setTimeout(() => poster.remove(), 300);
+}
+for (const button of document.querySelectorAll('#steps button')) button.addEventListener('click', reveal);
+
 // The opening view is drawn: then the other sheets (sheetsAll once they all have).
-map.once('idle', () => { window.sheetsReady = true; fillIn(); });
+map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });
 window.sheetsMap = map;

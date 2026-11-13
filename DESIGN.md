@@ -2662,6 +2662,16 @@ are deferred, not ruled out. See "Open questions".
     with; the glyphs are served as protobuf so Cloudflare compresses them
     (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
     CPU): drawn at 5.9 s, was 8.9 s; opening view settled at 6.5 s, was 12 s.
+  - While it loads, the sheets page shows a picture of the view it opens on,
+    with a "Loading…" line over it, and fades to the map once the map has
+    drawn that view (or at once, if a button is pressed first). The pictures
+    (`public/poster/`, one per theme for a phone and for a wider screen, about
+    60 to 150 KB each) are taken from the live site by `scripts/poster.mjs`,
+    after each change to how the sheets look and daily
+    (`.github/workflows/poster.yml`), so they are the map the page then draws.
+    The page centres the picture as the map is centred, and shifts it as the
+    map's bounds shift the view on a very wide screen. A link to another view,
+    or an address forcing a theme, gets the line on plain ground instead.
   - MapLibre and the Overpass font are served from the site itself: no extra
     connections to a CDN or Google before the map can start.
   - Symbols are drawn on canvases kept in memory, not on the GPU
@@ -4393,6 +4403,10 @@ work against the real structure before asking for evaluation.
   asks for the opening view's files from its HTML (#125). Reason: on slow 4G
   the page was blank for about 9 s, waiting on sheets that don't show at the
   opening zoom.
+- 2026-11-12: While the sheets page loads it shows a picture of its opening
+  view with "Loading…" over it, then fades to the map (#125). Reason: Chris:
+  "have a loading thing show up in front of it, so it shows the map as a
+  static, and then it says loading…and then it goes to the actual thing".
 
 ## Sources
 
