@@ -495,20 +495,60 @@ test('a route number never sits on a stop: each stop holds its ground, placed be
   }
 });
 
-test('the quietest bus street reads clearly in both themes and each busier class stands above the one below', async () => {
-  const { PALETTES } = await import('../public/js/sheets/style.js');
-  const lum = (hex) => {
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  };
-  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
-  // A hairline of light on dark ground reads fainter than the same contrast in ink on paper.
-  const least = { light: 1.8, dark: 2.6 };
+test('bus streets are three steps, evenly spaced in lightness, the busiest under every rail line', async () => {
+  const { PALETTES, BUS_STEP, railInk } = await import('../public/js/sheets/style.js');
+  const { contrast, lightness } = await import('../public/js/color.js');
+  // A thin line of light on dark ground reads fainter than the same contrast in ink on paper.
+  const least = { light: 1.8, dark: 2.2 };
+  // Line colours as RTD gives them, dark and pale; the rule must hold for any of them.
+  const colors = ['#552683', '#B71318', '#9F26B5', '#C4D600', '#F6B221', '#57C1E9', '#F79239', '#009DAA', '#4E9D2D', '#000000', '#ffffff'];
   for (const theme of ['light', 'dark']) {
     const c = PALETTES[theme];
-    const steps = ['c60', 'c30', 'c15', 'c10', 'c5'].map((k) => ratio(c.bus[k], c.ground));
-    assert.ok(steps[0] >= least[theme], `${theme}: the quietest street reads (${steps[0].toFixed(2)})`);
-    for (let i = 1; i < steps.length; i++) assert.ok(steps[i] >= steps[i - 1] * 1.25, `${theme}: class ${i} stands above class ${i - 1}`);
+    const steps = [0, 1, 2].map((s) => Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => c.bus[cls]));
+    for (const step of steps) assert.equal(new Set(step).size, 1, `${theme}: the classes in a step share one colour`);
+    const ink = steps.map((step) => step[0]);
+    const [q, m, t] = ink.map((x) => contrast(x, c.ground));
+    assert.ok(q >= least[theme], `${theme}: the quietest street reads (${q.toFixed(2)})`);
+    assert.ok(m >= q * 1.25 && t >= m * 1.25, `${theme}: each step stands above the one below (${[q, m, t].map((x) => x.toFixed(2))})`);
+    const [lq, lm, lt] = ink.map(lightness);
+    assert.ok(Math.abs((lm - lq) - (lt - lm)) < 0.01, `${theme}: the steps are evenly spaced in lightness`);
+    if (theme === 'dark') assert.ok(t < contrast(c.mark, c.ground) / 2, 'dark: no bus street comes near the white of station marks');
+    for (const color of colors) {
+      const r = railInk(theme, color);
+      // A cased line stands off the ground by its casing.
+      const stands = contrast(r.casing ?? r.line, c.ground);
+      assert.ok(stands > t * 1.1, `${theme} ${color}: rail stands above the busiest bus street (${stands.toFixed(2)} against ${t.toFixed(2)})`);
+      if (r.casing) assert.equal(r.line, color, `${theme} ${color}: a cased line keeps RTD's colour`);
+      if (theme === 'dark') assert.ok(!r.casing, 'in the dark a line is lifted, not cased');
+    }
+  }
+});
+
+test('the page inks each line from the colours the build found: pale ones cased in the light, dim ones lifted in the dark', async () => {
+  const { sheetStyle, railInk } = await import('../public/js/sheets/style.js');
+  const colors = ['#C4D600', '#552683'];
+  const light = sheetStyle('light', [], colors).layers;
+  const casing = light.filter((l) => l.id.startsWith('rail-casing'));
+  assert.equal(casing.length, 4, 'every sheet cases its pale lines');
+  assert.deepEqual(casing[0].filter.at(-1), ['in', ['get', 'color'], ['literal', ['#C4D600']]], 'only the pale one');
+  assert.ok(light.findIndex((l) => l.id === 'rail-casing-2') < light.findIndex((l) => l.id === 'rail-2'), 'under the line');
+  const dark = sheetStyle('dark', [], colors).layers;
+  assert.ok(!dark.some((l) => l.id.startsWith('rail-casing')));
+  const rail = dark.find((l) => l.id === 'rail-2').paint['line-color'];
+  assert.equal(rail[rail.indexOf('#552683') + 1], railInk('dark', '#552683').line, 'the dim purple is drawn lifted');
+  assert.deepEqual(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], ['get', 'color'], 'without the list, RTD\'s own colours');
+});
+
+test('bus widths step up by about 1.6 to the rail width, none under a pixel, and numbers still clear the widest', async () => {
+  const { BUS_WIDTH, BUS_STEP, STEP_RATIO } = await import('../public/js/sheets/style.js');
+  for (const sheet of SHEETS) {
+    const w = BUS_WIDTH[sheet.id];
+    const steps = [0, 1, 2].map((s) => [...new Set(Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => w[cls]))]);
+    assert.ok(steps.every((x) => x.length === 1), `sheet ${sheet.id}: one width per step`);
+    const [q, m, t] = steps.map((x) => x[0]);
+    assert.equal(t, SIZES.rail[sheet.id], `sheet ${sheet.id}: the busiest step is as wide as rail`);
+    assert.ok(q >= 1, `sheet ${sheet.id}: no line under a pixel`);
+    for (const [lo, hi] of [[q, m], [m, t]]) assert.ok(Math.abs(hi / lo - STEP_RATIO) < 0.05 && STEP_RATIO >= 1.5 && STEP_RATIO <= 1.7, `sheet ${sheet.id}: each step about 1.6 times the one below`);
   }
 });
 

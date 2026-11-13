@@ -86,7 +86,7 @@ export const SIZES = {
   // The sheet from which bus stops are drawn, each a ring.
   stopSheet: 4,
   // A stop's ring, out to its edge (public/js/sheets/style.js, STOP_RING).
-  stopRing: 3.7,
+  stopRing: 4.75,
 };
 
 // --- Screen pixels at a zoom (512-pixel tiles, as MapLibre draws) -----------

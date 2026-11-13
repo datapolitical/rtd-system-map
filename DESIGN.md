@@ -2088,9 +2088,20 @@ How it is built:
   the line was heading: beside the bar it would stand beside that station
   too.
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
-  The quietest bus street reads clearly in both themes (in the dark, where
-  a hairline of light reads faint, more so), and each busier class stands a
-  clear step above it.
+  The build's six bus classes are drawn as three steps: a bus every 10
+  minutes or better, every 15, and every 30 or less often (more steps than
+  three don't read as steps). Each step is 1.6 times as wide as the one
+  below, the busiest as wide as the sheet's rail, none under a pixel; their
+  greys are evenly spaced in lightness, and the quietest reads clearly in
+  both themes (in the dark, where a thin line of light reads faint, more
+  so). Rail reads first by its colour: in each theme the busiest bus grey
+  has less contrast with the ground than any rail line, by at least 15%.
+  The page takes each line's colour from RTD's data (the build lists them
+  in `sheets.json`) and, where one is too dim for that, lifts it in the dark
+  (lighter, same hue) or, in the light, darkens it by at most a shade; a
+  colour that would need more (lime, gold, orange, sky blue on cream) keeps
+  RTD's colour and gets a thin casing of itself, darker. Pure white is for
+  station marks. A stop's ring on sheet 4 is wider than the busiest street.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
@@ -4393,6 +4404,15 @@ work against the real structure before asking for evaluation.
   its bars on sheet 4.
 - 2026-11-12: Sheets keep route numbers off bus stops. Reason: a stop's ring
   takes no part in placing lettering, so numbers landed on stops on sheet 4.
+- 2026-11-12: Sheets draw bus streets in three steps, the busiest as wide
+  as rail and below every rail line's contrast, with dim rail colours lifted
+  in the dark and pale ones cased in the light (#117, review items 1 to 3;
+  #114). Reason: in the dark the busiest streets were nearly white and the
+  downtown grid outshone the purple and red lines; five classes at 0.9 to
+  3.1 px in close greys read as gridlines, not steps; in the light lime,
+  gold and sky blue faded into the cream. Sheet 4's stop rings grow to stay
+  wider than the busiest street. The dark street grid is left as it was: at
+  1.09:1 against the ground it is well under the quietest bus step (2.27:1).
 
 ## Sources
 

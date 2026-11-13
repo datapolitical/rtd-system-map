@@ -12,15 +12,18 @@ export async function writeSheets(dir) {
   // Where the page opens (the hub), and the names the sheets give their stations.
   let hub = null;
   const named = new Set();
+  // Each rail line's colour from RTD's data: the page sets each theme's ink from these (public/js/sheets/style.js).
+  const colors = new Set();
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
     if (sheet.id === 1) hub = drawn.hub;
     for (const f of drawn.features) if (f.properties.shape === 'name') named.add(f.properties.name);
+    for (const f of drawn.features) if (f.properties.kind === 'rail') colors.add(f.properties.color);
     await writeFile(path.join(dir, `sheet-${sheet.id}.geojson`), JSON.stringify(drawn));
     const count = (kind) => drawn.features.filter((f) => f.properties.kind === kind).length;
     console.log(`sheet ${sheet.id} (zoom ${sheet.zoom}): ${count('rail')} rail lines, ${drawn.features.filter((f) => f.properties.shape === 'name').length} station names, ${count('letter')} letters, ${count('bus')} bus streets`);
   }
-  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ hub, stations: [...named] }));
+  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ hub, stations: [...named], colors: [...colors] }));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

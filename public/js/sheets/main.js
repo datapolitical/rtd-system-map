@@ -12,11 +12,11 @@ const zooms = SHEETS.map((s) => s.zoom);
 const meta = await fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json());
 const [[west, south], [east, north]] = meta.bounds.core;
 // The page opens on the hub, a little above the middle so the lines south of it show.
-const { hub, stations } = await fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({}));
+const { hub, stations, colors } = await fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({}));
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: sheetStyle(theme(), stations),
+  style: sheetStyle(theme(), stations, colors),
   center: hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2],
   zoom: zooms[0],
   minZoom: zooms[0] - 0.6,
@@ -31,7 +31,7 @@ const map = new maplibregl.Map({
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
-scheme.addEventListener('change', () => { if (!forced) map.setStyle(sheetStyle(theme(), stations)); });
+scheme.addEventListener('change', () => { if (!forced) map.setStyle(sheetStyle(theme(), stations, colors)); });
 
 // --- Resting only on a sheet -------------------------------------------------
 

@@ -51,6 +51,9 @@ function fromOklab([L, a, b]) {
   );
 }
 
+// A color's lightness, 0 to 1 (OKLab L).
+export const lightness = (color) => toOklab(color)[0];
+
 // The color itself if it already stands out from `background` by `ratio`;
 // otherwise the same hue, darkened only as far as it needs to.
 export function darkenTo(color, background, ratio) {
