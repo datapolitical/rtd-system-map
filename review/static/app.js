@@ -164,10 +164,10 @@
     return row;
   }
 
-  function seg(state) {
+  function seg(state, labels) {
     const s = el("span", "seg");
     for (const v of ["before", "after"]) {
-      const b = el("button", "", v === "before" ? "Before" : "After");
+      const b = el("button", "", v === "before" ? (labels ? labels[0] : "Before") : (labels ? labels[1] : "After"));
       b.type = "button";
       b.dataset.s = v;
       b.setAttribute("aria-pressed", String(v === state));
@@ -180,7 +180,7 @@
     if (card.dataset.key) flips.set(card.dataset.key, state);
     card.classList.toggle("show-before", state === "before");
     const tag = card.querySelector(".tag");
-    if (tag) tag.textContent = state === "before" ? "Before" : "After";
+    if (tag) tag.textContent = state === "before" ? (card.dataset.lb || "Before") : (card.dataset.la || "After");
     for (const b of card.querySelectorAll(".item-row .seg button")) b.setAttribute("aria-pressed", String(b.dataset.s === state));
   }
 
@@ -201,7 +201,7 @@
     });
   }
 
-  function choiceBox(r, target, choices, picked) {
+  function choiceBox(r, target, choices, picked, notes = []) {
     const box = el("div", "choices");
     const closed = r.status === "closed";
     const buttons = el("div", `choice-buttons${choices.length === 3 || choices.length > 4 ? " three" : ""}`);
@@ -213,8 +213,8 @@
     const ta = el("textarea", "choice-note");
     ta.rows = 1;
     ta.maxLength = 4000;
-    ta.placeholder = picked ? "Add a note to your pick (optional)" : "Note (optional), sent with your pick";
-    ta.setAttribute("aria-label", "Note with your pick (optional)");
+    ta.placeholder = picked ? "Add a note to your pick (optional)" : "Note: sent with your pick, or on its own";
+    ta.setAttribute("aria-label", picked ? "Note with your pick (optional)" : "Note, with a pick or on its own");
     ta.value = drafts.get(noteKey) || "";
 
     async function pick(choice) {
@@ -249,8 +249,13 @@
       head.append(el("span", "who", `You picked ${picked.choice}`), el("span", "when", picked.at), badge(picked.status));
       status.append(head);
       if (picked.text) status.append(el("span", "picked-note", picked.text));
+    } else if (notes.length) {
+      const last = notes[notes.length - 1];
+      const head = el("div", "comment-head picked-line");
+      head.append(el("span", "who", "You sent a note without picking"), el("span", "when", last.at), badge(last.status));
+      status.append(head, el("span", "picked-note", last.text));
     } else if (!closed) {
-      status.textContent = "Tap one. You can change it later.";
+      status.textContent = "Tap one (you can change it later), or write a note and send it without picking.";
     }
     box.append(status);
     if (picked && picked.reply) {
@@ -272,7 +277,31 @@
         row.append(send);
         row.addEventListener("submit", (e) => { e.preventDefault(); pick(picked.choice); });
       } else {
-        row.addEventListener("submit", (e) => e.preventDefault());
+        // A note with no pick: sent as a plain comment on the same question.
+        send = el("button", "secondary", "Send without picking");
+        send.type = "submit";
+        send.hidden = !ta.value.trim();
+        row.append(send);
+        row.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const text = ta.value.trim();
+          if (!text) { status.textContent = "Write a note first."; return; }
+          send.disabled = true;
+          status.textContent = "Sending…";
+          try {
+            await api("/shots/api/comments", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-CSRF-Token": await ensureSession() },
+              body: JSON.stringify({ target, text }),
+            });
+            drafts.delete(noteKey);
+            keepOpen.add(r.id);
+            load();
+          } catch (err) {
+            status.textContent = err.message;
+            send.disabled = false;
+          }
+        });
       }
       box.append(row);
     }
@@ -283,6 +312,7 @@
     const flip = it.before && it.after;
     const card = el("article", `item ${flip || it.images.length ? "with-pic" : "plain"}`);
     card.dataset.key = `${r.id}/${it.id}`;
+    if (it.labels) { card.dataset.lb = it.labels[0]; card.dataset.la = it.labels[1]; }
     const asksPerItem = r.sections.some((sec) => sec.items.some((x) => x.ask));
     if (asksPerItem && !it.ask) card.append(el("span", "info-tag", "For information"));
     if (it.title) card.append(el("h4", "", it.title));
@@ -293,10 +323,11 @@
       const pic = el("div", "pic");
       pic.setAttribute("role", "button");
       pic.tabIndex = 0;
-      pic.setAttribute("aria-label", "Flip between before and after");
-      const after = el("img", "after"); after.src = reviewImg(r.id, it.after); after.alt = `${it.title}, after`; after.loading = "lazy";
-      const before = el("img", "before"); before.src = reviewImg(r.id, it.before); before.alt = `${it.title}, before`; before.loading = "lazy";
-      pic.append(after, before, el("span", "tag", "After"));
+      pic.setAttribute("aria-label", it.labels ? `Flip between ${it.labels[0]} and ${it.labels[1]}` : "Flip between before and after");
+      const [lb, la] = it.labels || ["Before", "After"];
+      const after = el("img", "after"); after.src = reviewImg(r.id, it.after); after.alt = `${it.title}, ${la}`; after.loading = "lazy";
+      const before = el("img", "before"); before.src = reviewImg(r.id, it.before); before.alt = `${it.title}, ${lb}`; before.loading = "lazy";
+      pic.append(after, before, el("span", "tag", la));
       pic.addEventListener("click", () => setFlip(card, card.classList.contains("show-before") ? "after" : "before"));
       pic.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pic.click(); } });
       card.append(pic);
@@ -309,7 +340,7 @@
     if (flip || it.links.length) {
       const row = el("div", "item-row");
       if (flip) {
-        const s = seg("after");
+        const s = seg("after", it.labels);
         s.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setFlip(card, b.dataset.s); });
         row.append(s);
       }
@@ -336,7 +367,7 @@
       const waiting = r.status === "open" || (keepOpen.has(r.id) && r.status !== "closed");
       const box = el("div", `ask-box${waiting ? "" : " done"}${r.choices.length ? " with-choices" : ""}`);
       box.append(el("div", "ask-label", waiting ? "What I need from you" : "What was asked"), el("p", "ask-text", r.ask));
-      if (r.choices.length) box.append(choiceBox(r, `review:${r.id}`, r.choices, r.picked));
+      if (r.choices.length) box.append(choiceBox(r, `review:${r.id}`, r.choices, r.picked, r.comments.filter((c) => !("choice" in c))));
       sec.append(box);
     }
     sec.append(el("p", "small", `Posted ${r.created}`));

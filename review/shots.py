@@ -306,6 +306,7 @@ def comments_by_target(home: Path = HOME) -> dict:
 #        "ask": "...",                                            optional: this item needs an answer
 #        "choices": ["Keep", "Drop"],                             optional one-tap answers for this item
 #        "before": "img/a.jpg", "after": "img/b.jpg",            a flip pair, or
+#        "labels": ["Blue", "Tint"],                              optional names for the pair (default Before/After)
 #        "images": ["img/c.png"],                                 a plain gallery (or neither)
 #        "links": [{"label": "...", "url": "https://..."}]}]}]
 # }
@@ -396,6 +397,12 @@ def create_review(home: Path, manifest: Path, session: str = "") -> str:
                 item["choices"] = _choices(it.get("choices"))
             if it.get("before") or it.get("after"):
                 item["before"], item["after"] = image(it.get("before")), image(it.get("after"))
+                labels = it.get("labels")
+                if labels is not None:
+                    if (not isinstance(labels, list) or len(labels) != 2
+                            or not all(isinstance(x, str) and x.strip() for x in labels)):
+                        raise ShotsError("\"labels\" must be two short names for the flip pair, e.g. [\"Blue\", \"Tint\"].")
+                    item["labels"] = [_text(x, 24) for x in labels]
             item["images"] = [image(p) for p in (it.get("images") or [])][:12]
             items.append(item)
         sections.append({"heading": _text(sec.get("heading"), 120), "note": _text(sec.get("note")),

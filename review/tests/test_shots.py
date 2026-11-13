@@ -152,6 +152,28 @@ class ChoiceTests(unittest.TestCase):
         shots.create_review(self.home, make_manifest(self.src))
         self.assertEqual(sorted(len(x["choices"]) for x in shots.list_reviews(self.home)), [0, 3])
 
+    def test_flip_pair_labels(self):
+        m = make_manifest(self.src)
+        spec = json.loads(m.read_text())
+        spec["sections"][0]["items"][0]["labels"] = ["Blue", "Tint"]
+        m.write_text(json.dumps(spec))
+        shots.create_review(self.home, m)
+        items = shots.list_reviews(self.home)[0]["sections"][0]["items"]
+        self.assertEqual(items[0]["labels"], ["Blue", "Tint"])
+        self.assertNotIn("labels", items[1])
+        for bad in (["Blue"], "Blue", ["Blue", " "], ["Blue", 3]):
+            spec["sections"][0]["items"][0]["labels"] = bad
+            m.write_text(json.dumps(spec))
+            with self.assertRaises(shots.ShotsError, msg=bad):
+                shots.create_review(self.home, m)
+
+    def test_note_without_pick_leaves_choice_open(self):
+        rid = shots.create_review(self.home, with_choices(self.src))
+        shots.add_comment(self.home, f"review:{rid}", "Show me blue next to tint", LOGIN)
+        r = shots.list_reviews(self.home, shots.comments_by_target(self.home))[0]
+        self.assertIsNone(r["picked"])
+        self.assertEqual([c["text"] for c in r["comments"]], ["Show me blue next to tint"])
+
     def test_bad_choices_are_refused(self):
         for bad in (["Only"], ["Blue", "Blue"], "Blue", ["Blue", 3], ["Blue", " "], [str(i) for i in range(9)]):
             with self.assertRaises(shots.ShotsError, msg=bad):
