@@ -2040,7 +2040,14 @@ How it is built:
   long enough is lettered down its length with what it is ("Bus concourse"
   where the data says underground, "Bus station" otherwise), and street
   names give way to it. A place the ground map names the same as a station
-  is not lettered twice. Lines that end over a bus station's hall end at the
+  is not lettered twice. Places are named by rank: cities and towns on
+  sheets 1 and 2, a city's neighbourhoods on 3 and 4 (its own statistical
+  neighbourhoods before smaller ones), the most important first. A place's
+  name gives way to rail, line letters and station names, but not to bus
+  streets: it sits over them on its halo, and route numbers give way to it.
+  The largest cities (Denver, Boulder, Aurora by the tiles' rank) are set a
+  size up and a step clearer than the busiest bus street. A register entry
+  ("... Historic District") is not a place name and is not set. Lines that end over a bus station's hall end at the
   wall they come in through, with their bar on it, not at a point inside the
   room. A corner of bus streets beside a hall's wall sits on the wall. A
   street's weight is its own buses'. Where streets gather into one (a
@@ -4425,6 +4432,12 @@ work against the real structure before asking for evaluation.
   the old floor (6.1:1) is still red, so T lifted to salmon #fe6156 and E
   and N to lavender and orchid. Now T is #fb4b43, E #a673e3, N #d84af3, all
   over a 5.4:1 floor.
+- 2026-11-12: Sheets place town and neighbourhood names by rank, before
+  route numbers and over bus streets (#117). Reason: placed last, behind the
+  marks that keep lettering off bus streets, they lost every busy area:
+  sheet 1 named Thornton and Niwot but not Denver, Aurora, Lakewood or
+  Boulder, sheet 2 named no town at all, and sheet 3 named "Quality Hill
+  Historic District" instead of Capitol Hill.
 
 ## Sources
 

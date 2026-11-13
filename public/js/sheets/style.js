@@ -35,7 +35,7 @@ export const PALETTES = {
     // whole outer street grid, which should sit back behind the frequent streets, not read as chart gridlines.
     busHairline: '#3e454f',
     hall: '#243147', hallEdge: '#6a7a98',
-    mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', streetName: '#4b566b', number: '#c9d2e4', stop: '#aab6cf',
+    mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', city: '#9ba5b8', streetName: '#4b566b', number: '#c9d2e4', stop: '#aab6cf',
   },
   light: {
     ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
@@ -44,7 +44,7 @@ export const PALETTES = {
     // OKLab L 0.785.
     busHairline: '#b4b9c1',
     hall: '#dcd8cf', hallEdge: '#979ba3',
-    mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', streetName: '#a3a6ad', number: '#3a4560', stop: '#566179',
+    mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', city: '#555a63', streetName: '#a3a6ad', number: '#3a4560', stop: '#566179',
   },
 };
 
@@ -97,6 +97,10 @@ export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 
 // Station name size per sheet (SIZES.name in the build).
 const NAME_SIZE = { 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 };
+
+// A city at or under this rank in the tiles (Denver, Boulder, Aurora) is set a size up and a little brighter.
+export const PLACE_MAJOR_RANK = 8;
+const PLACE_SIZE = { 1: 10.5, 2: 10.5, 3: 10, 4: 10.5 };
 
 const FONT = { regular: ['Overpass Regular'], medium: ['Overpass Medium'], semibold: ['Overpass SemiBold'], bold: ['Overpass ExtraBold'] };
 const byClass = (table) => ['match', ['get', 'cls'], ...Object.entries(table).flat(), Object.values(table)[0]];
@@ -180,10 +184,6 @@ export function sheetStyle(theme, stations = [], colors = []) {
       filter: ['in', ['get', 'class'], ['literal', n === 3 ? ['primary', 'secondary', 'tertiary', 'trunk'] : ['primary', 'secondary', 'tertiary', 'trunk', 'minor']]],
       layout: { 'symbol-placement': 'line', 'symbol-spacing': 420, 'text-field': ['get', 'name'], 'text-font': FONT.regular, 'text-size': n === 3 ? 9 : 10.5, 'text-max-angle': 25, 'text-padding': 14, 'text-offset': [0, n === 4 ? 1.3 : 0] },
       paint: { 'text-color': c.streetName, 'text-halo-color': c.ground, 'text-halo-width': 1.2 } });
-    layers.push({ id: `place-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'place', ...band,
-      filter: ['all', ['in', ['get', 'class'], ['literal', n < 3 ? ['city', 'town'] : ['suburb', 'neighbourhood', 'quarter']]], ['!', ['in', ['upcase', ['get', 'name']], ['literal', named]]]],
-      layout: { 'text-field': ['upcase', ['get', 'name']], 'text-font': FONT.medium, 'text-size': 10.5, 'text-letter-spacing': 0.22, 'text-padding': 4, 'text-max-width': 8 },
-      paint: { 'text-color': c.place, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
     const unseen = { layout: { 'symbol-placement': 'line', 'symbol-spacing': 6, 'text-field': 'o', 'text-font': FONT.medium, 'text-size': 7, 'text-allow-overlap': true, 'text-padding': 0, 'text-rotation-alignment': 'viewport' }, paint: { 'text-opacity': 0 } };
     layer('keep-off-bus', 'symbol', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]]), ...unseen });
     // Route numbers along each bus street, from the second sheet.
@@ -207,6 +207,23 @@ export function sheetStyle(theme, stations = [], colors = []) {
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n, w) + ROW_HEIGHT / 2]]]))),
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w) - ROW_HEIGHT / 2]]])))] },
       paint: { 'text-color': c.number, 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
+    // Place names: on the first two sheets cities and towns, closer in a city's own neighbourhoods. They are
+    // placed by rank (the tiles' importance, cities before towns, a city's statistical neighbourhoods before
+    // OSM's smaller ones), after rail, its letters and station names but before route numbers and the marks
+    // that keep lettering off bus streets: a town's name sits over bus streets on its halo, never over rail
+    // or a station. A listing such as "Quality Hill Historic District" is a register entry, not a name people
+    // use for where they are, so it is not set.
+    const classes = n < 3 ? ['city', 'town'] : ['suburb', 'quarter', 'neighbourhood'];
+    const major = ['all', ['==', ['get', 'class'], 'city'], ['<=', ['to-number', ['get', 'rank'], 99], PLACE_MAJOR_RANK]];
+    layers.push({ id: `place-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'place', ...band,
+      filter: ['all', ['in', ['get', 'class'], ['literal', classes]], ['!', ['in', ['upcase', ['get', 'name']], ['literal', named]]],
+        ['!', ['in', 'historic district', ['downcase', ['get', 'name']]]]],
+      layout: { 'text-field': ['upcase', ['get', 'name']], 'text-font': ['case', major, ['literal', FONT.semibold], ['literal', FONT.medium]],
+        'text-size': ['case', major, PLACE_SIZE[n] + 2, PLACE_SIZE[n]], 'text-letter-spacing': ['case', major, 0.26, 0.22], 'text-padding': 4, 'text-max-width': 8,
+        // Where the place's own point is taken (a city's point is often its busiest corner), its name may sit just beside it.
+        'text-variable-anchor': ['center', 'top', 'bottom', 'left', 'right'], 'text-radial-offset': 0.6,
+        'symbol-sort-key': ['+', ['*', 100, ['index-of', ['get', 'class'], ['literal', classes]]], ['to-number', ['get', 'rank'], 99]] },
+      paint: { 'text-color': ['case', major, c.city, c.place], 'text-halo-color': c.ground, 'text-halo-width': 2.2, 'text-halo-blur': 0.4 } });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
     layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name']),
       layout: { 'text-field': ['get', 'text'], 'text-font': ['case', ['get', 'minor'], ['literal', FONT.medium], ['literal', FONT.semibold]], 'text-size': ['case', ['get', 'minor'], 10, NAME_SIZE[n]], 'text-max-width': 40, 'text-line-height': 1.12,
