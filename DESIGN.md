@@ -3302,6 +3302,23 @@ work against the real structure before asking for evaluation.
    the deployment-failure email (Cloudflare dashboard, Notifications),
    offline caching, a domain.
 
+### Launch and versions
+
+Decided 2026-11-13. The site is called launched at **v1.0**, when the
+"Launch (v1.0)" milestone closes: Chris has signed off the four sheets on
+his phone in both themes, the sheets can highlight one route, and the
+version is closed (#14: domain, share links, screen reader, offline). V1 to
+V3 above are the names of the design stages that led there, not releases.
+What is planned but not needed to launch (other times, Live tiers, alerts
+and departures, route numbers, Classic map fixes) is in "After launch
+(v1.1+)".
+
+A release is a tag on `main` (`v1.0`, `v1.1`, ...) with a GitHub Release
+listing the milestone's closed issues, made only after Chris's sign-off.
+Each group of new features that ships is a minor version; fixes between
+releases are not tagged. Cloudflare Pages still deploys every commit to
+`main`; a tag names a build worth going back to.
+
 ## Open questions
 
 - **Shared streets by combined frequency (decided 2026-11-08):** each
@@ -4483,6 +4500,13 @@ work against the real structure before asking for evaluation.
   its `gh` wrapper and the instruction to run it are gone. Reason: Chris
   no longer uses DeepSeek here (the Agent workflow is switched off), and the
   step made every commit and comment ask for permission.
+- 2026-11-13: Launch is v1.0, set by a "Launch (v1.0)" milestone: the four
+  sheets signed off, route highlight on the sheets, and #14. V3's remaining
+  steps (other times, Live tiers, alerts) move after launch. Releases are
+  tags on `main` after Chris's sign-off. Reason: the V3 milestone no longer
+  matched the work after the four-sheets decision, and nothing said what
+  launch meant.
+
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in

@@ -30,6 +30,13 @@ we are" section from them (closed issues show as done).
   reaches main on GitHub. Close it by hand if the work lands another way.
 - When something waits on Chris (a phone check, a decision, the go-ahead to
   publish), add the `needs Chris` label and say what is needed in a comment.
+- "Launch (v1.0)" holds what must be done before launch; "After launch
+  (v1.1+)" what can wait. Put new work in the one it belongs to, and ask
+  Chris before adding to the launch milestone.
+- Releases (DESIGN.md, "Launch and versions"): only after Chris signs off a
+  milestone, tag `main` with `git tag -a vX.Y`, push the tag, and run
+  `gh release create vX.Y --notes` listing the milestone's closed issues.
+  Never tag on your own judgment that a milestone is done.
 - New work gets its own issue in the right milestone. Add a line
   `Estimate: N min of agent time` to the body when you can guess one.
 - The repo is public. Keep issues about the map: no usage or budget numbers,
