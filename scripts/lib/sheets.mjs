@@ -85,6 +85,12 @@ export const SIZES = {
   hallLetter: 9.5,
   // The sheet from which bus stops are drawn, each a ring.
   stopSheet: 4,
+  // From this sheet bus streets are named, from their stops (drawSheet, runStreet).
+  streetSheet: 3,
+  // How far past each end of a labelled run its street's stops still say which street it is (about 600 m).
+  streetAhead: { 1: 0, 2: 0, 3: 80, 4: 320 },
+  // No two names of one street closer than this (px): about one a screen.
+  streetEvery: { 1: 0, 2: 0, 3: 520, 4: 640 },
   // A stop's ring, out to its edge (public/js/sheets/style.js, STOP_RING).
   stopRing: 4.75,
 };
@@ -2384,6 +2390,40 @@ export function busStops(stops, routes) {
   });
 }
 
+/** The street a stop is on, from its name ("S Broadway & W Florida Ave" is on S Broadway); none for a station's gate. */
+export function stopStreet(name) {
+  const m = String(name).replace(/\s*\[[^\]]*\]/g, '').match(/^(.+?) & /);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * The street a labelled run is on, from the stops beside it that its routes serve: the name most
+ * of them give (a "S" or "W" before it doesn't make another street), in its commonest form. None
+ * where fewer than two stops agree, or under 60% of them do. `stops` are `{ at, routes, street }`
+ * in the sheet's pixels.
+ */
+export function runStreet(run, stops, reach, ahead = 0) {
+  const mine = new Set(String(run.routes).split(' '));
+  // A run is often one block, with a stop or none: the street carries straight on past each end.
+  const on = (path, d) => { const [a, b] = path; const l = dist(a, b) || 1; return [a[0] + ((a[0] - b[0]) / l) * d, a[1] + ((a[1] - b[1]) / l) * d]; };
+  const path = ahead ? [on(run.path, ahead), ...run.path, on([...run.path].reverse(), ahead)] : run.path;
+  const votes = new Map();
+  let total = 0;
+  for (const s of stops) {
+    if (!s.routes.some((r) => mine.has(r)) || !boxed(path, s.at, reach) || nearest(path, s.at).d > reach) continue;
+    total++;
+    if (!s.street) continue;
+    const key = s.street.replace(/^[NSEW] /, '');
+    const v = votes.get(key) ?? { n: 0, forms: new Map() };
+    v.n++;
+    v.forms.set(s.street, (v.forms.get(s.street) ?? 0) + 1);
+    votes.set(key, v);
+  }
+  const best = [...votes.values()].sort((a, b) => b.n - a.n)[0];
+  if (!best || best.n < 2 || best.n < 0.6 * total) return null;
+  return [...best.forms].sort((a, b) => b[1] - a[1])[0][0];
+}
+
 /** A route list in two rows of about the same length, the first ending in its comma. */
 export function stacked(routes) {
   const list = inOrder(String(routes).split(' '));
@@ -2472,7 +2512,13 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const width = (s, rows = 1) => Math.max(...(rows > 1 ? stacked(s.routes) : [listed(s.routes)]).map((row) => row.length)) * size * 0.5 + 2 * SIZES.busLabelAir;
   const sides = new Map();
   const side = (path, rows) => { if (!sides.has(path)) sides.set(path, labelSide({ path }, bus, size, rows)); return sides.get(path); };
+  // Bus stops with the street each is on, in the sheet's pixels, asked for once.
+  let stopsPx = null;
+  const onStreets = () => (stopsPx ??= busStops(stops, routes).map((f) => ({ at: toPx(f.geometry.coordinates, sheet.zoom),
+    routes: String(f.properties.lines ?? f.properties.routes ?? '').split(/[ ,]+/).filter(Boolean), street: stopStreet(f.properties.name) })));
+  const listedRuns = [];
   for (const run of labelRuns(bus, SIZES.busLabelEvery[sheet.id], width, (path, rows) => side(path, rows) !== 0)) {
+    listedRuns.push(run.path);
     const below = side(run.path, run.rows) < 0 ? { side: -1 } : {};
     if (run.rows === 1) {
       features.push(feature({ kind: 'bus-label', cls: run.cls, label: listed(run.routes), n: run.n, ...below }, { type: 'LineString', coordinates: run.path.map(back) }));
@@ -2482,6 +2528,22 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     const [a, b] = [run.path[0], run.path.at(-1)];
     features.push(feature({ kind: 'bus-stack', cls: run.cls, label: stacked(run.routes).join('\n'), n: run.n, angle: Math.round((Math.atan2(b[1] - a[1], b[0] - a[0]) * 1800) / Math.PI) / 10, ...below },
       { type: 'Point', coordinates: back(pointAlong(run.path, length(run.path) / 2)) }));
+  }
+  // From sheet 3 the bus streets are named, from their stops (runStreet): each piece takes the name its
+  // stops give, and pieces that carry straight on under one name are one run, labelled like route lists.
+  // The page sets these after the route numbers, so a name takes only room the numbers left.
+  if (sheet.id >= SIZES.streetSheet) {
+    const reach = Math.max(SIZES.busMerge[sheet.id], 8);
+    const NONE = '-';
+    const byName = bus.map((st) => ({ ...st, routes: runStreet(st, onStreets(), reach, SIZES.streetAhead[sheet.id])?.replace(/ /g, '\u00a0') ?? NONE }));
+    const wide = (st) => String(st.routes).length * size * 0.5 * 0.92 + 2 * SIZES.busLabelAir;
+    // A name takes a stretch no route list is on: the page places the lists first.
+    const listedOn = (path) => listedRuns.some((q) => [path[0], pointAlong(path, length(path) / 2), path.at(-1)].some((p) => boxed(q, p, 3) && nearest(q, p).d < 3));
+    for (const run of labelRuns(byName, SIZES.streetEvery[sheet.id], wide, (path) => side(path, 1) !== 0 && !listedOn(path))) {
+      if (run.rows !== 1 || run.routes === NONE || run.routes.includes(' ')) continue;
+      const below = side(run.path, 1) < 0 ? { side: -1 } : {};
+      features.push(feature({ kind: 'bus-street', cls: run.cls, label: run.routes.replace(/\u00a0/g, ' '), ...below }, { type: 'LineString', coordinates: run.path.map(back) }));
+    }
   }
   for (const l of lines) {
     features.push(feature({ kind: 'rail', route: l.route, color: l.color }, { type: 'MultiLineString', coordinates: l.paths.map((p) => p.map(back)) }));

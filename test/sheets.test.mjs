@@ -1074,3 +1074,17 @@ test("a name level with another station's bar, and not with its own, reads as th
   // And nearer another bar than its own it is the other's.
   assert.ok(strayed([12, -34, 98, -12], mine, [bar(14, -40)]));
 });
+
+test('a label run takes its street from the names of the stops its routes serve beside it', async () => {
+  const { stopStreet, runStreet } = await import('../scripts/lib/sheets.mjs');
+  assert.equal(stopStreet('S Broadway & W Florida Ave'), 'S Broadway');
+  assert.equal(stopStreet('15th St & Welton St [ Z Stop ]'), '15th St');
+  assert.equal(stopStreet('Federal Center Station Gate H'), null);
+  const run = { path: [[0, 0], [300, 0]], routes: '15 15L' };
+  const stop = (x, street, routes = ['15']) => ({ at: [x, 3], routes, street });
+  assert.equal(runStreet(run, [stop(10, 'E Colfax Ave'), stop(100, 'Colfax Ave'), stop(200, 'Colfax Ave')], 8), 'Colfax Ave', 'a direction before the name is the same street');
+  assert.equal(runStreet(run, [stop(10, 'Colfax Ave')], 8), null, 'one stop is not enough');
+  assert.equal(runStreet(run, [stop(10, 'Colfax Ave'), stop(100, 'Colfax Ave'), stop(150, 'Broadway', ['0']), stop(200, 'Broadway', ['0'])], 8), 'Colfax Ave', "another route's stops don't vote");
+  assert.equal(runStreet(run, [stop(10, 'Colfax Ave'), stop(100, 'Colfax Ave'), stop(150, 'Broadway'), stop(200, 'Broadway')], 8), null, 'no clear majority, no name');
+  assert.equal(runStreet(run, [stop(10, 'Colfax Ave', ['15']), { at: [100, 40], routes: ['15'], street: 'Colfax Ave' }], 8), null, 'a stop off the run does not count');
+});

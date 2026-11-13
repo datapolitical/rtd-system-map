@@ -35,7 +35,7 @@ export const PALETTES = {
     // whole outer street grid, which should sit back behind the frequent streets, not read as chart gridlines.
     busHairline: '#3e454f',
     hall: '#243147', hallEdge: '#6a7a98',
-    mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', city: '#9ba5b8', streetName: '#4b566b', number: '#c9d2e4', stop: '#aab6cf',
+    mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', city: '#9ba5b8', streetName: '#5c6780', busStreetName: '#7b869b', number: '#c9d2e4', stop: '#aab6cf',
   },
   light: {
     ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
@@ -44,7 +44,7 @@ export const PALETTES = {
     // OKLab L 0.785.
     busHairline: '#b4b9c1',
     hall: '#dcd8cf', hallEdge: '#979ba3',
-    mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', city: '#555a63', streetName: '#a3a6ad', number: '#3a4560', stop: '#566179',
+    mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', city: '#555a63', streetName: '#8a8d95', busStreetName: '#73777f', number: '#3a4560', stop: '#566179',
   },
 };
 
@@ -101,6 +101,20 @@ const NAME_SIZE = { 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 };
 // A city at or under this rank in the tiles (Denver, Boulder, Aurora) is set a size up and a little brighter.
 export const PLACE_MAJOR_RANK = 8;
 const PLACE_SIZE = { 1: 10.5, 2: 10.5, 3: 10, 4: 10.5 };
+
+// A street's name in the short form a map sets it in: "West Colfax Avenue" is "W Colfax Ave".
+const STREET_PREFIX = { 'North ': 'N ', 'South ': 'S ', 'East ': 'E ', 'West ': 'W ' };
+const STREET_SUFFIX = { ' Avenue': ' Ave', ' Street': ' St', ' Boulevard': ' Blvd', ' Parkway': ' Pkwy', ' Road': ' Rd', ' Drive': ' Dr',
+  ' Place': ' Pl', ' Court': ' Ct', ' Lane': ' Ln', ' Highway': ' Hwy', ' Circle': ' Cir', ' Way': ' Way' };
+function shortStreet(name) {
+  const n = ['var', 'n'];
+  const head = ['case', ...Object.entries(STREET_PREFIX).flatMap(([long, short]) => [
+    ['==', ['slice', name, 0, long.length], long], ['concat', short, ['slice', name, long.length]]]), name];
+  const tail = ['case', ...Object.entries(STREET_SUFFIX).flatMap(([long, short]) => [
+    ['all', ['>', ['length', n], long.length], ['==', ['slice', n, ['-', ['length', n], long.length]], long]],
+    ['concat', ['slice', n, 0, ['-', ['length', n], long.length]], short]]), n];
+  return ['let', 'n', head, tail];
+}
 
 const FONT = { regular: ['Overpass Regular'], medium: ['Overpass Medium'], semibold: ['Overpass SemiBold'], bold: ['Overpass ExtraBold'] };
 const byClass = (table) => ['match', ['get', 'cls'], ...Object.entries(table).flat(), Object.values(table)[0]];
@@ -188,13 +202,29 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     if (n <= 2) layers.push({ id: `freeway-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band, filter: ['all', ['==', ['get', 'class'], 'motorway'], ['has', 'ref'], ['==', ['geometry-type'], 'LineString']],
       layout: { 'symbol-placement': 'line', 'symbol-spacing': 260, 'text-field': ['concat', ['match', ['get', 'network'], 'us-interstate', 'I-', 'us-highway', 'US ', ['case', ['>=', ['to-number', ['get', 'ref'], -1], 0], 'Hwy ', '']], ['get', 'ref']], 'text-font': FONT.medium, 'text-size': 9, 'text-letter-spacing': 0.04, 'text-rotation-alignment': 'viewport', 'text-padding': 6 },
       paint: { 'text-color': c.place, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
-    if (n >= 3) layers.push({ id: `street-name-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band,
-      filter: ['in', ['get', 'class'], ['literal', n === 3 ? ['primary', 'secondary', 'tertiary', 'trunk'] : ['primary', 'secondary', 'tertiary', 'trunk', 'minor']]],
-      layout: { 'symbol-placement': 'line', 'symbol-spacing': 420, 'text-field': ['get', 'name'], 'text-font': FONT.regular, 'text-size': n === 3 ? 9 : 10.5, 'text-max-angle': 25, 'text-padding': 14, 'text-offset': [0, n === 4 ? 1.3 : 0] },
-      paint: { 'text-color': c.streetName, 'text-halo-color': c.ground, 'text-halo-width': 1.2 } });
+    // The ground's street names from sheet 3, in short forms ("W 13th Ave"), on the street's centreline,
+    // the main streets first. A bus street's name leads its route label (bus-number, below), so these keep
+    // off the busier bus streets and name the streets between them.
+    if (n >= 3) {
+      const roadClasses = n === 3 ? ['trunk', 'primary', 'secondary', 'tertiary'] : ['trunk', 'primary', 'secondary', 'tertiary', 'minor'];
+      layers.push({ id: `street-name-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band,
+        filter: ['in', ['get', 'class'], ['literal', roadClasses]],
+        layout: { 'symbol-placement': 'line', 'symbol-spacing': 420, 'text-field': shortStreet(['get', 'name']), 'text-font': FONT.regular, 'text-size': n === 3 ? 9.5 : 10.5,
+          'text-max-angle': 25, 'text-padding': 10, 'symbol-sort-key': ['index-of', ['get', 'class'], ['literal', roadClasses]] },
+        paint: { 'text-color': c.streetName, 'text-halo-color': c.ground, 'text-halo-width': 1.4 } });
+    }
+    // Route numbers along each bus street, from the second sheet.
     const unseen = { layout: { 'symbol-placement': 'line', 'symbol-spacing': 6, 'text-field': 'o', 'text-font': FONT.medium, 'text-size': 7, 'text-allow-overlap': true, 'text-padding': 0, 'text-rotation-alignment': 'viewport' }, paint: { 'text-opacity': 0 } };
     layer('keep-off-bus', 'symbol', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]]), ...unseen });
-    // Route numbers along each bus street, from the second sheet.
+    // Bus streets' names from sheet 3, beside the street like its route numbers and placed after them
+    // (scripts/lib/sheets.mjs names them from their stops), quieter than the numbers.
+    const besideStreet = (n2, shift = 0) => ['case', ['==', ['get', 'side'], -1],
+      byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n2]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n2, w) + shift]]]))),
+      byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n2]).map(([k, w]) => [k, ['literal', [0, numberOffset(n2, w) - shift]]])))];
+    if (n >= 3) layer('bus-street', 'symbol', { filter: kind('bus-street'),
+      layout: { 'symbol-placement': 'line', 'symbol-spacing': 520, 'text-field': ['get', 'label'], 'text-font': FONT.regular, 'text-size': NUMBER_SIZE[n], 'text-max-angle': 25, 'text-padding': 6,
+        'text-offset': besideStreet(n), 'text-letter-spacing': 0.02 },
+      paint: { 'text-color': c.busStreetName, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
     if (n >= 2) layer('bus-number', 'symbol', { filter: kind('bus-label'),
       // Set just beside the street, not on it: on it, the line shows between the figures and a
       // comma reads as a dash. The offset is the street's half width and a little air, in ems.

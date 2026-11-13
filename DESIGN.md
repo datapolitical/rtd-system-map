@@ -2047,7 +2047,14 @@ How it is built:
   streets: it sits over them on its halo, and route numbers give way to it.
   The largest cities (Denver, Boulder, Aurora by the tiles' rank) are set a
   size up and a step clearer than the busiest bus street. A register entry
-  ("... Historic District") is not a place name and is not set. Lines that end over a bus station's hall end at the
+  ("... Historic District") is not a place name and is not set.
+  From sheet 3 a bus street is named from its stops: the street most of
+  the stops its routes serve along it give (RTD names a stop "Colfax Ave &
+  Hudson St"), set beside the street like its route list, in a quieter
+  grey, on a stretch no list is on, about once a screen. Route lists are
+  placed first, so a name never costs one. The streets between bus streets
+  keep the ground map's names, shortened ("W 13th Ave"), on the centreline,
+  at about 3:1. Lines that end over a bus station's hall end at the
   wall they come in through, with their bar on it, not at a point inside the
   room. A corner of bus streets beside a hall's wall sits on the wall. A
   street's weight is its own buses'. Where streets gather into one (a
@@ -4464,6 +4471,12 @@ work against the real structure before asking for evaluation.
   sheet 1 named Thornton and Niwot but not Denver, Aurora, Lakewood or
   Boulder, sheet 2 named no town at all, and sheet 3 named "Quality Hill
   Historic District" instead of Capitol Hill.
+- 2026-11-12: Sheets name bus streets from their stops' names, beside the
+  street after its route numbers, and shorten the ground map's street
+  names (#117). Reason: the ground map's names were kept off bus streets,
+  so sheet 3 named West 14th Avenue and Pine Street but not Colfax or
+  Broadway; set on a bus street's centreline they cut its line and read
+  muddy, and set ahead of the route lists they took 8 of 18 downtown.
 
 ## Sources
 
