@@ -121,10 +121,6 @@ jobs:
           PROMPT_FILE="$RUNNER_TEMP/brief.txt"
           { echo "You are working on datapolitical/rtd-system-map. Read CLAUDE.md in the worktree root and DESIGN.md before changing anything."; echo; echo "$BRIEF"; echo; echo "## Today's assignment"; echo "$ASSIGN"; echo "Date: $(date -u +%F). Run folder: $PWD/run."; } > "$PROMPT_FILE"
           mkdir -p run
-          # Credit every commit, comment and issue to the model that made it
-          # (.github/daily/madeby).
-          source "$RUNNER_TEMP/daily/madeby/madeby.sh"
-          made_by "$MODEL"
           # The job is done when the agent has written daily-summary.txt
           # (both briefs end with it). A model that ends its turn before
           # then is told to carry on in the same session.

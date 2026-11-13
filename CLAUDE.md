@@ -32,11 +32,6 @@ we are" section from them (closed issues show as done).
   publish), add the `needs Chris` label and say what is needed in a comment.
 - New work gets its own issue in the right milestone. Add a line
   `Estimate: N min of agent time` to the body when you can guess one.
-- Say who did the work. Before committing or commenting, run
-  `source .github/daily/madeby/madeby.sh; made_by <model>` (`made_by Claude`
-  for Claude). It sets the commit author to the model, and `gh` then ends
-  each comment, issue and pull request with "Made by: ..." and adds the
-  `made by: free model`, `made by: DeepSeek` or `made by: Claude` label.
 - The repo is public. Keep issues about the map: no usage or budget numbers,
   no personal details.
 

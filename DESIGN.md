@@ -3092,15 +3092,9 @@ without the other noticing.
   human, so every comment it posts ends with the hidden mark
   `<!-- agent -->`, and the worker skips marked comments when it looks
   for the human's.
-- All work says who made it: DeepSeek or Claude. Only DeepSeek V4.1
-  Flash builds, on GitHub and on the home machine; Claude evaluates.
-  `.github/daily/madeby/madeby.sh` (`made_by <model>`) sets the git
-  author to the model, and its `gh` wrapper ends every comment, issue and
-  pull request with "Made by: ..." and labels the issue `made by: DeepSeek` or
-  `made by: Claude` (`made by: free model` marks earlier work by the free
-  models). The worker sets it for
-  its model, the home lanes the same, and the evaluator always runs as
-  Claude.
+- Only DeepSeek V4.1 Flash builds, on GitHub and on the home machine;
+  Claude evaluates. (Work was credited by model until 2026-11-13; see the
+  decision log.)
 
 The satellite overlay (`qa/sat/render.py`) draws Esri satellite tiles
 with OpenStreetMap shapes and the map's own stops, rail lines,
@@ -4485,6 +4479,10 @@ work against the real structure before asking for evaluation.
   Broadway; set on a bus street's centreline they cut its line and read
   muddy, and set ahead of the route lists they took 8 of 18 downtown.
 
+- 2026-11-13: Work is no longer credited by model: the `made_by` script,
+  its `gh` wrapper and the instruction to run it are gone. Reason: Chris
+  no longer uses DeepSeek here (the Agent workflow is switched off), and the
+  step made every commit and comment ask for permission.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in
