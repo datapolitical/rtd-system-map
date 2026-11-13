@@ -108,35 +108,18 @@ map.on('zoomend', (e) => {
   show(to, input.wheel ? map.unproject([input.wheel[0] - box.left, input.wheel[1] - box.top]) : undefined);
 });
 // A double tap or double click shows the next sheet, about the point tapped. MapLibre's own
-// double-tap zoom is off (it would stop between sheets), and Safari on a phone never turns a
-// double tap into a dblclick, so taps are counted here: two one-finger taps that didn't move,
-// close in time and place. A mouse's double click still arrives as dblclick.
-map.doubleClickZoom.disable();
-const canvas = map.getCanvasContainer();
-let press = null;
-let lastTap = null;
-let tappedAt = -Infinity;
-canvas.addEventListener('touchstart', (e) => {
-  const t = e.touches[0];
-  press = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
-}, { passive: true });
-canvas.addEventListener('touchend', (e) => {
-  const t = e.changedTouches[0];
-  const tap = press && !e.touches.length && Math.hypot(t.clientX - press.x, t.clientY - press.y) < 10;
-  press = null;
-  if (!tap) { lastTap = null; return; }
-  const now = performance.now();
-  if (lastTap && now - lastTap.at < 350 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 40) {
-    // No mouse events after this tap: their mousedown would stop the move to the next sheet.
-    e.preventDefault();
-    lastTap = null;
-    tappedAt = now;
-    const box = canvas.getBoundingClientRect();
-    show(sheet + 1, map.unproject([t.clientX - box.left, t.clientY - box.top]));
-  } else lastTap = { at: now, x: t.clientX, y: t.clientY };
-}, { passive: false });
-// A browser that does make a dblclick of the same two taps is not counted twice.
-map.on('dblclick', (e) => { if (performance.now() - tappedAt > 600) show(sheet + 1, e.lngLat); });
+// handlers recognise it (Safari never makes a dblclick of a double tap); the one-level step
+// they start is turned into the move to the next sheet straight away, so the map makes one
+// move, not two.
+map.on('zoomstart', (e) => {
+  const o = e.originalEvent;
+  if (e.settling || !o || !['touchend', 'dblclick'].includes(o.type)) return;
+  const p = o.changedTouches?.[0] ?? o;
+  const box = map.getContainer().getBoundingClientRect();
+  const around = map.unproject([p.clientX - box.left, p.clientY - box.top]);
+  began = null;
+  requestAnimationFrame(() => show(sheet + 1, around));
+});
 document.querySelector('#in').addEventListener('click', () => show(sheet + 1));
 document.querySelector('#out').addEventListener('click', () => show(sheet - 1));
 show(sheet);
