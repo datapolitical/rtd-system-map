@@ -77,7 +77,8 @@ we are" section from them (closed issues show as done).
 - Branch previews no longer run the map checks: Chris turned the "Checks
   (branch preview)" workflow off on 2026-11-13 because waiting on it slowed
   work down. Don't wait for a `checks/map` status before merging or asking
-  for a phone check. The nightly and baseline check workflows still run.
+  for a phone check. The nightly run is only the live site's page health
+  check now; the other checks run only by hand.
 
 ## Status page
 
