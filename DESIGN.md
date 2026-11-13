@@ -1478,7 +1478,10 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   the street, the busier way counting (a one-way street has one). The gaps
   between the merged departures are the waits a rider can get, and the
   street is as fast as the gap that nine in ten gaps are at or under — the
-  90th percentile, an hour over it (`rate`). So the wait the map promises
+  90th percentile, an hour over it (`rate`). The class is read from that
+  wait rounded to whole minutes, the number the street's panel shows
+  (`classOf`), so a 15-minute route whose stop times come out a few seconds
+  over 15 is still "every 11 to 15". So the wait the map promises
   is a wait it keeps: evenly spaced buses give their plain headway, two
   every-30 routes that leave a minute apart stay "every 30" (nine waits in
   ten are the long gap), two that interleave are "every 15", and a bunch of
@@ -4506,6 +4509,11 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   tags on `main` after Chris's sign-off. Reason: the V3 milestone no longer
   matched the work after the four-sheets decision, and nothing said what
   launch meant.
+- 2026-11-13: A street's class is read from its wait rounded to whole
+  minutes, not its exact buses per hour. Reason: Chris saw route 83 west of
+  University drawn every 16 to 30 between stretches drawn every 15. Its wait
+  came out at 15 minutes and a few seconds (stop times filled in between
+  RTD's timepoints), so the line said every 30 while the panel said 15.
 
 ## Sources
 

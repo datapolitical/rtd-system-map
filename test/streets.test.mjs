@@ -35,6 +35,19 @@ test('rate is the rider\'s: evenly spaced buses give their plain rate, a bunched
   assert.equal(rate([]), 0);
 });
 
+test('a street is classed by its wait in whole minutes, the one its panel shows', () => {
+  // Route 83 west of University, 2026-11-13: a wait of 15 minutes and a few
+  // seconds was drawn every 16 to 30 while its panel said every 15.
+  assert.equal(classOf(3600 / (15 * 60 + 20)), 'c15');
+  assert.equal(classOf(4), 'c15');
+  assert.equal(classOf(3600 / (15 * 60 + 40)), 'c30'); // rounds to 16
+  assert.equal(classOf(2), 'c30');
+  assert.equal(classOf(60 / 31), 'c60');
+  assert.equal(classOf(6), 'c10');
+  assert.equal(classOf(20), 'c3');
+  assert.equal(classOf(0), 'c60');
+});
+
 test('two routes on one street are one line with both buses counted', () => {
   // Every 15 and every 20 minutes, both leaving on the hour: the street has a
   // hole of 15 minutes in it, so it reads as every 15 (the rider's wait), and
