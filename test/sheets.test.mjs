@@ -556,8 +556,9 @@ test('the opening sheet draws its quiet step fainter than the quiet step elsewhe
     assert.ok(faint < contrast(c.bus.c60, c.ground) && faint >= 1.6, `${theme}: fainter, still seen (${faint.toFixed(2)})`);
   }
   const { sheetStyle } = await import('../public/js/sheets/style.js');
+  const { evaluate } = await import('../public/js/evaluate.js');
   const bus1 = sheetStyle('dark').layers.find((l) => l.id === 'bus-1').paint['line-color'];
-  assert.equal(bus1[bus1.indexOf('c60') + 1], PALETTES.dark.busHairline, 'sheet 1 paints it');
+  assert.equal(evaluate(bus1, { props: { cls: 'c60' }, state: { bus: '', rail: '' } }), PALETTES.dark.busHairline, 'sheet 1 paints it');
 });
 
 test('in the dark a lifted line keeps its hue and stays a strong colour: red stays red, not salmon', async () => {
@@ -593,9 +594,12 @@ test('the page inks each line from the colours the build found: pale ones cased 
   assert.ok(light.findIndex((l) => l.id === 'rail-casing-2') < light.findIndex((l) => l.id === 'rail-2'), 'under the line');
   const dark = sheetStyle('dark', [], colors).layers;
   assert.ok(!dark.some((l) => l.id.startsWith('rail-casing')));
+  // With no route picked (style.js, PICKED), the line's own ink.
+  const { evaluate } = await import('../public/js/evaluate.js');
+  const unpicked = (expr, color) => evaluate(expr, { props: { color }, state: { bus: '', rail: '' } });
   const rail = dark.find((l) => l.id === 'rail-2').paint['line-color'];
-  assert.equal(rail[rail.indexOf('#552683') + 1], railInk('dark', '#552683').line, 'the dim purple is drawn lifted');
-  assert.deepEqual(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], ['get', 'color'], 'without the list, RTD\'s own colours');
+  assert.equal(unpicked(rail, '#552683'), railInk('dark', '#552683').line, 'the dim purple is drawn lifted');
+  assert.equal(unpicked(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], '#123456'), '#123456', 'without the list, RTD\'s own colours');
 });
 
 test('bus widths step up by about 1.6 to the rail width (steeper on the opening sheet), none under a pixel, and numbers still clear the widest', async () => {

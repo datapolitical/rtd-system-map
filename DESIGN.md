@@ -1998,6 +1998,23 @@ holds these rules.
 | 3 | 14 | One-way pairs on their own streets, names of the main streets. |
 | 4 | 16 | Every stop, buildings, platforms apart from each other. |
 
+**Tap a route to highlight it** (#118). A tap on a street, its route numbers,
+a line letter, a rail line, a station or a stop opens the card, which lists
+each route there as a button. Picking one draws that route whole and every
+other street and line faded; the same button, or a tap on empty ground,
+clears it. A picked bus route is one ink and one weight from end to end (the
+sheet's rail width, near-black in the light, near-white in the dark, no rail
+line's hue) on a rim of ground, its pieces joined round, so it reads as one
+line however many streets it takes; its stops are ringed over it on sheet 4,
+and place names step off it rather than cut it. A picked rail line keeps its
+own colour and its stations' bars; the other stations fade, and only half as
+far while a bus is picked, so the places a bus passes still read. What is
+faded is inked nearer the ground, not made see-through, so overlapping
+pieces show no darker knots. Ground, streets' names and place names stay as
+they are. The pick is MapLibre global state (`bus`, `rail`) that each sheet's
+layers read, so it holds on every sheet and through zooms with no tile made
+again (`public/js/sheets/style.js`, `pick.js`).
+
 How it is built:
 
 - **One procedure, run once per sheet.** `scripts/lib/sheets.mjs` draws a
@@ -4557,6 +4574,10 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   loads them ahead (MapLibre has no public way to, so it uses its tile
   managers) and keeps room for them in a larger tile cache. Measured on the
   live data, every first step in and out drew with no blank frame on both.
+- 2026-11-14: Sheets: tap a route to highlight it, the rest faded (#118). A
+  picked bus route is drawn in one ink and weight end to end, not each
+  street's grey, so it reads as one line; fading mixes colours toward the
+  ground instead of using opacity, so overlaps leave no knots.
 
 ## Sources
 

@@ -2,6 +2,7 @@
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { SHEETS, sheetData, sheetStyle } from './style.js';
+import { pickFrom, routeList } from './pick.js';
 import { settle } from './settle.js';
 
 // Start the map's worker downloading while the two small files below load.
@@ -46,7 +47,12 @@ const map = new maplibregl.Map({
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
-scheme.addEventListener('change', () => { if (!forced) map.setStyle(sheetStyle(theme(), stations, colors, wanted)); });
+// A new theme is a new style; the picked route is set on it again (pick, below).
+scheme.addEventListener('change', () => {
+  if (forced) return;
+  map.setStyle(sheetStyle(theme(), stations, colors, wanted));
+  map.once('styledata', () => setPick(picked));
+});
 
 // --- The other sheets, once the first is drawn ----------------------------------
 
@@ -198,33 +204,68 @@ document.querySelector('#out').addEventListener('click', () => show(sheet - 1));
 show(sheet);
 
 // --- What is this? Tap a line, a station or a stop --------------------------------
+// The card names what is under the finger; each route on it is a button, and picking one
+// highlights that route on every sheet, the rest faded (style.js, PICKED). A tap on empty
+// ground clears both.
 
 const card = document.querySelector('#card');
 const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
-function tell(title, note) {
-  card.innerHTML = `<b>${title}</b>${note ? `<span>${esc(note)}</span>` : ''}`;
+let picked = null; // { mode: 'bus' | 'rail', route }
+let shown = null; // what the card names: { title, note, routes: [{ mode, route, color }] }
+function setPick(p) {
+  picked = p;
+  map.setGlobalStateProperty('bus', p?.mode === 'bus' ? p.route : '');
+  map.setGlobalStateProperty('rail', p?.mode === 'rail' ? p.route : '');
+  window.sheetsPick = p;
+  document.documentElement.classList.toggle('picked', !!p);
+}
+function chip(r) {
+  const on = picked?.mode === r.mode && picked.route === r.route;
+  const look = r.mode === 'rail' ? ` style="background:${esc(r.color)};color:${esc(inkOn(r.color))}"` : '';
+  return `<button type="button" class="${r.mode}" data-mode="${r.mode}" data-route="${esc(r.route)}" aria-pressed="${on}"${look}>${esc(r.route)}</button>`;
+}
+function tell(what) {
+  shown = what;
+  const { title, note, routes = [] } = what;
+  const hint = routes.length ? (picked && routes.some((r) => r.mode === picked.mode && r.route === picked.route) ? 'Tap empty ground to clear' : `Tap ${routes.length > 1 ? 'a route' : 'it'} to show its whole way`) : '';
+  card.innerHTML = `<b>${title}</b>${note ? `<span>${esc(note)}</span>` : ''}${routes.length ? `<div class="routes">${routes.map(chip).join('')}</div><span class="hint">${hint}</span>` : ''}`;
   card.hidden = false;
 }
+card.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-route]');
+  if (!b) return;
+  const p = { mode: b.dataset.mode, route: b.dataset.route };
+  setPick(picked?.mode === p.mode && picked.route === p.route ? null : p);
+  if (shown) tell(shown);
+});
+// Each line's colour, as the sheets draw it (a station lists its lines by letter only).
+const colorOf = new Map();
+map.on('idle', () => {
+  for (const f of map.querySourceFeatures(`sheet-${SHEETS[sheet].id}`, { filter: ['==', ['get', 'kind'], 'rail'] })) colorOf.set(f.properties.route, f.properties.color);
+});
+const rails = (list) => list.map((route) => ({ mode: 'rail', route, color: colorOf.get(route) ?? '#888888' }));
+const buses = (text) => routeList(text).map((route) => ({ mode: 'bus', route }));
 map.on('click', (e) => {
   const n = SHEETS[sheet].id;
   const reach = 9;
   const box = [[e.point.x - reach, e.point.y - reach], [e.point.x + reach, e.point.y + reach]];
   const hit = (ids) => map.queryRenderedFeatures(box, { layers: ids.map((id) => `${id}-${n}`).filter((id) => map.getLayer(id)) });
-  const station = hit(['station', 'name'])[0];
-  if (station) return tell(esc(station.properties.name), `Rail station · ${String(station.properties.lines).split(' ').join(', ')}`);
-  const rail = [...new Map(hit(['rail']).map((f) => [f.properties.route, f.properties])).values()];
-  if (rail.length) {
-    const bullets = rail.map((r) => `<i style="background:${esc(r.color)};color:${esc(inkOn(r.color))}">${esc(r.route)}</i>`).join('');
-    return tell(`${bullets}${rail.length > 1 ? 'Lines' : 'Line'}`, 'Rail');
+  for (const f of hit(['rail', 'letter'])) if (f.properties.color) colorOf.set(f.properties.route, f.properties.color);
+  const what = pickFrom({
+    station: hit(['station', 'name'])[0]?.properties,
+    letter: hit(['letter'])[0]?.properties,
+    rail: [...new Map(hit(['rail']).map((f) => [f.properties.route, f.properties])).values()],
+    stop: hit(['stop'])[0]?.properties,
+    label: hit(['bus-number', 'bus-stack'])[0]?.properties,
+    bus: hit(['bus', 'pick-bus']).map((f) => f.properties).sort((a, b) => b.n - a.n)[0],
+  });
+  if (!what) {
+    card.hidden = true;
+    shown = null;
+    setPick(null);
+    return;
   }
-  const stop = hit(['stop'])[0];
-  if (stop) return tell(esc(stop.properties.name), `Bus stop · ${stop.properties.heading ?? ''} · ${stop.properties.routes}`.replace(' ·  · ', ' · '));
-  const bus = hit(['bus']).sort((a, b) => b.properties.n - a.properties.n)[0];
-  if (bus) {
-    const q = bus.properties;
-    return tell(`${q.n > 1 ? 'Routes' : 'Route'} ${esc(q.routes)}`, q.hw ? `A bus about every ${Math.round(q.hw)} minutes on this street, weekday midday` : 'Bus');
-  }
-  card.hidden = true;
+  tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
 });
 map.on('dragstart', () => { card.hidden = true; });
 function inkOn(color) {

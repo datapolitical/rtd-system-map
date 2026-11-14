@@ -36,6 +36,8 @@ export const PALETTES = {
     busHairline: '#3e454f',
     hall: '#243147', hallEdge: '#6a7a98',
     mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', city: '#9ba5b8', streetName: '#5c6780', busStreetName: '#7b869b', number: '#c9d2e4', stop: '#aab6cf',
+    // A picked bus route: the brightest ink on the sheet, nearly the station names', and no rail line's hue.
+    pick: '#eef1f6',
   },
   light: {
     ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
@@ -45,6 +47,7 @@ export const PALETTES = {
     busHairline: '#b4b9c1',
     hall: '#dcd8cf', hallEdge: '#979ba3',
     mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', city: '#555a63', streetName: '#8a8d95', busStreetName: '#73777f', number: '#3a4560', stop: '#566179',
+    pick: '#1d2433',
   },
 };
 
@@ -116,6 +119,37 @@ function shortStreet(name) {
   return ['let', 'n', head, tail];
 }
 
+// --- A picked route (DESIGN.md, "Four sheets": tap a route to highlight it) ----------------
+// The page sets MapLibre global state `bus` or `rail` to the route the reader picked ('' for
+// none; main.js). It is a layer of state over the drawing: every sheet's layers carry the rule
+// once, so a pick is one property write, holds on every sheet, and no tile is made again.
+// Everything not on the route is inked nearer the ground rather than made see-through, so
+// pieces that overlap at a corner do not show darker knots.
+export const STATE = { bus: { default: '' }, rail: { default: '' } };
+const BUS = ['global-state', 'bus'];
+const RAIL_PICK = ['global-state', 'rail'];
+export const PICKED = ['any', ['!=', BUS, ''], ['!=', RAIL_PICK, '']];
+// The picked route is one of a list: "0, 1, 15L" (a stacked list breaks a row after a comma).
+const listed = (prop, pick) => ['any',
+  ['in', ['concat', ' ', pick, ','], ['concat', ' ', ['get', prop], ',']],
+  ['in', ['concat', '\n', pick, ','], ['concat', ' ', ['get', prop], ',']]];
+export const onBus = (prop = 'routes') => ['all', ['!=', BUS, ''], listed(prop, BUS)];
+export const onRail = ['all', ['!=', RAIL_PICK, ''], ['==', ['get', 'route'], RAIL_PICK]];
+// A station on the picked line ("A B C").
+export const atStation = ['all', ['!=', RAIL_PICK, ''], ['in', ['concat', ' ', RAIL_PICK, ' '], ['concat', ' ', ['get', 'lines'], ' ']]];
+// How far toward the ground what is off the route goes: lines to about a fifth of their
+// strength, lettering a little less so the streets and stations around the route still read.
+export const FADE = { line: 0.8, text: 0.68, station: 0.72, stationNearBus: 0.45 };
+/** `color` a fraction `t` of the way to `ground` (sRGB), as #rrggbb. */
+export function mix(color, ground, t) {
+  const rgb = (h) => [1, 3, 5].map((at) => parseInt(String(h).slice(at, at + 2), 16));
+  const [a, b] = [rgb(color), rgb(ground)];
+  return `#${a.map((x, k) => Math.round(x + (b[k] - x) * t).toString(16).padStart(2, '0')).join('')}`;
+}
+// Ink that stays whole on the route (or when nothing is picked) and fades off it. `full` and
+// `faded` are the same expression with each colour mixed toward the ground.
+const unless = (hit, full, faded) => ['case', ['any', ['!', PICKED], hit], full, faded];
+
 const FONT = { regular: ['Overpass Regular'], medium: ['Overpass Medium'], semibold: ['Overpass SemiBold'], bold: ['Overpass ExtraBold'] };
 const byClass = (table) => ['match', ['get', 'cls'], ...Object.entries(table).flat(), Object.values(table)[0]];
 const kind = (k, ...more) => ['all', ['==', ['get', 'kind'], k], ...more];
@@ -138,8 +172,17 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
   const c = PALETTES[theme];
   // Each line's ink in this theme, from the colours the build found in RTD's data (sheets.json).
   const inks = colors.map((color) => ({ color, ...railInk(theme, color) }));
-  const byColor = (key, fallback) => (inks.length ? ['match', ['get', 'color'], ...inks.flatMap((x) => [x.color, x[key] ?? x.line]), fallback] : fallback);
+  const byColor = (key, fallback, t = 0) => (inks.length ? ['match', ['get', 'color'], ...inks.flatMap((x) => [x.color, t ? mix(x[key] ?? x.line, c.ground, t) : x[key] ?? x.line]), fallback] : fallback);
   const lineInk = byColor('line', ['get', 'color']);
+  const fadeTo = (color, t) => mix(color, c.ground, t);
+  const fadeTable = (table, t) => Object.fromEntries(Object.entries(table).map(([k, x]) => [k, fadeTo(x, t)]));
+  // Off the picked line, a rail line or letter disc takes its faded ink.
+  const railLine = unless(onRail, lineInk, byColor('line', ['get', 'color'], FADE.line));
+  const railCasing = unless(onRail, byColor('casing', c.ground), byColor('casing', c.ground, FADE.line));
+  const textInk = (color, hit) => unless(hit, color, fadeTo(color, FADE.text));
+  // A station's mark: whole on the picked line; off it, faded with the lines, and only half
+  // as far when a bus is picked, so the stations it passes still read as places.
+  const stationInk = (color) => ['case', ['any', ['!', PICKED], atStation], color, ['!=', BUS, ''], fadeTo(color, FADE.stationNearBus), fadeTo(color, FADE.station)];
   const letterInk = byColor('ink', ['get', 'ink']);
   const cased = inks.filter((x) => x.casing);
   const layers = [
@@ -170,23 +213,33 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     layer('bus-rim', 'line', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c10', 'c5', 'c3']]]), layout: ROUND,
       paint: { 'line-color': c.ground, 'line-width': ['+', byClass(BUS_WIDTH[n]), 1.6] } });
     layer('bus', 'line', { filter: kind('bus'), layout: { ...ROUND, 'line-sort-key': ['match', ['get', 'cls'], ...order.flatMap((k, j) => [k, j]), 0] },
-      paint: { 'line-color': byClass(busInk(theme, n)), 'line-width': byClass(BUS_WIDTH[n]) } });
+      // The picked route's own streets are drawn again on top (pick-bus, below), so all of them fade here.
+      paint: { 'line-color': ['case', PICKED, byClass(fadeTable(busInk(theme, n), FADE.line)), byClass(busInk(theme, n))], 'line-width': byClass(BUS_WIDTH[n]) } });
 
     // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses
     // end on. It is drawn over them, so a street ends flat on the wall, not in a round blob across it.
     layer('hall', 'fill', { filter: kind('hall'), paint: { 'fill-color': c.hall } });
-    layer('hall-edge', 'line', { filter: kind('hall'), layout: ROUND, paint: { 'line-color': c.hallEdge, 'line-width': [0, 1, 1.2, 1.6][i] } });
+    layer('hall-edge', 'line', { filter: kind('hall'), layout: ROUND, paint: { 'line-color': ['case', PICKED, fadeTo(c.hallEdge, FADE.text), c.hallEdge], 'line-width': [0, 1, 1.2, 1.6][i] } });
 
     // Bus stops: each one a ring, on the closest sheet.
     if (n >= 4) layers.push({ id: `stop-${n}`, type: 'circle', source: `sheet-${n}`, filter: ['==', ['get', 'kind'], 'stop'], ...band,
-      paint: n === 3 ? { 'circle-radius': 1.3, 'circle-color': c.stop, 'circle-opacity': 0.7 } : { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': c.stop, 'circle-stroke-width': STOP_RING.stroke } });
+      paint: n === 3 ? { 'circle-radius': 1.3, 'circle-color': c.stop, 'circle-opacity': 0.7 } : { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': ['case', PICKED, fadeTo(c.stop, FADE.line), c.stop], 'circle-stroke-width': STOP_RING.stroke } });
 
     // Rail: every line whole, with a rim of ground so lines side by side stay apart.
     layer('rail-rim', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
     // A pale line that can't stand off the ground in its own hue has a thin casing of its own colour, darker.
     if (cased.length) layer('rail-casing', 'line', { filter: kind('rail', ['in', ['get', 'color'], ['literal', cased.map((x) => x.color)]]), layout: FLAT,
-      paint: { 'line-color': byColor('casing', c.ground), 'line-width': w + 2 * CASING[n] } });
-    layer('rail', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': lineInk, 'line-width': w } });
+      paint: { 'line-color': railCasing, 'line-width': w + 2 * CASING[n] } });
+    layer('rail', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': railLine, 'line-width': w } });
+
+    // The picked bus route, whole, over everything but the stations: one weight and one ink from
+    // end to end on a rim of ground, its pieces joined round, so it reads as one line however
+    // many streets it takes. Its stops are ringed again on top of it.
+    const pickBus = ['all', ['==', ['get', 'kind'], 'bus'], onBus()];
+    layer('pick-bus-rim', 'line', { filter: pickBus, layout: ROUND, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
+    layer('pick-bus', 'line', { filter: pickBus, layout: ROUND, paint: { 'line-color': c.pick, 'line-width': w } });
+    if (n >= 4) layers.push({ id: `pick-stop-${n}`, type: 'circle', source, ...band, filter: ['all', ['==', ['get', 'kind'], 'stop'], onBus()],
+      paint: { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': c.pick, 'circle-stroke-width': STOP_RING.stroke } });
 
     // Stations: one white bar across the lines that stop there; the hub's is heavier.
     const bar = kind('station', ['==', ['get', 'shape'], 'bar']);
@@ -194,9 +247,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     const thin = ['case', ['get', 'single'], w + 1.4, ['get', 'hub'], w * 0.72 + 2.2, w * 0.72];
     // Lines that meet back to back at a bar get a fat one, about half again as thick, with a divider down it.
     const mark = ['case', ['get', 'fat'], ['+', ['*', 1.6, thin], 1], thin];
-    layer('station-edge', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.markEdge, 'line-width': ['+', mark, 2.6] } });
-    layer('station', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': c.mark, 'line-width': mark } });
-    layer('station-divider', 'line', { filter: ['all', bar, ['==', ['get', 'fat'], true]], layout: FLAT, paint: { 'line-color': c.markEdge, 'line-width': 1.2 } });
+    layer('station-edge', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': stationInk(c.markEdge), 'line-width': ['+', mark, 2.6] } });
+    layer('station', 'line', { filter: bar, layout: ROUND, paint: { 'line-color': stationInk(c.mark), 'line-width': mark } });
+    layer('station-divider', 'line', { filter: ['all', bar, ['==', ['get', 'fat'], true]], layout: FLAT, paint: { 'line-color': stationInk(c.markEdge), 'line-width': 1.2 } });
 
     // Lettering, least important first (MapLibre places the last layer first).
     if (n <= 2) layers.push({ id: `freeway-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band, filter: ['all', ['==', ['get', 'class'], 'motorway'], ['has', 'ref'], ['==', ['geometry-type'], 'LineString']],
@@ -234,7 +287,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n, w)]]]))),
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w)]]])))],
         'text-letter-spacing': 0.02, 'symbol-sort-key': ['-', 0, ['get', 'n']] },
-      paint: { 'text-color': c.number, 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
+      paint: { 'text-color': textInk(c.number, onBus('label')), 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
     // A list too long for its stretch in one row is stacked in two (scripts/lib/sheets.mjs, labelRuns): one piece
     // of lettering turned the way its street runs, so both rows show or neither does. Its middle sits half a row
     // farther off the street than a single row's, so the nearer row is where a single row would be.
@@ -244,7 +297,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
         'text-offset': ['case', ['==', ['get', 'side'], -1],
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n, w) + ROW_HEIGHT / 2]]]))),
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w) - ROW_HEIGHT / 2]]])))] },
-      paint: { 'text-color': c.number, 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
+      paint: { 'text-color': textInk(c.number, onBus('label')), 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
     // Place names: on the first two sheets cities and towns, closer in a city's own neighbourhoods. They are
     // placed by rank (the tiles' importance, cities before towns, a city's statistical neighbourhoods before
     // OSM's smaller ones), after rail, its letters and station names but before route numbers and the marks
@@ -262,19 +315,22 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
         'text-variable-anchor': ['center', 'top', 'bottom', 'left', 'right'], 'text-radial-offset': 0.6,
         'symbol-sort-key': ['+', ['*', 100, ['index-of', ['get', 'class'], ['literal', classes]]], ['to-number', ['get', 'rank'], 99]] },
       paint: { 'text-color': ['case', major, c.city, c.place], 'text-halo-color': c.ground, 'text-halo-width': 2.2, 'text-halo-blur': 0.4 } });
+    // A picked bus route holds its ground like rail: placed before the place names, so a town's
+    // name and its halo move off the route instead of cutting it.
+    layer('keep-off-pick', 'symbol', { filter: ['all', ['==', ['get', 'kind'], 'bus'], onBus()], ...unseen });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
     layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name']),
       layout: { 'text-field': ['get', 'text'], 'text-font': ['case', ['get', 'minor'], ['literal', FONT.medium], ['literal', FONT.semibold]], 'text-size': ['case', ['get', 'minor'], 10, NAME_SIZE[n]], 'text-max-width': 40, 'text-line-height': 1.12,
         'text-anchor': ['get', 'anchor'], 'text-offset': ['get', 'offset'], 'text-justify': ['get', 'justify'], 'text-allow-overlap': true, 'text-padding': 3 },
-      paint: { 'text-color': c.name, 'text-halo-color': c.ground, 'text-halo-width': 2 } });
+      paint: { 'text-color': textInk(c.name, ['any', atStation, ['!=', BUS, '']]), 'text-halo-color': c.ground, 'text-halo-width': 2 } });
     // Line letters, placed by the build where each line runs alone: a disc in the line's colour.
     const disc = [7.4, 8.2, 9.4, 10.6][i];
     // Beside a station's name the letters are smaller (scripts/lib/sheets.mjs, SIZES.nameLetter).
     const small = [5.6, 6, 6.6, 7.4][i];
-    layer('letter-disc', 'circle', { filter: kind('letter'), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': lineInk, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
+    layer('letter-disc', 'circle', { filter: kind('letter'), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
     layer('letter', 'symbol', { filter: kind('letter'),
       layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * 1.42, disc * 1.42], 'text-allow-overlap': true, 'text-offset': [0, 0.06] },
-      paint: { 'text-color': letterInk } });
+      paint: { 'text-color': unless(onRail, letterInk, byColor('ink', ['get', 'ink'], FADE.line)) } });
     // Lettering keeps off the lines: unseen marks along rail and the busiest streets hold their
     // ground. MapLibre places the last layer first: rail's marks, then the route numbers (which
     // sit on their own streets but never on rail), then the streets' marks, then everything above.
@@ -291,6 +347,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
   });
   return {
     version: 8,
+    state: STATE,
     glyphs: new URL('../../vendor/glyphs/{fontstack}/{range}.pbf', import.meta.url).href.replace(/%7B/g, '{').replace(/%7D/g, '}'),
     sources: {
       ground: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
