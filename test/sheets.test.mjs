@@ -503,50 +503,105 @@ test('a route number never sits on a stop: each stop holds its ground, placed be
   }
 });
 
-test('bus streets are three steps, evenly spaced in lightness, the busiest under every rail line', async () => {
-  const { PALETTES, BUS_STEP, railInk } = await import('../public/js/sheets/style.js');
-  const { contrast, lightness } = await import('../public/js/color.js');
+// Line colours as RTD gives them, dark and pale, with a black and a white; the colour rules must hold for any of them.
+const LINE_COLORS = ['#552683', '#B71318', '#9F26B5', '#C4D600', '#F6B221', '#57C1E9', '#F79239', '#009DAA', '#4E9D2D', '#000000', '#ffffff'];
+const TURN = 2 * Math.PI;
+const hueApart = (a, b) => { const d = Math.abs(a - b) % TURN; return Math.min(d, TURN - d); };
+
+test('the hue the rail colours leave free is the middle of the widest gap between theirs, and no hue when none has one', async () => {
+  const { freeHue, fromLch, toLch } = await import('../public/js/color.js');
+  const at = (degrees) => fromLch(0.6, 0.12, degrees * Math.PI / 180);
+  const deg = (hue) => hue * 180 / Math.PI;
+  assert.ok(Math.abs(deg(freeHue([at(20), at(60), at(200)])) - 290) < 3, 'between 200 and 20, the long way round');
+  assert.ok(Math.abs(deg(freeHue([at(90)])) - 270) < 3, 'one line: straight across the wheel');
+  assert.equal(freeHue([]), null);
+  assert.equal(freeHue(['#000000', '#ffffff', '#808080']), null, 'black, white and grey have no hue');
+  const hue = freeHue(LINE_COLORS);
+  const lines = LINE_COLORS.map(toLch).filter(([, chroma]) => chroma >= 0.04).map(([, , h]) => h);
+  const clear = Math.min(...lines.map((h) => hueApart(h, hue)));
+  for (let d = 0; d < 360; d += 2) assert.ok(Math.min(...lines.map((h) => hueApart(h, d * Math.PI / 180))) <= clear + 0.02, `no hue is farther from every line than the one chosen (${d})`);
+});
+
+test('bus streets are one hue in three strengths, none a grey; rail reads first by its width and the strength of its colour', async () => {
+  const { PALETTES, BUS_STEP, busHue, busInk, railInk } = await import('../public/js/sheets/style.js');
+  const { contrast, toLch, GREY_UNDER } = await import('../public/js/color.js');
   // A thin line of light on dark ground reads fainter than the same contrast in ink on paper.
   const least = { light: 1.8, dark: 2.2 };
-  // Line colours as RTD gives them, dark and pale; the rule must hold for any of them.
-  const colors = ['#552683', '#B71318', '#9F26B5', '#C4D600', '#F6B221', '#57C1E9', '#F79239', '#009DAA', '#4E9D2D', '#000000', '#ffffff'];
   for (const theme of ['light', 'dark']) {
     const c = PALETTES[theme];
-    const steps = [0, 1, 2].map((s) => Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => c.bus[cls]));
+    const { hue } = busHue(theme, LINE_COLORS);
+    const sheets = [1, 2].map((n) => busInk(theme, n, LINE_COLORS));
+    const steps = [0, 1, 2].map((s) => Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => sheets[1][cls]));
     for (const step of steps) assert.equal(new Set(step).size, 1, `${theme}: the classes in a step share one colour`);
     const ink = steps.map((step) => step[0]);
+    for (const x of [...ink, sheets[0].c60]) {
+      const [, chroma, h] = toLch(x);
+      assert.ok(chroma >= GREY_UNDER, `${theme} ${x}: a bus street is not a grey (a grey line is a road)`);
+      assert.ok(hueApart(h, hue) < 0.12, `${theme} ${x}: every step is the one hue`);
+    }
     const [q, m, t] = ink.map((x) => contrast(x, c.ground));
     assert.ok(q >= least[theme], `${theme}: the quietest street reads (${q.toFixed(2)})`);
     assert.ok(m >= q * 1.25 && t >= m * 1.25, `${theme}: each step stands above the one below (${[q, m, t].map((x) => x.toFixed(2))})`);
-    const [lq, lm, lt] = ink.map(lightness);
-    assert.ok(Math.abs((lm - lq) - (lt - lm)) < 0.01, `${theme}: the steps are evenly spaced in lightness`);
+    const [lq, lm, lt] = ink.map((x) => toLch(x)[0]);
+    assert.ok(Math.abs(lt - lm) < Math.abs(lm - lq), `${theme}: the two frequent steps sit together, clear of the quiet one`);
     if (theme === 'dark') assert.ok(t < contrast(c.mark, c.ground) / 2, 'dark: no bus street comes near the white of station marks');
-    for (const color of colors) {
+    const strength = toLch(ink[2])[1];
+    for (const color of LINE_COLORS) {
       const r = railInk(theme, color);
       // A cased line stands off the ground by its casing.
       const stands = contrast(r.casing ?? r.line, c.ground);
-      assert.ok(stands > t * 1.1, `${theme} ${color}: rail stands above the busiest bus street (${stands.toFixed(2)} against ${t.toFixed(2)})`);
+      assert.ok(stands >= c.railFloor - 0.01, `${theme} ${color}: the line stands off the ground (${stands.toFixed(2)})`);
+      const [, chroma, h] = toLch(r.line);
+      if (chroma >= GREY_UNDER) {
+        assert.ok(strength <= chroma + 0.003, `${theme} ${color}: no bus street is a stronger colour than a rail line (${strength.toFixed(3)} against ${chroma.toFixed(3)})`);
+        assert.ok(hueApart(h, hue) > 0.5, `${theme} ${color}: the bus hue is none of the lines'`);
+      }
       if (r.casing) assert.equal(r.line, color, `${theme} ${color}: a cased line keeps RTD's colour`);
       if (theme === 'dark') assert.ok(!r.casing, 'in the dark a line is lifted, not cased');
     }
+    // A network whose lines are all one weak colour holds the bus streets to it.
+    const pale = '#8fa3a8';
+    assert.ok(toLch(busInk(theme, 2, [pale]).c3)[1] <= toLch(railInk(theme, pale).line)[1] + 0.003, `${theme}: a weak rail colour holds the bus colour down`);
+    // With no line colours to go by (the list failed to load), three greys at the same strengths.
+    const bare = busInk(theme, 2);
+    assert.ok(Object.values(bare).every((x) => toLch(x)[1] < 0.005) && new Set(Object.values(bare)).size === 3, `${theme}: three greys without the list`);
+  }
+});
+
+test('route numbers are the bus streets\' own lettering: their hue at a reading strength, apart from the grey street names', async () => {
+  const { PALETTES, busHue, numberInk, railInk, sheetStyle } = await import('../public/js/sheets/style.js');
+  const { contrast, toLch, GREY_UNDER } = await import('../public/js/color.js');
+  for (const theme of ['light', 'dark']) {
+    const c = PALETTES[theme];
+    const figures = numberInk(theme, LINE_COLORS);
+    const [, chroma, h] = toLch(figures);
+    assert.ok(chroma >= GREY_UNDER && hueApart(h, busHue(theme, LINE_COLORS).hue) < 0.12, `${theme} ${figures}: the bus streets' hue`);
+    assert.ok(contrast(figures, c.ground) >= 7, `${theme}: as easy to read as body text (${contrast(figures, c.ground).toFixed(2)})`);
+    // The dark theme's greys lean a little blue, like its ground; the figures are a clear step bluer.
+    for (const name of [c.busStreetName, c.streetName]) assert.ok(toLch(name)[1] <= chroma - 0.04, `${theme} ${name}: a street name stays a grey beside the figures`);
+    for (const color of LINE_COLORS) {
+      const line = toLch(railInk(theme, color).line)[1];
+      if (line >= GREY_UNDER) assert.ok(chroma <= line + 0.003, `${theme} ${color}: no stronger a colour than a rail line`);
+    }
+    const style = sheetStyle(theme, [], LINE_COLORS).layers;
+    for (const id of ['bus-number-3', 'bus-stack-3']) assert.equal(style.find((l) => l.id === id).paint['text-color'], figures, `${theme}: ${id} is set in it`);
+    assert.ok(toLch(numberInk(theme))[1] < 0.005, `${theme}: a grey without the list of line colours`);
   }
 });
 
 test('the opening sheet draws its quiet step fainter than the quiet step elsewhere, still above the ground', async () => {
-  const { PALETTES, busInk } = await import('../public/js/sheets/style.js');
+  const { PALETTES, busInk, sheetStyle } = await import('../public/js/sheets/style.js');
   const { contrast } = await import('../public/js/color.js');
   for (const theme of ['light', 'dark']) {
     const c = PALETTES[theme];
-    const one = busInk(theme, 1);
-    assert.equal(one.c60, c.busHairline);
-    assert.equal(one.c15, c.bus.c15, `${theme}: only the quiet step changes`);
-    assert.deepEqual(busInk(theme, 2), c.bus, `${theme}: the other sheets keep the three greys`);
-    const faint = contrast(c.busHairline, c.ground);
-    assert.ok(faint < contrast(c.bus.c60, c.ground) && faint >= 1.6, `${theme}: fainter, still seen (${faint.toFixed(2)})`);
+    const [one, two] = [1, 2].map((n) => busInk(theme, n, LINE_COLORS));
+    assert.deepEqual([one.c15, one.c3], [two.c15, two.c3], `${theme}: only the quiet step changes`);
+    assert.deepEqual(busInk(theme, 4, LINE_COLORS), two, `${theme}: the other sheets share their three colours`);
+    const faint = contrast(one.c60, c.ground);
+    assert.ok(faint < contrast(two.c60, c.ground) && faint >= 1.6, `${theme}: fainter, still seen (${faint.toFixed(2)})`);
   }
-  const { sheetStyle } = await import('../public/js/sheets/style.js');
-  const bus1 = sheetStyle('dark').layers.find((l) => l.id === 'bus-1').paint['line-color'];
-  assert.equal(bus1[bus1.indexOf('c60') + 1], PALETTES.dark.busHairline, 'sheet 1 paints it');
+  const bus1 = sheetStyle('dark', [], LINE_COLORS).layers.find((l) => l.id === 'bus-1').paint['line-color'];
+  assert.equal(bus1[bus1.indexOf('c60') + 1], busInk('dark', 1, LINE_COLORS).c60, 'sheet 1 paints it');
 });
 
 test('in the dark a lifted line keeps its hue and stays a strong colour: red stays red, not salmon', async () => {
@@ -587,25 +642,30 @@ test('the page inks each line from the colours the build found: pale ones cased 
   assert.deepEqual(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], ['get', 'color'], 'without the list, RTD\'s own colours');
 });
 
-test('bus widths: the busiest as wide as rail and never wider, the middle step under it, the quiet step as before; the frequent steps read by a lit core, not width', async () => {
-  const { sheetStyle, BUS_WIDTH, BUS_STEP, MID_UNDER_TOP, BUS_CORE } = await import('../public/js/sheets/style.js');
+test('bus widths: none as wide as rail, the busiest three quarters of it, the middle step six tenths, the quiet step as before; each street is one solid line', async () => {
+  const { sheetStyle, PALETTES, BUS_WIDTH, BUS_STEP, BUS_UNDER_RAIL, busInk } = await import('../public/js/sheets/style.js');
+  assert.ok(BUS_UNDER_RAIL.mid < BUS_UNDER_RAIL.top && BUS_UNDER_RAIL.top <= 0.8, 'the busiest step is clearly slimmer than rail');
   for (const sheet of SHEETS) {
     const w = BUS_WIDTH[sheet.id];
     const steps = [0, 1, 2].map((s) => [...new Set(Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => w[cls]))]);
     assert.ok(steps.every((x) => x.length === 1), `sheet ${sheet.id}: one width per step`);
     const [q, m, t] = steps.map((x) => x[0]);
     const rail = SIZES.rail[sheet.id];
-    assert.ok(Math.abs(t - rail) < 0.01, `sheet ${sheet.id}: the busiest step is as wide as rail, never wider`);
-    assert.ok(Math.abs(m - rail / MID_UNDER_TOP) < 0.01 && m > q, `sheet ${sheet.id}: the middle step sits between`);
+    assert.ok(Math.abs(t - rail * BUS_UNDER_RAIL.top) < 0.01, `sheet ${sheet.id}: the busiest step is its share of rail`);
+    assert.ok(Math.abs(m - rail * BUS_UNDER_RAIL.mid) < 0.01 && m > q, `sheet ${sheet.id}: the middle step sits between`);
     assert.ok(q >= 1, `sheet ${sheet.id}: no line under a pixel`);
     if (sheet.id === 1) assert.ok(q <= 1.05, 'the opening sheet\'s quiet step is a hairline');
     else assert.ok(Math.abs(q - rail / 1.6 ** 2) < 0.01, `sheet ${sheet.id}: the quiet step is rail over 1.6 twice`);
-    assert.ok(rail * BUS_CORE < m, `sheet ${sheet.id}: the core sits inside the line`);
   }
   for (const theme of ['dark', 'light']) {
-    const core = sheetStyle(theme).layers.find((l) => l.id === 'bus-core-2');
-    assert.ok(core, `${theme}: the frequent steps carry a core`);
-    assert.ok(!JSON.stringify(core.filter).match(/c30|c60/), `${theme}: the quiet steps carry none`);
+    const layers = sheetStyle(theme, [], LINE_COLORS).layers;
+    // What is drawn along a bus street on one sheet: the rim under the frequent ones, and the street.
+    const along = layers.filter((l) => l.type === 'line' && l.id.endsWith('-2') && JSON.stringify(l.filter).includes('"bus"'));
+    assert.deepEqual(along.map((l) => l.id), ['bus-rim-2', 'bus-2'], `${theme}: nothing is drawn down a street's middle (a core or a spine makes it a road)`);
+    assert.equal(along[0].paint['line-color'], PALETTES[theme].ground, `${theme}: the rim is ground, a gap and not an edge`);
+    assert.ok(!JSON.stringify(along[0].filter).match(/c30|c60/), `${theme}: the quiet steps have no rim`);
+    const ring = layers.find((l) => l.id === 'bus-end-2').paint['circle-stroke-color'];
+    assert.equal(ring[ring.indexOf('c3') + 1], busInk(theme, 2, LINE_COLORS).c3, `${theme}: a line's end ring is the line's own colour`);
   }
 });
 
@@ -787,6 +847,31 @@ test("where lines end together at a bar its name carries their letters, and a st
   assert.equal(once[0].letters.map((l) => l.route).join(''), 'ABEW');
 });
 
+test('on the first screen a name never straddles its side: one whose station is on it stays inside, one just off it stays out; closer sheets are not framed', () => {
+  const first = SHEETS[0];
+  const o = toPx([-105, 39.75], first.zoom);
+  const at1 = (s) => (x, y) => toLonLat([o[0] + x, o[1] + y], s.zoom);
+  const { width, room } = SIZES.opening;
+  const set = (s) => {
+    const p = at1(s);
+    const rail = (route, x0, y0, x1, y1) => line({ mode: 'rail', route, color: '#57C1E9', slot: 0 }, [p(x0, y0), p(x1, y1)]);
+    // The page opens centred on the hub; one line ends near the screen's right side, another just past it.
+    const lines = railLines(all([rail('A', -100, 0, 100, 0), rail('N', 170, 0, 170, -300), rail('R', 210, 0, 210, 300)]), s);
+    const marks = stationMarks(all([point({ id: 1, name: 'Hub', served: true, lines: 'A', hub: true }, p(0, 0)),
+      point({ id: 2, name: 'Thornton Crossroads / 104th Avenue', served: true, lines: 'N', end: true }, p(170, -300)),
+      point({ id: 3, name: 'Far Side / 72nd Avenue', served: true, lines: 'R', end: true }, p(210, 300))]), lines, s);
+    const hub = marks.find((m) => m.hub);
+    const centre = (hub.ends[0][0] + hub.ends[1][0]) / 2;
+    return { centre, of: (name) => names(marks, lines, [], s).find((n) => n.mark.name === name) };
+  };
+  const { centre, of } = set(first);
+  // A reader looks right of a mark first, but there the name would run off the screen.
+  assert.ok(of('Thornton Crossroads / 104th Avenue').box[2] <= centre + width / 2 - room + 0.5, 'kept inside');
+  assert.ok(of('Far Side / 72nd Avenue').box[0] >= centre + width / 2 - 0.5, 'kept out');
+  const closer = set(SHEETS[1]);
+  assert.ok(closer.of('Thornton Crossroads / 104th Avenue').box[0] > closer.centre, 'to the right, where a reader looks first');
+});
+
 test('a long hall says what it is down its length; a place that shares a station\'s name is not lettered twice; a label is never a list cut short', async () => {
   const data = { routes: all([]), stations: all([]), streets: all([]), stops: null };
   const room = (w, more) => ({ type: 'Feature', properties: { id: 1, name: 'Hall', ...more }, geometry: { type: 'Polygon', coordinates: [[at3(0, 0), at3(w, 0), at3(w, 20), at3(0, 20), at3(0, 0)]] } });
@@ -801,6 +886,28 @@ test('a long hall says what it is down its length; a place that shares a station
   assert.ok(JSON.stringify(style.layers.find((l) => l.id === 'place-4').filter).includes('UNION STATION'));
   const ids = style.layers.map((l) => l.id);
   assert.ok(ids.indexOf('hall-name-4') > ids.indexOf('street-name-4'), 'placed before street names, which give way');
+});
+
+test('a place\'s name moves to a clear spot rather than have a frequent bus street strike through it; a town\'s stays near its point, a major city\'s may go farther', async () => {
+  const { sheetStyle, PLACE_SPOTS, PLACE_REACH } = await import('../public/js/sheets/style.js');
+  const ids = sheetStyle('light').layers.map((l) => l.id);
+  for (const n of [1, 2, 3, 4]) {
+    // MapLibre places the last layer first: what a name gives way to comes after it.
+    for (const first of [`keep-off-bus-${n}`, `keep-off-${n}`, `name-${n}`, `letter-${n}`].concat(n >= 2 ? [`bus-number-${n}`, `bus-stack-${n}`] : []))
+      assert.ok(ids.indexOf(`place-${n}`) < ids.indexOf(first), `sheet ${n}: placed after ${first}`);
+    assert.ok(ids.indexOf(`place-${n}`) > ids.indexOf(n >= 3 ? `street-name-${n}` : `freeway-${n}`), `sheet ${n}: placed before the ground's own lettering`);
+  }
+  const far = ([, [x, y]]) => Math.hypot(x, y);
+  assert.deepEqual(PLACE_SPOTS.town[0], ['center', [0, 0]], 'on its point when that is clear');
+  assert.ok(PLACE_SPOTS.town.every((s) => far(s) <= PLACE_REACH.town + 1e-9), 'a town stays near its point');
+  assert.deepEqual(PLACE_SPOTS.city.slice(0, PLACE_SPOTS.town.length), PLACE_SPOTS.town, 'a city tries the near spots first');
+  assert.ok(PLACE_SPOTS.city.every((s) => far(s) <= PLACE_REACH.city + 1e-9) && PLACE_REACH.city > PLACE_REACH.town);
+  // Each ring is no nearer than the one before it.
+  const rings = PLACE_SPOTS.city.filter(([a]) => a === 'bottom').map(far);
+  assert.deepEqual(rings, [...rings].sort((a, b) => a - b));
+  const place = sheetStyle('light').layers.find((l) => l.id === 'place-1');
+  assert.equal(place.layout['text-variable-anchor'], undefined, 'one list of spots');
+  assert.ok(JSON.stringify(place.layout['text-variable-anchor-offset']).includes(JSON.stringify(PLACE_SPOTS.city.flat())));
 });
 
 test('lines that end over a hall end at its wall; a corner beside a wall sits on it; a street carrying all of a neighbour\'s routes is no lighter', async () => {
