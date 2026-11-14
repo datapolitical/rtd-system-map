@@ -2701,6 +2701,10 @@ are deferred, not ruled out. See "Open questions".
     with; the glyphs are served as protobuf so Cloudflare compresses them
     (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
     CPU): drawn at 5.9 s, was 8.9 s; opening view settled at 6.5 s, was 12 s.
+  - Once a sheets view is at rest, the page loads every other sheet's tiles
+    for that view, and the tiles of each whole zoom between the sheets, into
+    MapLibre's cache (nearest zoom first, again after each move), so the
+    first step to a sheet draws at once instead of showing bare ground.
   - While it loads, the sheets page shows a picture of the view it opens on,
     with a "Loading…" line over it, and fades to the map once the map has
     drawn that view (or at once, if a button is pressed first). The pictures
@@ -4545,6 +4549,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   sheets 2 to 4, C, T and E stay a pitch apart (0.94 to 1.03) to the fork;
   the other forks (Union Station, the B/G split, W at Decatur, Nine Mile)
   also leave the pack at the fork, moving lines by at most 10 px on sheet 4.
+- 2026-11-13: Sheets: the tiles of every sheet around the view load while
+  the map rests. Chris: the first zoom to each sheet flashed black, and later
+  ones were fine. MapLibre makes a sheet's tiles only once the zoom reaches
+  it, so the first step drew bare ground until they came: 120 to 190 ms on a
+  desktop, 300 to 460 ms at the "Quality floor" phone profile. The page now
+  loads them ahead (MapLibre has no public way to, so it uses its tile
+  managers) and keeps room for them in a larger tile cache. Measured on the
+  live data, every first step in and out drew with no blank frame on both.
 
 ## Sources
 

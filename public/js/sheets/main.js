@@ -40,6 +40,9 @@ const map = new maplibregl.Map({
   touchPitch: false,
   attributionControl: false,
   fadeDuration: 0,
+  // Room in the cache for every sheet's tiles around the view (warm, below), as well as the
+  // tiles of the places just looked at.
+  maxTileCacheZoomLevels: 12,
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
@@ -68,6 +71,76 @@ function fillIn() {
   map.on('sourcedata', done);
   want(next);
 }
+
+// --- The other sheets' tiles, before the reader steps ------------------------------
+
+// MapLibre makes a sheet's tiles only once the zoom reaches that sheet, so the first step to
+// each sheet showed bare ground for a moment (black in the dark theme) until they came. While
+// the map rests, every other sheet's tiles for this view are made and put in its cache, where
+// a step finds them. This reaches into MapLibre's tile managers: it has no way to ask for
+// another zoom's tiles. If they change, nothing breaks; the flash only comes back.
+const ready = new Set(wanted); // sheets whose drawing the map has, not the empty stand-in
+map.on('sourcedata', (e) => {
+  const n = Number(/^sheet-(\d+)$/.exec(e.sourceId ?? '')?.[1]);
+  if (e.sourceDataType !== 'content' || !wanted.has(n)) return;
+  ready.add(n);
+  tried.delete(map.style?.tileManagers?.[e.sourceId]); // new data empties the source's cache
+});
+let tried = new WeakMap(); // tile manager -> tiles asked for while the map has rested here
+map.on('movestart', () => { tried = new WeakMap(); });
+function warm() {
+  const managers = map.style?.tileManagers;
+  const sample = managers?.ground?.getTileByID(managers.ground.getIds()[0] ?? '');
+  if (!sample) return;
+  const [Tile, TileID] = [sample.constructor, sample.tileID.constructor];
+  // A step passes through every whole zoom between two sheets, and at each one the sheet whose
+  // band it is in shows, drawn from that zoom's tiles. All of them, nearest the map's first.
+  const here = map.getZoom();
+  const levels = [];
+  for (let t = zooms[0]; t <= zooms.at(-1); t++) levels.push(t);
+  levels.sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
+  for (const t of levels) {
+    const s = SHEETS.findLast((sh, i) => !i || sh.zoom - 1 <= t);
+    for (const id of ['ground', ...(ready.has(s.id) ? [`sheet-${s.id}`] : [])]) {
+      const tm = managers[id];
+      const source = tm?.getSource();
+      if (!source?.loadTile || !tm._outOfViewCache) continue;
+      if (!tried.has(tm)) tried.set(tm, new Set());
+      for (const [over, z, x, y] of cover(source, t)) {
+        const tileID = new TileID(over, 0, z, x, y);
+        if (tried.get(tm).has(tileID.key) || tm.getTileByID(tileID.key) || tm._outOfViewCache.has(tileID)) continue;
+        tried.get(tm).add(tileID.key);
+        // Made apart from the tiles in view, which the map's tidying would drop half-loaded,
+        // then put in the cache that a step takes its tiles from.
+        const tile = new Tile(tileID, source.tileSize * tileID.overscaleFactor());
+        Promise.resolve(source.loadTile(tile)).then(() => {
+          if (tile.hasData() && !tm.getTileByID(tileID.key) && !tm._outOfViewCache.has(tileID) && map.style?.tileManagers?.[id] === tm) {
+            tm._outOfViewCache.add(tileID, tile, tile.getExpiryTimeout());
+          } else source.unloadTile?.(tile);
+        }, () => {});
+      }
+    }
+  }
+}
+// The tiles a source draws a view at `zoom` from, about the map's centre, as MapLibre picks
+// them for a map that is never tilted or turned: [overscaled zoom, zoom, x, y].
+function cover(source, zoom) {
+  const want = Math.floor(zoom + Math.log2(512 / (source.tileSize || 512)));
+  const z = Math.max(source.minzoom ?? 0, Math.min(want, source.maxzoom ?? want));
+  const over = z === source.maxzoom ? Math.max(z, want) : z;
+  const n = 2 ** z;
+  const size = (512 * 2 ** zoom) / n; // a tile's width on screen at that zoom
+  const { lng, lat } = map.getCenter();
+  const cx = ((lng + 180) / 360) * n;
+  const cy = ((1 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / Math.PI) / 2) * n;
+  const { clientWidth: w, clientHeight: h } = map.getContainer();
+  const tiles = [];
+  for (let x = Math.floor(cx - w / 2 / size); x <= Math.floor(cx + w / 2 / size); x++) {
+    for (let y = Math.max(0, Math.floor(cy - h / 2 / size)); y <= Math.min(n - 1, Math.floor(cy + h / 2 / size)); y++) tiles.push([over, z, x, y]);
+  }
+  return tiles;
+}
+map.on('idle', warm);
 
 // --- Resting only on a sheet -------------------------------------------------
 
