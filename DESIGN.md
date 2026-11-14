@@ -1478,7 +1478,10 @@ build (`scripts/lib/streets.mjs`, from the per-stretch departures
   the street, the busier way counting (a one-way street has one). The gaps
   between the merged departures are the waits a rider can get, and the
   street is as fast as the gap that nine in ten gaps are at or under — the
-  90th percentile, an hour over it (`rate`). So the wait the map promises
+  90th percentile, an hour over it (`rate`). The class is read from that
+  wait rounded to whole minutes, the number the street's panel shows
+  (`classOf`), so a 15-minute route whose stop times come out a few seconds
+  over 15 is still "every 11 to 15". So the wait the map promises
   is a wait it keeps: evenly spaced buses give their plain headway, two
   every-30 routes that leave a minute apart stay "every 30" (nine waits in
   ten are the long gap), two that interleave are "every 15", and a bunch of
@@ -1995,6 +1998,23 @@ holds these rules.
 | 3 | 14 | One-way pairs on their own streets, names of the main streets. |
 | 4 | 16 | Every stop, buildings, platforms apart from each other. |
 
+**Tap a route to highlight it** (#118). A tap on a street, its route numbers,
+a line letter, a rail line, a station or a stop opens the card, which lists
+each route there as a button. Picking one draws that route whole and every
+other street and line faded; the same button, or a tap on empty ground,
+clears it. A picked bus route is one ink and one weight from end to end (the
+sheet's rail width, near-black in the light, near-white in the dark, no rail
+line's hue) on a rim of ground, its pieces joined round, so it reads as one
+line however many streets it takes; its stops are ringed over it on sheet 4,
+and place names step off it rather than cut it. A picked rail line keeps its
+own colour and its stations' bars; the other stations fade, and only half as
+far while a bus is picked, so the places a bus passes still read. What is
+faded is inked nearer the ground, not made see-through, so overlapping
+pieces show no darker knots. Ground, streets' names and place names stay as
+they are. The pick is MapLibre global state (`bus`, `rail`) that each sheet's
+layers read, so it holds on every sheet and through zooms with no tile made
+again (`public/js/sheets/style.js`, `pick.js`).
+
 How it is built:
 
 - **One procedure, run once per sheet.** `scripts/lib/sheets.mjs` draws a
@@ -2008,7 +2028,8 @@ How it is built:
   runs alone, or among its neighbours where it shares track for a long way;
   each station's name goes on the clearest side of its mark. A second track
   of the same line is not drawn, the shared track is rounded before lines are
-  set beside it so a pack turns as one, and a line ends square at its last
+  set beside it so a pack turns as one (lines on one track share one rounded
+  track, and a line leaves it at the fork, not before), and a line ends square at its last
   station. A bend that moves the track less than about two thirds of a
   line's width (a line and its gap) is too small to draw on that sheet: the
   track is drawn straight through it, the station bars with it, and it
@@ -2746,6 +2767,10 @@ are deferred, not ruled out. See "Open questions".
     with; the glyphs are served as protobuf so Cloudflare compresses them
     (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
     CPU): drawn at 5.9 s, was 8.9 s; opening view settled at 6.5 s, was 12 s.
+  - Once a sheets view is at rest, the page loads every other sheet's tiles
+    for that view, and the tiles of each whole zoom between the sheets, into
+    MapLibre's cache (nearest zoom first, again after each move), so the
+    first step to a sheet draws at once instead of showing bare ground.
   - While it loads, the sheets page shows a picture of the view it opens on,
     with a "Loading…" line over it, and fades to the map once the map has
     drawn that view (or at once, if a button is pressed first). The pictures
@@ -3141,15 +3166,9 @@ without the other noticing.
   human, so every comment it posts ends with the hidden mark
   `<!-- agent -->`, and the worker skips marked comments when it looks
   for the human's.
-- All work says who made it: DeepSeek or Claude. Only DeepSeek V4.1
-  Flash builds, on GitHub and on the home machine; Claude evaluates.
-  `.github/daily/madeby/madeby.sh` (`made_by <model>`) sets the git
-  author to the model, and its `gh` wrapper ends every comment, issue and
-  pull request with "Made by: ..." and labels the issue `made by: DeepSeek` or
-  `made by: Claude` (`made by: free model` marks earlier work by the free
-  models). The worker sets it for
-  its model, the home lanes the same, and the evaluator always runs as
-  Claude.
+- Only DeepSeek V4.1 Flash builds, on GitHub and on the home machine;
+  Claude evaluates. (Work was credited by model until 2026-11-13; see the
+  decision log.)
 
 The satellite overlay (`qa/sat/render.py`) draws Esri satellite tiles
 with OpenStreetMap shapes and the map's own stops, rail lines,
@@ -3356,6 +3375,35 @@ work against the real structure before asking for evaluation.
    Worker is deployed with its `DEPLOY_HOOK` secret and cron. Not yet done:
    the deployment-failure email (Cloudflare dashboard, Notifications),
    offline caching, a domain.
+
+### Launch and versions
+
+Decided 2026-11-13. The site is called launched at **v1.0**, when the
+"Launch (v1.0)" milestone closes: Chris has signed off the four sheets on
+his phone in both themes, the sheets can highlight one route, and the
+version is closed (#14: domain, share links, screen reader, offline). V1 to
+V3 above are the names of the design stages that led there, not releases.
+What comes after launch is in four milestones, in this order (decided
+2026-11-13):
+
+1. **v1.1: Sheets polish.** Faults on the sheets and in the bus data they
+   draw from.
+2. **v2: One zoomable map.** The sheets' drawing at every zoom, one map
+   that zooms smoothly, with the classic map's features carried over
+   (#129). The classic map is paused until the sheets launch; its open
+   issues carry the `classic` label.
+3. **v2.x: Other times and Live.** Saturday, Sunday and evening in the
+   Key, Live tiers, alerts, departures and vehicles, on the zoomable map.
+4. **Later.** Ideas with no date.
+
+Every open issue is labelled `sheets`, `classic` or `both` (the shared data
+pipeline or the site as a whole).
+
+A release is a tag on `main` (`v1.0`, `v1.1`, ...) with a GitHub Release
+listing the milestone's closed issues, made only after Chris's sign-off.
+Each group of new features that ships is a minor version; fixes between
+releases are not tagged. Cloudflare Pages still deploys every commit to
+`main`; a tag names a build worth going back to.
 
 ## Open questions
 
@@ -4584,6 +4632,52 @@ work against the real structure before asking for evaluation.
   sheet, and stays where it was (#126). Reason: with each stop's letter on
   its street, the matching squares tie the table to the streets, and the
   bracket was too faint to see on a phone.
+
+- 2026-11-13: Work is no longer credited by model: the `made_by` script,
+  its `gh` wrapper and the instruction to run it are gone. Reason: Chris
+  no longer uses DeepSeek here (the Agent workflow is switched off), and the
+  step made every commit and comment ask for permission.
+- 2026-11-13: Launch is v1.0, set by a "Launch (v1.0)" milestone: the four
+  sheets signed off, route highlight on the sheets, and #14. V3's remaining
+  steps (other times, Live tiers, alerts) move after launch. Releases are
+  tags on `main` after Chris's sign-off. Reason: the V3 milestone no longer
+  matched the work after the four-sheets decision, and nothing said what
+  launch meant.
+- 2026-11-13: A street's class is read from its wait rounded to whole
+  minutes, not its exact buses per hour. Reason: Chris saw route 83 west of
+  University drawn every 16 to 30 between stretches drawn every 15. Its wait
+  came out at 15 minutes and a few seconds (stop times filled in between
+  RTD's timepoints), so the line said every 30 while the panel said 15.
+- 2026-11-13: The roadmap after launch is v1.1 (sheets polish), v2 (one
+  zoomable map built from the sheets, carrying the classic map's
+  features), v2.x (other times and Live), then Later. The classic map is
+  paused until the sheets launch. Reason: Chris: the classic map waits
+  "until we get the sheets version working", and the goal is to make the
+  sheets infinitely zoomable and merge in the classic map's features.
+- 2026-11-13: Sheets: lines that share track are set beside one rounded
+  track (#128). Chris, of sheet 2: "the alignment for the C line at I-25 and
+  Broadway looks wrong". Each line's track was rounded on its own over up to
+  nine line widths, so past a fork its rounding leaned its own way early: C
+  pulled away from T and E between Alameda and I-25 / Broadway, 1.1 to 2.6
+  pitches from T where the data has them on one track. Where the data has
+  lines on one track, each now takes the mean of their rounded tracks, and
+  past the shared track a line eases back to its own over at least eight
+  line widths (slowly at both ends, so a straight line shows no corner). On
+  sheets 2 to 4, C, T and E stay a pitch apart (0.94 to 1.03) to the fork;
+  the other forks (Union Station, the B/G split, W at Decatur, Nine Mile)
+  also leave the pack at the fork, moving lines by at most 10 px on sheet 4.
+- 2026-11-13: Sheets: the tiles of every sheet around the view load while
+  the map rests. Chris: the first zoom to each sheet flashed black, and later
+  ones were fine. MapLibre makes a sheet's tiles only once the zoom reaches
+  it, so the first step drew bare ground until they came: 120 to 190 ms on a
+  desktop, 300 to 460 ms at the "Quality floor" phone profile. The page now
+  loads them ahead (MapLibre has no public way to, so it uses its tile
+  managers) and keeps room for them in a larger tile cache. Measured on the
+  live data, every first step in and out drew with no blank frame on both.
+- 2026-11-14: Sheets: tap a route to highlight it, the rest faded (#118). A
+  picked bus route is drawn in one ink and weight end to end, not each
+  street's grey, so it reads as one line; fading mixes colours toward the
+  ground instead of using opacity, so overlaps leave no knots.
 
 ## Sources
 

@@ -39,6 +39,25 @@ test('a rail line is one whole path however its pieces come, and two lines on on
   assert.ok(Math.abs(Math.abs(apart) - pitch) < 0.2, `lines are ${apart} apart, want ${pitch}`);
 });
 
+test('lines on one track stay a pitch apart up to the fork where one goes another way', () => {
+  // A and B share 60 pixels of track (about one rounding reach), then A turns hard
+  // and B carries straight on: B used to pull away from A well before the fork.
+  const rail = (route, slot, coords) => line({ mode: 'rail', route, color: '#57C1E9', slot }, coords);
+  const routes = all([
+    rail('A', -0.5, [at(0, 0), at(60, 0)]),
+    rail('B', 0.5, [at(0, 0), at(60, 0)]),
+    rail('A', 0, [at(60, 0), at(120, 45)]),
+    rail('B', 0, [at(60, 0), at(200, 0)]),
+  ]);
+  const [a, b] = railLines(routes, sheet);
+  const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
+  for (const x of [10, 20, 30, 40]) {
+    const p = nearest(a.paths[0], [origin[0] + x, origin[1]]).at;
+    const d = Math.min(...b.paths.map((q) => nearest(q, p).d));
+    assert.ok(Math.abs(d - pitch) < 0.15 * pitch, `${x} px along, the lines are ${d.toFixed(2)} apart, want ${pitch}`);
+  }
+});
+
 test('a piece run the other way keeps its side of the track', () => {
   const rail = (slot, coords) => line({ mode: 'rail', route: 'A', color: '#57C1E9', slot }, coords);
   // Second piece runs right to left with the opposite slot: the same side on the ground.
@@ -545,8 +564,9 @@ test('the opening sheet draws its quiet step fainter than the quiet step elsewhe
     assert.ok(faint < contrast(c.bus.c60, c.ground) && faint >= 1.6, `${theme}: fainter, still seen (${faint.toFixed(2)})`);
   }
   const { sheetStyle } = await import('../public/js/sheets/style.js');
+  const { evaluate } = await import('../public/js/evaluate.js');
   const bus1 = sheetStyle('dark').layers.find((l) => l.id === 'bus-1').paint['line-color'];
-  assert.equal(bus1[bus1.indexOf('c60') + 1], PALETTES.dark.busHairline, 'sheet 1 paints it');
+  assert.equal(evaluate(bus1, { props: { cls: 'c60' }, state: { bus: '', rail: '' } }), PALETTES.dark.busHairline, 'sheet 1 paints it');
 });
 
 test('in the dark a lifted line keeps its hue and stays a strong colour: red stays red, not salmon', async () => {
@@ -582,9 +602,12 @@ test('the page inks each line from the colours the build found: pale ones cased 
   assert.ok(light.findIndex((l) => l.id === 'rail-casing-2') < light.findIndex((l) => l.id === 'rail-2'), 'under the line');
   const dark = sheetStyle('dark', [], colors).layers;
   assert.ok(!dark.some((l) => l.id.startsWith('rail-casing')));
+  // With no route picked (style.js, PICKED), the line's own ink.
+  const { evaluate } = await import('../public/js/evaluate.js');
+  const unpicked = (expr, color) => evaluate(expr, { props: { color }, state: { bus: '', rail: '' } });
   const rail = dark.find((l) => l.id === 'rail-2').paint['line-color'];
-  assert.equal(rail[rail.indexOf('#552683') + 1], railInk('dark', '#552683').line, 'the dim purple is drawn lifted');
-  assert.deepEqual(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], ['get', 'color'], 'without the list, RTD\'s own colours');
+  assert.equal(unpicked(rail, '#552683'), railInk('dark', '#552683').line, 'the dim purple is drawn lifted');
+  assert.equal(unpicked(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], '#123456'), '#123456', 'without the list, RTD\'s own colours');
 });
 
 test('bus widths: the busiest as wide as rail and never wider, the middle step under it, the quiet step as before; the frequent steps read by a lit core, not width', async () => {

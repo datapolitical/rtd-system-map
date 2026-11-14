@@ -12,9 +12,10 @@
 // failed straight away), SUMMARY_FILE, RUN_URL, DRY_RUN (change nothing).
 // Writes outcome.json for the ledger and prints the Agent log line.
 //
-// The agent's own comments and issues are the ones that end with the
-// "Made by:" line (.github/daily/madeby); the checks it starts post as the
-// same bot without it, so they are not counted as its work. Its pushes are
+// The agent's own comments and issues are the ones the Actions bot posted
+// since the run began. The checks it starts post as the same bot, so they
+// count too (they were told apart by a "Made by:" line, dropped 2026-11-13
+// while the Agent workflow is off). Its pushes are
 // the branches GitHub Actions pushed during the run (the repo's activity
 // list), not every branch that moved: mini pushes too.
 //
@@ -70,7 +71,7 @@ try {
 const pushed = [...after].filter(([b, sha]) => b !== 'daily-ledger' && before.get(b) !== sha && (!byActions || byActions.has(b))).map(([branch, sha]) => ({ branch, sha }));
 
 // Comments and issues the agent made since it started.
-const mine = (x) => x.user?.login === 'github-actions[bot]' && x.created_at >= start && /\nMade by: /.test(x.body || '');
+const mine = (x) => x.user?.login === 'github-actions[bot]' && x.created_at >= start;
 const numberOf = (url) => Number(url.split('/').pop());
 const comments = start ? gh(`repos/${repo}/issues/comments?since=${start}&per_page=100`).filter(mine) : [];
 const filed = start ? gh(`repos/${repo}/issues?state=all&since=${start}&per_page=100`).filter((i) => !i.pull_request && mine(i)).map((i) => i.number) : [];

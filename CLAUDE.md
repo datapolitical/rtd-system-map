@@ -30,13 +30,16 @@ we are" section from them (closed issues show as done).
   reaches main on GitHub. Close it by hand if the work lands another way.
 - When something waits on Chris (a phone check, a decision, the go-ahead to
   publish), add the `needs Chris` label and say what is needed in a comment.
+- "Launch (v1.0)" holds what must be done before launch; the later
+  milestones (DESIGN.md, the roadmap after launch) hold what can wait. Put
+  new work in the one it belongs to, and ask Chris before adding to the
+  launch milestone.
+- Releases (DESIGN.md, "Launch and versions"): only after Chris signs off a
+  milestone, tag `main` with `git tag -a vX.Y`, push the tag, and run
+  `gh release create vX.Y --notes` listing the milestone's closed issues.
+  Never tag on your own judgment that a milestone is done.
 - New work gets its own issue in the right milestone. Add a line
   `Estimate: N min of agent time` to the body when you can guess one.
-- Say who did the work. Before committing or commenting, run
-  `source .github/daily/madeby/madeby.sh; made_by <model>` (`made_by Claude`
-  for Claude). It sets the commit author to the model, and `gh` then ends
-  each comment, issue and pull request with "Made by: ..." and adds the
-  `made by: free model`, `made by: DeepSeek` or `made by: Claude` label.
 - The repo is public. Keep issues about the map: no usage or budget numbers,
   no personal details.
 
@@ -72,11 +75,11 @@ we are" section from them (closed issues show as done).
   score goes up, update `qa/recall/baseline.json` in the same commit.
 - When you or Chris find a fault the checks missed, pin it in
   `qa/recall/finds.json` on the build it was seen on, then fix it.
-- A branch's preview runs `npm run check:map` against main's and posts a
-  commit status, `checks/map`, that fails when the branch adds a map fault
-  main doesn't have; the run's summary lists each with a link. Ask Chris for
-  a phone check only when `checks/map` passes, or when each new fault has an
-  answer in the issue (fixed, or why it is not a fault).
+- Branch previews no longer run the map checks: Chris turned the "Checks
+  (branch preview)" workflow off on 2026-11-13 because waiting on it slowed
+  work down. Don't wait for a `checks/map` status before merging or asking
+  for a phone check. The nightly run is only the live site's page health
+  check now; the other checks run only by hand.
 
 ## Status page
 

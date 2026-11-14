@@ -58,10 +58,6 @@ because of its name.
 
 ## Map changes
 
-- Your commits, comments and issues are credited to your model
-  automatically: the git author is set and `gh` adds a "Made by" line and
-  label. Do not set `git config user.name` or `user.email`, and do not pass
-  `--author`.
 - Push the branch (`git push -u origin <branch>`). Do not merge map
   changes to main.
 - Pushes made with the workflow token do not start other workflows, so

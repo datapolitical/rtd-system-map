@@ -2,6 +2,7 @@
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { SHEETS, sheetData, sheetStyle, PALETTES, GROUP } from './style.js';
+import { pickFrom, routeList } from './pick.js';
 import { settle } from './settle.js';
 
 // Start the map's worker downloading while the two small files below load.
@@ -40,10 +41,18 @@ const map = new maplibregl.Map({
   touchPitch: false,
   attributionControl: false,
   fadeDuration: 0,
+  // Room in the cache for every sheet's tiles around the view (warm, below), as well as the
+  // tiles of the places just looked at.
+  maxTileCacheZoomLevels: 12,
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
-scheme.addEventListener('change', () => { if (!forced) map.setStyle(sheetStyle(theme(), stations, colors, wanted)); });
+// A new theme is a new style; the picked route is set on it again (pick, below).
+scheme.addEventListener('change', () => {
+  if (forced) return;
+  map.setStyle(sheetStyle(theme(), stations, colors, wanted));
+  map.once('styledata', () => setPick(picked));
+});
 
 // --- The other sheets, once the first is drawn ----------------------------------
 
@@ -68,6 +77,76 @@ function fillIn() {
   map.on('sourcedata', done);
   want(next);
 }
+
+// --- The other sheets' tiles, before the reader steps ------------------------------
+
+// MapLibre makes a sheet's tiles only once the zoom reaches that sheet, so the first step to
+// each sheet showed bare ground for a moment (black in the dark theme) until they came. While
+// the map rests, every other sheet's tiles for this view are made and put in its cache, where
+// a step finds them. This reaches into MapLibre's tile managers: it has no way to ask for
+// another zoom's tiles. If they change, nothing breaks; the flash only comes back.
+const ready = new Set(wanted); // sheets whose drawing the map has, not the empty stand-in
+map.on('sourcedata', (e) => {
+  const n = Number(/^sheet-(\d+)$/.exec(e.sourceId ?? '')?.[1]);
+  if (e.sourceDataType !== 'content' || !wanted.has(n)) return;
+  ready.add(n);
+  tried.delete(map.style?.tileManagers?.[e.sourceId]); // new data empties the source's cache
+});
+let tried = new WeakMap(); // tile manager -> tiles asked for while the map has rested here
+map.on('movestart', () => { tried = new WeakMap(); });
+function warm() {
+  const managers = map.style?.tileManagers;
+  const sample = managers?.ground?.getTileByID(managers.ground.getIds()[0] ?? '');
+  if (!sample) return;
+  const [Tile, TileID] = [sample.constructor, sample.tileID.constructor];
+  // A step passes through every whole zoom between two sheets, and at each one the sheet whose
+  // band it is in shows, drawn from that zoom's tiles. All of them, nearest the map's first.
+  const here = map.getZoom();
+  const levels = [];
+  for (let t = zooms[0]; t <= zooms.at(-1); t++) levels.push(t);
+  levels.sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
+  for (const t of levels) {
+    const s = SHEETS.findLast((sh, i) => !i || sh.zoom - 1 <= t);
+    for (const id of ['ground', ...(ready.has(s.id) ? [`sheet-${s.id}`] : [])]) {
+      const tm = managers[id];
+      const source = tm?.getSource();
+      if (!source?.loadTile || !tm._outOfViewCache) continue;
+      if (!tried.has(tm)) tried.set(tm, new Set());
+      for (const [over, z, x, y] of cover(source, t)) {
+        const tileID = new TileID(over, 0, z, x, y);
+        if (tried.get(tm).has(tileID.key) || tm.getTileByID(tileID.key) || tm._outOfViewCache.has(tileID)) continue;
+        tried.get(tm).add(tileID.key);
+        // Made apart from the tiles in view, which the map's tidying would drop half-loaded,
+        // then put in the cache that a step takes its tiles from.
+        const tile = new Tile(tileID, source.tileSize * tileID.overscaleFactor());
+        Promise.resolve(source.loadTile(tile)).then(() => {
+          if (tile.hasData() && !tm.getTileByID(tileID.key) && !tm._outOfViewCache.has(tileID) && map.style?.tileManagers?.[id] === tm) {
+            tm._outOfViewCache.add(tileID, tile, tile.getExpiryTimeout());
+          } else source.unloadTile?.(tile);
+        }, () => {});
+      }
+    }
+  }
+}
+// The tiles a source draws a view at `zoom` from, about the map's centre, as MapLibre picks
+// them for a map that is never tilted or turned: [overscaled zoom, zoom, x, y].
+function cover(source, zoom) {
+  const want = Math.floor(zoom + Math.log2(512 / (source.tileSize || 512)));
+  const z = Math.max(source.minzoom ?? 0, Math.min(want, source.maxzoom ?? want));
+  const over = z === source.maxzoom ? Math.max(z, want) : z;
+  const n = 2 ** z;
+  const size = (512 * 2 ** zoom) / n; // a tile's width on screen at that zoom
+  const { lng, lat } = map.getCenter();
+  const cx = ((lng + 180) / 360) * n;
+  const cy = ((1 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / Math.PI) / 2) * n;
+  const { clientWidth: w, clientHeight: h } = map.getContainer();
+  const tiles = [];
+  for (let x = Math.floor(cx - w / 2 / size); x <= Math.floor(cx + w / 2 / size); x++) {
+    for (let y = Math.max(0, Math.floor(cy - h / 2 / size)); y <= Math.min(n - 1, Math.floor(cy + h / 2 / size)); y++) tiles.push([over, z, x, y]);
+  }
+  return tiles;
+}
+map.on('idle', warm);
 
 // --- Resting only on a sheet -------------------------------------------------
 
@@ -107,58 +186,112 @@ map.on('zoomend', (e) => {
   const box = map.getContainer().getBoundingClientRect();
   show(to, input.wheel ? map.unproject([input.wheel[0] - box.left, input.wheel[1] - box.top]) : undefined);
 });
-map.doubleClickZoom.disable();
-map.on('dblclick', (e) => show(sheet + 1, e.lngLat));
+// A double tap or double click shows the next sheet, about the point tapped. MapLibre's own
+// handlers recognise it (Safari never makes a dblclick of a double tap); the one-level step
+// they start is turned into the move to the next sheet straight away, so the map makes one
+// move, not two.
+map.on('zoomstart', (e) => {
+  const o = e.originalEvent;
+  if (e.settling || !o || !['touchend', 'dblclick'].includes(o.type)) return;
+  const p = o.changedTouches?.[0] ?? o;
+  const box = map.getContainer().getBoundingClientRect();
+  const around = map.unproject([p.clientX - box.left, p.clientY - box.top]);
+  began = null;
+  requestAnimationFrame(() => show(sheet + 1, around));
+});
 document.querySelector('#in').addEventListener('click', () => show(sheet + 1));
 document.querySelector('#out').addEventListener('click', () => show(sheet - 1));
 show(sheet);
 
 // --- What is this? Tap a line, a station or a stop --------------------------------
+// The card names what is under the finger; each route on it is a button, and picking one
+// highlights that route on every sheet, the rest faded (style.js, PICKED). A tap on empty
+// ground clears both.
 
 const card = document.querySelector('#card');
 const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
-function tell(title, note, rows = '', lead = '') {
-  card.innerHTML = `<b>${title}</b>${lead ? `<span>${esc(lead)}</span>` : ''}${rows}${note ? `<span>${esc(note)}</span>` : ''}`;
-  card.hidden = false;
+let picked = null; // { mode: 'bus' | 'rail', route }
+let shown = null; // what the card names: { title, note, routes: [{ mode, route, color }] }
+function setPick(p) {
+  picked = p;
+  map.setGlobalStateProperty('bus', p?.mode === 'bus' ? p.route : '');
+  map.setGlobalStateProperty('rail', p?.mode === 'rail' ? p.route : '');
+  window.sheetsPick = p;
+  document.documentElement.classList.toggle('picked', !!p);
+}
+function chip(r) {
+  const on = picked?.mode === r.mode && picked.route === r.route;
+  const look = r.mode === 'rail' ? ` style="background:${esc(r.color)};color:${esc(inkOn(r.color))}"` : '';
+  return `<button type="button" class="${r.mode}" data-mode="${r.mode}" data-route="${esc(r.route)}" aria-pressed="${on}"${look}>${esc(r.route)}</button>`;
 }
 // A stop group's rows ("X 1 15 | Y 10 28", scripts/lib/sheets.mjs, groupRows): each letter in a
-// square like the map's, then its routes.
-function groupRows(rows) {
-  const html = String(rows).split(' | ').map((row) => {
-    const [letter, ...routes] = row.split(' ');
-    return `<i>${esc(letter)}</i><em>${esc(routes.join(' '))}</em>`;
-  }).join('');
-  return `<div class="rows">${html}</div>`;
+// square like the map's, then its routes, each one a button like the card's other routes.
+const groupList = (rows) => String(rows ?? '').split(' | ').filter(Boolean).map((row) => {
+  const [letter, ...routes] = row.split(' ');
+  return { letter, routes: routes.filter(Boolean).map((route) => ({ mode: 'bus', route })) };
+});
+function tell(what) {
+  shown = what;
+  const { title, note, lead, groups = [] } = what;
+  const routes = [...(what.routes ?? []), ...groups.flatMap((g) => g.routes)];
+  const hint = routes.length ? (picked && routes.some((r) => r.mode === picked.mode && r.route === picked.route) ? 'Tap empty ground to clear' : `Tap ${routes.length > 1 ? 'a route' : 'it'} to show its whole way`) : '';
+  const rows = groups.length ? `<div class="rows">${groups.map((g) => `<i>${esc(g.letter)}</i><div class="routes">${g.routes.map(chip).join('')}</div>`).join('')}</div>` : '';
+  const list = what.routes?.length ? `${what.also ? `<span>${esc(what.also)}</span>` : ''}<div class="routes">${what.routes.map(chip).join('')}</div>` : '';
+  // A plain card says what it is before its routes; a stop-group card leads with its letters.
+  const said = note ? `<span>${esc(note)}</span>` : '';
+  card.innerHTML = `<b>${title}</b>${lead ? `<span>${esc(lead)}</span>` : ''}${groups.length ? '' : said}${rows}${list}${groups.length ? said : ''}${hint ? `<span class="hint">${hint}</span>` : ''}`;
+  card.hidden = false;
 }
+card.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-route]');
+  if (!b) return;
+  const p = { mode: b.dataset.mode, route: b.dataset.route };
+  setPick(picked?.mode === p.mode && picked.route === p.route ? null : p);
+  if (shown) tell(shown);
+});
+// Each line's colour, as the sheets draw it (a station lists its lines by letter only).
+const colorOf = new Map();
+map.on('idle', () => {
+  for (const f of map.querySourceFeatures(`sheet-${SHEETS[sheet].id}`, { filter: ['==', ['get', 'kind'], 'rail'] })) colorOf.set(f.properties.route, f.properties.color);
+});
+const rails = (list) => list.map((route) => ({ mode: 'rail', route, color: colorOf.get(route) ?? '#888888' }));
+const buses = (text) => routeList(text).map((route) => ({ mode: 'bus', route }));
 map.on('click', (e) => {
   const n = SHEETS[sheet].id;
   const reach = 9;
   const box = [[e.point.x - reach, e.point.y - reach], [e.point.x + reach, e.point.y + reach]];
   const hit = (ids) => map.queryRenderedFeatures(box, { layers: ids.map((id) => `${id}-${n}`).filter((id) => map.getLayer(id)) });
-  const table = hit(['group-area'])[0];
-  if (table) return tell(esc(table.properties.title), '', groupRows(table.properties.rows), 'Each stop serves the routes of its letter');
-  const station = hit(['station', 'name'])[0];
-  if (station) return tell(esc(station.properties.name), `Rail station · ${String(station.properties.lines).split(' ').join(', ')}`);
-  const rail = [...new Map(hit(['rail']).map((f) => [f.properties.route, f.properties])).values()];
-  if (rail.length) {
-    const bullets = rail.map((r) => `<i style="background:${esc(r.color)};color:${esc(inkOn(r.color))}">${esc(r.route)}</i>`).join('');
-    return tell(`${bullets}${rail.length > 1 ? 'Lines' : 'Line'}`, 'Rail');
+  for (const f of hit(['rail', 'letter'])) if (f.properties.color) colorOf.set(f.properties.route, f.properties.color);
+  // RTD's stop groups first: a table, a lettered stop, or a street whose stops are lettered lists
+  // its routes by the letter of the stop each one uses.
+  const table = hit(['group-area'])[0]?.properties;
+  if (table) return tell({ title: esc(table.title), lead: 'Each stop serves the routes of its letter', groups: groupList(table.rows) });
+  const station = hit(['station', 'name'])[0]?.properties;
+  const lettered = station ? null : hit(['group-stop', 'stop-letter'])[0]?.properties;
+  if (lettered?.letter) {
+    return tell({ title: esc(lettered.name), note: `Bus stop ${lettered.letter}${lettered.heading ? ` · ${lettered.heading}` : ''}`,
+      groups: groupList(`${lettered.letter} ${routeList(lettered.routes).join(' ')}`) });
   }
-  const stop = hit(['group-stop', 'stop', 'stop-letter'])[0];
-  if (stop?.properties.letter) {
-    const q = stop.properties;
-    return tell(esc(q.name), `Bus stop ${q.letter}${q.heading ? ` · ${q.heading}` : ''}`, groupRows(`${q.letter} ${String(q.routes).split(', ').join(' ')}`));
+  const bus = hit(['bus', 'pick-bus']).map((f) => f.properties).sort((a, b) => b.n - a.n)[0];
+  const what = pickFrom({
+    station,
+    letter: hit(['letter'])[0]?.properties,
+    rail: [...new Map(hit(['rail']).map((f) => [f.properties.route, f.properties])).values()],
+    stop: hit(['stop'])[0]?.properties,
+    label: hit(['bus-number', 'bus-stack'])[0]?.properties,
+    bus,
+  });
+  if (!what) {
+    card.hidden = true;
+    shown = null;
+    setPick(null);
+    return;
   }
-  if (stop) return tell(esc(stop.properties.name), `Bus stop · ${stop.properties.heading ?? ''} · ${stop.properties.routes}`.replace(' ·  · ', ' · '));
-  const bus = hit(['bus']).sort((a, b) => b.properties.n - a.properties.n)[0];
-  if (bus) {
-    const q = bus.properties;
-    const often = q.hw ? `A bus about every ${Math.round(q.hw)} minutes on this street, weekday midday` : '';
-    // On a street RTD letters its stops by, its routes by the letter of the stop each one uses.
-    if (q.groups) return tell(esc(q.street), [q.others && `Also on this street: ${q.others}`, often].filter(Boolean).join(' · '), groupRows(q.groups), 'Routes by the letter of their stop');
-    return tell(`${q.n > 1 ? 'Routes' : 'Route'} ${esc(q.routes)}`, often || 'Bus');
+  if (what.bus === bus?.routes && bus?.groups) {
+    return tell({ title: esc(bus.street), lead: 'Routes by the letter of their stop', groups: groupList(bus.groups),
+      routes: buses(bus.others ?? ''), also: bus.others ? 'Also on this street' : '', note: what.note === 'Bus' ? '' : what.note });
   }
-  card.hidden = true;
+  tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
 });
 map.on('dragstart', () => { card.hidden = true; });
 function inkOn(color) {
@@ -178,6 +311,8 @@ function reveal() {
   setTimeout(() => poster.remove(), 300);
 }
 for (const button of document.querySelectorAll('#steps button')) button.addEventListener('click', reveal);
+// A pinch, drag or double tap reaches the map through the picture (index.html), and moves it.
+map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 
 // The opening view is drawn: then the other sheets (sheetsAll once they all have).
 map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });

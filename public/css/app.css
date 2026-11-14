@@ -62,6 +62,9 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* Nothing that reads as a browser (DESIGN.md): no pull-to-refresh or bounce, no gray tap flash. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
   background: var(--page);
   color: var(--ink);
   font: 15px/1.4 var(--font);
@@ -71,6 +74,11 @@ body {
 #map {
   position: absolute;
   inset: 0;
+}
+
+/* No wait for a second tap on a control. */
+button {
+  touch-action: manipulation;
 }
 
 :focus-visible {

@@ -1,12 +1,11 @@
-# The nightly watchdog: the fast browser checks (qa/checks/) against the live
-# site, so faults are found before a rider does, and each failing spec gets an
-# issue labelled "found by checks" with its findings and a link to the run.
-# When a spec passes again, its issue is commented on and closed. The checks
-# read the site's own data (CHECK_URL), so there is no build or server here.
-# visual.spec.mjs compares against the -linux.png baselines in the tree, which
-# were captured on this runner; @deep stays out for now (DESIGN.md, "Design
-# review rubric"; this file's sibling checks-preview.yml runs the same set on
-# every branch preview).
+# The nightly watchdog: the live site rebuilds from RTD's data with nobody
+# watching, so each night the page health check (qa/checks/health.spec.mjs)
+# loads it and fails on a console error, a failed request or a style error.
+# A failure opens an issue labelled "found by checks" with a link to the run;
+# a pass closes it. The other browser checks and the map checks no longer run
+# here: Chris stopped them on 2026-11-13 because they failed every night
+# without finding faults he hadn't, and slowed work down. They can still be
+# run by hand (npm run check, npm run check:map).
 name: Checks (nightly)
 
 on:
@@ -29,7 +28,7 @@ jobs:
     # Pinned: Playwright 1.55.1 has no build for Ubuntu 26.04, which
     # ubuntu-latest now is.
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -38,16 +37,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run the fast checks against the live site
+      - name: The page health check against the live site
         env:
           CHECK_URL: https://rtd-system-map.pages.dev
           CHECK_JSON: qa/report/results.json
-        run: npm run check
-      - name: The map checks on the live site (npm run check:map)
-        if: always()
-        env:
-          CHECK_URL: https://rtd-system-map.pages.dev
-        run: node qa/checks/report.mjs --out qa/findings
+        run: npx playwright test -c qa/playwright.config.mjs health --grep-invert @deep
       - name: Upload the report and captures
         if: always()
         uses: actions/upload-artifact@v7
@@ -56,7 +50,6 @@ jobs:
           path: |
             qa/report/
             qa/checks/out/
-            qa/findings/
           if-no-files-found: warn
       - name: Open, comment on or close the issue for each spec
         if: always() && github.ref_name == 'main'
