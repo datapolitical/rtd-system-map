@@ -4765,6 +4765,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   kept street (#136). Before, a block of two streets side by side put
   routes on kilometres of street they never use (route 1 on Colfax from
   Federal to downtown).
+- 2026-11-14: Sheets offline after one visit, for real (#133). The map's
+  drawing worker starts before the service worker exists, so on a first
+  visit its fetches (every sheet's drawing, the basemap tiles) never reached
+  the cache and the page opened offline only after a second visit. The page
+  now names them to the service worker: all four sheets, and the basemap
+  tiles of every sheet around each view it rests at during that first visit.
 
 ## Sources
 

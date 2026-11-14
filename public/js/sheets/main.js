@@ -399,21 +399,44 @@ map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });
 // Asked for only once the opening view is drawn, so it never slows it (DESIGN.md, "Quality
 // floor"). On the first visit the files already fetched are handed to it to keep; from then on
 // it sees every request itself.
+//
+// Not quite every request on that first visit: the map's drawing worker was started before the
+// service worker existed, so what it fetches (each sheet's drawing and the basemap's tiles) never
+// passes through the service worker, and the page's list of what it fetched doesn't hold it
+// either (#133). So the page names those itself: every sheet's drawing, and the basemap tiles
+// of each sheet around every view the map rests at, until the visit ends.
+const firstVisit = 'serviceWorker' in navigator && !navigator.serviceWorker.controller;
+// The basemap tiles every sheet draws this view from: the ones in view and the ones warm() makes.
+function groundTiles() {
+  const source = map.getSource('ground');
+  const template = source?.tiles?.[0];
+  if (!template) return [];
+  const urls = new Set();
+  const add = (z, x, y) => urls.add(template.replace('{z}', z).replace('{x}', x).replace('{y}', y));
+  for (const key of map.style?.tileManagers?.ground?.getIds() ?? []) {
+    const c = map.style.tileManagers.ground.getTileByID(key)?.tileID?.canonical;
+    if (c) add(c.z, c.x, c.y);
+  }
+  for (let t = zooms[0]; t <= zooms.at(-1); t++) for (const [, z, x, y] of cover(source, t)) add(z, x, y);
+  return [...urls];
+}
 if ('serviceWorker' in navigator) {
   map.once('idle', async () => {
     try {
       await navigator.serviceWorker.register(new URL('../../sw.js', import.meta.url), { scope: new URL('../../', import.meta.url).pathname });
       const reg = await navigator.serviceWorker.ready;
       let sent = 0;
-      const hand = () => {
+      const hand = (more = []) => {
         const entries = performance.getEntriesByType('resource');
-        const urls = [new URL('../../', import.meta.url).href, ...entries.slice(sent).map((e) => e.name)];
+        const urls = [new URL('../../', import.meta.url).href, ...entries.slice(sent).map((e) => e.name), ...more];
         sent = entries.length;
         reg.active?.postMessage({ type: 'keep', urls });
       };
-      hand();
+      hand(firstVisit ? [...SHEETS.map((s) => sheetData(s.id)), ...groundTiles()] : []);
       // What came in between, until the worker sees requests itself.
-      if (!navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', hand, { once: true });
+      if (!navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', () => hand(), { once: true });
+      // The drawing worker never comes under it on this visit, so the tiles of each new view are named too.
+      if (firstVisit) map.on('idle', () => hand(groundTiles()));
     } catch { /* no offline copy: the page works as before */ }
   });
 }
