@@ -41,6 +41,7 @@
 <link rel="modulepreload" href="/js/sheets/settle.js">
 <link rel="modulepreload" href="/js/sheets/pick.js">
 <link rel="modulepreload" href="/js/sheets/address.js">
+<link rel="modulepreload" href="/js/sheets/say.js">
 <link rel="preload" href="/data/meta.json" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="/data/sheets.json" as="fetch" crossorigin="anonymous">
 <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
@@ -53,9 +54,11 @@
 <link rel="preload" href="/vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
   @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: block; }
-  :root { --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; }
-  @media (prefers-color-scheme: dark) { :root { --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; } }
+  /* --note is the card's and the credit's quieter text, and --rim a route button's ring: AA on the card and the ground in both themes (#14). */
+  :root { --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; --note: #656a74; --rim: #8b8f98; }
+  @media (prefers-color-scheme: dark) { :root { --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; --note: #8592a6; --rim: #6c7890; } }
   html, body, #map { margin: 0; height: 100%; background: var(--ground); }
+  main { position: absolute; inset: 0; }
   /* A pinch or double tap on the map is the map's, never the page's, even before the map script has run. */
   #map { touch-action: none; }
   /* Nothing that reads as a browser (DESIGN.md): no pull-to-refresh or bounce (iOS needs it on html too), no gray tap flash. */
@@ -65,20 +68,27 @@
     background: var(--card); border-radius: 22px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); -webkit-touch-callout: none; user-select: none; }
   #steps button { all: unset; touch-action: manipulation; width: 44px; height: 44px; text-align: center; font-size: 24px; line-height: 44px; color: var(--ink); cursor: pointer; }
   #steps button:disabled { color: var(--quiet); opacity: 0.5; }
+  #steps button:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; border-radius: 22px; }
+  /* Said to a screen reader, not shown. */
+  .sr, #card .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   #sheets { display: flex; gap: 6px; padding: 0 2px; }
   #sheets i { width: 5px; height: 5px; border-radius: 50%; background: var(--quiet); opacity: 0.5; }
   #sheets i.on { background: var(--ink); opacity: 1; }
-  #credit { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--quiet); padding: 2px 6px; margin-left: -6px; border-radius: 8px; background: color-mix(in srgb, var(--ground) 82%, transparent); }
+  #credit { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--note); padding: 2px 6px; margin-left: -6px; border-radius: 8px; background: color-mix(in srgb, var(--ground) 82%, transparent); }
   #credit a { color: inherit; }
   #card { position: absolute; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: max(84px, calc(env(safe-area-inset-bottom) + 76px)); max-width: 420px; padding: 12px 14px; background: var(--card); color: var(--ink);
     border-radius: 14px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); }
   #card[hidden] { display: none; }
-  #card b { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; }
-  #card span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--quiet); line-height: 1.3; }
+  #card b { display: block; padding-right: 26px; font-size: 15px; font-weight: 700; line-height: 1.25; }
+  #card span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--note); line-height: 1.3; }
+  /* Closes the card as a tap on empty ground does, without having to find empty ground. */
+  #card button.close { all: unset; position: absolute; top: 4px; right: 4px; width: 36px; height: 36px; border-radius: 18px; text-align: center;
+    font-size: 22px; line-height: 36px; color: var(--note); cursor: pointer; touch-action: manipulation; }
+  #card button.close:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
   /* Each route on the card is a button: picking one draws it whole on every sheet, the rest faded (js/sheets/main.js). */
   #card .routes { display: flex; flex-wrap: wrap; gap: 6px; margin: 5px -4px 0; padding: 4px; max-height: 128px; overflow-y: auto; }
   #card .routes button { all: unset; box-sizing: border-box; touch-action: manipulation; cursor: pointer; min-width: 36px; height: 32px; padding: 0 10px; border-radius: 16px;
-    text-align: center; font-size: 14px; font-weight: 700; line-height: 33px; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--quiet); font-variant-numeric: tabular-nums; }
+    text-align: center; font-size: 14px; font-weight: 700; line-height: 33px; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--rim); font-variant-numeric: tabular-nums; }
   #card .routes button.rail { min-width: 32px; padding: 0; box-shadow: none; font-weight: 800; }
   #card .routes button[aria-pressed="true"] { background: var(--ink); color: var(--card); box-shadow: none; }
   #card .routes button.rail[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink); }
@@ -86,6 +96,7 @@
   /* In a stop-group row the routes sit beside their letter, a row of the same buttons. */
   #card .rows .routes { margin: 0; padding: 2px; max-height: none; gap: 5px; }
   #card span.hint { margin-top: 4px; font-size: 11.5px; }
+  #card span.hint:empty { display: none; }
   #card i { display: inline-block; min-width: 1.5em; height: 1.5em; margin-right: 6px; border-radius: 0.75em; text-align: center; font-style: normal; line-height: 1.55em; }
   /* A stop group's routes, a row per letter: the letter in a small square of ink, as on the map. */
   #card .rows { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 5px 8px; margin-top: 8px; font-size: 14px; font-weight: 600; }
@@ -106,7 +117,10 @@
 </style>
 </head>
 <body>
+<main>
 <div id="map"></div>
+<!-- What a tap names. Next after the map, so a screen reader reaches it from there (#14). -->
+<div id="card" role="region" aria-labelledby="card-title" hidden></div>
 <div id="poster" data-view="10/39.7192/-105.0018" data-bounds="-105.8841,39.1565,-104.3693,40.5067">
   <picture>
     <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
@@ -149,11 +163,12 @@
 <div id="steps" role="group" aria-label="Map sheet">
   <!-- As the page opens, on the widest sheet; the script sets these for a link to another. -->
   <button id="out" aria-label="Wider sheet" disabled>&minus;</button>
-  <div id="sheets" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
+  <div id="sheets" role="img" aria-label="Sheet 1 of 4"><i class="on"></i><i></i><i></i><i></i></div>
   <button id="in" aria-label="Closer sheet">+</button>
 </div>
-<div id="card" role="status" hidden></div>
-<div id="credit">Unofficial. Data: RTD · <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · <a href="https://openfreemap.org">OpenFreeMap</a></div>
+<p id="say" class="sr" role="status"></p>
+</main>
+<footer id="credit">Unofficial. Data: RTD · <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · <a href="https://openfreemap.org">OpenFreeMap</a></footer>
 <script type="module" src="/js/sheets/main.js"></script>
 </body>
 </html>

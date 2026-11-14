@@ -5,6 +5,7 @@ import { SHEETS, sheetData, sheetStyle, PALETTES, GROUP } from './style.js';
 import { pickFrom, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
+import { routeName, sheetName, pickSaid, cardSaid, inkOn } from './say.js';
 
 // Start the map's worker downloading while the two small files below load.
 maplibregl.prewarm();
@@ -48,6 +49,8 @@ const map = new maplibregl.Map({
   touchPitch: false,
   attributionControl: false,
   fadeDuration: 0,
+  // What a screen reader calls the map (#14). Its canvas takes focus, and Tab moves on from it.
+  locale: { 'Map.Title': 'Map of RTD bus and rail service. Tap a line, a station or a stop to hear what it is' },
   // Room in the cache for every sheet's tiles around the view (warm, below), as well as the
   // tiles of the places just looked at.
   maxTileCacheZoomLevels: 12,
@@ -161,8 +164,22 @@ let sheet = nearest(map.getZoom());
 function nearest(zoom) {
   return zooms.reduce((best, z, i) => (Math.abs(z - zoom) < Math.abs(zooms[best] - zoom) ? i : best), 0);
 }
+// A screen reader hears what changed (#14): a sheet, a card, a pick. Cleared first, so the same
+// words said twice are said again.
+const voice = document.querySelector('#say');
+let quiet = 0;
+function say(text) {
+  if (!voice) return;
+  voice.textContent = '';
+  clearTimeout(quiet);
+  quiet = setTimeout(() => { voice.textContent = text; }, 60);
+}
 function show(index, around) {
+  const was = sheet;
   sheet = Math.max(0, Math.min(zooms.length - 1, index));
+  const dots = document.querySelector('#sheets');
+  dots.setAttribute('aria-label', sheetName(sheet, zooms.length));
+  if (sheet !== was) say(sheetName(sheet, zooms.length));
   want(sheet);
   map.easeTo({ zoom: zooms[sheet], around, duration: 380 }, { settling: true });
   for (const [i, dot] of [...document.querySelectorAll('#sheets i')].entries()) dot.classList.toggle('on', i === sheet);
@@ -230,7 +247,7 @@ function setPick(p) {
 function chip(r) {
   const on = picked?.mode === r.mode && picked.route === r.route;
   const look = r.mode === 'rail' ? ` style="background:${esc(r.color)};color:${esc(inkOn(r.color))}"` : '';
-  return `<button type="button" class="${r.mode}" data-mode="${r.mode}" data-route="${esc(r.route)}" aria-pressed="${on}"${look}>${esc(r.route)}</button>`;
+  return `<button type="button" class="${r.mode}" data-mode="${r.mode}" data-route="${esc(r.route)}" aria-label="${esc(routeName(r))}" aria-pressed="${on}"${look}>${esc(r.route)}</button>`;
 }
 // A stop group's rows ("X 1 15 | Y 10 28", scripts/lib/sheets.mjs, groupRows): each letter in a
 // square like the map's, then its routes, each one a button like the card's other routes.
@@ -238,25 +255,48 @@ const groupList = (rows) => String(rows ?? '').split(' | ').filter(Boolean).map(
   const [letter, ...routes] = row.split(' ');
   return { letter, routes: routes.filter(Boolean).map((route) => ({ mode: 'bus', route })) };
 });
+const routesOf = (what) => [...(what.routes ?? []), ...(what.groups ?? []).flatMap((g) => g.routes)];
+function hintFor(routes) {
+  if (!routes.length) return '';
+  return picked && routes.some((r) => r.mode === picked.mode && r.route === picked.route) ? 'Tap empty ground to clear' : `Tap ${routes.length > 1 ? 'a route' : 'it'} to show its whole way`;
+}
 function tell(what) {
   shown = what;
   const { title, note, lead, groups = [] } = what;
-  const routes = [...(what.routes ?? []), ...groups.flatMap((g) => g.routes)];
-  const hint = routes.length ? (picked && routes.some((r) => r.mode === picked.mode && r.route === picked.route) ? 'Tap empty ground to clear' : `Tap ${routes.length > 1 ? 'a route' : 'it'} to show its whole way`) : '';
-  const rows = groups.length ? `<div class="rows">${groups.map((g) => `<i>${esc(g.letter)}</i><div class="routes">${g.routes.map(chip).join('')}</div>`).join('')}</div>` : '';
+  const routes = routesOf(what);
+  const hint = hintFor(routes);
+  // Each letter is said as its stop ("Stop A"), then its routes.
+  const rows = groups.length ? `<div class="rows">${groups.map((g) => `<i><span class="sr">Stop </span>${esc(g.letter)}</i><div class="routes">${g.routes.map(chip).join('')}</div>`).join('')}</div>` : '';
   const list = what.routes?.length ? `${what.also ? `<span>${esc(what.also)}</span>` : ''}<div class="routes">${what.routes.map(chip).join('')}</div>` : '';
   // A plain card says what it is before its routes; a stop-group card leads with its letters.
   const said = note ? `<span>${esc(note)}</span>` : '';
-  card.innerHTML = `<b>${title}</b>${lead ? `<span>${esc(lead)}</span>` : ''}${groups.length ? '' : said}${rows}${list}${groups.length ? said : ''}${hint ? `<span class="hint">${hint}</span>` : ''}`;
+  card.innerHTML = `<b id="card-title" role="heading" aria-level="2">${title}</b>${lead ? `<span>${esc(lead)}</span>` : ''}${groups.length ? '' : said}${rows}${list}${groups.length ? said : ''}<span class="hint">${hint}</span>`
+    + '<button type="button" class="close" aria-label="Close">\u00d7</button>';
   card.hidden = false;
+  say(cardSaid({ title: card.querySelector('#card-title').textContent, note, lead, routes }));
+}
+// Closing the card is a tap on empty ground: the card goes, and so does a pick.
+function close({ focus = false } = {}) {
+  if (card.hidden) return;
+  card.hidden = true;
+  shown = null;
+  if (picked) { setPick(null); say(pickSaid(null)); }
+  if (focus) map.getCanvas().focus({ preventScroll: true });
 }
 card.addEventListener('click', (e) => {
+  if (e.target.closest('button.close')) return close({ focus: true });
   const b = e.target.closest('button[data-route]');
   if (!b) return;
   const p = { mode: b.dataset.mode, route: b.dataset.route };
   setPick(picked?.mode === p.mode && picked.route === p.route ? null : p);
-  if (shown) tell(shown);
+  say(pickSaid(picked));
+  // Changed in place, so the button pressed keeps its focus (and a screen reader its place).
+  for (const other of card.querySelectorAll('button[data-route]')) {
+    other.setAttribute('aria-pressed', String(picked?.mode === other.dataset.mode && picked.route === other.dataset.route));
+  }
+  if (shown) card.querySelector('.hint').textContent = hintFor(routesOf(shown));
 });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') close({ focus: card.contains(document.activeElement) }); });
 // Each line's colour, as the sheets draw it (a station lists its lines by letter only).
 const colorOf = new Map();
 map.on('idle', () => {
@@ -292,6 +332,7 @@ map.on('click', (e) => {
   if (!what) {
     card.hidden = true;
     shown = null;
+    if (picked) say(pickSaid(null));
     setPick(null);
     return;
   }
@@ -302,10 +343,6 @@ map.on('click', (e) => {
   tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
 });
 map.on('dragstart', () => { card.hidden = true; });
-function inkOn(color) {
-  const [r, g, b] = [1, 3, 5].map((at) => parseInt(String(color).slice(at, at + 2), 16) / 255);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#10151d' : '#ffffff';
-}
 
 // --- The address is the share link (address.js) ----------------------------------
 // It holds the sheet, the centre and the picked route, rewritten in place as the map comes to
@@ -348,6 +385,7 @@ const poster = document.querySelector('#poster');
 function reveal() {
   if (!poster?.isConnected || poster.classList.contains('gone')) return;
   poster.classList.add('gone');
+  poster.setAttribute('aria-hidden', 'true');
   setTimeout(() => poster.remove(), 300);
 }
 for (const button of document.querySelectorAll('#steps button')) button.addEventListener('click', reveal);

@@ -164,6 +164,10 @@ test("when OpenStreetMap doesn't answer, the hall is the last build's, its stops
   assert.equal(today.gate.properties.terminal, 1);
   assert.equal(today.gate.properties.gate, 1);
   assert.ok(!today.street.properties.terminal, 'a stop outside the hall is still a street stop');
+  // Its roof comes back with it, and another hall's doesn't (#69).
+  const roof = (terminal) => ({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [hall] }, properties: { kind: 'canopy', terminal, station: '' } });
+  const roofed = await terminalFootprints({ facilities: [facility], indexes: [0], stops: Object.values(stops()), previous, previousRoofs: [roof('7'), roof('8')], fetchText: down, log: () => {} });
+  assert.deepEqual(roofed.canopies, [roof('7')]);
   // With no build before either, the hall is lost, and said so.
   const none = await terminalFootprints({ facilities: [facility], indexes: [0], stops: Object.values(stops()), fetchText: down, log: () => {} });
   assert.equal(none.terminals.size, 0);

@@ -303,6 +303,22 @@ The build checks the data before it deploys:
 - Every rail line has a color.
 - At least half of the map's stations have trains (see "Station service").
 
+OpenStreetMap's shapes are checked the same way (#69). A station or hall whose
+box OSM doesn't answer for (an error or a timeout) keeps the last good build's
+shapes, roofs included: this folder's, or on a fresh checkout (every
+Cloudflare build) the published site's. The count checks compare with the
+same last good build. So OSM being down costs nothing, and a build fails when:
+
+- OSM answers with much less than before: the stations' shapes (platforms,
+  canopies, buildings, hall roofs) or the bus halls, above or below ground,
+  fall by more than 30% or to none.
+- OSM is down and there is no last build to fall back on either.
+
+A smaller change, such as one station's platforms redrawn or removed in OSM,
+is taken as a change in the place and drawn. The drills are in
+`qa/drills/mock-fetch.mjs` (`DRILL=osm-down`, `osm-empty`, `osm-half`,
+`osm-down-cold`).
+
 If any check fails, the build fails, and Cloudflare keeps serving the last good
 version. The live `meta.json` still shows the old versions, so the next hourly
 check tries again. A temporary outage at RTD therefore fixes itself.
@@ -473,8 +489,21 @@ drawn side by side, never on top of each other.
 
 ## Data
 
-All data is public and comes from RTD. Nothing depends on a private key, a
-private server, or the departures project on mini.
+All data is public. The network, its schedules and its live trains come from
+RTD. Two things come from OpenStreetMap:
+
+- **The basemap** (streets, water, parks, place names), as OpenFreeMap's
+  vector tiles, read by the page ("Basemap").
+- **The shapes of stations**, read by the build from OpenStreetMap's map API
+  (`api.openstreetmap.org/api/0.6/map`, a box around each station): rail
+  platforms, the canopies over them and station buildings
+  (`scripts/lib/structures.mjs`, "Stations"), and the halls of RTD's bus
+  stations with their roofs (`scripts/lib/footprints.mjs`, "Terminals").
+  Nothing about a station's shape is written down here: a station draws what
+  OSM has, and one with nothing in OSM is drawn from RTD's data alone.
+
+Nothing depends on a private key, a private server, or the departures project
+on mini. The credit names both sources.
 
 ### Map geometry: RTD's own system map
 
@@ -2818,7 +2847,20 @@ are deferred, not ruled out. See "Open questions".
   delaying later loads. The Live relay and other pages are never touched.
 - **Accessibility:** WCAG AA contrast for text, visible keyboard focus, every
   action reachable by keyboard, motion reduced when the user prefers it, and
-  nothing identified by color alone.
+  nothing identified by color alone. On the sheets page (#14) a screen reader
+  hears it all: the map's canvas is labelled and Tab moves on from it; the
+  − / + buttons are named, and the dots between them say "Sheet 2 of 4";
+  each route button on the card is "Route 15" or "W Line", pressed or not,
+  and each stop letter is "Stop A" before its routes. The card is a region
+  with a heading, next after the map, and a polite live region says what
+  changed: the card's title and how many routes it offers when it opens, the
+  sheet on a step, "Route 15 shown, the rest faded" or "Cleared". A × in the
+  card's corner (or Esc) closes it as a tap on empty ground does, and
+  returns focus to the map. The card's quieter text (`--note`) and a route
+  button's ring (`--rim`) meet AA (4.5:1 and 3:1) in both themes; a line's
+  label on the card takes whichever of near-black and white reads better on
+  its colour. `qa/a11y.mjs` checks the tree, axe-core and the live region in
+  headless Chromium; a real VoiceOver pass on a phone is a person's check.
 - **Resilience:** if the live feed fails, the map still works and says live
   data is unavailable. If ArcGIS is down, the site uses the last built
   snapshot.
@@ -4707,6 +4749,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   network-first for the page's own files so a deploy is never held back,
   cache-first for basemap tiles (versioned addresses), registered after the
   first draw so the first load is no slower.
+- 2026-11-14: OpenStreetMap is named as a data source (#69): the basemap
+  and the stations' shapes. Its shapes join the count checks, which now
+  compare with the published site's counts on a fresh checkout (before, a
+  Cloudflare build had nothing to compare with and skipped them), and a hall
+  kept from the last build keeps its roof. OSM down falls back; OSM
+  answering with less than 70% of last time, or nothing, fails the build.
+- 2026-11-14: Screen reader pass on the sheets page (#14): named controls,
+  "Sheet N of 4", "Route 15" buttons, "Stop A" letters, a live region for
+  the card, steps and picks, a close button on the card, and AA tokens for
+  the card's quieter text (`--note`) and route rings (`--rim`).
 
 ## Sources
 
