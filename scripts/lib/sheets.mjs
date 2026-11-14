@@ -1799,9 +1799,22 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
       i = j;
     }
     if (!folded.includes(true)) { keep(e); continue; }
-    for (const into of new Set(hits.filter((h, i) => h && folded[i]).map((h) => h.e))) {
-      const routes = [...new Set(`${into.routes} ${e.routes}`.split(' '))];
-      [into.routes, into.n] = [routes.join(' '), Math.max(into.n, routes.length)];
+    // The routes join the kept street only along the stretch they were folded into, not the
+    // whole of it: a block of two streets side by side near Federal would otherwise put route 1
+    // on two kilometres of Colfax it never runs on (#136). The kept street is cut there below.
+    for (let i = 0; i < pts.length;) {
+      let j = i;
+      while (j < pts.length && folded[j] === folded[i]) j++;
+      if (folded[i]) {
+        const span = new Map(); // street folded into -> [first, last] of its points beside this run
+        for (let k = i; k < j; k++) {
+          const h = hits[k];
+          const [lo, hi] = span.get(h.e) ?? [h.i, h.i];
+          span.set(h.e, [Math.min(lo, h.i), Math.max(hi, h.i)]);
+        }
+        for (const [into, [lo, hi]] of span) (into.adds ??= []).push({ lo, hi, routes: e.routes });
+      }
+      i = j;
     }
     // The street kept is drawn midway between the two, so the two halves of a divided road
     // make one straight line down its middle and not a line that hops from side to side.
@@ -1832,6 +1845,34 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
       return lerp(w.p, mid, 0.5);
     });
   }
+  // A kept street that took routes along part of its length is cut where the list changes, so
+  // each piece carries its own routes. A tail still finds its point on the street it was joined
+  // to (`moved` of the street before the cut), and the cut ends meet at one corner below.
+  for (const e of [...kept]) {
+    if (!e.adds) continue;
+    const base = e.routes.split(' ');
+    const at = e.pts.map((_, i) => {
+      const routes = new Set(base);
+      for (const a of e.adds) if (i >= a.lo && i <= a.hi) for (const r of a.routes.split(' ')) routes.add(r);
+      return [...routes].join(' ');
+    });
+    const pieces = [];
+    for (let i = 0; i < at.length;) {
+      let j = i;
+      while (j < at.length && at[j] === at[i]) j++;
+      // Each piece runs to the first point of the next, so the pieces meet.
+      pieces.push({ from: i, to: Math.min(j, at.length - 1), routes: at[i] });
+      i = j;
+    }
+    const routesOf = (p) => p.routes.split(' ').length;
+    const cut = pieces.filter((p) => p.to > p.from).map((p) => ({
+      ...e, origin: e, routes: p.routes, n: Math.max(e.n, routesOf(p)),
+      pts: e.pts.slice(p.from, p.to + 1), moved: e.moved.slice(p.from, p.to + 1),
+      tails: e.tails.filter((t) => (t.end === 0 && p.from === 0) || (t.end === 1 && p.to === e.pts.length - 1)),
+    }));
+    if (cut.length) kept.splice(kept.indexOf(e), 1, ...cut);
+    else e.routes = at[0];
+  }
   const corners = new Map();
   for (const e of kept) for (const i of [0, e.pts.length - 1]) {
     const k = key(e.pts[i].p);
@@ -1853,7 +1894,7 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
       if (corners.get(key(e.pts[i].p)).length > 1 || e.tails.some((tl) => tl.end === end)) return false;
       const p = e.pts[i].p;
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-        if ((grid.get(at(p, dx, dy)) ?? []).some((hit) => hit.e !== e && dist(hit.p, p) <= cell)) return false;
+        if ((grid.get(at(p, dx, dy)) ?? []).some((hit) => hit.e !== (e.origin ?? e) && dist(hit.p, p) <= cell)) return false;
       }
       return true;
     });

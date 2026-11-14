@@ -337,6 +337,21 @@ test('a turnaround drawn as a loop too slim to see into is one street out to its
   assert.equal(loop, round);
 });
 
+test('a street folded into a near one gives it its routes only where the two run together, not along the whole of it', () => {
+  const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  // Route 2 comes in, runs a block four pixels beside the street route 1 runs the length of, and leaves again (#136).
+  const drawn = busStreets(all([
+    street('c15', '1', [at(0, 0), at(600, 0)]),
+    street('c60', '2', [at(250, 80), at(250, 4)]),
+    street('c60', '2', [at(250, 4), at(350, 4)]),
+    street('c60', '2', [at(350, 4), at(350, 80)]),
+  ]), sheet);
+  const on = (x) => drawn.filter((s) => s.path.some((p) => Math.abs(p[1] - origin[1]) < 1) && length(s.path) > 0 &&
+    Math.min(...s.path.map((p) => p[0] - origin[0])) <= x && Math.max(...s.path.map((p) => p[0] - origin[0])) >= x);
+  for (const x of [50, 150, 450, 550]) assert.deepEqual(on(x).flatMap((s) => s.routes.split(' ')), ['1'], `only route 1 at ${x}`);
+  assert.deepEqual(on(300).flatMap((s) => s.routes.split(' ')).sort(), ['1', '2'], 'both where they run together');
+});
+
 test('two near streets tied by short links are drawn as one, and a small square block between through streets is kept', () => {
   const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
   // A ladder on the widest sheet: two streets five pixels apart, a link between them every sixty.

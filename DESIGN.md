@@ -2197,7 +2197,8 @@ How it is built:
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
-  that carries the routes of both.
+  that carries the routes of both, only along the stretch where they run
+  together.
   `test/sheets.test.mjs` holds the rules.
 - **Bus stations are rooms.** Where buses go indoors (the halls in
   `terminals.geojson`) RTD's route lines stop at the door. A hall at least
@@ -4759,6 +4760,11 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   "Sheet N of 4", "Route 15" buttons, "Stop A" letters, a live region for
   the card, steps and picks, a close button on the card, and AA tokens for
   the card's quieter text (`--note`) and route rings (`--rim`).
+- 2026-11-14: Sheets: a street folded into a nearby one adds its routes
+  only along the stretch where the two run together, not along the whole
+  kept street (#136). Before, a block of two streets side by side put
+  routes on kilometres of street they never use (route 1 on Colfax from
+  Federal to downtown).
 
 ## Sources
 
