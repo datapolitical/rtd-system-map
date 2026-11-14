@@ -56,10 +56,12 @@
   html, body, #map { margin: 0; height: 100%; background: var(--ground); }
   /* A pinch or double tap on the map is the map's, never the page's, even before the map script has run. */
   #map { touch-action: none; }
-  body { font-family: Overpass, system-ui, sans-serif; overscroll-behavior: none; }
+  /* Nothing that reads as a browser (DESIGN.md): no pull-to-refresh or bounce (iOS needs it on html too), no gray tap flash. */
+  html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+  body { font-family: Overpass, system-ui, sans-serif; }
   #steps { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(28px, calc(env(safe-area-inset-bottom) + 20px)); display: flex; align-items: center;
-    background: var(--card); border-radius: 22px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); }
-  #steps button { all: unset; width: 44px; height: 44px; text-align: center; font-size: 24px; line-height: 44px; color: var(--ink); cursor: pointer; }
+    background: var(--card); border-radius: 22px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); -webkit-touch-callout: none; user-select: none; }
+  #steps button { all: unset; touch-action: manipulation; width: 44px; height: 44px; text-align: center; font-size: 24px; line-height: 44px; color: var(--ink); cursor: pointer; }
   #steps button:disabled { color: var(--quiet); opacity: 0.5; }
   #sheets { display: flex; gap: 6px; padding: 0 2px; }
   #sheets i { width: 5px; height: 5px; border-radius: 50%; background: var(--quiet); opacity: 0.5; }
