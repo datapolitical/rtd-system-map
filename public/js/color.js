@@ -132,3 +132,26 @@ export function shade(color, factor, background, ratio) {
 export function textOn(color, ink) {
   return contrast('#ffffff', color) >= contrast(ink, color) ? '#ffffff' : ink;
 }
+
+// A colour as OKLCh: lightness, chroma and hue (radians). And back.
+export function toLch(color) {
+  const [L, a, b] = toOklab(color);
+  return [L, Math.hypot(a, b), Math.atan2(b, a)];
+}
+export const fromLch = (L, chroma, hue) => fromOklab([L, chroma * Math.cos(hue), chroma * Math.sin(hue)]);
+
+// A colour with less chroma than this has no hue to speak of: black, white, a grey.
+export const GREY_UNDER = 0.04;
+
+// The hue farthest from every one of `colors` (radians): the middle of the
+// widest gap they leave round the colour wheel. Null when none of them has a hue.
+export function freeHue(colors) {
+  const turn = 2 * Math.PI;
+  const hues = colors.map(toLch).filter(([, chroma]) => chroma >= GREY_UNDER).map(([, , hue]) => (hue + turn) % turn).sort((a, b) => a - b);
+  let widest = null;
+  hues.forEach((hue, i) => {
+    const gap = (i + 1 < hues.length ? hues[i + 1] : hues[0] + turn) - hue;
+    if (!widest || gap > widest.gap) widest = { gap, hue: (hue + gap / 2) % turn };
+  });
+  return widest ? widest.hue : null;
+}

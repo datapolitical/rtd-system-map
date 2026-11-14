@@ -1026,7 +1026,9 @@ change gets a decision-log line that says what the views showed.
    white casing
 2. Bus streets, by how often a bus comes along them with every route
    counted: the busiest (every 10 minutes or better) in full ink, as wide
-   as or wider than rail close in, but under it and in no hue
+   as or wider than rail close in, but under it and in no hue. (The sheets
+   differ: there every bus street is one hue of its own, the one the rail
+   colours leave free, and slimmer than rail. See "Four sheets".)
 3. Stations and Park-n-Rides
 4. In Live, vehicles and alert marks
 5. Quieter bus streets, lighter and thinner by class, and part-time routes
@@ -2022,7 +2024,13 @@ How it is built:
   with none of the line's stations beyond it, is tail track: the line ends
   at that station's bar. A line never ends at a station while another of
   its stations lies beyond, however little track is left. On the first sheet the hub and line ends are named large and other
-  stations small, where a name has open ground.
+  stations small, where a name has open ground. The first sheet's names
+  also know the first screen (the page opens on it centred on the hub, on
+  a phone about 393 px wide): a name never straddles the screen's side. A
+  station on the screen keeps its name a few pixels inside it, in two rows,
+  its short form or on the other side of its mark; a station just off it
+  keeps its name off too; and a small name that can only be cut off is left
+  for sheet 2, like one with no open ground.
 - **Drawn, not traced.** Where the true position of a thing makes an ugly
   drawing, the drawing wins by a few pixels. A station bar is square across
   its lines. The platforms of one station where lines end are drawn parallel,
@@ -2043,8 +2051,15 @@ How it is built:
   is not lettered twice. Places are named by rank: cities and towns on
   sheets 1 and 2, a city's neighbourhoods on 3 and 4 (its own statistical
   neighbourhoods before smaller ones), the most important first. A place's
-  name gives way to rail, line letters and station names, but not to bus
-  streets: it sits over them on its halo, and route numbers give way to it.
+  name gives way to rail, line letters, station names, route numbers and the
+  frequent bus streets: no line strikes through it. It sits on its point if
+  that is clear, else at the nearest clear spot around it (nudged, then in
+  rings a little farther off), and where none is near it is not set, as the
+  order at the top of this document says. A town's name stays within about
+  two ems of its point; a major city covers far more of the sheet, so its
+  name may go up to seven ems to find room (on the opening view DENVER sits
+  in the open just west of Union Station rather than on Colfax). It may sit
+  over a quiet bus street on its halo.
   The largest cities (Denver, Boulder, Aurora by the tiles' rank) are set a
   size up and a step clearer than the busiest bus street. A register entry
   ("... Historic District") is not a place name and is not set.
@@ -2111,23 +2126,31 @@ How it is built:
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
   The build's six bus classes are drawn as three steps: a bus every 10
   minutes or better, every 15, and every 30 or less often (more steps than
-  three don't read as steps). A street with a bus every 10 minutes is as
-  wide as the sheet's rail, never wider: wider bands made downtown, where
-  every street is frequent, a heavy grey mat. The frequent network reads
-  as corridors by a lit core instead: a thin line (0.36 of rail's width)
-  down the middle of each busiest street, near white in the dark and near
-  black in the light, and a thinner, dimmer one down each street with a
-  bus every 15 minutes (the Flatiron Flyer's), so the two steps read in
-  order and both read above the grid without adding width. The core is
-  grey and thinner than any rail line, so rail still reads first by its
-  colour and width. The quiet step is the sheet's rail width over 1.6
-  twice, and on the opening sheet a one-pixel hairline, half a lightness
-  step nearer the ground: there it is the whole outer street grid, and the
-  sheet's job is where service is frequent, so the grid sits back. The
-  middle step is rail's width over 1.4. Their greys are evenly
-  spaced in lightness, and the quietest reads clearly in both themes (in
-  the dark, where a thin line of light reads faint, more so). Rail reads first by its colour: in each theme the busiest bus grey
-  has less contrast with the ground than any rail line, by at least 15%.
+  three don't read as steps). Bus streets are one colour, and it is not
+  grey: a grey line on a map is a road, and a network of them is a road
+  atlas. The page takes the hue RTD's rail colours leave most free (the
+  middle of the widest gap between the lines' hues in `sheets.json`, a
+  slate blue today) and draws every bus street in it. Colour then says
+  rail, that one blue says bus, and grey is left to the ground. The three
+  steps are three strengths of the hue. The two frequent steps sit close
+  together, well clear of the quiet one, and read as one frequent network:
+  the every-10 step is three quarters of the sheet's rail width and the
+  every-15 step (the Flatiron Flyer's) six tenths. No bus street is as
+  wide as rail: wider bands made downtown, where every street is frequent,
+  a heavy mat. Each street is one solid line, with nothing down its middle
+  and no edge of another colour: a core or a casing makes a street a
+  highway. (The frequent steps keep a thin rim of ground, a gap where they
+  cross quieter streets, not an edge.) The quiet step is a dim tint of the
+  hue, the sheet's rail width over 1.6 twice, and on the opening sheet a
+  one-pixel hairline nearer the ground: there it is the whole outer street
+  grid, and the sheet's job is where service is frequent, so the grid sits
+  back. The quietest reads clearly in both themes (in the dark, where a
+  thin line of light reads faint, more so). Rail reads first by its width
+  and by the strength of its colour: a bus street is never a stronger
+  colour (more chroma) than the weakest rail line as that theme draws it,
+  whatever colours RTD gives its lines. With no line colours to go by, the
+  steps are greys. Each rail line stands off the ground by a set contrast
+  (5.4 to 1 in the dark, 4.82 in the light).
   The page takes each line's colour from RTD's data (the build lists them
   in `sheets.json`) and, where one is too dim for that, lifts it in the dark
   (lighter, same hue, keeping its share of the most chroma that hue can
@@ -2138,7 +2161,7 @@ How it is built:
   A bus line never ends in the open. Where it ends (no other street, rail
   station or bus station's hall meets it) and a stop of one of its routes is
   within 320 m, it is led on to that stop and ends on a ring there: ground
-  inside, in the line's own grey, a little wider than the line. Lines that
+  inside, in the line's own colour, a little wider than the line. Lines that
   end at one stop, or at stops a ring's width apart (gates either side of a
   highway), share one ring. An end with none of its stops that near is a
   spur in the data, and the run back to the street it leaves is not drawn
@@ -2239,6 +2262,11 @@ How it is built:
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
+  They are set in the bus streets' own hue at a reading strength (as easy
+  to read as body text, and no stronger a colour than the weakest rail
+  line, like the streets), so the figures read as the lines' lettering and
+  apart from the street names beside them, the bus streets' and the
+  ground's, which stay grey. With no hue free they are a grey too.
   Nor on a stop: on sheet 4 each stop's ring keeps lettering off it.
   Nor on the street beside it: where another street runs within the
   figures' reach on one side (the other half of a one-way pair), they go on
@@ -4532,6 +4560,54 @@ work against the real structure before asking for evaluation.
   and from 27 to 1 on sheet 2. The three left (the airport, Evergreen and
   Parker) are where RTD's route data stops 400 m to 1 km short of the
   stop, too far to lead on to by rule.
+- 2026-11-13: On the sheets every bus street is one hue, the one the rail
+  colours leave free (a slate blue today), in three strengths. The frequent
+  steps are solid lines slimmer than rail, three quarters and six tenths of
+  it, and the lit core is gone (#117). Reason: Chris: "The thick gray lines
+  for the frequent busses are really ugly." Every bus street was a neutral
+  grey like the ground's streets, so the network read as a road atlas, and
+  the frequent step's rim and core made it a highway with casing and a
+  centre line; no width or grey could fix that. Of three looks tried (the
+  hue, plain ink, and a tint with an ink spine), the hue read as a bus
+  network in both themes; ink shouted in the dark against the white
+  station marks, and the spine was a cased road again. The quiet step
+  takes the hue too, so quiet bus streets no longer vanish among the
+  ground's streets in the suburbs. Rail now reads first by width and by
+  strength of colour. The rule that the busiest bus grey has 15% less
+  contrast than any rail line is replaced by a cap on the bus colour's
+  chroma (no more than the weakest rail line's), and rail's contrast floor
+  is a set number, so each line is lifted, shaded or cased exactly as
+  before.
+- 2026-11-13: On the sheets a place's name no longer sits over the frequent
+  bus streets on its halo: it gives way to them and to route numbers, and
+  moves to the nearest clear spot around its point (a town's within about
+  two ems, a major city's within seven), or is not set. Reason: DENVER and
+  AURORA sat on Colfax on the opening view, and BOULDER on its own lines;
+  the halo chopped the line and the line chopped the word, so the first
+  screen everyone sees had its biggest names struck through. A name can
+  move where a line can't (the order at the top of this document). Towns
+  keep a short reach so a name never lands on the next town; the sheet-3
+  neighbourhood names that lines ran through downtown are no longer set.
+- 2026-11-13: The first sheet's station names never straddle the side of
+  the first screen (a 393 px phone centred on the hub): a station on it
+  keeps its name inside, one just off it keeps its name out, and a small
+  name that can only be cut off is left for sheet 2. Reason: "Thornton
+  Crossroads / 104…" and "Commerce City / 72nd Av…" ran off the right
+  edge of the screen everyone sees first, and Peoria's name poked in as
+  "Pe" from a mark off the screen. Today Northglenn keeps its name in two
+  rows; Thornton Crossroads, Original Thornton and Commerce City are named
+  from sheet 2. The G line's end, Wheat Ridge / Ward Road, whose mark sits
+  at the very edge, has no spot inside that is not nearer the next station,
+  so its name is still cut there.
+- 2026-11-13: Sheets set route numbers in the bus streets' hue at a reading
+  strength; street names stay grey. Reason: the numbers, the bus streets'
+  names and the ground's street names were three near greys (downtown on
+  sheet 3 a wall of figures read as more street lettering), and since the
+  bus streets took one hue the figures beside them were the one part of
+  the bus network still grey. Tried and not kept: on the first sheet,
+  drawing any ring under four times today's size as a point, to tidy the
+  SKIP's turnaround loop at Table Mesa in Boulder; across the region it
+  pulled streets into stars at many corners, worse than the loop.
 - 2026-11-12: Sheet 4 names its bus streets: a name leads its street's
   route list where the block holds both, and a name of its own slides along
   its street to a stretch between stops and within one of the page's tiles

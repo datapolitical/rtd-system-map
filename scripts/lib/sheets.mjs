@@ -50,6 +50,13 @@ export const SIZES = {
   nameBeside: 20,
   // A station's other bar this far from its first is named too, so each end of a long station says what it is.
   nameAgain: 120,
+  // The first screen: the page opens on the first sheet centred on the hub (public/js/sheets/main.js), framed
+  // here for a common phone this wide and about this tall. A name never straddles its side: a name of a station
+  // on the screen keeps `room` inside it (for a narrower phone), one just off it keeps out. Each pixel across
+  // costs this much, like line under the name, so a name takes two rows, its short form or the other side,
+  // and one that is not needed there and would still be cut is left for a closer sheet.
+  opening: { width: 393, height: 900, room: 9 },
+  nameOffScreen: 2,
   // Where two or more lines end at a bar, its name carries their letters in a row: each disc this big, this far apart.
   nameLetter: { 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 },
   // Bus streets: a stretch shorter than this takes the class of the stretches
@@ -745,6 +752,18 @@ export function names(marks, lines, discs, sheet, streets = []) {
   ];
   const set = [];
   const rank = (m) => (m.hub ? 0 : m.end ? 1 : 2) * 100 - m.count;
+  // The first screen's sides, on the sheet the page opens on: how far a name beside the mark at `p` crosses
+  // one, from the mark's side of it (out from a mark on the screen, in from one just off it).
+  const hub = sheet.id === SHEETS[0].id && marks.find((m) => m.hub);
+  const centre = hub && lerp(hub.ends[0], hub.ends[1], 0.5);
+  const across = (p, box) => {
+    if (!centre || Math.abs(p[1] - centre[1]) > SIZES.opening.height / 2) return 0;
+    const [l, r] = [centre[0] - SIZES.opening.width / 2, centre[0] + SIZES.opening.width / 2];
+    if (p[0] < l) return Math.max(0, box[2] - l);
+    if (p[0] > r) return Math.max(0, r - box[0]);
+    const { room } = SIZES.opening;
+    return Math.max(0, l + room - box[0]) + Math.max(0, box[2] - r + room);
+  };
   // A name belongs to the bar it is nearest: one nearer another station's bar than its own
   // names that station to the eye, which is worse than no name.
   const bars = marks.map((m) => ({ m, pts: [m.ends, ...m.more].flatMap((bar) => [bar[0], lerp(bar[0], bar[1], 0.5), bar[1]]) }));
@@ -793,7 +812,8 @@ export function names(marks, lines, discs, sheet, streets = []) {
           const hits = set.filter((o) => touch(box, o.box)).length + (strays ? 1 : 0);
           const beyond = last && ((c[0] - before[0]) * dx + (c[1] - before[1]) * dy) / n / dist(c, before) > 0.9;
           const crowded = last && dist(c, before) < tall && !beyond;
-          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0);
+          const cut = across(c, box) * SIZES.nameOffScreen;
+          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0) + cut;
           if (!best || score < best.score) best = { text, score, hits, box, anchor, tall, offset: [(at[0] - c[0]) / size, (ty - c[1]) / size] };
         }
       }
@@ -810,7 +830,7 @@ export function names(marks, lines, discs, sheet, streets = []) {
     }
     const text = best.text;
     // Where every station is named, a name gives way only to another name; where they are
-    // not, it also gives way to lines.
+    // not, it also gives way to lines and to the first screen's side.
     if (!must && (best.hits || (minor && best.score >= SIZES.nameCrowd))) continue;
     const justify = best.anchor.includes('left') ? 'left' : best.anchor.includes('right') ? 'right' : 'center';
     const [x0, , x1] = best.box;
