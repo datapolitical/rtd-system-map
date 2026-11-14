@@ -416,7 +416,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
       layer('group-stop', 'symbol', { filter: kind('group-stop'),
         layout: { 'icon-image': `stopgroup-street-${theme}`, 'icon-allow-overlap': true, 'text-allow-overlap': true,
           'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.letter },
-        paint: { 'text-color': c.ground, 'icon-opacity': ['case', PICKED, 1 - FADE.text, 1], 'text-opacity': ['case', PICKED, 1 - FADE.text, 1] } });
+        // A picked route keeps its own stops' letters whole; the others fade as far as the lines,
+        // so the route reads unbroken where it passes a stop it doesn't use.
+        paint: { 'text-color': c.ground, 'icon-opacity': unless(onBus(), 1, 1 - FADE.line), 'text-opacity': unless(onBus(), 1, 1 - FADE.line) } });
     }
   });
   return {
