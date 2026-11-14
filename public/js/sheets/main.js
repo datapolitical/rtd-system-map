@@ -50,7 +50,8 @@ const map = new maplibregl.Map({
   attributionControl: false,
   fadeDuration: 0,
   // What a screen reader calls the map (#14). Its canvas takes focus, and Tab moves on from it.
-  locale: { 'Map.Title': 'Map of RTD bus and rail service. Tap a line, a station or a stop to hear what it is' },
+  // A screen reader can't tap a chosen spot on it, so the label names the list that can (#135).
+  locale: { 'Map.Title': 'Map of RTD bus and rail service. Tap a line, a station or a stop to hear what it is, or use the next button, List what\'s in view' },
   // Room in the cache for every sheet's tiles around the view (warm, below), as well as the
   // tiles of the places just looked at.
   maxTileCacheZoomLevels: 12,
@@ -236,6 +237,7 @@ const card = document.querySelector('#card');
 const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
 let picked = null; // { mode: 'bus' | 'rail', route }
 let shown = null; // what the card names: { title, note, routes: [{ mode, route, color }] }
+let opener = null; // the button the card was opened from (the list, #135), where closing it returns
 function setPick(p) {
   picked = p;
   map.setGlobalStateProperty('bus', p?.mode === 'bus' ? p.route : '');
@@ -257,7 +259,7 @@ const groupList = (rows) => String(rows ?? '').split(' | ').filter(Boolean).map(
 });
 const routesOf = (what) => [...(what.routes ?? []), ...(what.groups ?? []).flatMap((g) => g.routes)];
 function hintFor(routes) {
-  if (!routes.length) return '';
+  if (!routes.length || shown?.list) return '';
   return picked && routes.some((r) => r.mode === picked.mode && r.route === picked.route) ? 'Tap empty ground to clear' : `Tap ${routes.length > 1 ? 'a route' : 'it'} to show its whole way`;
 }
 function tell(what) {
@@ -272,6 +274,7 @@ function tell(what) {
   const said = note ? `<span>${esc(note)}</span>` : '';
   card.innerHTML = `<b id="card-title" role="heading" aria-level="2">${title}</b>${lead ? `<span>${esc(lead)}</span>` : ''}${groups.length ? '' : said}${rows}${list}${groups.length ? said : ''}<span class="hint">${hint}</span>`
     + '<button type="button" class="close" aria-label="Close">\u00d7</button>';
+  card.classList.remove('list');
   card.hidden = false;
   say(cardSaid({ title: card.querySelector('#card-title').textContent, note, lead, routes }));
 }
@@ -281,10 +284,12 @@ function close({ focus = false } = {}) {
   card.hidden = true;
   shown = null;
   if (picked) { setPick(null); say(pickSaid(null)); }
-  if (focus) map.getCanvas().focus({ preventScroll: true });
+  if (focus) (opener ?? map.getCanvas()).focus({ preventScroll: true });
 }
 card.addEventListener('click', (e) => {
   if (e.target.closest('button.close')) return close({ focus: true });
+  const place = e.target.closest('button[data-place]');
+  if (place) return placeCard(shown.places[Number(place.dataset.place)], { focus: true });
   const b = e.target.closest('button[data-route]');
   if (!b) return;
   const p = { mode: b.dataset.mode, route: b.dataset.route };
@@ -305,6 +310,7 @@ map.on('idle', () => {
 const rails = (list) => list.map((route) => ({ mode: 'rail', route, color: colorOf.get(route) ?? '#888888' }));
 const buses = (text) => routeList(text).map((route) => ({ mode: 'bus', route }));
 map.on('click', (e) => {
+  opener = null;
   const n = SHEETS[sheet].id;
   const reach = 9;
   const box = [[e.point.x - reach, e.point.y - reach], [e.point.x + reach, e.point.y + reach]];
@@ -316,10 +322,7 @@ map.on('click', (e) => {
   if (table) return tell({ title: esc(table.title), lead: 'Each stop serves the routes of its letter', groups: groupList(table.rows) });
   const station = hit(['station', 'name'])[0]?.properties;
   const lettered = station ? null : hit(['group-stop', 'stop-letter'])[0]?.properties;
-  if (lettered?.letter) {
-    return tell({ title: esc(lettered.name), note: `Bus stop ${lettered.letter}${lettered.heading ? ` · ${lettered.heading}` : ''}`,
-      groups: groupList(`${lettered.letter} ${routeList(lettered.routes).join(' ')}`) });
-  }
+  if (lettered?.letter) return placeCard({ lettered });
   const bus = hit(['bus', 'pick-bus']).map((f) => f.properties).sort((a, b) => b.n - a.n)[0];
   const what = pickFrom({
     station,
@@ -343,6 +346,62 @@ map.on('click', (e) => {
   tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
 });
 map.on('dragstart', () => { card.hidden = true; });
+
+// A station's or a stop's card, from a tap or from the list of what's in view.
+function placeCard({ station, lettered, stop }, { focus = false } = {}) {
+  if (lettered) {
+    tell({ title: esc(lettered.name), note: `Bus stop ${lettered.letter}${lettered.heading ? ` · ${lettered.heading}` : ''}`,
+      groups: groupList(`${lettered.letter} ${routeList(lettered.routes).join(' ')}`) });
+  } else {
+    const what = pickFrom({ station, stop });
+    tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
+  }
+  // Opened from the list, the card takes the focus its button had: the button is gone.
+  if (focus) (card.querySelector('button:not(.close)') ?? card.querySelector('button.close')).focus();
+}
+
+// --- What's in view, for a keyboard or a screen reader (#135) ----------------------
+// Nobody can tap a chosen spot on the map without seeing it, so a button lists what the sheet
+// draws on screen: its stations and stops, each opening its card, and its lines and routes,
+// each picked as on a card. It shows only when it has the keyboard's focus; a screen reader
+// finds it next after the map.
+const listButton = document.querySelector('#inview');
+const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+const byRoute = (a, b) => a.route.localeCompare(b.route, undefined, { numeric: true });
+function inView() {
+  const n = SHEETS[sheet].id;
+  const drawn = (id) => (map.getLayer(`${id}-${n}`) ? map.queryRenderedFeatures({ layers: [`${id}-${n}`] }).map((f) => f.properties) : []);
+  const once = (list, key) => [...new Map(list.map((p) => [key(p), p])).values()];
+  for (const p of drawn('rail')) if (p.color) colorOf.set(p.route, p.color);
+  const stations = once(drawn('station'), (p) => p.name).sort(byName).map((station) => ({ name: station.name, station }));
+  const stops = [
+    ...once(drawn('group-stop').filter((p) => p.letter), (p) => `${p.name}|${p.letter}`).map((lettered) => ({ name: `${lettered.name}, stop ${lettered.letter}`, lettered })),
+    ...once(drawn('stop'), (p) => `${p.name}|${p.heading}`).map((stop) => ({ name: [stop.name, stop.heading].filter(Boolean).join(', '), stop })),
+  ].sort(byName);
+  const lines = rails([...new Set(drawn('rail').map((p) => p.route))]).sort(byRoute);
+  const routes = [...new Set(drawn('bus').flatMap((p) => routeList(p.routes)))].map((route) => ({ mode: 'bus', route })).sort(byRoute);
+  return { places: [...stations, ...stops], stations: stations.length, routes: [...lines, ...routes], lines: lines.length };
+}
+function showList() {
+  const { places, stations, routes, lines } = inView();
+  shown = { list: true, places, routes };
+  opener = listButton;
+  const part = (head, html) => (html ? `<span class="head" role="heading" aria-level="3">${head}</span>${html}` : '');
+  const placeList = (from, to) => (to > from ? `<div class="places">${places.slice(from, to).map((p, i) => `<button type="button" data-place="${from + i}">${esc(p.name)}</button>`).join('')}</div>` : '');
+  const routeRow = (list) => (list.length ? `<div class="routes">${list.map(chip).join('')}</div>` : '');
+  const nothing = !places.length && !routes.length;
+  card.innerHTML = `<b id="card-title" role="heading" aria-level="2">In view</b>`
+    + (nothing ? '<span>No lines or stations here</span>' : '')
+    + part('Stations', placeList(0, stations)) + part('Stops', placeList(stations, places.length))
+    + part('Rail lines', routeRow(routes.slice(0, lines))) + part('Bus routes', routeRow(routes.slice(lines)))
+    + '<span class="hint"></span><button type="button" class="close" aria-label="Close">\u00d7</button>';
+  card.classList.add('list');
+  card.hidden = false;
+  const count = (k, one, many) => (k ? `${k} ${k === 1 ? one : many}` : '');
+  say(['In view:', [count(stations, 'station', 'stations'), count(places.length - stations, 'stop', 'stops'), count(lines, 'rail line', 'rail lines'), count(routes.length - lines, 'bus route', 'bus routes')].filter(Boolean).join(', ') || 'nothing'].join(' '));
+  (card.querySelector('button:not(.close)') ?? card.querySelector('button.close')).focus();
+}
+listButton?.addEventListener('click', showList);
 
 // --- The address is the share link (address.js) ----------------------------------
 // It holds the sheet, the centre and the picked route, rewritten in place as the map comes to

@@ -141,6 +141,34 @@ for (const theme of ['light', 'dark']) {
   }
   check(theme, 'tab moves past the map', new Set(order).size >= 3, order.join(' → '));
   check(theme, 'focus visible on the sheet buttons', await page.evaluate(() => { const b = document.querySelector('#out:not(:disabled), #in:not(:disabled)'); b.focus(); return getComputedStyle(b).outlineStyle; }) !== 'none');
+  // What's in view, by keyboard alone (#135): next after the map, a list of what is on screen
+  // whose places open their cards and whose routes are picked, and Escape back to the button.
+  check(theme, 'the map label names the list', /List what's in view/.test(await page.locator('canvas').getAttribute('aria-label')));
+  await page.locator('canvas').focus();
+  await page.keyboard.press('Tab');
+  check(theme, 'Tab from the map reaches the list button', await page.evaluate(() => document.activeElement?.id === 'inview'));
+  check(theme, 'the list button shows when focused', await page.locator('#inview').evaluate((b) => b.getBoundingClientRect().width > 40));
+  await page.keyboard.press('Enter');
+  check(theme, 'the list is said', /^In view: /.test(await said()), await page.locator('#say').textContent());
+  check(theme, 'focus goes into the list', await page.evaluate(() => document.querySelector('#card').contains(document.activeElement)));
+  const tree3 = await page.locator('#card').ariaSnapshot();
+  await writeFile(path.join(OUT, `${theme}-list.yaml`), tree3);
+  check(theme, 'the list has a heading and items', /heading "In view" \[level=2\]/.test(tree3) && /button "/.test(tree3));
+  await axe('list of what is in view', '#card');
+  const place = page.locator('#card .places button').first();
+  if (await place.count()) {
+    await place.focus();
+    await page.keyboard.press('Enter');
+    check(theme, 'a place in the list opens its card', (await page.locator('#card-title').textContent()) !== 'In view' && await page.evaluate(() => document.querySelector('#card').contains(document.activeElement)));
+  }
+  const route = page.locator('#card .routes button').first();
+  if (await route.count()) {
+    await route.focus();
+    await page.keyboard.press('Enter');
+    check(theme, 'a route is picked from the keyboard', !!(await page.evaluate(() => window.sheetsPick)));
+  }
+  await page.keyboard.press('Escape');
+  check(theme, 'Escape goes back to the list button', await page.evaluate(() => document.activeElement?.id === 'inview') && await page.locator('#card').isHidden());
   check(theme, 'no page errors', !errors.length, errors.join('; '));
   await context.close();
 }
