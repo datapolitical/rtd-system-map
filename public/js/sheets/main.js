@@ -4,9 +4,12 @@ import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { SHEETS, sheetData, sheetStyle, PALETTES, GROUP } from './style.js';
 import { pickFrom, routeList } from './pick.js';
 import { settle } from './settle.js';
+import { readView, writeView, drawsRoute } from './address.js';
 
 // Start the map's worker downloading while the two small files below load.
 maplibregl.prewarm();
+// Room to list every file and tile the first visit fetches, for the offline cache (sw.js, below).
+performance.setResourceTimingBufferSize?.(2000);
 
 const scheme = matchMedia('(prefers-color-scheme: dark)');
 const forced = new URLSearchParams(location.search).get('theme');
@@ -22,20 +25,24 @@ const [[west, south], [east, north]] = meta.bounds.core;
 
 // Only the sheet the page opens on loads first: the others are most of the page's weight and
 // none of them shows until the reader zooms (DESIGN.md, "Quality floor"). The page opens at
-// the widest sheet unless its address names a zoom (`#zoom/lat/lon`).
-const asked = parseFloat(location.hash.slice(1));
-const wanted = new Set([SHEETS[nearest(Number.isFinite(asked) ? asked : zooms[0])].id]);
+// the widest sheet unless its address names another (address.js: `#zoom/lat/lon/mode/route`).
+// An address that names no view, or a centre off the map, opens the page as a plain visit does.
+const [[minLon, minLat], [maxLon, maxLat]] = meta.bounds.routes;
+const onMap = (c) => c && c[0] >= minLon - 0.3 && c[0] <= maxLon + 0.3 && c[1] >= minLat - 0.3 && c[1] <= maxLat + 0.3;
+const asked = ((v) => (v && v.center && !onMap(v.center) ? null : v))(readView(location.hash));
+const start = nearest(asked?.zoom ?? zooms[0]);
+const wanted = new Set([SHEETS[start].id]);
+// The page opens on the hub, a little above the middle so the lines south of it show.
+const home = hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2];
 
 const map = new maplibregl.Map({
   container: 'map',
-  // The page opens on the hub, a little above the middle so the lines south of it show.
   style: sheetStyle(theme(), stations, colors, wanted),
-  center: hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2],
-  zoom: zooms[0],
+  center: asked?.center ?? home,
+  zoom: zooms[start],
   minZoom: zooms[0] - 0.6,
   maxZoom: zooms.at(-1) + 0.6,
-  maxBounds: [[meta.bounds.routes[0][0] - 0.3, meta.bounds.routes[0][1] - 0.3], [meta.bounds.routes[1][0] + 0.3, meta.bounds.routes[1][1] + 0.3]],
-  hash: true,
+  maxBounds: [[minLon - 0.3, minLat - 0.3], [maxLon + 0.3, maxLat + 0.3]],
   dragRotate: false,
   pitchWithRotate: false,
   touchPitch: false,
@@ -218,6 +225,7 @@ function setPick(p) {
   map.setGlobalStateProperty('rail', p?.mode === 'rail' ? p.route : '');
   window.sheetsPick = p;
   document.documentElement.classList.toggle('picked', !!p);
+  remember();
 }
 function chip(r) {
   const on = picked?.mode === r.mode && picked.route === r.route;
@@ -299,6 +307,38 @@ function inkOn(color) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#10151d' : '#ffffff';
 }
 
+// --- The address is the share link (address.js) ----------------------------------
+// It holds the sheet, the centre and the picked route, rewritten in place as the map comes to
+// rest: no history entry per move, so Back still leaves the page. Opening it shows the same view.
+
+// A plain visit keeps its plain address until the view changes: it is the opening view, and the
+// loading picture is fetched early only for an address without one (index.html).
+const opening = writeView({ zoom: zooms[0], center: home });
+function remember() {
+  const hash = writeView({ zoom: zooms[sheet], center: map.getCenter().toArray(), pick: picked });
+  if (hash === location.hash || (!location.hash && hash === opening)) return;
+  history.replaceState(history.state, '', hash);
+}
+map.on('moveend', remember);
+// An address edited in place, or a link to this page followed from itself.
+addEventListener('hashchange', () => {
+  const v = readView(location.hash);
+  if (!v || (v.center && !onMap(v.center))) return;
+  if (v.center) map.jumpTo({ center: v.center });
+  show(nearest(v.zoom));
+  setPick(v.pick);
+});
+// A picked route the address names is set once the map has its style, and kept only if the
+// sheets still draw it: an old link to a route RTD has dropped opens on the plain map. Sheet 2
+// draws every route; its file is read as text, not parsed, from the browser's cache.
+if (asked?.pick) {
+  const check = fetch(sheetData(2)).then((r) => (r.ok ? r.text() : '')).then((text) => drawsRoute(text, asked.pick), () => true);
+  map.once('load', async () => {
+    setPick(asked.pick);
+    if (!(await check) && picked === asked.pick) setPick(null);
+  });
+}
+
 // --- The picture shown while the map loads (index.html, #poster) -----------------
 
 // It goes once the map has drawn the same view, fading so the few labels the two place
@@ -316,6 +356,29 @@ map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 
 // The opening view is drawn: then the other sheets (sheetsAll once they all have).
 map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });
+
+// --- Offline (sw.js) ------------------------------------------------------------------
+// Asked for only once the opening view is drawn, so it never slows it (DESIGN.md, "Quality
+// floor"). On the first visit the files already fetched are handed to it to keep; from then on
+// it sees every request itself.
+if ('serviceWorker' in navigator) {
+  map.once('idle', async () => {
+    try {
+      await navigator.serviceWorker.register(new URL('../../sw.js', import.meta.url), { scope: new URL('../../', import.meta.url).pathname });
+      const reg = await navigator.serviceWorker.ready;
+      let sent = 0;
+      const hand = () => {
+        const entries = performance.getEntriesByType('resource');
+        const urls = [new URL('../../', import.meta.url).href, ...entries.slice(sent).map((e) => e.name)];
+        sent = entries.length;
+        reg.active?.postMessage({ type: 'keep', urls });
+      };
+      hand();
+      // What came in between, until the worker sees requests itself.
+      if (!navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', hand, { once: true });
+    } catch { /* no offline copy: the page works as before */ }
+  });
+}
 
 // --- The stop-group tables' plates and letter squares (style.js, GROUP) -------------
 

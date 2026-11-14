@@ -2536,6 +2536,17 @@ The URL reflects what's open (`#route=15`, `#station=…`, `#here=lat,lon`) and
 when (`#at=sunday`, `#at=2026-11-27T18:00`, `#live`), so any view can be
 shared or bookmarked.
 
+On the sheets page (v1.0) there is no share button: the address is the link
+(#14, Chris 2026-11-14). It always holds the sheet, the centre and a picked
+route, `#14/39.72264/-104.99487/bus/ART` (MapLibre's `#zoom/lat/lon`, which
+the page read before, then the pick), rewritten in place with
+`history.replaceState` each time the map comes to rest or a route is picked,
+so Back still leaves the page. Opening it shows the same sheet, the centre to
+within half a pixel, and the pick. A plain visit keeps its plain address until
+the view changes. An address that names no view or a centre off the map
+opens the opening view; a pick the sheets no longer draw is dropped. The rules
+are in `public/js/sheets/address.js`, with tests.
+
 ### Link preview
 
 A link to the site shows the title "RTD system map", the page's description
@@ -2794,6 +2805,17 @@ are deferred, not ruled out. See "Open questions".
   This is dependable only once the site is on the Home Screen, where
   Safari's seven-day deletion of a site's storage does not apply (see
   "Installed on a phone").
+  The sheets page has this from v1.0 (`public/sw.js`, #14): its page,
+  scripts, styles, font, glyphs and the four sheets' data go to the network
+  first and to the offline copy only when the network fails, so a new deploy
+  reaches everyone online on their next load and nobody is held on an old
+  version (a cache-first copy with versioned names would need a build step to
+  name every file, and would show the old version once after each deploy).
+  Basemap tiles are cache-first, since their addresses name the tile build,
+  up to 3000 tiles, oldest dropped first. The worker is registered only after
+  the opening view is drawn, so it never slows the first load; the files that
+  load fetched are handed to it then. Navigation preload keeps it from
+  delaying later loads. The Live relay and other pages are never touched.
 - **Accessibility:** WCAG AA contrast for text, visible keyboard focus, every
   action reachable by keyboard, motion reduced when the user prefers it, and
   nothing identified by color alone.
@@ -4678,6 +4700,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   picked bus route is drawn in one ink and weight end to end, not each
   street's grey, so it reads as one line; fading mixes colours toward the
   ground instead of using opacity, so overlaps leave no knots.
+- 2026-11-14: Sheets: the address is the share link, no share button (#14,
+  Chris). It holds the sheet, centre and picked route, rewritten in place as
+  the view settles; old and malformed addresses open the opening view.
+- 2026-11-14: Sheets work offline after one visit (#14): a service worker,
+  network-first for the page's own files so a deploy is never held back,
+  cache-first for basemap tiles (versioned addresses), registered after the
+  first draw so the first load is no slower.
 
 ## Sources
 
