@@ -54,6 +54,8 @@
   :root { --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; }
   @media (prefers-color-scheme: dark) { :root { --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; } }
   html, body, #map { margin: 0; height: 100%; background: var(--ground); }
+  /* A pinch or double tap on the map is the map's, never the page's, even before the map script has run. */
+  #map { touch-action: none; }
   body { font-family: Overpass, system-ui, sans-serif; overscroll-behavior: none; }
   #steps { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(28px, calc(env(safe-area-inset-bottom) + 20px)); display: flex; align-items: center;
     background: var(--card); border-radius: 22px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); }
@@ -71,7 +73,8 @@
   #card span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--quiet); line-height: 1.3; }
   #card i { display: inline-block; min-width: 1.5em; height: 1.5em; margin-right: 6px; border-radius: 0.75em; text-align: center; font-style: normal; line-height: 1.55em; }
   /* While the map loads: a picture of the view it opens on, centred as the map is, and a line saying so (scripts/poster.mjs). */
-  #poster { position: absolute; inset: 0; overflow: hidden; background: var(--ground); transition: opacity 250ms ease-out; }
+  /* Touches go through the picture to the map under it: a pinch on the picture zoomed the page, not the map. */
+  #poster { position: absolute; inset: 0; overflow: hidden; background: var(--ground); transition: opacity 250ms ease-out; pointer-events: none; }
   #poster img { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: none; user-select: none; -webkit-user-drag: none;
     opacity: 0; transition: opacity 200ms ease-out; }
   #poster img.whole { opacity: 1; }

@@ -171,6 +171,8 @@ function reveal() {
   setTimeout(() => poster.remove(), 300);
 }
 for (const button of document.querySelectorAll('#steps button')) button.addEventListener('click', reveal);
+// A pinch, drag or double tap reaches the map through the picture (index.html), and moves it.
+map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 
 // The opening view is drawn: then the other sheets (sheetsAll once they all have).
 map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });
