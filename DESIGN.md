@@ -2129,7 +2129,12 @@ How it is built:
   its own buses by a street of other routes: a heavy street does not run on
   past the corner its routes turn at. (A tick a few pixels long may lose
   its weight to the pale street it ends, and a blip between two stretches
-  that agree takes theirs.) A short end that leads nowhere (under 25 px from its
+  that agree takes theirs.) A run a tick long (under 14 px) that leaves a
+  street at least as wide and ends at a fork of streets all drawn at most
+  half its width takes the weight of the widest of them: on the opening
+  sheet, where the quiet step is a hairline, a frequent piece between a
+  corridor's corner and a fork of hourly streets read as a stub ending in
+  nothing; now the corner reads as the fork it is. A short end that leads nowhere (under 25 px from its
   loose end to the first corner where streets part, however many pieces it
   is in) is left off; this is the one thing not drawn.
   A turnaround loop too small to read as a ring is drawn as the point where
@@ -4759,6 +4764,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   "Sheet N of 4", "Route 15" buttons, "Stop A" letters, a live region for
   the card, steps and picks, a close button on the card, and AA tokens for
   the card's quieter text (`--note`) and route rings (`--rim`).
+- 2026-11-15: Sheets: no bright tick into faint streets (#117, Chris's phone
+  check: a stub east of US 36 at I-25 on sheet 1). A run of bus street
+  shorter than 14 px from a corner, leaving a street at least as wide, that
+  ends at a fork where every street going on is drawn at most half its
+  width, takes the widest of those streets' weight. Judged by the page's
+  widths, so it acts where the quiet step is a hairline (sheet 1: 11
+  places) and almost nowhere else (sheet 3: 1, a stub into a transit
+  centre's loop; sheets 2 and 4: none).
 
 ## Sources
 

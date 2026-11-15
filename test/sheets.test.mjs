@@ -932,6 +932,33 @@ test('a short stretch is made heavier only by a stretch of the same routes', () 
   assert.ok(same.filter((s) => s.routes === '8').every((s) => s.cls === 'c15'));
 });
 
+test('a short run off a corridor into streets drawn far fainter takes their weight, not a stub ending in nothing', async () => {
+  const { unstubbed } = await import('../scripts/lib/sheets.mjs');
+  const [one, two] = [SHEETS.find((s) => s.id === 1), SHEETS.find((s) => s.id === 2)];
+  // A corridor turns at a corner; a 7 px piece leaves it east to a fork of hourly streets.
+  const place = (stub) => [
+    st([[-100, 0], [0, 0]], { routes: 'FF LD1', cls: 'c15', hw: 15 }),
+    st([[0, 0], [0, 100]], { routes: 'FF LD1 120X', cls: 'c15', hw: 15 }),
+    st([[0, 0], [stub, 0]], { routes: 'FF LD1 120X', cls: 'c15', hw: 15 }),
+    st([[stub, 0], [stub + 100, 0]], { routes: 'FF', cls: 'c60', hw: 60 }),
+    st([[stub, 0], [stub, -100]], { routes: '120X', cls: 'c60', hw: 60 }),
+  ];
+  const stubOf = (out, stub) => out.find((s) => s.path[0][0] === 0 && s.path.at(-1)[0] === stub && s.path.at(-1)[1] === 0);
+  // On the opening sheet the hourly streets are hairlines: the piece takes their weight and headway.
+  const fixed = stubOf(unstubbed(place(7), one, SIZES.busTick), 7);
+  assert.equal(fixed.cls, 'c60');
+  assert.equal(fixed.hw, 60);
+  // The corridor it left keeps its weight.
+  assert.ok(unstubbed(place(7), one, SIZES.busTick).filter((s) => s.path[0][0] === -100 || s.path.at(-1)[1] === 100).every((s) => s.cls === 'c15'));
+  // On the next sheet the quiet step reads as a street: the corner is a fork and stays as it is.
+  assert.equal(stubOf(unstubbed(place(7), two, SIZES.busTick), 7).cls, 'c15');
+  // A run as long as a tick is a street of its own.
+  assert.equal(stubOf(unstubbed(place(SIZES.busTick + 6), one, SIZES.busTick), SIZES.busTick + 6).cls, 'c15');
+  // A run of two short pieces through a bend is measured whole.
+  const bent = unstubbed([...place(7).filter((s) => s.path[0][0] !== 0 || s.path.at(-1)[1] !== 0), st([[0, 0], [4, 0]], { routes: 'FF', cls: 'c15' }), st([[4, 0], [7, 0]], { routes: 'FF', cls: 'c15' })], one, SIZES.busTick);
+  assert.ok(bent.filter((s) => s.path[0][1] === 0 && s.path.at(-1)[1] === 0 && s.path.at(-1)[0] <= 7 && s.path[0][0] >= 0).every((s) => s.cls === 'c60'));
+});
+
 test('a weight gathered at a corner is not handed on down a route, and not taken from buses with another street to take', async () => {
   const { gathered } = await import('../scripts/lib/sheets.mjs');
   // One short heavy piece of a route does not make the rest of that route heavy.

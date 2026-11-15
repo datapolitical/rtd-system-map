@@ -64,6 +64,9 @@ export const SIZES = {
   busBridgeMetres: 110,
   busRunMetres: 220,
   busSpeck: 10,
+  // A run of bus street shorter than this from a corner into streets drawn at most half as wide
+  // reads as a stub, not a street: it takes their weight (`unstubbed`).
+  busTick: 14,
   // A bus line ends on a mark: the stop of its routes it ends at, if one is this near its end.
   // A loose end with none of its stops this near is a spur in the data, and a spur shorter than
   // busSpurMetres back to the street it leaves is not drawn.
@@ -1875,7 +1878,7 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
   // How far a point is from the nearest rail line or station bar.
   const inked = [...lines.flatMap((l) => l.paths), ...marks.flatMap((m) => [m.ends, ...(m.more ?? [])])];
   const railOff = (p) => inked.reduce((d, path) => (boxed(path, p, d) ? Math.min(d, nearest(path, p).d) : d), 1e9);
-  return gathered(onWalls(toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing), railOff, SIZES.rail[sheet.id] + 1.5 * SIZES.gap[sheet.id] + SIZES.rail[sheet.id] / 2 + 3), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre, walls), walls, SIZES.hallReach));
+  return gathered(unstubbed(onWalls(toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing), railOff, SIZES.rail[sheet.id] + 1.5 * SIZES.gap[sheet.id] + SIZES.rail[sheet.id] / 2 + 3), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre, walls), walls, SIZES.hallReach), sheet, SIZES.busTick));
 }
 
 /**
@@ -1928,6 +1931,47 @@ export function gathered(streets) {
     }
     return st;
   });
+}
+
+/**
+ * No bright tick into faint streets. A run of one weight from a corner, shorter than `most`, that
+ * ends at a corner where every street going on is drawn at most half its width on this sheet, reads
+ * as a stub ending in nothing (on the opening sheet the quiet step is a hairline). It takes the
+ * weight of the widest street it goes on into, so the corner it leaves reads as the fork it is. The
+ * run must leave a street at least as wide as itself: the stub sticks out of a corridor. Widths are
+ * the page's (`busWide`), so the rule finds nothing where the quiet step is drawn wide enough to read.
+ */
+export function unstubbed(streets, sheet, most) {
+  const edges = cornered(streets);
+  const at = new Map();
+  for (const e of edges) for (const k of [e.a, e.b]) at.set(k, [...(at.get(k) ?? []), e]);
+  const wide = (e) => busWide(e.st.cls, sheet);
+  const rank = (cls) => CLASS_ORDER.indexOf(cls);
+  const out = new Map();
+  for (const [near, here] of at) {
+    if (here.length < 3) continue;
+    for (const first of here) {
+      if (first.a === first.b) continue;
+      const cls = first.st.cls;
+      if (!here.some((o) => o !== first && busWide(o.st.cls, sheet) >= wide(first))) continue;
+      // Walk on through corners where nothing else meets, while the weight holds.
+      const run = [first];
+      let [e, k, len] = [first, first.a === near ? first.b : first.a, first.len];
+      while (len < most && at.get(k).length === 2) {
+        const next = at.get(k).find((o) => o !== e);
+        if (!next || next.st.cls !== cls || run.includes(next) || next.a === next.b) break;
+        run.push(next);
+        len += next.len;
+        [e, k] = [next, next.a === k ? next.b : next.a];
+      }
+      if (len >= most || k === near) continue;
+      const on = at.get(k).filter((o) => o !== e);
+      if (!on.length || on.some((o) => busWide(o.st.cls, sheet) > wide(first) / 2)) continue;
+      const to = [...on].sort((x, y) => wide(y) - wide(x) || rank(y.st.cls) - rank(x.st.cls))[0].st;
+      for (const r of run) out.set(r, to);
+    }
+  }
+  return edges.map((e) => (out.has(e) ? { ...e.st, cls: out.get(e).cls, hw: out.get(e).hw } : e.st));
 }
 
 /**
