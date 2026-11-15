@@ -19,10 +19,6 @@ export const SHEETS = [
 
 /** Sizes in pixels, by sheet id. The page draws with these; so does the build. */
 export const SIZES = {
-  // A BRT stop is set on its route's drawn street when one passes within this many rail widths,
-  // and stops closer than this many metres (a station's gates, both directions) are one station.
-  brtReach: 4,
-  brtApart: 150,
   // Width of a rail line, and the gap between two lines that share track.
   rail: { 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 },
   gap: { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 },
@@ -2931,33 +2927,11 @@ const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
 // The busiest (a bus every 5 minutes or better) a size up on sheets 1 to 3 (style.js, BUSIEST_OVER_RAIL).
 const BUSIEST = { c5: true, c3: true };
 // Bus rapid transit (DESIGN.md, "Four sheets"): the routes RTD files under this service category.
-// Their streets get the BRT line and their stations a dot; a route RTD adds to it is drawn so with no change here.
+// Their streets are marked `brt` and drawn in BRT's rose; a route RTD adds to it is drawn so with no change here.
 export const BRT_CATEGORY = 'BUS RAPID TRANSIT';
 export const brtRoutes = (routes) => new Set((routes?.features ?? [])
   .filter((f) => String(f.properties.category ?? '').trim().toUpperCase() === BRT_CATEGORY).map((f) => String(f.properties.route)));
 export const isBrt = (routes, brt) => String(routes ?? '').split(/[ ,]+/).some((r) => brt.has(r));
-/**
- * A BRT route's stations on one sheet: its stops, set on its drawn street (if one passes within
- * `reach` pixels) and merged where they sit closer than `apart` pixels (a station's gates and both
- * directions are one dot). Each keeps the first stop's name and every route that stops there.
- */
-export function brtStations(stops, brt, streets, zoom, reach, apart) {
-  const paths = streets.filter((s) => isBrt(s.routes, brt)).map((s) => s.path);
-  const out = [];
-  for (const f of stops?.features ?? []) {
-    const p = f.properties;
-    const routes = String(p.lines ?? p.routes ?? '').split(/[ ,]+/).filter(Boolean);
-    if (!routes.some((r) => brt.has(r))) continue;
-    const at = toPx(f.geometry.coordinates, zoom);
-    const on = paths.map((path) => nearest(path, at)).sort((a, b) => a.d - b.d)[0];
-    if (!on || on.d > reach) continue;
-    const near = out.find((o) => dist(o.at, on.at) < apart);
-    if (near) { for (const r of routes) near.routes.add(r); continue; }
-    out.push({ at: on.at, name: stopName(p.name).replace(/\s+Gate\s+\S+$/i, ''), routes: new Set(routes) });
-  }
-  return out.map((o) => ({ ...o, routes: inOrder([...o.routes]) }));
-}
-
 export const busWide = (cls, sheet) => { const w = SIZES.rail[sheet.id]; return [sheet.id === 1 ? 1 : w / 1.6 ** 2, w / 1.4, BUSIEST[cls] && sheet.id <= 3 ? w * 1.3 : w][BUS_STEP[cls] ?? 0]; };
 
 /** A sheet's pixels around a place, each set where something is drawn (lines, dots, boxes, rooms), grown by a margin. */
@@ -3164,13 +3138,6 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     const on = groupOf.get(s);
     const more = on ? { street: shortened(on.street), groups: groupRows(blockRows(s, on)), others: listed(String(s.routes).split(' ').filter((r) => !on.g.all.has(r)).join(' ')) } : {};
     features.push(feature({ kind: 'bus', cls: s.cls, routes: listed(s.routes), n: s.n, hw: s.hw, ...(isBrt(s.routes, brt) ? { brt: true } : {}), ...more }, { type: 'LineString', coordinates: s.path.map(back) }));
-  }
-  // Bus rapid transit's stations, on the sheets that draw no stops of their own.
-  if (sheet.id <= 3) {
-    const perMetre = 1 / metresPerPixel(lat0, sheet.zoom);
-    for (const b of brtStations(stops, brt, bus, sheet.zoom, SIZES.brtReach * SIZES.rail[sheet.id], Math.max(SIZES.brtApart * perMetre, 3 * SIZES.rail[sheet.id]))) {
-      features.push(feature({ kind: 'brt-stop', name: b.name, routes: listed(b.routes.join(' ')) }, { type: 'Point', coordinates: back(b.at) }));
-    }
   }
   // What is labelled along the streets: on a table's streets, only the routes it doesn't name.
   const toLabel = bus.flatMap((s) => {
@@ -3424,7 +3391,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     for (const b of n.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink }, { type: 'Point', coordinates: back(b.at) }));
   }
   // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.
-  if (sheet.id <= 3) for (const e of ends) features.push(feature({ kind: 'bus-end', cls: e.cls, routes: listed(e.routes) }, { type: 'Point', coordinates: back(e.at) }));
+  if (sheet.id <= 3) for (const e of ends) features.push(feature({ kind: 'bus-end', cls: e.cls, routes: listed(e.routes), ...(isBrt(String(e.routes), brt) ? { brt: true } : {}) }, { type: 'Point', coordinates: back(e.at) }));
   // A stop RTD letters by its group says its letter where its ring would be.
   for (const r of rings) features.push(feature({ kind: 'stop', id: r.id, name: r.letter ? stopName(r.name) : r.name, heading: r.heading, routes: r.routes.join(', '), ...(r.letter ? { letter: r.letter } : {}) }, { type: 'Point', coordinates: back(r.at) }));
   const hub = marks.find((m) => m.hub);

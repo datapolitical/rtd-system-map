@@ -37,8 +37,10 @@ const QUIET = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n, n === 
 // middle: the band is the street's width in a pale wash of the bus blue, the spine this share of
 // it in the step's own ink. The quiet step is a plain line in its ink.
 export const BUS_SPINE = { mid: 0.45, top: 0.42 };
-// A BRT street is this share of rail's width: a step below rail, above every bus street but the busiest.
-export const BRT_UNDER_RAIL = 0.8;
+// Bus rapid transit (the streets the build marks `brt`) is drawn as any bus street of its frequency,
+// band, spine, width and order alike, in a rose (OKLCh hue, degrees) in place of the blue: clear of
+// the purple lines and the red one, and never red.
+export const BRT_HUE = 355;
 const steps = (quiet, mid, top) => Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, [quiet, mid, top][s]]));
 
 // The bus blue's hue: the middle of the widest gap RTD's rail colours leave round the colour
@@ -69,9 +71,6 @@ export const PALETTES = {
     // Rail stands RAIL_OVER_BUS above this grey's contrast with the ground (railInk): the weight the
     // busiest bus street had when bus streets were grey. Rail's own inks were set against it.
     railFloor: '#79818d',
-    // Bus rapid transit, OKLCh [lightness, chroma, hue°]: a rose kept clear of the purple lines and
-    // the red one, cased in a deeper rose.
-    brt: { fill: [0.76, 0.12, 355], edge: [0.42, 0.12, 355] },
     hall: '#243147', hallEdge: '#6a7a98',
     mark: '#ffffff', markEdge: '#0e141d', name: '#f3f5f9', place: '#5f6b82', city: '#9ba5b8', streetName: '#5c6780', busStreetName: '#7b869b', number: '#c9d2e4', stop: '#aab6cf',
     // A picked bus route: the brightest ink on the sheet, nearly the station names', and no rail line's hue.
@@ -82,7 +81,6 @@ export const PALETTES = {
     busTone: { hairline: [0.79, 0.045], quiet: [0.7, 0.055], mid: [0.56, 0.08], top: [0.47, 0.095] },
     busWash: { mid: [0.78, 0.07], top: [0.72, 0.09], strength: 0.9 },
     railFloor: '#70757c',
-    brt: { fill: [0.74, 0.12, 355], edge: [0.5, 0.15, 355] },
     hall: '#dcd8cf', hallEdge: '#979ba3',
     mark: '#ffffff', markEdge: '#1b2230', name: '#161c28', place: '#8b8f98', city: '#555a63', streetName: '#8a8d95', busStreetName: '#73777f', number: '#3a4560', stop: '#566179',
     pick: '#1d2433',
@@ -101,16 +99,17 @@ export const LIGHT_SHADE_MOST = 0.12;
 // A cased line's casing, each side, per sheet: it sits in the gap between lines that share track.
 const CASING = { 1: 0.6, 2: 0.7, 3: 0.8, 4: 1 };
 
+/** The same, in BRT's rose. */
+export const brtInk = (theme, n) => busInk(theme, n, [], (BRT_HUE * Math.PI) / 180);
+export const brtWash = (theme) => busWash(theme, [], (BRT_HUE * Math.PI) / 180);
 /** Each bus class's ink on one sheet (a frequent step's spine): the opening sheet draws its quiet step as a faint hairline. */
-export const busInk = (theme, n, colors = []) => {
+export const busInk = (theme, n, colors = [], h = busHue(colors)) => {
   const t = PALETTES[theme].busTone;
-  const h = busHue(colors);
   return steps(...[n === 1 ? t.hairline : t.quiet, t.mid, t.top].map(([L, C]) => fromOklch(L, C, h)));
 };
 /** The frequent steps' band, laid over the ground: `{ c15, c10, c5, c3 }`. */
-export const busWash = (theme, colors = []) => {
+export const busWash = (theme, colors = [], h = busHue(colors)) => {
   const c = PALETTES[theme];
-  const h = busHue(colors);
   const [mid, top] = [c.busWash.mid, c.busWash.top].map(([L, C]) => mix(fromOklch(L, C, h), c.ground, 1 - c.busWash.strength));
   return Object.fromEntries(Object.entries(BUS_STEP).filter(([, s]) => s > 0).map(([k, s]) => [k, s === 1 ? mid : top]));
 };
@@ -271,34 +270,29 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     const order = ['c60', 'c30', 'c15', 'c10', 'c5', 'c3'];
     const frequent = ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]];
     const ink = busInk(theme, n, colors);
+    const rose = brtInk(theme, n);
     // A quiet street is a line in its ink; a frequent one is its band (busWash), with its spine on top.
+    // A BRT street is the same in rose.
     const body = { ...ink, ...busWash(theme, colors) };
+    const roseBody = { ...rose, ...brtWash(theme) };
+    const onBrt = ['==', ['get', 'brt'], true];
+    const inks = (blue, red) => ['case', onBrt, byClass(red), byClass(blue)];
+    const whole = (blue, red) => ['case', PICKED, inks(fadeTable(blue, FADE.line), fadeTable(red, FADE.line)), inks(blue, red)];
     layer('bus-rim', 'line', { filter: kind('bus', frequent), layout: ROUND,
       paint: { 'line-color': c.ground, 'line-width': ['+', byClass(BUS_WIDTH[n]), 1.6] } });
     layer('bus', 'line', { filter: kind('bus'), layout: { ...ROUND, 'line-sort-key': ['match', ['get', 'cls'], ...order.flatMap((k, j) => [k, j]), 0] },
       // The picked route's own streets are drawn again on top (pick-bus, below), so all of them fade here.
-      paint: { 'line-color': ['case', PICKED, byClass(fadeTable(body, FADE.line)), byClass(body)], 'line-width': byClass(BUS_WIDTH[n]) } });
+      paint: { 'line-color': whole(body, roseBody), 'line-width': byClass(BUS_WIDTH[n]) } });
     // The frequent steps' spine: the step's ink down the band's middle, a share of its width, so the
     // busiest streets keep their extra width in spine and band alike.
     const spine = Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, x]) => [k, x * (BUS_STEP[k] === 1 ? BUS_SPINE.mid : BUS_SPINE.top)]));
     layer('bus-spine', 'line', { filter: kind('bus', frequent), layout: ROUND,
-      paint: { 'line-color': ['case', PICKED, byClass(fadeTable(ink, FADE.line)), byClass(ink)], 'line-width': byClass(spine) } });
+      paint: { 'line-color': whole(ink, rose), 'line-width': byClass(spine) } });
     // Where a bus line ends: a ring on its end, ground inside, in the line's own ink, a little
     // wider than the line, so the line stops on something (a stop) rather than in the open.
     if (n <= 3) layer('bus-end', 'circle', { filter: kind('bus-end'), paint: {
       'circle-radius': ['+', ['/', byClass(BUS_WIDTH[n]), 2], BUS_END.stroke + 0.9], 'circle-color': c.ground,
-      'circle-stroke-color': ['case', PICKED, byClass(fadeTable(ink, FADE.line)), byClass(ink)], 'circle-stroke-width': BUS_END.stroke } });
-
-    // Bus rapid transit: the streets of the routes RTD files as BRT (the build marks them `brt`),
-    // a rose line cased in a deeper rose, a step below rail, with a white dot at each station.
-    // It fades with the bus streets when another route is picked.
-    const brtInk = (key) => { const [L, C, h] = c.brt[key]; return fromOklch(L, C, (h * Math.PI) / 180); };
-    const brtW = w * BRT_UNDER_RAIL;
-    const brtOn = (color) => unless(onBus(), color, fadeTo(color, FADE.line));
-    layer('brt-edge', 'line', { filter: kind('bus', ['==', ['get', 'brt'], true]), layout: ROUND, paint: { 'line-color': brtOn(brtInk('edge')), 'line-width': brtW + 1.6 } });
-    layer('brt', 'line', { filter: kind('bus', ['==', ['get', 'brt'], true]), layout: ROUND, paint: { 'line-color': brtOn(brtInk('fill')), 'line-width': brtW - 0.6 } });
-    if (n <= 3) layer('brt-stop', 'circle', { filter: kind('brt-stop'),
-      paint: { 'circle-radius': brtW * 0.62, 'circle-color': brtOn(c.mark), 'circle-stroke-color': brtOn(brtInk('edge')), 'circle-stroke-width': 1.3 } });
+      'circle-stroke-color': whole(ink, rose), 'circle-stroke-width': BUS_END.stroke } });
 
     // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses
     // end on. It is drawn over them, so a street ends flat on the wall, not in a round blob across it.

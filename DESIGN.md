@@ -2219,18 +2219,18 @@ How it is built:
   "BUS RAPID TRANSIT" in its routes layer, read by the build (`brtRoutes`
   in `scripts/lib/sheets.mjs`), never a list of routes. Today that is the
   Flatiron Flyer (FF) alone; 15 and 15L are filed as local buses. A street
-  any such route runs on is marked `brt` and drawn a step below rail: a
-  rose line 0.8 of rail's width, cased in a deeper rose, over the bus
-  streets and under rail, with a white dot ringed in the deeper rose at
-  each of its stations on sheets 1 to 3 (sheet 4 draws every stop). A
-  station is the route's stops set on its drawn street (within four rail
-  widths) and merged within 150 m or three rail widths, whichever is more,
-  so a station's gates and both directions are one dot. The rose (OKLCh hue
-  355°) is at least 30° from every rail hue: clear of the purple N and E
-  lines and the red T line, and never red. When RTD files the Colfax BRT
-  under that category, Colfax takes the rose with no change here. It fades
-  with the bus streets when another route is picked; a tap names it "Bus
-  rapid transit" on the card.
+  any such route runs on is marked `brt` and drawn exactly as any bus
+  street of its frequency (the same band and spine, or plain line on a
+  quieter stretch, the same widths, steps and order among the buses, the
+  same end ring), with only the hue changed: rose (OKLCh hue 355°) in place
+  of the blue, at the same lightness and chroma. No casing and no station
+  dots: it is a bus, not a rail line (Chris: the first, rail-like drawing
+  "looks too much like a rail line, and not like the 15"). The rose is at
+  least 30° from every rail hue (clear of the purple N and E lines and the
+  red T line, never red), and rail stands above its band as above the
+  blue's. When RTD files the Colfax BRT under that category, Colfax takes
+  the rose with no change here. It fades with the bus streets when another
+  route is picked; a tap names it "Bus rapid transit" on the card.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
@@ -4816,9 +4816,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   is a pale band with a spine of its step's ink. Teal was dropped: it sat
   10° from the W line. Rail's inks are unchanged.
 - 2026-11-15: Sheets: bus rapid transit in rose (#117, Chris picked "Rose"
-  over silver and none). Taken from RTD's "BUS RAPID TRANSIT" category: a
-  cased rose line a step below rail with station dots. Silver was near the
-  white of station marks in the dark.
+  over silver and none). Taken from RTD's "BUS RAPID TRANSIT" category.
+  First drawn as a cased rose line a step below rail with station dots;
+  Chris: it "looks too much like a rail line, and not like the 15". Now a
+  BRT street is drawn as any bus street of its frequency, band, spine,
+  widths and order alike, with only the hue changed to rose; no casing, no
+  dots. Silver was dropped: near the white of station marks in the dark.
 
 ## Sources
 
