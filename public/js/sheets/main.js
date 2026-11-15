@@ -325,7 +325,7 @@ map.on('click', (e) => {
     station,
     letter: hit(['letter'])[0]?.properties,
     rail: [...new Map(hit(['rail']).map((f) => [f.properties.route, f.properties])).values()],
-    stop: hit(['stop'])[0]?.properties,
+    stop: hit(['stop', 'brt-stop'])[0]?.properties,
     label: hit(['bus-number', 'bus-stack'])[0]?.properties,
     bus,
   });

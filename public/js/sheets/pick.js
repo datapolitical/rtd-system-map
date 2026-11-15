@@ -15,11 +15,11 @@ export function pickFrom({ station, letter, rail = [], stop, label, bus } = {}) 
   if (station) return { title: esc(station.name), note: 'Rail station', rail: String(station.lines ?? '').split(' ').filter(Boolean) };
   if (letter) return { title: 'Line', note: 'Rail', rail: [letter.route] };
   if (rail.length) return { title: rail.length > 1 ? 'Lines' : 'Line', note: 'Rail', rail: rail.map((r) => r.route) };
-  if (stop) return { title: esc(stop.name), note: ['Bus stop', stop.heading].filter(Boolean).join(' · '), bus: stop.routes };
+  if (stop) return { title: esc(stop.name), note: [stop.kind === 'brt-stop' ? 'Bus rapid transit station' : 'Bus stop', stop.heading].filter(Boolean).join(' · '), bus: stop.routes };
   if (label) return { title: routeList(label.label).length > 1 ? 'Routes on this street' : 'Route', note: 'Bus', bus: label.label };
   if (bus) {
-    return { title: bus.n > 1 ? 'Routes on this street' : 'Route', bus: bus.routes,
-      note: bus.hw ? `A bus about every ${Math.round(bus.hw)} minutes on this street, weekday midday` : 'Bus' };
+    const often = bus.hw ? `A bus about every ${Math.round(bus.hw)} minutes on this street, weekday midday` : 'Bus';
+    return { title: bus.n > 1 ? 'Routes on this street' : 'Route', bus: bus.routes, note: bus.brt ? `Bus rapid transit · ${often}` : often };
   }
   return null;
 }

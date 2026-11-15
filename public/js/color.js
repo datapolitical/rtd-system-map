@@ -53,6 +53,13 @@ function fromOklab([L, a, b]) {
 
 // A color's lightness, 0 to 1 (OKLab L).
 export const lightness = (color) => toOklab(color)[0];
+// A color as OKLCh: lightness, chroma, hue in radians (0 to 2π).
+export function toOklch(color) {
+  const [L, a, b] = toOklab(color);
+  return [L, Math.hypot(a, b), (Math.atan2(b, a) + 2 * Math.PI) % (2 * Math.PI)];
+}
+// The color at OKLCh lightness `L`, chroma `C`, hue `h` (radians), clipped into sRGB.
+export const fromOklch = (L, C, h) => fromOklab([L, C * Math.cos(h), C * Math.sin(h)]);
 
 // The color itself if it already stands out from `background` by `ratio`;
 // otherwise the same hue, darkened only as far as it needs to.

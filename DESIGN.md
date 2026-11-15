@@ -2168,28 +2168,37 @@ How it is built:
   minutes or better, every 15, and every 30 or less often (more steps than
   three don't read as steps). A street with a bus every 10 minutes is as
   wide as the sheet's rail, never wider: wider bands made downtown, where
-  every street is frequent, a heavy grey mat. The very busiest, a bus every
+  every street is frequent, a heavy mat. The very busiest, a bus every
   5 minutes or better (the build's two top classes: Colfax, the 16th Street
   shuttle, and a few downtown blocks where many routes share a street), are
-  a size up on sheets 1 to 3: 1.3 times rail's width, their core with them,
-  in the same grey. They are a few streets, not a district (about an eighth
-  of the bus ink downtown on sheet 3), so they read as the spine without
-  making the mat. Sheet 4 keeps them at rail's width, under a stop's ring.
-  The frequent network reads
-  as corridors by a lit core instead: a thin line (0.36 of rail's width)
-  down the middle of each busiest street, near white in the dark and near
-  black in the light, and a thinner, dimmer one down each street with a
-  bus every 15 minutes (the Flatiron Flyer's), so the two steps read in
-  order and both read above the grid without adding width. The core is
-  grey and thinner than any rail line, so rail still reads first by its
-  colour and width. The quiet step is the sheet's rail width over 1.6
-  twice, and on the opening sheet a one-pixel hairline, half a lightness
-  step nearer the ground: there it is the whole outer street grid, and the
-  sheet's job is where service is frequent, so the grid sits back. The
-  middle step is rail's width over 1.4. Their greys are evenly
-  spaced in lightness, and the quietest reads clearly in both themes (in
-  the dark, where a thin line of light reads faint, more so). Rail reads first by its colour: in each theme the busiest bus grey
-  has less contrast with the ground than any rail line, by at least 15%.
+  a size up on sheets 1 to 3: 1.3 times rail's width, band and spine with
+  them. They are a few streets, not a district (about an eighth of the bus
+  ink downtown on sheet 3), so they read as the spine without making the
+  mat. Sheet 4 keeps them at rail's width, under a stop's ring.
+  Bus streets are one blue, in the hue RTD's rail colours leave free: the
+  middle of the widest gap their hues leave round the OKLCh colour wheel
+  (greys don't count), worked out by the page from the line colours in
+  `sheets.json`, so a new line colour moves the blue with no change here.
+  Today it is about 265°, at least 38° from every line. The steps are
+  lighter and a little stronger in the dark, darker in the light (OKLCh
+  lightness and chroma per step in `PALETTES`). A frequent street (a bus
+  every 15 minutes or better) is a tint: a pale band of the blue at the
+  street's width, laid over the ground as a mixed colour (not see-through,
+  so crossings show no knot), with a spine of the step's ink down the
+  middle, 0.42 of the band's width (0.45 for a bus every 15 minutes, whose
+  band is paler). A quiet street is a plain line in its ink. Each step
+  stands at least a quarter again above the one below in contrast with the
+  ground, so 15, 10 and 5 minutes read in order. The quiet step is the
+  sheet's rail width over 1.6 twice, and on the opening sheet a one-pixel
+  hairline, nearer the ground: there it is the whole outer street grid, and
+  the sheet's job is where service is frequent, so the grid sits back. The
+  middle step is rail's width over 1.4. The quietest reads clearly in both
+  themes (in the dark, where a thin line of light reads faint, more so).
+  Rail reads first by its colour and width: every rail line has at least
+  10% more contrast with the ground than the busiest band, and the spine
+  is under half a band, thinner than any rail line. Rail's own inks are
+  set as before, at least 15% above the contrast the busiest bus street
+  had when bus streets were grey (`railFloor`).
   The page takes each line's colour from RTD's data (the build lists them
   in `sheets.json`) and, where one is too dim for that, lifts it in the dark
   (lighter, same hue, keeping its share of the most chroma that hue can
@@ -2200,12 +2209,28 @@ How it is built:
   A bus line never ends in the open. Where it ends (no other street, rail
   station or bus station's hall meets it) and a stop of one of its routes is
   within 320 m, it is led on to that stop and ends on a ring there: ground
-  inside, in the line's own grey, a little wider than the line. Lines that
+  inside, in the line's own ink, a little wider than the line. Lines that
   end at one stop, or at stops a ring's width apart (gates either side of a
   highway), share one ring. An end with none of its stops that near is a
   spur in the data, and the run back to the street it leaves is not drawn
   when it is shorter than 1.6 km. Sheet 4 draws every stop, so its lines
   already end on one.
+- **Bus rapid transit** is the routes RTD files under the service category
+  "BUS RAPID TRANSIT" in its routes layer, read by the build (`brtRoutes`
+  in `scripts/lib/sheets.mjs`), never a list of routes. Today that is the
+  Flatiron Flyer (FF) alone; 15 and 15L are filed as local buses. A street
+  any such route runs on is marked `brt` and drawn a step below rail: a
+  rose line 0.8 of rail's width, cased in a deeper rose, over the bus
+  streets and under rail, with a white dot ringed in the deeper rose at
+  each of its stations on sheets 1 to 3 (sheet 4 draws every stop). A
+  station is the route's stops set on its drawn street (within four rail
+  widths) and merged within 150 m or three rail widths, whichever is more,
+  so a station's gates and both directions are one dot. The rose (OKLCh hue
+  355°) is at least 30° from every rail hue: clear of the purple N and E
+  lines and the red T line, and never red. When RTD files the Colfax BRT
+  under that category, Colfax takes the rose with no change here. It fades
+  with the bus streets when another route is picked; a tap names it "Bus
+  rapid transit" on the card.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
@@ -4785,6 +4810,15 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   every 10 minutes stays at rail's width. Taken from the build's classes,
   so it is whichever streets RTD runs that often. Downtown stays open:
   those classes are about an eighth of its bus ink on sheet 3.
+- 2026-11-15: Sheets: bus streets in blue, frequent ones as a tint (#117,
+  Chris picked "Tint firmer" of eight options). The greys and lit core give
+  way to one blue in the hue the rail colours leave free; a frequent street
+  is a pale band with a spine of its step's ink. Teal was dropped: it sat
+  10° from the W line. Rail's inks are unchanged.
+- 2026-11-15: Sheets: bus rapid transit in rose (#117, Chris picked "Rose"
+  over silver and none). Taken from RTD's "BUS RAPID TRANSIT" category: a
+  cased rose line a step below rail with station dots. Silver was near the
+  white of station marks in the dark.
 
 ## Sources
 
