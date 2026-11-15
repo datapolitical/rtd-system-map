@@ -2924,7 +2924,9 @@ export function groupLayout(table, measure) {
 // A bus street's ink as the page draws it (public/js/sheets/style.js, BUS_WIDTH): the busiest step as wide as
 // rail, the middle step rail over 1.4, the quiet step rail over 1.6 twice (a hairline on the opening sheet).
 const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
-export const busWide = (cls, sheet) => { const w = SIZES.rail[sheet.id]; return [sheet.id === 1 ? 1 : w / 1.6 ** 2, w / 1.4, w][BUS_STEP[cls] ?? 0]; };
+// The busiest (a bus every 5 minutes or better) a size up on sheets 1 to 3 (style.js, BUSIEST_OVER_RAIL).
+const BUSIEST = { c5: true, c3: true };
+export const busWide = (cls, sheet) => { const w = SIZES.rail[sheet.id]; return [sheet.id === 1 ? 1 : w / 1.6 ** 2, w / 1.4, BUSIEST[cls] && sheet.id <= 3 ? w * 1.3 : w][BUS_STEP[cls] ?? 0]; };
 
 /** A sheet's pixels around a place, each set where something is drawn (lines, dots, boxes, rooms), grown by a margin. */
 export class Raster {

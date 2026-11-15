@@ -610,15 +610,21 @@ test('the page inks each line from the colours the build found: pale ones cased 
   assert.equal(unpicked(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], '#123456'), '#123456', 'without the list, RTD\'s own colours');
 });
 
-test('bus widths: the busiest as wide as rail and never wider, the middle step under it, the quiet step as before; the frequent steps read by a lit core, not width', async () => {
-  const { sheetStyle, BUS_WIDTH, BUS_STEP, MID_UNDER_TOP, BUS_CORE } = await import('../public/js/sheets/style.js');
+test('bus widths: the frequent step as wide as rail, the busiest few a size up on sheets 1 to 3, the middle step under it, the quiet step as before; the frequent steps read by a lit core', async () => {
+  const { sheetStyle, BUS_WIDTH, BUS_STEP, MID_UNDER_TOP, BUS_CORE, BUSIEST, BUSIEST_OVER_RAIL } = await import('../public/js/sheets/style.js');
   for (const sheet of SHEETS) {
     const w = BUS_WIDTH[sheet.id];
-    const steps = [0, 1, 2].map((s) => [...new Set(Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => w[cls]))]);
+    const steps = [0, 1, 2].map((s) => [...new Set(Object.entries(BUS_STEP).filter(([k, x]) => x === s && !BUSIEST.includes(k)).map(([cls]) => w[cls]))]);
     assert.ok(steps.every((x) => x.length === 1), `sheet ${sheet.id}: one width per step`);
     const [q, m, t] = steps.map((x) => x[0]);
     const rail = SIZES.rail[sheet.id];
-    assert.ok(Math.abs(t - rail) < 0.01, `sheet ${sheet.id}: the busiest step is as wide as rail, never wider`);
+    assert.ok(Math.abs(t - rail) < 0.01, `sheet ${sheet.id}: a bus every 10 minutes is as wide as rail`);
+    for (const k of BUSIEST) {
+      assert.equal(BUS_STEP[k], 2, `${k} is in the frequent step's grey`);
+      assert.ok(Math.abs(w[k] - rail * BUSIEST_OVER_RAIL[sheet.id]) < 0.01, `sheet ${sheet.id}: ${k} is the busiest size`);
+      if (sheet.id <= 3) assert.ok(w[k] >= 1.25 * t, `sheet ${sheet.id}: the busiest read a size up`);
+    }
+    for (const cls of Object.keys(w)) assert.ok(Math.abs(busWide(cls, sheet) - w[cls]) < 0.011, `sheet ${sheet.id}: the build places ${cls} at the page's width`);
     assert.ok(Math.abs(m - rail / MID_UNDER_TOP) < 0.01 && m > q, `sheet ${sheet.id}: the middle step sits between`);
     assert.ok(q >= 1, `sheet ${sheet.id}: no line under a pixel`);
     if (sheet.id === 1) assert.ok(q <= 1.05, 'the opening sheet\'s quiet step is a hairline');

@@ -25,6 +25,13 @@ export const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
 // rail's width over 1.6 twice, and on the opening sheet a one-pixel hairline (there it is the whole
 // outer street grid).
 export const MID_UNDER_TOP = 1.4;
+// The busiest streets, a bus every 5 minutes or better (the build's two top classes), are a size
+// up on sheets 1 to 3: wider than rail by this much, core and all, so the city's busiest street
+// reads above the frequent grid. They are a few streets, not a district (downtown on sheet 3, about
+// an eighth of the bus ink), so they do not make a mat. Sheet 4 keeps them at rail's width, under
+// a stop's ring. Rail still reads first by its colour.
+export const BUSIEST = ['c5', 'c3'];
+export const BUSIEST_OVER_RAIL = { 1: 1.3, 2: 1.3, 3: 1.3, 4: 1 };
 const QUIET = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n, n === '1' ? 1 : w / 1.6 ** 2]));
 // The busiest step's core: this share of its width, in a grey with more contrast than the band's.
 export const BUS_CORE = 0.36;
@@ -62,7 +69,7 @@ export const PALETTES = {
 
 // Bus street widths by class, per sheet.
 export const BUS_WIDTH = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n,
-  Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, Math.round([QUIET[n], w / MID_UNDER_TOP, w][s] * 100) / 100]))]));
+  Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, Math.round([QUIET[n], w / MID_UNDER_TOP, BUSIEST.includes(k) ? w * BUSIEST_OVER_RAIL[n] : w][s] * 100) / 100]))]));
 
 // Rail stands out from the busiest bus street by at least this much more contrast with the ground.
 export const RAIL_OVER_BUS = 1.15;
@@ -242,7 +249,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     const core = ['match', ['get', 'cls'], 'c15', c.busCoreMid, c.busCore];
     const coreFaded = ['match', ['get', 'cls'], 'c15', fadeTo(c.busCoreMid, FADE.line), fadeTo(c.busCore, FADE.line)];
     layer('bus-core', 'line', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]]), layout: ROUND,
-      paint: { 'line-color': ['case', PICKED, coreFaded, core], 'line-width': ['match', ['get', 'cls'], 'c15', RAIL[n] * BUS_CORE * 0.7, RAIL[n] * BUS_CORE] } });
+      paint: { 'line-color': ['case', PICKED, coreFaded, core], 'line-width': ['match', ['get', 'cls'], 'c15', RAIL[n] * BUS_CORE * 0.7, BUSIEST,RAIL[n] * BUS_CORE * BUSIEST_OVER_RAIL[n], RAIL[n] * BUS_CORE] } });
     // Where a bus line ends: a ring on its end, ground inside, in the line's own grey, a little
     // wider than the line, so the line stops on something (a stop) rather than in the open.
     if (n <= 3) layer('bus-end', 'circle', { filter: kind('bus-end'), paint: {

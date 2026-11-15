@@ -2168,7 +2168,14 @@ How it is built:
   minutes or better, every 15, and every 30 or less often (more steps than
   three don't read as steps). A street with a bus every 10 minutes is as
   wide as the sheet's rail, never wider: wider bands made downtown, where
-  every street is frequent, a heavy grey mat. The frequent network reads
+  every street is frequent, a heavy grey mat. The very busiest, a bus every
+  5 minutes or better (the build's two top classes: Colfax, the 16th Street
+  shuttle, and a few downtown blocks where many routes share a street), are
+  a size up on sheets 1 to 3: 1.3 times rail's width, their core with them,
+  in the same grey. They are a few streets, not a district (about an eighth
+  of the bus ink downtown on sheet 3), so they read as the spine without
+  making the mat. Sheet 4 keeps them at rail's width, under a stop's ring.
+  The frequent network reads
   as corridors by a lit core instead: a thin line (0.36 of rail's width)
   down the middle of each busiest street, near white in the dark and near
   black in the light, and a thinner, dimmer one down each street with a
@@ -3477,9 +3484,9 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
 ## Open questions
 
 - **Shared streets by combined frequency (decided 2026-11-08):** each
-  street is drawn once at the rider's combined rate (see "Bus routes"). Still
-  open: whether the busiest streets should be capped at rail's width rather
-  than drawn wider, and the right threshold for strands against a core line
+  street is drawn once at the rider's combined rate (see "Bus routes"). The
+  busiest are no longer capped at rail's width on sheets 1 to 3 (decided
+  2026-11-15, decision log). Still open: the right threshold for strands against a core line
   (six routes today).
 - **Span (decided 2026-11-08):** "Frequent" does not also require all-day
   service. A strict test (4 or more departures in every hour from 6am to 8pm)
@@ -4772,6 +4779,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   widths, so it acts where the quiet step is a hairline (sheet 1: 11
   places) and almost nowhere else (sheet 3: 1, a stub into a transit
   centre's loop; sheets 2 and 4: none).
+- 2026-11-15: Sheets: the busiest streets a size up (#117, Chris: "Colfax
+  should be thicker"). A bus every 5 minutes or better (classes `c5`, `c3`)
+  is drawn 1.3 times rail's width on sheets 1 to 3, core included; a bus
+  every 10 minutes stays at rail's width. Taken from the build's classes,
+  so it is whichever streets RTD runs that often. Downtown stays open:
+  those classes are about an eighth of its bus ink on sheet 3.
 
 ## Sources
 
