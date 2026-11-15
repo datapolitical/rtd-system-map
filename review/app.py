@@ -13,6 +13,7 @@ from collections import deque
 import hmac
 import os
 import secrets
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -24,6 +25,7 @@ import shots
 
 MAX_FILES = 12
 MAX_BODY = 120 * 1024 * 1024
+VIEW_MAX = 1600  # longest side, in pixels, of the JPEG copies the page shows
 PAGE = "/"
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -218,11 +220,39 @@ def create_app(config=None):
             abort(404)
         return image_response(path)
 
+    def view_copy(src: Path) -> Path | None:
+        """A phone-sized JPEG of a review PNG (longest side at most VIEW_MAX), made once with
+        macOS sips and kept under <home>/cache/view. None when it can't be made."""
+        out = home / "cache" / "view" / src.parent.name / (src.stem + ".jpg")
+        try:
+            if out.is_file() and out.stat().st_mtime >= src.stat().st_mtime:
+                return out
+            out.parent.mkdir(parents=True, exist_ok=True)
+            tmp = out.with_name(f".{out.stem}-{secrets.token_hex(3)}.jpg")
+            done = subprocess.run(["/usr/bin/sips", "-s", "format", "jpeg", "-s", "formatOptions", "85",
+                                   "-Z", str(VIEW_MAX), str(src), "--out", str(tmp)],
+                                  capture_output=True, timeout=30)
+            if done.returncode or not tmp.is_file():
+                tmp.unlink(missing_ok=True)
+                return None
+            tmp.replace(out)
+            return out
+        except (OSError, subprocess.SubprocessError):
+            return None
+
     @app.get("/shots/api/image/review/<rid>/<name>")
     def review_image(rid, name):
         if not shots.REVIEW_RE.match(rid) or not shots.FILE_RE.match(name):
             abort(404)
-        return image_response(shots.reviews_dir(home) / rid / name)
+        path = shots.reviews_dir(home) / rid / name
+        if not shots.is_image(path):
+            abort(404)
+        # The page asks for ?full=1 only when Chris opens a picture on its own.
+        if path.suffix.lower() == ".png" and request.args.get("full") != "1" and os.path.exists("/usr/bin/sips"):
+            view = view_copy(path)
+            if view:
+                return send_file(view, mimetype="image/jpeg", conditional=False, etag=False)
+        return image_response(path)
 
     @app.get("/shots/api/image/issue/<name>")
     def issue_image(name):

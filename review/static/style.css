@@ -156,3 +156,5 @@ details summary{cursor:pointer;font-weight:650;font-size:15px;padding:6px 0}deta
 .choice-note-row textarea{min-height:46px;font-size:15px;padding:10px}
 .choice-note-row .secondary{min-height:46px}
 @media(max-width:420px){.choice{font-size:17px;min-height:56px}}
+/* Review sections fold; pictures exist only while one is open. */
+.rsec{border-top:1px solid var(--line);margin-top:6px}.rsec>summary{padding:12px 0;min-height:44px}.rsec-title{font-size:15px;font-weight:650}.rsec[open]>summary{margin-bottom:4px}.rsec-body{padding-bottom:12px}
