@@ -365,6 +365,7 @@
 
   function reviewBlock(r) {
     const sec = el("section", "block review-block");
+    sec.id = r.id; // linkable: /#<review id>
     const head = el("div", "section-heading");
     head.append(el("h2", "", r.title), badge(r.status));
     const eyebrow = { open: "Waiting for you", commented: "You answered", closed: "Closed" }[r.status] || "Review";
@@ -524,7 +525,25 @@
     tabChosen = true;
     showTab(b.dataset.tab);
   });
-  window.addEventListener("hashchange", () => { tabChosen = true; showTab(location.hash.slice(1), false); });
+  // A link like /#r-20261115-145936-641891 opens the Review tab at that review,
+  // unfolding "You've answered" or "Closed" if it sits there.
+  const isReviewHash = () => /^#r-\d{8}-\d{6}-[0-9a-f]{6}$/.test(location.hash);
+  let jumped = "";
+  function jumpToReview() {
+    if (!isReviewHash() || jumped === location.hash) return;
+    const block = document.getElementById(location.hash.slice(1));
+    if (!block) return;
+    jumped = location.hash;
+    tabChosen = true;
+    showTab("review", false);
+    const fold = block.closest("details");
+    if (fold) fold.open = true;
+    block.scrollIntoView({ block: "start" });
+  }
+  window.addEventListener("hashchange", () => {
+    if (isReviewHash()) { jumped = ""; jumpToReview(); return; }
+    tabChosen = true; showTab(location.hash.slice(1), false);
+  });
   if (TABS.includes(location.hash.slice(1))) { tabChosen = true; showTab(location.hash.slice(1), false); }
 
   // ---------- Chris's screenshots ----------
@@ -609,6 +628,7 @@
       $("n-issues").textContent = openIssues.length ? String(openIssues.length) : "";
       $("issues-synced").textContent = data.issues_synced
         ? `Issues are taken from GitHub when they name a place on the map; pictures are refreshed every 6 hours. Last checked ${data.issues_synced}.` : "";
+      jumpToReview();
       if (!tabChosen) { showTab("review", false); tabChosen = true; }
     } catch (e) {
       showError(e.message);
