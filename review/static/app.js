@@ -406,7 +406,8 @@
       sum.append(el("span", "rsec-title", s.heading || (lone ? "Pictures" : `Part ${i + 1}`)));
       const n = s.items.length;
       const asks = s.items.filter((it) => it.ask).length;
-      const bits = n > 1 ? [`${n} items`] : [];
+      const pics = s.items.reduce((k, it) => k + (it.before && it.after ? 1 : 0) + it.images.length, 0);
+      const bits = pics ? ["Tap to see the pictures"] : n > 1 ? [`${n} items`] : [];
       if (asks && r.status !== "closed") bits.push(`${asks} need${asks === 1 ? "s" : ""} your answer`);
       if (bits.length) sum.append(el("span", "summary-note", bits.join(" · ")));
       fold.append(sum);
@@ -428,7 +429,8 @@
           if (!fold.contains(document.activeElement)) body.replaceChildren();
         }
       });
-      const startOpen = openSecs.has(key) || (lone && !seenSecs.has(key) && r.status === "open");
+      // A review waiting on Chris shows its first section the first time it's drawn.
+      const startOpen = openSecs.has(key) || (i === 0 && !seenSecs.has(key) && r.status === "open");
       seenSecs.add(key);
       if (startOpen) { fold.open = true; openSecs.add(key); build(); }
       folds.push(fold);

@@ -250,7 +250,8 @@ def create_app(config=None):
         # The page asks for ?full=1 only when Chris opens a picture on its own.
         if path.suffix.lower() == ".png" and request.args.get("full") != "1" and os.path.exists("/usr/bin/sips"):
             view = view_copy(path)
-            if view:
+            # Flat map crops can come out bigger as JPEG; then the PNG goes as it is.
+            if view and view.stat().st_size < path.stat().st_size:
                 return send_file(view, mimetype="image/jpeg", conditional=False, etag=False)
         return image_response(path)
 
