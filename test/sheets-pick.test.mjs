@@ -15,6 +15,9 @@ test("a drawn route list reads as its routes, a stacked one too, and a tap names
   assert.deepEqual(pickFrom({ letter: { route: 'W' }, rail: [{ route: 'E' }] }).rail, ['W']);
   assert.equal(pickFrom({ label: { label: '0, 1' } }).bus, '0, 1');
   assert.equal(pickFrom({}), null, 'empty ground names nothing');
+  assert.match(pickFrom({ bus: { routes: 'FF1', n: 1, hw: 15, express: true } }).note, /^Express · /);
+  assert.match(pickFrom({ bus: { routes: 'AT', n: 1, hw: 60, airport: true } }).note, /^Airport bus · /, 'an airport bus says so, never RTD\'s category');
+  assert.doesNotMatch(pickFrom({ bus: { routes: 'AT', n: 1, hw: 60, airport: true } }).note, /SKYRIDE|SkyRide|BRT|rapid/i);
 });
 
 test('a picked route holds on every sheet: its pieces are drawn on top, the rest fades toward the ground', () => {

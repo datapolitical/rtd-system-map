@@ -2232,6 +2232,26 @@ How it is built:
   (clear of the purple N and E lines and the red T line, never red), and
   rail stands above its band as above the blue's. It fades with the bus
   streets when another route is picked; a tap says "Express" on the card.
+  Two marks say it is special: where it runs often, a thin pale dashed line
+  down its spine, highway style; and along it, every 160 to 320 px by
+  sheet, a small slanted shield (a lozenge) in its rose on a rim of ground,
+  carrying the route's name from RTD's data ("FF"). A quiet stretch keeps
+  the plain line, so it never looks more frequent than it is.
+- **Airport buses** are drawn the same way in indigo, with a plane. Which
+  routes follows RTD's route category for its airport buses (SkyRide, read
+  by the build: `airportRoutes` and `AIRPORT_CATEGORY` in
+  `scripts/lib/sheets.mjs`), never a list; today that is the AB and AT.
+  Their streets are marked `airport` and drawn as any bus street of their
+  frequency in indigo (OKLCh hue 278°, `AIRPORT` in `style.js`): between the
+  bus blue and the E Line's purple, a little stronger than the blue so the
+  colour shows on a quiet line, and lifted a little lighter so it tells
+  from the E Line in the light theme. Never light blue: that is the A Line,
+  the airport train. Where it runs often it gets the same dashed spine as
+  the express; along it, a small plane seen from above, nose along the line,
+  on a disc of ground. Where an airport bus shares a street with the
+  express, the street stays rose. A tap says "Airport bus", never RTD's
+  category name. The shields and planes are placed before the labels, so
+  labels and stop names keep clear of them, and they never stack.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
@@ -4825,6 +4845,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   flyer can stay a separate color"). Silver was dropped: near the white of
   station marks in the dark.
 - 2026-11-15: FF drawn as an express in rose, not called BRT (Chris, 2026-11-15).
+- 2026-11-15: Express and airport marks (#117). Chris picked a dashed
+  centre plus shields for the FF over a shadow and chevrons (chevrons read
+  as stop marks at phone size), then a lozenge shield over a diamond and a
+  hexagon. Airport buses (RTD's SkyRide category) get their own colour, the
+  dashed centre and a plane; Chris picked indigo over jade. Slate was
+  dropped (looked like any street), amber can't fit between the C and G
+  lines, and light blue is the A Line's. The indigo was lifted a little
+  lighter after the pick so it tells from the E Line in the light theme.
 
 ## Sources
 

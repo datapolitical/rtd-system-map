@@ -1,7 +1,7 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
-import { SHEETS, sheetData, sheetStyle, PALETTES, GROUP } from './style.js';
+import { SHEETS, sheetData, sheetStyle, PALETTES, GROUP, expressInk, airportInk } from './style.js';
 import { pickFrom, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
@@ -461,7 +461,39 @@ function groupImage(id) {
   }
   return { width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data };
 }
+// The marks repeated along the express and the airport buses (style.js): the express's shield, a slanted
+// plate in its rose on a rim of ground, and the airport plane, seen from above with its nose along the
+// line, in the airport indigo on a disc of ground.
+function markImage(id) {
+  const m = /^(express-shield|airport-plane)-(light|dark)$/.exec(id);
+  if (!m) return null;
+  const [, kind, theme] = m;
+  const c = PALETTES[theme];
+  const [w, h] = kind === 'express-shield' ? [18, 10] : [13, 13];
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * ratio); canvas.height = Math.round(h * ratio);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(ratio, ratio);
+  if (kind === 'express-shield') {
+    const lozenge = (inset) => {
+      ctx.beginPath(); ctx.moveTo(inset + 3, inset); ctx.lineTo(w - inset, inset); ctx.lineTo(w - inset - 3, h - inset); ctx.lineTo(inset, h - inset); ctx.closePath();
+    };
+    ctx.lineJoin = 'round';
+    lozenge(0.5); ctx.fillStyle = c.ground; ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = c.ground; ctx.stroke();
+    lozenge(1.4); ctx.fillStyle = expressInk(theme, 2).c10; ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 2, 0, 2 * Math.PI); ctx.fillStyle = c.ground; ctx.fill();
+    ctx.translate(w / 2, h / 2); ctx.fillStyle = airportInk(theme, 2).c10; ctx.beginPath();
+    ctx.moveTo(5.2, 0); ctx.quadraticCurveTo(5, -0.9, 3.6, -0.9); ctx.lineTo(1, -0.9); ctx.lineTo(-1.6, -5); ctx.lineTo(-2.8, -5); ctx.lineTo(-1.2, -0.9);
+    ctx.lineTo(-3.6, -0.9); ctx.lineTo(-4.6, -2.4); ctx.lineTo(-5.4, -2.4); ctx.lineTo(-4.8, 0);
+    ctx.lineTo(-5.4, 2.4); ctx.lineTo(-4.6, 2.4); ctx.lineTo(-3.6, 0.9); ctx.lineTo(-1.2, 0.9); ctx.lineTo(-2.8, 5); ctx.lineTo(-1.6, 5); ctx.lineTo(1, 0.9);
+    ctx.lineTo(3.6, 0.9); ctx.quadraticCurveTo(5, 0.9, 5.2, 0); ctx.closePath(); ctx.fill();
+  }
+  return { width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data };
+}
 map.setMissingStyleImageResolver((id) => {
+  const mark = !map.hasImage(id) && markImage(id);
+  if (mark) return map.addImage(id, mark, { pixelRatio: ratio });
   const image = !map.hasImage(id) && groupImage(id);
   if (image) map.addImage(id, image, { pixelRatio: ratio });
 });

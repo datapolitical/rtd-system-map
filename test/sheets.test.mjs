@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -585,7 +585,7 @@ test('the express is drawn as any bus street of its frequency, in rose: same ban
   for (const color of colors) assert.ok(deg((EXPRESS_HUE * Math.PI) / 180, toOklch(color)[2]) >= 30, `rose keeps 30 degrees off ${color}`);
   for (const theme of ['light', 'dark']) {
     const layers = sheetStyle(theme, [], colors).layers;
-    assert.ok(!layers.some((l) => /^(brt|express)/.test(l.id)), `${theme}: no layers of its own`);
+    assert.ok(!layers.some((l) => /^brt|^express(?!-shield-)/.test(l.id) || (l.type === 'circle' && /express/.test(JSON.stringify(l.filter)))), `${theme}: no casing or dots of its own, only its shield`);
     const paint = (id, cls, express) => evaluate(layers.find((l) => l.id === id).paint['line-color'], { props: { cls, ...(express ? { express: true } : {}) }, state: { bus: '', rail: '' } });
     const [blue, rose] = [busInk(theme, 2, colors), expressInk(theme, 2)];
     for (const cls of ['c60', 'c15', 'c10', 'c5']) {
@@ -609,6 +609,41 @@ test('the build finds the express by RTD\'s route category, not a route list', (
   const express = expressRoutes(routes);
   assert.deepEqual([...express], ['FF1']);
   assert.ok(isExpress('15 FF1', express) && isExpress('15, FF1', express) && !isExpress('15 15L', express));
+});
+
+test('the build finds the airport buses by RTD\'s route category, not a route list', () => {
+  const routes = { features: [
+    { properties: { route: 'AT', category: 'SKYRIDE' } }, { properties: { route: 'AB', category: ' SkyRide ' } }, { properties: { route: 'FF1', category: 'BUS RAPID TRANSIT' } }, { properties: { route: '15', category: 'METRO LOCAL' } }] };
+  assert.deepEqual([...airportRoutes(routes)].sort(), ['AB', 'AT']);
+});
+
+test('the airport buses are drawn as any bus street of their frequency, in indigo, with a plane; clear of the rail lines and the bus blue', async () => {
+  const { sheetStyle, busInk, airportInk, airportWash, AIRPORT } = await import('../public/js/sheets/style.js');
+  const { toOklch } = await import('../public/js/color.js');
+  const { evaluate } = await import('../public/js/evaluate.js');
+  const colors = ['#57C1E9', '#4E9D2D', '#F79239', '#552683', '#F6B221', '#9F26B5', '#C4D600', '#B71318', '#009DAA'];
+  const deg = (a, b) => { const d = Math.abs(a - b) * 180 / Math.PI % 360; return Math.min(d, 360 - d); };
+  const lab = (c) => { const [L, C, h] = toOklch(c); return [L, C * Math.cos(h), C * Math.sin(h)]; };
+  const dE = (a, b) => Math.hypot(...lab(a).map((v, i) => v - lab(b)[i]));
+  for (const color of colors) assert.ok(deg((AIRPORT.hue * Math.PI) / 180, toOklch(color)[2]) >= 20, `indigo keeps 20 degrees off ${color}`);
+  for (const theme of ['light', 'dark']) {
+    const layers = sheetStyle(theme, [], colors).layers;
+    const paint = (id, cls, props) => evaluate(layers.find((l) => l.id === id).paint['line-color'], { props: { cls, ...props }, state: { bus: '', rail: '' } });
+    const [blue, air] = [busInk(theme, 2, colors), airportInk(theme, 2)];
+    for (const cls of ['c60', 'c15', 'c10']) {
+      assert.equal(paint('bus-2', cls, { airport: true }), { ...air, ...airportWash(theme) }[cls], `${theme} ${cls}: an airport street in indigo`);
+      assert.equal(paint('bus-2', cls, { airport: true, express: true }), paint('bus-2', cls, { express: true }), `${theme} ${cls}: the express wins where both run`);
+      assert.ok(dE(air[cls], blue[cls]) >= 0.045, `${theme} ${cls}: indigo tells from the bus blue`);
+      assert.ok(dE(air[cls], '#552683') >= 0.09, `${theme} ${cls}: indigo tells from the E Line`);
+    }
+    assert.equal(paint('bus-spine-2', 'c10', { airport: true }), air.c10, `${theme}: its spine in indigo`);
+    const plane = layers.find((l) => l.id === 'airport-plane-2');
+    assert.equal(plane.layout['icon-image'], `airport-plane-${theme}`);
+    const dash = layers.find((l) => l.id === 'marked-dash-2');
+    const on = (props) => evaluate(dash.filter, { props: { kind: 'bus', ...props }, state: { bus: '', rail: '' } });
+    assert.ok(on({ cls: 'c15', airport: true }) && on({ cls: 'c10', express: true }), `${theme}: frequent airport and express streets get the dash`);
+    assert.ok(!on({ cls: 'c60', airport: true }) && !on({ cls: 'c10' }), `${theme}: a quiet one, or a plain bus street, doesn't`);
+  }
 });
 
 test('in the dark a lifted line keeps its hue and stays a strong colour: red stays red, not salmon', async () => {

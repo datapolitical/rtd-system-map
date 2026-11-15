@@ -41,6 +41,14 @@ export const BUS_SPINE = { mid: 0.45, top: 0.42 };
 // band, spine, width and order alike, in a rose (OKLCh hue, degrees) in place of the blue: clear of
 // the purple lines and the red one, and never red.
 export const EXPRESS_HUE = 355;
+// The dashed line down the express's and the airport buses' spine.
+const DASH = { light: '#ffffff', dark: '#f1eef3' };
+// Airport buses (the streets the build marks `airport`: the routes RTD files as SkyRide) are drawn the
+// same way again, in an indigo: between the bus blue and the E Line's purple, a little stronger than
+// the blue so the colour shows even on a quiet street, and a little lighter than the E Line in the
+// light theme so the two don't meet as near twins. Its tones: chroma × `chroma` (× `quiet` more on the
+// quiet step, a thin line), and each tone lifted by `lift` in OKLab L.
+export const AIRPORT = { hue: 278, chroma: 1.5, quiet: 1.8, lift: { light: 0.02, dark: 0.04 } };
 const steps = (quiet, mid, top) => Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, [quiet, mid, top][s]]));
 
 // The bus blue's hue: the middle of the widest gap RTD's rail colours leave round the colour
@@ -99,18 +107,22 @@ export const LIGHT_SHADE_MOST = 0.12;
 // A cased line's casing, each side, per sheet: it sits in the gap between lines that share track.
 const CASING = { 1: 0.6, 2: 0.7, 3: 0.8, 4: 1 };
 
-/** The same, in the express's rose. */
+/** The same, in the express's rose, and in the airport buses' indigo. */
 export const expressInk = (theme, n) => busInk(theme, n, [], (EXPRESS_HUE * Math.PI) / 180);
 export const expressWash = (theme) => busWash(theme, [], (EXPRESS_HUE * Math.PI) / 180);
+const AIRPORT_TINT = (theme) => ({ chroma: AIRPORT.chroma, quiet: AIRPORT.quiet, lift: AIRPORT.lift[theme] });
+export const airportInk = (theme, n) => busInk(theme, n, [], (AIRPORT.hue * Math.PI) / 180, AIRPORT_TINT(theme));
+export const airportWash = (theme) => busWash(theme, [], (AIRPORT.hue * Math.PI) / 180, AIRPORT_TINT(theme));
+const PLAIN = { chroma: 1, quiet: 1, lift: 0 };
 /** Each bus class's ink on one sheet (a frequent step's spine): the opening sheet draws its quiet step as a faint hairline. */
-export const busInk = (theme, n, colors = [], h = busHue(colors)) => {
+export const busInk = (theme, n, colors = [], h = busHue(colors), { chroma, quiet, lift } = PLAIN) => {
   const t = PALETTES[theme].busTone;
-  return steps(...[n === 1 ? t.hairline : t.quiet, t.mid, t.top].map(([L, C]) => fromOklch(L, C, h)));
+  return steps(...[n === 1 ? t.hairline : t.quiet, t.mid, t.top].map(([L, C], j) => fromOklch(L + lift, C * chroma * (j === 0 ? quiet : 1), h)));
 };
 /** The frequent steps' band, laid over the ground: `{ c15, c10, c5, c3 }`. */
-export const busWash = (theme, colors = [], h = busHue(colors)) => {
+export const busWash = (theme, colors = [], h = busHue(colors), { chroma } = PLAIN) => {
   const c = PALETTES[theme];
-  const [mid, top] = [c.busWash.mid, c.busWash.top].map(([L, C]) => mix(fromOklch(L, C, h), c.ground, 1 - c.busWash.strength));
+  const [mid, top] = [c.busWash.mid, c.busWash.top].map(([L, C]) => mix(fromOklch(L, C * chroma, h), c.ground, 1 - c.busWash.strength));
   return Object.fromEntries(Object.entries(BUS_STEP).filter(([, s]) => s > 0).map(([k, s]) => [k, s === 1 ? mid : top]));
 };
 
@@ -271,28 +283,36 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     const frequent = ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]];
     const ink = busInk(theme, n, colors);
     const rose = expressInk(theme, n);
+    const air = airportInk(theme, n);
     // A quiet street is a line in its ink; a frequent one is its band (busWash), with its spine on top.
-    // An express street is the same in rose.
+    // An express street is the same in rose, an airport bus's in indigo (the express wins where both run).
     const body = { ...ink, ...busWash(theme, colors) };
     const roseBody = { ...rose, ...expressWash(theme) };
+    const airBody = { ...air, ...airportWash(theme) };
     const onExpress = ['==', ['get', 'express'], true];
-    const inks = (blue, red) => ['case', onExpress, byClass(red), byClass(blue)];
-    const whole = (blue, red) => ['case', PICKED, inks(fadeTable(blue, FADE.line), fadeTable(red, FADE.line)), inks(blue, red)];
+    const onAirport = ['all', ['==', ['get', 'airport'], true], ['!', onExpress]];
+    const inks = (blue, red, indigo) => ['case', onExpress, byClass(red), onAirport, byClass(indigo), byClass(blue)];
+    const whole = (blue, red, indigo) => ['case', PICKED,
+      inks(fadeTable(blue, FADE.line), fadeTable(red, FADE.line), fadeTable(indigo, FADE.line)), inks(blue, red, indigo)];
     layer('bus-rim', 'line', { filter: kind('bus', frequent), layout: ROUND,
       paint: { 'line-color': c.ground, 'line-width': ['+', byClass(BUS_WIDTH[n]), 1.6] } });
     layer('bus', 'line', { filter: kind('bus'), layout: { ...ROUND, 'line-sort-key': ['match', ['get', 'cls'], ...order.flatMap((k, j) => [k, j]), 0] },
       // The picked route's own streets are drawn again on top (pick-bus, below), so all of them fade here.
-      paint: { 'line-color': whole(body, roseBody), 'line-width': byClass(BUS_WIDTH[n]) } });
+      paint: { 'line-color': whole(body, roseBody, airBody), 'line-width': byClass(BUS_WIDTH[n]) } });
     // The frequent steps' spine: the step's ink down the band's middle, a share of its width, so the
     // busiest streets keep their extra width in spine and band alike.
     const spine = Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, x]) => [k, x * (BUS_STEP[k] === 1 ? BUS_SPINE.mid : BUS_SPINE.top)]));
     layer('bus-spine', 'line', { filter: kind('bus', frequent), layout: ROUND,
-      paint: { 'line-color': whole(ink, rose), 'line-width': byClass(spine) } });
+      paint: { 'line-color': whole(ink, rose, air), 'line-width': byClass(spine) } });
+    // The express and the airport buses where they run often: a thin pale dashed line down the spine,
+    // highway style. A quiet one stays a plain line, so neither looks more frequent than it is.
+    layer('marked-dash', 'line', { filter: kind('bus', ['all', ['any', onExpress, onAirport], frequent]), layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      paint: { 'line-color': unless(onBus(), DASH[theme], fadeTo(DASH[theme], FADE.line)), 'line-width': Math.max(0.8, w * 0.16), 'line-dasharray': [3, 2.5] } });
     // Where a bus line ends: a ring on its end, ground inside, in the line's own ink, a little
     // wider than the line, so the line stops on something (a stop) rather than in the open.
     if (n <= 3) layer('bus-end', 'circle', { filter: kind('bus-end'), paint: {
       'circle-radius': ['+', ['/', byClass(BUS_WIDTH[n]), 2], BUS_END.stroke + 0.9], 'circle-color': c.ground,
-      'circle-stroke-color': whole(ink, rose), 'circle-stroke-width': BUS_END.stroke } });
+      'circle-stroke-color': whole(ink, rose, air), 'circle-stroke-width': BUS_END.stroke } });
 
     // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses
     // end on. It is drawn over them, so a street ends flat on the wall, not in a round blob across it.
@@ -357,6 +377,18 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     // Route numbers along each bus street, from the second sheet.
     const unseen = { layout: { 'symbol-placement': 'line', 'symbol-spacing': 6, 'text-field': 'o', 'text-font': FONT.medium, 'text-size': 7, 'text-allow-overlap': true, 'text-padding': 0, 'text-rotation-alignment': 'viewport' }, paint: { 'text-opacity': 0 } };
     layer('keep-off-bus', 'symbol', { filter: kind('bus', ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]]), ...unseen });
+    // Repeated along them: the express's slanted shield with its name from RTD's data (`shield`), and the
+    // airport buses' small plane, pointing along the line. Above keep-off-bus so they are placed first and
+    // the labels below keep clear of them; they keep clear of each other.
+    const markOpacity = unless(onBus(), 1, 1 - FADE.line);
+    const along = { 'symbol-placement': 'line', 'symbol-spacing': [160, 200, 260, 320][i], 'symbol-sort-key': -1000, 'icon-padding': 6 };
+    layer('express-shield', 'symbol', { filter: kind('bus', onExpress),
+      layout: { ...along, 'icon-image': `express-shield-${theme}`, 'icon-rotation-alignment': 'viewport',
+        'text-field': ['get', 'shield'], 'text-font': FONT.bold, 'text-size': 7, 'text-letter-spacing': -0.02, 'text-rotation-alignment': 'viewport', 'text-padding': 6 },
+      paint: { 'text-color': theme === 'dark' ? c.ground : '#ffffff', 'icon-opacity': markOpacity, 'text-opacity': markOpacity } });
+    layer('airport-plane', 'symbol', { filter: kind('bus', onAirport),
+      layout: { ...along, 'icon-image': `airport-plane-${theme}`, 'icon-rotation-alignment': 'map' },
+      paint: { 'icon-opacity': markOpacity } });
     // Bus streets' names from sheet 3, beside the street like its route numbers and placed after them
     // (scripts/lib/sheets.mjs names them from their stops), quieter than the numbers.
     const besideStreet = (n2, shift = 0) => ['case', ['==', ['get', 'side'], -1],
