@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, brtRoutes, isBrt } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -576,39 +576,39 @@ test('the opening sheet draws its quiet step fainter than the quiet step elsewhe
   assert.equal(evaluate(bus1, { props: { cls: 'c60' }, state: { bus: '', rail: '' } }), busInk('dark', 1).c60, 'sheet 1 paints it');
 });
 
-test('bus rapid transit is drawn as any bus street of its frequency, in rose: same band, spine, widths and order, no casing or station dots', async () => {
-  const { sheetStyle, busInk, brtInk, brtWash, busWash, BRT_HUE, PALETTES, railInk } = await import('../public/js/sheets/style.js');
+test('the express is drawn as any bus street of its frequency, in rose: same band, spine, widths and order, no casing or station dots', async () => {
+  const { sheetStyle, busInk, expressInk, expressWash, busWash, EXPRESS_HUE, PALETTES, railInk } = await import('../public/js/sheets/style.js');
   const { toOklch, contrast } = await import('../public/js/color.js');
   const { evaluate } = await import('../public/js/evaluate.js');
   const colors = ['#57C1E9', '#4E9D2D', '#F79239', '#552683', '#F6B221', '#9F26B5', '#C4D600', '#B71318', '#009DAA'];
   const deg = (a, b) => { const d = Math.abs(a - b) * 180 / Math.PI % 360; return Math.min(d, 360 - d); };
-  for (const color of colors) assert.ok(deg((BRT_HUE * Math.PI) / 180, toOklch(color)[2]) >= 30, `rose keeps 30 degrees off ${color}`);
+  for (const color of colors) assert.ok(deg((EXPRESS_HUE * Math.PI) / 180, toOklch(color)[2]) >= 30, `rose keeps 30 degrees off ${color}`);
   for (const theme of ['light', 'dark']) {
     const layers = sheetStyle(theme, [], colors).layers;
-    assert.ok(!layers.some((l) => /^brt/.test(l.id)), `${theme}: no layers of its own`);
-    const paint = (id, cls, brt) => evaluate(layers.find((l) => l.id === id).paint['line-color'], { props: { cls, ...(brt ? { brt: true } : {}) }, state: { bus: '', rail: '' } });
-    const [blue, rose] = [busInk(theme, 2, colors), brtInk(theme, 2)];
+    assert.ok(!layers.some((l) => /^(brt|express)/.test(l.id)), `${theme}: no layers of its own`);
+    const paint = (id, cls, express) => evaluate(layers.find((l) => l.id === id).paint['line-color'], { props: { cls, ...(express ? { express: true } : {}) }, state: { bus: '', rail: '' } });
+    const [blue, rose] = [busInk(theme, 2, colors), expressInk(theme, 2)];
     for (const cls of ['c60', 'c15', 'c10', 'c5']) {
       assert.equal(paint('bus-2', cls, false), { ...blue, ...busWash(theme, colors) }[cls], `${theme} ${cls}: a bus street in blue`);
-      assert.equal(paint('bus-2', cls, true), { ...rose, ...brtWash(theme) }[cls], `${theme} ${cls}: a BRT street in rose`);
+      assert.equal(paint('bus-2', cls, true), { ...rose, ...expressWash(theme) }[cls], `${theme} ${cls}: an express street in rose`);
       assert.deepEqual(toOklch(rose[cls]).slice(0, 1).map((x) => x.toFixed(2)), toOklch(blue[cls]).slice(0, 1).map((x) => x.toFixed(2)), `${theme} ${cls}: only the hue changes`);
     }
     assert.equal(paint('bus-spine-2', 'c10', true), rose.c10, `${theme}: its spine in rose`);
     const g = PALETTES[theme].ground;
-    const band = contrast(brtWash(theme).c10, g);
+    const band = contrast(expressWash(theme).c10, g);
     for (const color of colors) {
       const r = railInk(theme, color);
-      assert.ok(contrast(r.casing ?? r.line, g) > band * 1.1, `${theme} ${color}: rail stands above a BRT band`);
+      assert.ok(contrast(r.casing ?? r.line, g) > band * 1.1, `${theme} ${color}: rail stands above an express band`);
     }
   }
 });
 
-test('the build finds BRT by RTD\'s category, not a route list', () => {
+test('the build finds the express by RTD\'s route category, not a route list', () => {
   const routes = { features: [
     { properties: { route: 'FF1', category: 'BUS RAPID TRANSIT' } }, { properties: { route: '15', category: 'METRO LOCAL' } }, { properties: { route: 'A', category: 'COMMUTER RAIL' } }] };
-  const brt = brtRoutes(routes);
-  assert.deepEqual([...brt], ['FF1']);
-  assert.ok(isBrt('15 FF1', brt) && isBrt('15, FF1', brt) && !isBrt('15 15L', brt));
+  const express = expressRoutes(routes);
+  assert.deepEqual([...express], ['FF1']);
+  assert.ok(isExpress('15 FF1', express) && isExpress('15, FF1', express) && !isExpress('15 15L', express));
 });
 
 test('in the dark a lifted line keeps its hue and stays a strong colour: red stays red, not salmon', async () => {

@@ -2215,22 +2215,23 @@ How it is built:
   spur in the data, and the run back to the street it leaves is not drawn
   when it is shorter than 1.6 km. Sheet 4 draws every stop, so its lines
   already end on one.
-- **Bus rapid transit** is the routes RTD files under the service category
-  "BUS RAPID TRANSIT" in its routes layer, read by the build (`brtRoutes`
-  in `scripts/lib/sheets.mjs`), never a list of routes. Today that is the
-  Flatiron Flyer (FF) alone; 15 and 15L are filed as local buses. A street
-  any such route runs on is marked `brt` and drawn exactly as any bus
-  street of its frequency (the same band and spine, or plain line on a
-  quieter stretch, the same widths, steps and order among the buses, the
-  same end ring), with only the hue changed: rose (OKLCh hue 355°) in place
-  of the blue, at the same lightness and chroma. No casing and no station
-  dots: it is a bus, not a rail line (Chris: the first, rail-like drawing
-  "looks too much like a rail line, and not like the 15"). The rose is at
-  least 30° from every rail hue (clear of the purple N and E lines and the
-  red T line, never red), and rail stands above its band as above the
-  blue's. When RTD files the Colfax BRT under that category, Colfax takes
-  the rose with no change here. It fades with the bus streets when another
-  route is picked; a tap names it "Bus rapid transit" on the card.
+- **The express** (the Flatiron Flyer, FF) is drawn in rose. Which routes
+  get it follows RTD's route category: the routes in the service category
+  RTD files the FF under in its routes layer, read by the build
+  (`expressRoutes` and `EXPRESS_CATEGORY` in `scripts/lib/sheets.mjs`),
+  never a list of routes. Today that is the FF alone; the 15 and 15L and
+  RTD's regional routes stay regular buses. The map calls it an express
+  (Chris), never by RTD's category name. A street the FF runs on is marked
+  `express` and drawn exactly as any bus street of its frequency (the same
+  band and spine, or plain line on a quieter stretch, the same widths,
+  steps and order among the buses, the same end ring), with only the hue
+  changed: rose (OKLCh hue 355°) in place of the blue, at the same
+  lightness and chroma. No casing and no station dots: it is a bus, not a
+  rail line (Chris: a rail-like drawing "looks too much like a rail line,
+  and not like the 15"). The rose is at least 30° from every rail hue
+  (clear of the purple N and E lines and the red T line, never red), and
+  rail stands above its band as above the blue's. It fades with the bus
+  streets when another route is picked; a tap says "Express" on the card.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
@@ -4815,13 +4816,15 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   way to one blue in the hue the rail colours leave free; a frequent street
   is a pale band with a spine of its step's ink. Teal was dropped: it sat
   10° from the W line. Rail's inks are unchanged.
-- 2026-11-15: Sheets: bus rapid transit in rose (#117, Chris picked "Rose"
-  over silver and none). Taken from RTD's "BUS RAPID TRANSIT" category.
-  First drawn as a cased rose line a step below rail with station dots;
-  Chris: it "looks too much like a rail line, and not like the 15". Now a
-  BRT street is drawn as any bus street of its frequency, band, spine,
-  widths and order alike, with only the hue changed to rose; no casing, no
-  dots. Silver was dropped: near the white of station marks in the dark.
+- 2026-11-15: Sheets: the Flatiron Flyer in rose (#117, Chris picked "Rose"
+  over silver and none). First drawn as a cased line a step below rail with
+  station dots; Chris: it "looks too much like a rail line, and not like
+  the 15". Now drawn as any bus street of its frequency with only the hue
+  changed. Which routes are rose follows RTD's route category (the one RTD
+  files the FF under); RTD's regional routes stay regular buses ("the
+  flyer can stay a separate color"). Silver was dropped: near the white of
+  station marks in the dark.
+- 2026-11-15: FF drawn as an express in rose, not called BRT (Chris, 2026-11-15).
 
 ## Sources
 

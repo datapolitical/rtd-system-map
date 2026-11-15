@@ -2926,12 +2926,13 @@ export function groupLayout(table, measure) {
 const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
 // The busiest (a bus every 5 minutes or better) a size up on sheets 1 to 3 (style.js, BUSIEST_OVER_RAIL).
 const BUSIEST = { c5: true, c3: true };
-// Bus rapid transit (DESIGN.md, "Four sheets"): the routes RTD files under this service category.
-// Their streets are marked `brt` and drawn in BRT's rose; a route RTD adds to it is drawn so with no change here.
-export const BRT_CATEGORY = 'BUS RAPID TRANSIT';
-export const brtRoutes = (routes) => new Set((routes?.features ?? [])
-  .filter((f) => String(f.properties.category ?? '').trim().toUpperCase() === BRT_CATEGORY).map((f) => String(f.properties.route)));
-export const isBrt = (routes, brt) => String(routes ?? '').split(/[ ,]+/).some((r) => brt.has(r));
+// The express (DESIGN.md, "Four sheets"): the routes in the service category RTD files the Flatiron
+// Flyer under (today the FF alone). Their streets are marked `express` and drawn in rose; a route RTD
+// adds to that category is drawn so with no change here. The map calls it an express, not by RTD's name.
+export const EXPRESS_CATEGORY = 'BUS RAPID TRANSIT';
+export const expressRoutes = (routes) => new Set((routes?.features ?? [])
+  .filter((f) => String(f.properties.category ?? '').trim().toUpperCase() === EXPRESS_CATEGORY).map((f) => String(f.properties.route)));
+export const isExpress = (routes, express) => String(routes ?? '').split(/[ ,]+/).some((r) => express.has(r));
 export const busWide = (cls, sheet) => { const w = SIZES.rail[sheet.id]; return [sheet.id === 1 ? 1 : w / 1.6 ** 2, w / 1.4, BUSIEST[cls] && sheet.id <= 3 ? w * 1.3 : w][BUS_STEP[cls] ?? 0]; };
 
 /** A sheet's pixels around a place, each set where something is drawn (lines, dots, boxes, rooms), grown by a margin. */
@@ -3102,7 +3103,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const { streets: bus, ends } = termini(busStreets(streets, sheet, walls, marks, lines), endStops, 1 / metresPerPixel(lat0, sheet.zoom),
     marks.flatMap((m) => [m.ends, ...(m.more ?? [])]), walls);
   const discs = letters(lines, marks, sheet);
-  const brt = brtRoutes(routes);
+  const express = expressRoutes(routes);
   const back = (p) => toLonLat(p, sheet.zoom);
   const feature = (properties, geometry) => ({ type: 'Feature', properties, geometry });
   const features = [];
@@ -3137,7 +3138,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   for (const s of bus) {
     const on = groupOf.get(s);
     const more = on ? { street: shortened(on.street), groups: groupRows(blockRows(s, on)), others: listed(String(s.routes).split(' ').filter((r) => !on.g.all.has(r)).join(' ')) } : {};
-    features.push(feature({ kind: 'bus', cls: s.cls, routes: listed(s.routes), n: s.n, hw: s.hw, ...(isBrt(s.routes, brt) ? { brt: true } : {}), ...more }, { type: 'LineString', coordinates: s.path.map(back) }));
+    features.push(feature({ kind: 'bus', cls: s.cls, routes: listed(s.routes), n: s.n, hw: s.hw, ...(isExpress(s.routes, express) ? { express: true } : {}), ...more }, { type: 'LineString', coordinates: s.path.map(back) }));
   }
   // What is labelled along the streets: on a table's streets, only the routes it doesn't name.
   const toLabel = bus.flatMap((s) => {
@@ -3391,7 +3392,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     for (const b of n.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink }, { type: 'Point', coordinates: back(b.at) }));
   }
   // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.
-  if (sheet.id <= 3) for (const e of ends) features.push(feature({ kind: 'bus-end', cls: e.cls, routes: listed(e.routes), ...(isBrt(String(e.routes), brt) ? { brt: true } : {}) }, { type: 'Point', coordinates: back(e.at) }));
+  if (sheet.id <= 3) for (const e of ends) features.push(feature({ kind: 'bus-end', cls: e.cls, routes: listed(e.routes), ...(isExpress(String(e.routes), express) ? { express: true } : {}) }, { type: 'Point', coordinates: back(e.at) }));
   // A stop RTD letters by its group says its letter where its ring would be.
   for (const r of rings) features.push(feature({ kind: 'stop', id: r.id, name: r.letter ? stopName(r.name) : r.name, heading: r.heading, routes: r.routes.join(', '), ...(r.letter ? { letter: r.letter } : {}) }, { type: 'Point', coordinates: back(r.at) }));
   const hub = marks.find((m) => m.hub);

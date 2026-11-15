@@ -37,10 +37,10 @@ const QUIET = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n, n === 
 // middle: the band is the street's width in a pale wash of the bus blue, the spine this share of
 // it in the step's own ink. The quiet step is a plain line in its ink.
 export const BUS_SPINE = { mid: 0.45, top: 0.42 };
-// Bus rapid transit (the streets the build marks `brt`) is drawn as any bus street of its frequency,
+// The express (the streets the build marks `express`: today the Flatiron Flyer) is drawn as any bus street of its frequency,
 // band, spine, width and order alike, in a rose (OKLCh hue, degrees) in place of the blue: clear of
 // the purple lines and the red one, and never red.
-export const BRT_HUE = 355;
+export const EXPRESS_HUE = 355;
 const steps = (quiet, mid, top) => Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, [quiet, mid, top][s]]));
 
 // The bus blue's hue: the middle of the widest gap RTD's rail colours leave round the colour
@@ -99,9 +99,9 @@ export const LIGHT_SHADE_MOST = 0.12;
 // A cased line's casing, each side, per sheet: it sits in the gap between lines that share track.
 const CASING = { 1: 0.6, 2: 0.7, 3: 0.8, 4: 1 };
 
-/** The same, in BRT's rose. */
-export const brtInk = (theme, n) => busInk(theme, n, [], (BRT_HUE * Math.PI) / 180);
-export const brtWash = (theme) => busWash(theme, [], (BRT_HUE * Math.PI) / 180);
+/** The same, in the express's rose. */
+export const expressInk = (theme, n) => busInk(theme, n, [], (EXPRESS_HUE * Math.PI) / 180);
+export const expressWash = (theme) => busWash(theme, [], (EXPRESS_HUE * Math.PI) / 180);
 /** Each bus class's ink on one sheet (a frequent step's spine): the opening sheet draws its quiet step as a faint hairline. */
 export const busInk = (theme, n, colors = [], h = busHue(colors)) => {
   const t = PALETTES[theme].busTone;
@@ -270,13 +270,13 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     const order = ['c60', 'c30', 'c15', 'c10', 'c5', 'c3'];
     const frequent = ['in', ['get', 'cls'], ['literal', ['c15', 'c10', 'c5', 'c3']]];
     const ink = busInk(theme, n, colors);
-    const rose = brtInk(theme, n);
+    const rose = expressInk(theme, n);
     // A quiet street is a line in its ink; a frequent one is its band (busWash), with its spine on top.
-    // A BRT street is the same in rose.
+    // An express street is the same in rose.
     const body = { ...ink, ...busWash(theme, colors) };
-    const roseBody = { ...rose, ...brtWash(theme) };
-    const onBrt = ['==', ['get', 'brt'], true];
-    const inks = (blue, red) => ['case', onBrt, byClass(red), byClass(blue)];
+    const roseBody = { ...rose, ...expressWash(theme) };
+    const onExpress = ['==', ['get', 'express'], true];
+    const inks = (blue, red) => ['case', onExpress, byClass(red), byClass(blue)];
     const whole = (blue, red) => ['case', PICKED, inks(fadeTable(blue, FADE.line), fadeTable(red, FADE.line)), inks(blue, red)];
     layer('bus-rim', 'line', { filter: kind('bus', frequent), layout: ROUND,
       paint: { 'line-color': c.ground, 'line-width': ['+', byClass(BUS_WIDTH[n]), 1.6] } });
