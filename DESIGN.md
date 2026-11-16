@@ -2255,7 +2255,9 @@ How it is built:
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
-  that carries the routes of both.
+  that carries the routes of both, only along the stretch where they run
+  together: where one turns away, the other goes on with its own routes
+  alone (Chris saw the AT drawn far down a street it never takes).
   `test/sheets.test.mjs` holds the rules.
 - **Bus stations are rooms.** Where buses go indoors (the halls in
   `terminals.geojson`) RTD's route lines stop at the door. A hall at least
@@ -4853,6 +4855,15 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   dropped (looked like any street), amber can't fit between the C and G
   lines, and light blue is the A Line's. The indigo was lifted a little
   lighter after the pick so it tells from the E Line in the light theme.
+- 2026-11-15: Sheets: a street folded into one beside it adds its routes
+  only along the stretch they share (#117). Before, the kept street took
+  them along its whole length, so a route a block beside a long street was
+  drawn all down it (Chris: the AT east of County Line). Every sheet's bus
+  pieces checked against each route's own GTFS shape: 655 piece-routes off
+  their shape before, 3 after: on sheet 1 the 24 near Civic Center, where
+  a thin strip of two streets is drawn as one at that scale, and on sheet 4
+  the 59's end loop, drawn off its own shape (a shape fault, not a route on
+  the wrong street).
 
 ## Sources
 

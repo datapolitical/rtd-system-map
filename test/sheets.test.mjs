@@ -159,6 +159,17 @@ test('the two halves of a divided road are one line down the middle with the rou
   assert.ok(Math.min(...ys) > 0.5 && Math.max(...ys) < 3.5, `drawn between the two, at ${ys[0].toFixed(1)}`);
 });
 
+test('a street folded into one beside it adds its routes only along the stretch they share, not along all of the other', () => {
+  // A long street (route 1) and a second street (route 2) beside it for its first 100 px that then turns away.
+  const street = (routes, coords) => line({ mode: 'bus', cls: 'c15', routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  const drawn = busStreets(all([street('1', [at(0, 0), at(600, 0)]), street('2', [at(0, 3), at(100, 3), at(100, 200)])]), sheet);
+  const carry2 = drawn.filter((s) => s.routes.split(' ').includes('2'));
+  const xs = carry2.flatMap((s) => s.path.filter((p) => Math.abs(p[1] - origin[1]) < 6).map((p) => p[0] - origin[0]));
+  assert.ok(xs.length && Math.max(...xs) < 140, `route 2 stops where the streets part, not at ${Math.max(...xs).toFixed(0)} px along route 1's street`);
+  const far = drawn.filter((s) => s.path.some((p) => p[0] - origin[0] > 300));
+  assert.ok(far.length && far.every((s) => s.routes === '1'), 'route 1 runs on alone past the turn');
+});
+
 test('a short break between two ends that share a route is bridged, and a short stretch takes the weight of the street it runs into', () => {
   const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
   const drawn = busStreets(all([

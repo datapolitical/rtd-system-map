@@ -35,6 +35,8 @@ const VIEWS = {
   airport: '16/39.84700/-104.67396',
   alameda: '16/39.70868/-104.99316',
   broadway: '11/39.70050/-104.98950',
+  // 2026-11-15, the signoff-fixes build (40f14d7), sheet 2 by County Line.
+  countyLine: '12/39.57500/-104.84500',
 };
 
 // Chris's review of the stations build on 2026-11-11: his words on the
@@ -112,6 +114,13 @@ const PINS = [
     said: 'the rail lines look jerky rather than clean and hand drawn.', kind: 'drift', caught_by: ['drift', 'steep-ease', 'step'], confidence: 'clear', radius: 40 },
   { ...REVIEW, id: '103-broadway-break', latest: 'gone: C eases over 1.4 km', place: 'I-25 / Broadway', view: 'broadway', at: [[-104.98990, 39.69910]],
     said: 'The rail line breaks at I-25 and Broadway', kind: 'steep-ease', caught_by: ['steep-ease', 'step', 'gap'], confidence: 'clear', radius: 12 },
+  // The AT drawn on the 402L/PD street east of County Line: a short stretch where the AT runs beside
+  // that street was folded into it, and the whole street took the AT (fixed in the sheets build's fold).
+  { issue: 117, seen: '40f14d7', latestBuild: '40f14d7', looked: '2026-11-15', latest: 'still there on 40f14d7; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from the build\'s data (ground points on the street wrongly given the AT), 2026-11-15',
+    id: '117-at-off-route', place: 'County Line to E-470', view: 'countyLine', at: [[-104.87590, 39.57860], [-104.87189, 39.56305]],
+    said: 'I don\'t think the AT goes off that way', kind: 'route-off-shape', caught_by: ['route-off-shape'], confidence: 'clear', radius: 30 },
 ];
 
 // The picture point (CSS px in a phone capture of `view`) of a ground point.

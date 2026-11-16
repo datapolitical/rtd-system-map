@@ -1780,6 +1780,8 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
     kept.push(e);
     e.pts = walked(e.path);
     e.pull = e.pts.map(() => null);
+    // The routes folded into this street, point by point: only where the folded street ran beside it.
+    e.adds = e.pts.map(() => null);
     e.tails = [];
     e.pts.forEach((w, i) => {
       if (!grid.has(at(w.p))) grid.set(at(w.p), []);
@@ -1802,9 +1804,23 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
       i = j;
     }
     if (!folded.includes(true)) { keep(e); continue; }
-    for (const into of new Set(hits.filter((h, i) => h && folded[i]).map((h) => h.e))) {
-      const routes = [...new Set(`${into.routes} ${e.routes}`.split(' '))];
-      [into.routes, into.n] = [routes.join(' '), Math.max(into.n, routes.length)];
+    // The kept street carries the folded one's routes only along the stretch they ran side by side,
+    // not on to where it goes alone (a route a block beside a long street is not on all of it).
+    const mine = e.routes.split(' ');
+    // Run by run: a street beside another at two places is not on it between them.
+    for (let i = 0; i < pts.length;) {
+      let j = i;
+      while (j < pts.length && folded[j] === folded[i]) j++;
+      if (folded[i]) for (const into of new Set(hits.slice(i, j).filter(Boolean).map((h) => h.e))) {
+        // The points it ran beside, and the few between two of them in a row (never across a loop's far side).
+        const at = hits.slice(i, j).flatMap((h) => (h?.e === into ? [h.i] : []));
+        at.forEach((k, n) => {
+          const prev = n ? at[n - 1] : k;
+          const [lo, hi] = Math.abs(k - prev) <= 4 ? [Math.min(k, prev), Math.max(k, prev)] : [k, k];
+          for (let q = lo; q <= hi; q++) for (const r of mine) (into.adds[q] ??= new Set()).add(r);
+        });
+      }
+      i = j;
     }
     // The street kept is drawn midway between the two, so the two halves of a divided road
     // make one straight line down its middle and not a line that hops from side to side.
@@ -1862,7 +1878,37 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
     });
     e.path = rounded(path, cell);
     e.len = length(e.path);
+    // Where the folded routes start and stop along it, by point (the joined-on tails at either end
+    // carry the routes of the point they leave from).
+    const lead = e.tails.filter((t) => t.end === 0).length;
+    const own = new Set(e.routes.split(' '));
+    e.sets = [...Array(lead).fill(0), ...e.pts.map((_, i) => i), ...e.tails.filter((t) => t.end === 1).map(() => e.pts.length - 1)]
+      .map((i) => { const add = [...(e.adds[i] ?? [])].filter((r) => !own.has(r)).sort(); return [...own, ...add].join(' '); });
+    e.unrounded = path;
   }
+  // A kept street cut where its routes change: each piece with the routes that run along it. A run of
+  // a few pixels takes the routes of the longer stretch beside it, so no street breaks into specks.
+  const byRoutes = (e) => {
+    if (new Set(e.sets).size === 1) return [{ routes: e.sets[0], path: e.path }];
+    const runs = [];
+    e.sets.forEach((set, i) => { if (runs.at(-1)?.set === set) runs.at(-1).to = i; else runs.push({ set, from: i, to: i }); });
+    const span = (r) => length(e.unrounded.slice(r.from, r.to + 1));
+    for (let changed = true; changed && runs.length > 1;) {
+      changed = false;
+      const shortest = runs.map((r, i) => ({ r, i, len: span(r) })).filter((x) => x.len < SIZES.busSpeck * 2).sort((a, b) => a.len - b.len)[0];
+      if (!shortest) break;
+      const { i } = shortest;
+      const nb = [runs[i - 1], runs[i + 1]].filter(Boolean).sort((a, b) => span(b) - span(a))[0];
+      nb.from = Math.min(nb.from, runs[i].from); nb.to = Math.max(nb.to, runs[i].to);
+      runs.splice(i, 1);
+      for (let k = runs.length - 1; k > 0; k--) if (runs[k].set === runs[k - 1].set) { runs[k - 1].to = runs[k].to; runs.splice(k, 1); }
+      changed = true;
+    }
+    if (runs.length === 1) return [{ routes: runs[0].set, path: e.path }];
+    // Each piece runs to the first point of the next, so the pieces meet.
+    return runs.map((r, k) => ({ routes: r.set, path: rounded(e.unrounded.slice(r.from, (k + 1 < runs.length ? runs[k + 1].from : r.to) + 1), cell) }))
+      .filter((x) => x.path.length > 1);
+  };
   const drawn = kept
     .filter((e) => {
       const closed = dist(e.path[0], e.path.at(-1)) < 1;
@@ -1871,7 +1917,7 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
       // A short spur off a street reads as a barb, not a route.
       return !(e.free && e.len < 2.5 * SIZES.busSpeck);
     })
-    .map((e) => ({ cls: CLASS_ORDER[e.rank], routes: e.routes, n: e.n, hw: e.hw, path: simplify(rounded(simplify(e.path, 2), 2), 0.3) }));
+    .flatMap((e) => byRoutes(e).map(({ routes, path }) => ({ cls: CLASS_ORDER[e.rank], routes, n: Math.max(e.n, routes.split(' ').length), hw: e.hw, path: simplify(rounded(simplify(path, 2), 2), 0.3) })));
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
   const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
