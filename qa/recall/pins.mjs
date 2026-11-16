@@ -39,6 +39,8 @@ const VIEWS = {
   countyLine: '12/39.57500/-104.84500',
   loop59: '16/39.60500/-105.13600',
   colfax24: '10/39.74100/-104.97300',
+  // 2026-11-15, the signoff-fixes build (c2bf817), sheet 1 with the 28 picked from a link.
+  pick28: '10/39.77160/-104.98630',
 };
 
 // Chris's review of the stations build on 2026-11-11: his words on the
@@ -139,6 +141,21 @@ const PINS = [
     pinned: 'Claude, from the build\'s data (ground points on Colfax wrongly given the 24), 2026-11-15',
     id: '117-24-colfax', place: 'Colfax, Downing to Broadway', view: 'colfax24', at: [[-104.98000, 39.74100], [-104.96600, 39.74100]],
     said: 'the 24 is drawn along Colfax to Civic Center, where it never runs', kind: 'route-off-shape', caught_by: ['route-off-shape'], confidence: 'clear', radius: 20 },
+  // With the 28 picked on sheet 1, the hub's name sat on the 28 where it runs east from the
+  // station (fixed: a name has a second place off a route that runs under it, shown while that
+  // route is picked, and where it has none its halo knocks the route out under the lettering).
+  { issue: 117, seen: 'c2bf817', latestBuild: 'c2bf817', looked: '2026-11-15', latest: 'still there on c2bf817; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from his screenshot and a capture of the same link (ground points along the name), 2026-11-15',
+    id: '117-name-on-pick-28', place: 'Union Station\'s name, sheet 1, the 28 picked', view: 'pick28', at: [[-104.98530, 39.75420], [-104.93510, 39.75420]],
+    said: 'The Union Station label sits on top of route 28', kind: 'name-on-pick', caught_by: ['name-on-pick'], confidence: 'clear', radius: 20 },
+  // A link with a picked route (#z/lat/lon/bus/28) lit the route but opened no card saying which
+  // route it was until it was tapped (fixed: the address's pick opens the card a tap would).
+  { issue: 117, seen: 'c2bf817', latestBuild: 'c2bf817', looked: '2026-11-15', latest: 'still there on c2bf817; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, at the picked route in the same link\'s view (the card is the page\'s, not a place on the map), 2026-11-15',
+    id: '117-pick-link-no-card', place: 'Any link with a picked route; seen on the 28, sheet 1', view: 'pick28', at: [[-105.07000, 39.75900]],
+    said: 'when I click the link, the route is highlighted, but there is no modal box that comes up showing which route it is until I click on the route again', kind: 'pick-no-card', caught_by: ['pick-no-card'], confidence: 'clear', radius: 30 },
 ];
 
 // The picture point (CSS px in a phone capture of `view`) of a ground point.

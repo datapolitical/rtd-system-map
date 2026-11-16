@@ -23,3 +23,13 @@ export function pickFrom({ station, letter, rail = [], stop, label, bus } = {}) 
   }
   return null;
 }
+
+/**
+ * The card an address with a picked route opens on (main.js): the card a tap on that route's
+ * number gives, so a shared link shows what its sender saw. `{ title, note, rail | bus }`.
+ */
+export function pickCard({ mode, route } = {}) {
+  if (mode === 'rail') return { title: 'Line', note: 'Rail', rail: [route] };
+  if (mode === 'bus') return { title: 'Route', note: 'Bus', bus: route };
+  return null;
+}

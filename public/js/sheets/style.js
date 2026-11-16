@@ -204,6 +204,15 @@ const listed = (prop, pick) => ['any',
   ['in', ['concat', ' ', pick, ','], ['concat', ' ', ['get', prop], ',']],
   ['in', ['concat', '\n', pick, ','], ['concat', ' ', ['get', prop], ',']]];
 export const onBus = (prop = 'routes') => ['all', ['!=', BUS, ''], listed(prop, BUS)];
+// A station's name and its letters where a picked bus route would run under them have a second
+// place off that route (scripts/lib/sheets.mjs, names): the first gives way to the picks it names
+// (`under`, "|28|0|"), the second shows only for them (`alt`).
+const tagged = (prop) => ['coalesce', ['get', prop], ''];
+const picks = (prop) => ['in', ['concat', '|', BUS, '|'], tagged(prop)];
+export const namePlace = ['case', ['!=', tagged('alt'), ''], picks('alt'), ['!', picks('under')]];
+// Where a name has no place off a picked route (`cover`), its halo widens to knock the route out
+// under the lettering, as a printed map does, so both read.
+export const nameCovers = picks('cover');
 export const onRail = ['all', ['!=', RAIL_PICK, ''], ['==', ['get', 'route'], RAIL_PICK]];
 // A station on the picked line ("A B C").
 export const atStation = ['all', ['!=', RAIL_PICK, ''], ['in', ['concat', ' ', RAIL_PICK, ' '], ['concat', ' ', ['get', 'lines'], ' ']]];
@@ -442,16 +451,16 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     // name and its halo move off the route instead of cutting it.
     layer('keep-off-pick', 'symbol', { filter: ['all', ['==', ['get', 'kind'], 'bus'], onBus()], ...unseen });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
-    layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name']),
+    layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name'], namePlace),
       layout: { 'text-field': ['get', 'text'], 'text-font': ['case', ['get', 'minor'], ['literal', FONT.medium], ['literal', FONT.semibold]], 'text-size': ['case', ['get', 'minor'], 10, NAME_SIZE[n]], 'text-max-width': 40, 'text-line-height': 1.12,
         'text-anchor': ['get', 'anchor'], 'text-offset': ['get', 'offset'], 'text-justify': ['get', 'justify'], 'text-allow-overlap': true, 'text-padding': 3 },
-      paint: { 'text-color': textInk(c.name, ['any', atStation, ['!=', BUS, '']]), 'text-halo-color': c.ground, 'text-halo-width': 2 } });
+      paint: { 'text-color': textInk(c.name, ['any', atStation, ['!=', BUS, '']]), 'text-halo-color': c.ground, 'text-halo-width': ['case', nameCovers, 3.5, 2] } });
     // Line letters, placed by the build where each line runs alone: a disc in the line's colour.
     const disc = [7.4, 8.2, 9.4, 10.6][i];
     // Beside a station's name the letters are smaller (scripts/lib/sheets.mjs, SIZES.nameLetter).
     const small = [5.6, 6, 6.6, 7.4][i];
-    layer('letter-disc', 'circle', { filter: kind('letter'), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
-    layer('letter', 'symbol', { filter: kind('letter'),
+    layer('letter-disc', 'circle', { filter: kind('letter', namePlace), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
+    layer('letter', 'symbol', { filter: kind('letter', namePlace),
       layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * 1.42, disc * 1.42], 'text-allow-overlap': true, 'text-offset': [0, 0.06] },
       paint: { 'text-color': unless(onRail, letterInk, byColor('ink', ['get', 'ink'], FADE.line)) } });
     // Lettering keeps off the lines: unseen marks along rail and the busiest streets hold their

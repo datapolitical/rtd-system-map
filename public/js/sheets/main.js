@@ -2,7 +2,7 @@
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { SHEETS, sheetData, sheetStyle, PALETTES, GROUP, expressInk, airportInk } from './style.js';
-import { pickFrom, routeList } from './pick.js';
+import { pickFrom, pickCard, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
 import { routeName, sheetName, pickSaid, cardSaid, inkOn } from './say.js';
@@ -364,7 +364,17 @@ addEventListener('hashchange', () => {
   if (v.center) map.jumpTo({ center: v.center });
   show(nearest(v.zoom));
   setPick(v.pick);
+  openCard(v.pick);
 });
+// A picked route in the address opens its card too, as a tap on it would: closing the card
+// clears the pick, the same as after a tap. A rail line's chip takes its colour from the map.
+function openCard(p) {
+  const what = pickCard(p ?? {});
+  if (!what) return;
+  const fill = () => { if (picked === p) tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] }); };
+  fill();
+  if (p.mode === 'rail' && !colorOf.has(p.route)) map.once('idle', fill);
+}
 // A picked route the address names is set once the map has its style, and kept only if the
 // sheets still draw it: an old link to a route RTD has dropped opens on the plain map. Sheet 2
 // draws every route; its file is read as text, not parsed, from the browser's cache.
@@ -372,7 +382,8 @@ if (asked?.pick) {
   const check = fetch(sheetData(2)).then((r) => (r.ok ? r.text() : '')).then((text) => drawsRoute(text, asked.pick), () => true);
   map.once('load', async () => {
     setPick(asked.pick);
-    if (!(await check) && picked === asked.pick) setPick(null);
+    if (!(await check)) { if (picked === asked.pick) setPick(null); return; }
+    if (picked === asked.pick) openCard(asked.pick);
   });
 }
 

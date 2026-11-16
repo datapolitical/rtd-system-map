@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluate } from '../public/js/evaluate.js';
 import { sheetStyle, PALETTES, STATE, mix } from '../public/js/sheets/style.js';
-import { pickFrom, routeList } from '../public/js/sheets/pick.js';
+import { pickFrom, pickCard, routeList } from '../public/js/sheets/pick.js';
+import fs from 'node:fs';
 
 const layer = (style, id) => style.layers.find((l) => l.id === id);
 const none = { bus: '', rail: '' };
@@ -54,5 +55,49 @@ test('a picked route holds on every sheet: its pieces are drawn on top, the rest
     // On the closest sheet the picked route's stops are ringed over it.
     const stop = layer(style, 'pick-stop-4');
     assert.equal(evaluate(stop.filter, { props: { kind: 'stop', routes: '15, 15L' }, state: { ...none, bus: '15L' } }), true);
+  }
+});
+
+test('a link with a picked route opens that route\'s card, the one a tap on its number gives (#117)', () => {
+  // Chris: "when I click the link, the route is highlighted, but there is no modal box that comes up
+  // showing which route it is until I click on the route again".
+  assert.deepEqual(pickCard({ mode: 'bus', route: '28' }), { title: 'Route', note: 'Bus', bus: '28' });
+  assert.deepEqual(pickCard({ mode: 'rail', route: 'W' }), { title: 'Line', note: 'Rail', rail: ['W'] });
+  const { title, note, bus } = pickFrom({ label: { label: '28' } });
+  assert.deepEqual(pickCard({ mode: 'bus', route: '28' }), { title, note, bus }, 'the same card as a tap on the route\'s number');
+  assert.equal(pickCard({}), null);
+  // The page opens it wherever it sets a pick from the address: on opening, and when the address changes.
+  const main = fs.readFileSync(new URL('../public/js/sheets/main.js', import.meta.url), 'utf8');
+  assert.match(main, /setPick\(asked\.pick\);[\s\S]{0,200}openCard\(asked\.pick\)/);
+  assert.match(main, /setPick\(v\.pick\);\s*openCard\(v\.pick\);/);
+  // Closing it clears the pick, as it does after a tap.
+  assert.match(main, /function close\([^)]*\) \{[\s\S]{0,160}if \(picked\) \{ setPick\(null\)/);
+});
+
+test('a station name keeps off a picked route: moved where it can be, the route knocked out under it where not (#117)', () => {
+  // Chris: "The Union Station label sits on top of route 28".
+  for (const theme of ['light', 'dark']) {
+    const style = sheetStyle(theme, [], ['#57C1E9']);
+    for (const n of [1, 2, 3, 4]) {
+      const name = layer(style, `name-${n}`);
+      const shows = (props, bus) => evaluate(name.filter, { props: { kind: 'station', shape: 'name', ...props }, state: { ...none, bus } });
+      // The first place gives way to its second only for the routes it names, "28" not "28X".
+      assert.equal(shows({ under: '|28|0|' }, ''), true);
+      assert.equal(shows({ under: '|28|0|' }, '28'), false);
+      assert.equal(shows({ under: '|28|0|' }, '15'), true);
+      assert.equal(shows({ alt: '|28|' }, '28'), true);
+      assert.equal(shows({ alt: '|28|' }, '2'), false);
+      assert.equal(shows({ alt: '|28|' }, ''), false, 'nothing picked: the first place only');
+      assert.equal(shows({}, '28'), true);
+      // The name's letters go with it.
+      for (const id of [`letter-${n}`, `letter-disc-${n}`]) {
+        assert.equal(evaluate(layer(style, id).filter, { props: { kind: 'letter', small: true, alt: '|28|' }, state: { ...none, bus: '28' } }), true);
+        assert.equal(evaluate(layer(style, id).filter, { props: { kind: 'letter', small: true, under: '|28|' }, state: { ...none, bus: '28' } }), false);
+      }
+      // A name with nowhere off the route knocks it out with a wider halo, only while that route is picked.
+      const halo = name.paint['text-halo-width'];
+      assert.ok(evaluate(halo, { props: { cover: '|28|' }, state: { ...none, bus: '28' } }) > evaluate(halo, { props: { cover: '|28|' }, state: none }));
+      assert.equal(evaluate(halo, { props: { cover: '|28|' }, state: { ...none, bus: '15' } }), evaluate(halo, { props: {}, state: none }));
+    }
   }
 });

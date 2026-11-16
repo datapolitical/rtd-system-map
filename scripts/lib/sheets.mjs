@@ -905,7 +905,8 @@ export function names(marks, lines, discs, sheet, streets = []) {
     const before = bars.filter((o) => o.m !== m && String(o.m.lines ?? '').split(' ').some((l) => mine.includes(l))).map((o) => o.pts[1])
       .reduce((near, p) => (!near || dist(p, c) < dist(near, c) ? p : near), null);
     const last = bar.ending.length > 0 && bar.ending.length === m.count && before;
-    const placed = (text) => {
+    // `extra` adds a cost to a box (a picked route under it, below); `self` is the name being moved.
+    const placed = (text, extra = null, self = null) => {
       const rows = text.split('\n');
       const wide = Math.max(...rows.map((t) => t.length)) * size * 0.56;
       const tall = rows.length * size * 1.12;
@@ -925,10 +926,10 @@ export function names(marks, lines, discs, sheet, streets = []) {
           const ty = dy > 0 ? at[1] : dy < 0 ? y0 + tall : y0 + tall / 2;
           const lettering = [x0, y0, x0 + w, y0 + tall];
           const strays = strayed(lettering, bars.find((o) => o.m === m).pts, bars.filter((o) => o.m !== m).map((o) => o.pts));
-          const hits = set.filter((o) => touch(box, o.box)).length + (strays ? 1 : 0);
+          const hits = set.filter((o) => o !== self && touch(box, o.box)).length + (strays ? 1 : 0);
           const beyond = last && ((c[0] - before[0]) * dx + (c[1] - before[1]) * dy) / n / dist(c, before) > 0.9;
           const crowded = last && dist(c, before) < tall && !beyond;
-          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0);
+          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0) + (extra ? extra(box) : 0);
           if (!best || score < best.score) best = { text, score, hits, box, anchor, tall, offset: [(at[0] - c[0]) / size, (ty - c[1]) / size] };
         }
       }
@@ -937,22 +938,58 @@ export function names(marks, lines, discs, sheet, streets = []) {
     // A name is written out where it has room; where it would sit on lines or stand off from
     // its mark, the shortened name is used if that sits better.
     // Between stations too close for two rows, it is set in one.
-    let best = placed(wrapped(m.name));
-    for (const other of [wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')]) {
-      if (other === best.text || best.score < SIZES.nameShorten) continue;
-      const tried = placed(other);
-      if (tried.score < best.score - 1) best = tried;
-    }
-    const text = best.text;
+    const texts = [wrapped(m.name), wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')];
+    const choose = (extra = null, self = null) => {
+      let best = placed(texts[0], extra, self);
+      for (const other of texts.slice(1)) {
+        if (other === best.text || best.score < SIZES.nameShorten) continue;
+        const tried = placed(other, extra, self);
+        if (tried.score < best.score - 1) best = tried;
+      }
+      return best;
+    };
+    const best = choose();
     // Where every station is named, a name gives way only to another name; where they are
     // not, it also gives way to lines.
     if (!must && (best.hits || (minor && best.score >= SIZES.nameCrowd))) continue;
-    const justify = best.anchor.includes('left') ? 'left' : best.anchor.includes('right') ? 'right' : 'center';
-    const [x0, , x1] = best.box;
-    const span = row.length * (2 * r + 2) - 2;
-    const left = justify === 'left' ? x0 : justify === 'right' ? x1 - span : (x0 + x1 - span) / 2;
-    const letters = row.map((l, i) => ({ route: l.route, color: l.color, ink: inkOn(l.color), at: [left + r + i * (2 * r + 2), best.box[1] + best.tall + 3 + r] }));
-    set.push({ mark: m, at: c, text, minor, box: best.box, anchor: best.anchor, offset: best.offset, justify, letters });
+    const finish = (b) => {
+      const justify = b.anchor.includes('left') ? 'left' : b.anchor.includes('right') ? 'right' : 'center';
+      const [x0, , x1] = b.box;
+      const span = row.length * (2 * r + 2) - 2;
+      const left = justify === 'left' ? x0 : justify === 'right' ? x1 - span : (x0 + x1 - span) / 2;
+      const letters = row.map((l, i) => ({ route: l.route, color: l.color, ink: inkOn(l.color), at: [left + r + i * (2 * r + 2), b.box[1] + b.tall + 3 + r] }));
+      return { text: b.text, box: b.box, anchor: b.anchor, offset: b.offset, justify, letters, hits: b.hits };
+    };
+    const { hits, ...chosen } = finish(best);
+    const entry = { mark: m, at: c, minor, ...chosen, alts: [], left: [] };
+    Object.defineProperty(entry, 'retry', { value: (extra) => finish(choose(extra, entry)) });
+    set.push(entry);
+  }
+  // A picked route reads whole on every sheet: a name set on a route's street has a second
+  // place, off that route, which the page shows while that route is picked (style.js, name).
+  // It keeps off rail and the other names as the first does, and is kept only where it clears
+  // the route, or half of what the first place covered of it, without landing on another name.
+  // A route it can't keep off (`left`) runs under the name, which the page knocks out of it.
+  const reach = (st) => busWide(st.cls, sheet) / 2 + 1.5;
+  const bounds = new Map(streets.map((st) => [st, [0, 1].flatMap((k) => [Math.min(...st.path.map((p) => p[k])), Math.max(...st.path.map((p) => p[k]))])]));
+  const near = (box, pad) => (st) => { const [x0, x1, y0, y1] = bounds.get(st); return x1 > box[0] - pad && x0 < box[2] + pad && y1 > box[1] - pad && y0 < box[3] + pad; };
+  const covers = (box, pts) => pts.filter(([p, w]) => p[0] > box[0] - w && p[0] < box[2] + w && p[1] > box[1] - w && p[1] < box[3] + w).length;
+  for (const n of set) {
+    const under = new Set(streets.filter(near(n.box, 12)).filter((st) => covers(n.box, resample(st.path, 1).map((p) => [p, reach(st)])) > 0)
+      .flatMap((st) => String(st.routes).split(' ').filter(Boolean)));
+    for (const route of [...under].sort()) {
+      const pts = streets.filter((st) => String(st.routes).split(' ').includes(route)).filter(near(n.box, 400)).flatMap((st) => resample(st.path, 1).map((p) => [p, reach(st)]));
+      const before = covers(n.box, pts);
+      // Nor on another name's second place for the same route.
+      const moved = set.flatMap((o) => (o === n ? [] : o.alts.filter((a) => a.routes.includes(route)).map((a) => a.box)));
+      const clash = (box) => moved.filter((b) => touch(box, b)).length;
+      const alt = n.retry((box) => 60 * covers(box, pts) + 1000 * clash(box));
+      const after = covers(alt.box, pts);
+      if (alt.hits || clash(alt.box) || after >= before / 2 || (alt.anchor === n.anchor && alt.text === n.text && alt.offset.every((v, i) => v === n.offset[i]))) { n.left.push(route); continue; }
+      const same = n.alts.find((a) => a.anchor === alt.anchor && a.text === alt.text && a.offset.every((v, i) => v === alt.offset[i]));
+      if (same) same.routes.push(route);
+      else { const { hits, ...kept } = alt; n.alts.push({ routes: [route], ...kept }); }
+    }
   }
   return set;
 }
@@ -3517,11 +3554,18 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   for (const b of discs) {
     features.push(feature({ kind: 'letter', route: b.route, color: b.color, ink: b.ink }, { type: 'Point', coordinates: back(b.at) }));
   }
+  // A name with a second place for a picked route (names) says which picks it gives way to
+  // (`under`), and each second place which picks show it (`alt`), as "|28|0|"; a name with no
+  // place off a route says which picks run under it (`cover`): style.js, name.
+  const bars = (routes) => `|${routes.join('|')}|`;
   for (const n of stationNames) {
     const m = n.mark;
-    features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: n.text, anchor: n.anchor, offset: n.offset, justify: n.justify },
-      { type: 'Point', coordinates: back(n.at) }));
-    for (const b of n.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink }, { type: 'Point', coordinates: back(b.at) }));
+    const under = { ...(n.alts.length ? { under: bars(n.alts.flatMap((a) => a.routes)) } : {}), ...(n.left.length ? { cover: bars(n.left) } : {}) };
+    for (const [at, tag] of [[n, under], ...n.alts.map((a) => [a, { alt: bars(a.routes) }])]) {
+      features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: at.text, anchor: at.anchor, offset: at.offset, justify: at.justify, ...tag },
+        { type: 'Point', coordinates: back(n.at) }));
+      for (const b of at.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, ...tag }, { type: 'Point', coordinates: back(b.at) }));
+    }
   }
   // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.
   if (sheet.id <= 3) for (const e of ends) features.push(feature({ kind: 'bus-end', cls: e.cls, routes: listed(e.routes), ...(isExpress(String(e.routes), express) ? { express: true } : {}), ...(isExpress(String(e.routes), airport) ? { airport: true } : {}) }, { type: 'Point', coordinates: back(e.at) }));

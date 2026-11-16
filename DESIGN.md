@@ -2064,7 +2064,12 @@ clears it. A picked bus route is one ink and one weight from end to end (the
 sheet's rail width, near-black in the light, near-white in the dark, no rail
 line's hue) on a rim of ground, its pieces joined round, so it reads as one
 line however many streets it takes; its stops are ringed over it on sheet 4,
-and place names step off it rather than cut it. A picked rail line keeps its
+and place names step off it rather than cut it. No station name sits on a
+picked bus route: where a route runs under a name, the build gives the name
+(and its row of line letters) a second place off that route, which shows only
+while that route is picked; where there is no such place that reads as its
+own station's, the name's halo widens and knocks the route out under the
+lettering, as a printed map does. A picked rail line keeps its
 own colour and its stations' bars; the other stations fade, and only half as
 far while a bus is picked, so the places a bus passes still read. What is
 faded is inked nearer the ground, not made see-through, so overlapping
@@ -2664,7 +2669,9 @@ route, `#14/39.72264/-104.99487/bus/ART` (MapLibre's `#zoom/lat/lon`, which
 the page read before, then the pick), rewritten in place with
 `history.replaceState` each time the map comes to rest or a route is picked,
 so Back still leaves the page. Opening it shows the same sheet, the centre to
-within half a pixel, and the pick. A plain visit keeps its plain address until
+within half a pixel, and the pick, with the picked route's card open, the
+card a tap on its number gives; closing it clears the pick, as after a tap.
+A plain visit keeps its plain address until
 the view changes. An address that names no view or a centre off the map
 opens the opening view; a pick the sheets no longer draw is dropped. The rules
 are in `public/js/sheets/address.js`, with tests.
@@ -4933,6 +4940,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   FF's and the 20's streets, and on sheet 2 the 65's end toward Thomas
   Jefferson High School was left off for 590 m. `check:accuracy` holds
   both: 0 on all four sheets.
+- 2026-11-15: Sheets: a picked bus route has no station name on it, and a
+  link with a pick opens that route's card (#117). A name a route runs under
+  has a second place off it, shown while that route is picked; with none,
+  its halo knocks the route out under the name. Reason: Chris, from a review
+  link with the 28 picked: "The Union Station label sits on top of route
+  28", and the route lit up with no card saying which route it was until he
+  tapped it.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in

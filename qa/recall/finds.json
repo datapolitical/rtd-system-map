@@ -1441,6 +1441,100 @@
       "found_by": "Claude, checking every sheet street piece against its routes' GTFS shapes, 2026-11-15 (issue #117)",
       "pinned_by": "Claude, from the build's data (ground points on Colfax wrongly given the 24), 2026-11-15",
       "confidence": "clear"
+    },
+    {
+      "id": "117-name-on-pick-28",
+      "issue": 117,
+      "place": "Union Station's name, sheet 1, the 28 picked",
+      "said": "The Union Station label sits on top of route 28",
+      "kind": "name-on-pick",
+      "caught_by": [
+        "name-on-pick"
+      ],
+      "seen_on": [
+        "c2bf817"
+      ],
+      "latest": {
+        "build": "c2bf817",
+        "looked": "2026-11-15",
+        "status": "still there on c2bf817; fixed in the next signoff-fixes build"
+      },
+      "theme": "dark",
+      "zoom": 10,
+      "points": [
+        [
+          -104.9853,
+          39.7542
+        ],
+        [
+          -104.9351,
+          39.7542
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "10/39.77160/-104.98630",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            202,
+            470
+          ],
+          [
+            276,
+            470
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)",
+      "pinned_by": "Claude, from his screenshot and a capture of the same link (ground points along the name), 2026-11-15",
+      "confidence": "clear"
+    },
+    {
+      "id": "117-pick-link-no-card",
+      "issue": 117,
+      "place": "Any link with a picked route; seen on the 28, sheet 1",
+      "said": "when I click the link, the route is highlighted, but there is no modal box that comes up showing which route it is until I click on the route again",
+      "kind": "pick-no-card",
+      "caught_by": [
+        "pick-no-card"
+      ],
+      "seen_on": [
+        "c2bf817"
+      ],
+      "latest": {
+        "build": "c2bf817",
+        "looked": "2026-11-15",
+        "status": "still there on c2bf817; fixed in the next signoff-fixes build"
+      },
+      "theme": "dark",
+      "zoom": 10,
+      "points": [
+        [
+          -105.07,
+          39.759
+        ]
+      ],
+      "radius_px": 30,
+      "capture": {
+        "view": "10/39.77160/-104.98630",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            79,
+            461
+          ]
+        ]
+      },
+      "found_by": "Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)",
+      "pinned_by": "Claude, at the picked route in the same link's view (the card is the page's, not a place on the map), 2026-11-15",
+      "confidence": "clear"
     }
   ]
 }

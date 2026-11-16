@@ -1241,6 +1241,25 @@ test('a name that cannot sit right beside its bar stands off only as far as it m
   assert.ok(off(beside) < 11, `but no further than it must: ${off(beside).toFixed(1)} px`);
 });
 
+test('a name set on a route\'s street has a second place off that route, for when it is picked (#117)', () => {
+  // Chris: "The Union Station label sits on top of route 28".
+  const s1 = SHEETS[0];
+  const o1 = toPx([-105, 39.75], s1.zoom);
+  const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
+  const lines = railLines(all([line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(0, -300), at1(0, 300)])]), s1);
+  const marks = stationMarks(all([point({ id: 1, name: 'City', served: true, lines: 'E' }, at1(0, 0))]), lines, s1);
+  // Quiet streets every 12 px across the line, one vertex at each end: the 28 on the one level with the bar.
+  const streets = [-24, -12, 0, 12, 24].map((y) => ({ cls: 'c30', routes: y ? '1' : '28', n: 1, hw: 30, path: [[o1[0] - 200, o1[1] + y], [o1[0] + 200, o1[1] + y]] }));
+  const [n] = names(marks, lines, [], s1, streets);
+  const on = (box, y) => box[1] < o1[1] + y + 2 && box[3] > o1[1] + y - 2;
+  assert.ok(on(n.box, 0), 'the name sits level with its bar, on the 28');
+  const alt = n.alts.find((a) => a.routes.includes('28'));
+  assert.ok(alt, 'it has a second place for the 28');
+  assert.ok(!on(alt.box, 0), 'off the 28');
+  assert.equal(alt.text, n.text);
+  assert.deepEqual(n.left, []);
+});
+
 test('where a line at the side of a pack ends, the lines beside it carry straight on; where one in the middle ends, the others close up', () => {
   const s1 = SHEETS[0];
   const pitch = SIZES.rail[s1.id] + SIZES.gap[s1.id];
