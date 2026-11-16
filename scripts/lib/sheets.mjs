@@ -1129,7 +1129,9 @@ function unslivered(streets, most, slim, snap) {
       const turn = [...ring.slice(joins[0]), ...ring.slice(0, joins[0])];
       const path = turn.flatMap((r, i) => (i ? run(r).slice(1) : run(r)));
       path[path.length - 1] = path[0];
-      const all = routesOf(turn.map((r) => r.o));
+      // A route that turns round goes all the way round: one on a short stretch of the ring alone
+      // (a block of the street the loop hangs from) is not drawn round it.
+      const all = routesOf(turn.map((r) => r.o)).filter((x) => turn.filter((r) => String(r.o.st.routes).split(' ').includes(x)).reduce((n, r) => n + r.o.len, 0) >= round / 2);
       const loop = { st: { ...longest(turn.map((r) => r.o)).st, routes: all.join(' '), n: all.length, path }, a: turn[0].from, b: turn[0].from, len: round };
       for (const r of ring) gone.add(r.o);
       edges.push(loop);
@@ -1164,6 +1166,17 @@ function unslivered(streets, most, slim, snap) {
       const gone1 = [...rails].sort(order)[0];
       keep = [rails.find((side) => side !== gone1)];
       drop = [gone1, ...rungs];
+    }
+    // Thin all along, not on average. Two ways round between two corners may part by more than
+    // `slim` for no more than three times that (a short bulge is drawn through, DESIGN.md); the
+    // rails of a ladder never (a strip pinched at one end, as where a ring was gathered to a
+    // point, is a wedge, and its wide end is two streets with a rung across).
+    const kept = keep.flat().map((r) => r.o.st.path);
+    const bulge = ladder ? 0 : 3 * slim;
+    const apart = (path) => { let n = 0; for (const p of resample(path, 1)) { n = kept.every((k) => nearest(k, p).d > slim) ? n + 1 : 0; if (n > bulge) return true; } return false; };
+    if (drop.filter((side) => long(side) > slim).some((side) => side.some((r) => apart(r.o.st.path)))) continue;
+    if (ladder) {
+      const gone1 = drop[0];
       const n = sides.length;
       const [d, k] = [sides.indexOf(gone1), sides.indexOf(keep[0])];
       const corner = (i) => sides[((i % n) + n) % n][0].from;
@@ -1900,34 +1913,46 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
       .map((i) => { const add = [...(e.adds[i] ?? [])].filter((r) => !own.has(r)).sort(); return [...own, ...add].join(' '); });
     e.unrounded = path;
   }
-  // A kept street cut where its routes change: each piece with the routes that run along it. A run of
-  // a few pixels takes the routes of the longer stretch beside it, so no street breaks into specks.
+  // A kept street cut where its routes change: each piece with the routes that run along it, however
+  // short. Each point's routes are what ran beside it, so a short run is real: a route folded in for a
+  // short way is drawn there, and one that leaves a street for a block is not drawn along that block.
   const byRoutes = (e) => {
     if (new Set(e.sets).size === 1) return [{ routes: e.sets[0], path: e.path }];
     const runs = [];
     e.sets.forEach((set, i) => { if (runs.at(-1)?.set === set) runs.at(-1).to = i; else runs.push({ set, from: i, to: i }); });
-    const span = (r) => length(e.unrounded.slice(r.from, r.to + 1));
-    for (let changed = true; changed && runs.length > 1;) {
-      changed = false;
-      const shortest = runs.map((r, i) => ({ r, i, len: span(r) })).filter((x) => x.len < SIZES.busSpeck * 2).sort((a, b) => a.len - b.len)[0];
-      if (!shortest) break;
-      const { i } = shortest;
-      const nb = [runs[i - 1], runs[i + 1]].filter(Boolean).sort((a, b) => span(b) - span(a))[0];
-      nb.from = Math.min(nb.from, runs[i].from); nb.to = Math.max(nb.to, runs[i].to);
-      runs.splice(i, 1);
-      for (let k = runs.length - 1; k > 0; k--) if (runs[k].set === runs[k - 1].set) { runs[k - 1].to = runs[k].to; runs.splice(k, 1); }
-      changed = true;
-    }
     if (runs.length === 1) return [{ routes: runs[0].set, path: e.path }];
     // Each piece runs to the first point of the next, so the pieces meet.
     return runs.map((r, k) => ({ routes: r.set, path: rounded(e.unrounded.slice(r.from, (k + 1 < runs.length ? runs[k + 1].from : r.to) + 1), cell) }))
       .filter((x) => x.path.length > 1);
   };
+  // A ring too small to read as one is not drawn: it is the point where its streets meet. A street
+  // that met it elsewhere round it is led on round the ring to that point, the way its routes go
+  // (else the shorter way), so it does not stop short in mid-air and is not then taken for a spur
+  // where the data stops short, and dropped.
+  const ringed = (e) => dist(e.path[0], e.path.at(-1)) < 1 && Math.max(...e.path.map((p) => dist(p, e.path[0]))) < 2.4 * SIZES.busSpeck;
+  for (const ring of kept.filter(ringed)) {
+    const to = ring.path[0];
+    const round = ring.unrounded;
+    for (const e of kept) {
+      if (e === ring || ringed(e)) continue;
+      for (const end of [0, 1]) {
+        const p = end ? e.path.at(-1) : e.path[0];
+        if (dist(p, to) < 1 || nearest(ring.path, p).d > SIZES.busSnap) continue;
+        const i = round.reduce((b, q, k) => (dist(q, p) < dist(round[b], p) ? k : b), 0);
+        const mine = String(e.sets[end ? e.sets.length - 1 : 0]).split(' ');
+        const ways = [round.map((_, k) => k).slice(i), round.map((_, k) => k).slice(0, i + 1).reverse()];
+        const share = (way) => way.filter((k) => mine.every((r) => String(ring.sets[k]).split(' ').includes(r))).length / way.length;
+        const way = ways.sort((a, b) => share(b) - share(a) || length(a.map((k) => round[k])) - length(b.map((k) => round[k])))[0];
+        const lead = way.slice(1).map((k) => round[k]);
+        lead[lead.length - 1] = to;
+        if (end) { e.path = [...e.path, ...lead]; e.unrounded = [...e.unrounded, ...lead]; e.sets = [...e.sets, ...lead.map(() => e.sets.at(-1))]; }
+        else { e.path = [...lead.reverse(), ...e.path]; e.unrounded = [...lead, ...e.unrounded]; e.sets = [...lead.map(() => e.sets[0]), ...e.sets]; }
+      }
+    }
+  }
   const drawn = kept
     .filter((e) => {
-      const closed = dist(e.path[0], e.path.at(-1)) < 1;
-      const reachOf = Math.max(...e.path.map((p) => dist(p, e.path[0])));
-      if (closed && reachOf < 2.4 * SIZES.busSpeck) return false;
+      if (ringed(e)) return false;
       // A short spur off a street reads as a barb, not a route.
       return !(e.free && e.len < 2.5 * SIZES.busSpeck);
     })
@@ -2102,10 +2127,15 @@ export function noded(streets, snap, reach = snap) {
         // A short street is not bent back onto the street it has just left.
         if ((host[0] === base || host.at(-1) === base) && total < 2 * reach) continue;
         const hit = nearest(host, tip);
-        if (hit.d <= reach && (!best || hit.d < best.d)) best = hit;
+        if (hit.d <= reach && (!best || hit.d < best.d)) best = { ...hit, host };
       }
-      if (!best || best.d <= snap) continue;
-      const to = weld(best.at);
+      if (!best) continue;
+      // On the middle of the street, the corner is cut into it below. Where the street is about to
+      // end there, it is not cut (too near its corner), so the end is led on to that corner itself.
+      const fromEnd = Math.min(best.along, length(best.host) - best.along);
+      if (best.d <= snap && fromEnd > snap) continue;
+      const to = best.d <= snap ? (best.along <= snap ? best.host[0] : best.host.at(-1)) : weld(best.at);
+      if (dist(to, tip) < 1e-9) continue;
       if (to === base) continue;
       if (end) path.push(to); else path.unshift(to);
     }

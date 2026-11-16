@@ -1644,6 +1644,29 @@ streets that no longer met):
   dashed or dotted line (`n: 0`, `tier`), so it meets the streets it joins
   and moves with a divided road.
 
+*Route accuracy* (`qa/accuracy.mjs`, `npm run check:accuracy`; #117): every
+sheet's bus lines are checked against both of RTD's sources, its route layer
+(the lines the sheets are drawn from) and its GTFS trip shapes. The two agree
+to a metre (p99) for every route, so a difference between the map and either
+is the map's. For each sheet the check reports pieces carrying a route on a
+street it doesn't take, stretches of a route with no line carrying it, and how
+far lines sit from their route, and fails on any fault. "Near" on a sheet is
+what it draws as one street: the fold distance (`busMerge`) plus a street's
+width plus 30 m. What a sheet may leave off or draw simpler, by design:
+- a loop, ramp or divided road the street graph draws simpler (above), within
+  250 m of the route's own street, on every sheet;
+- a short end that leads nowhere (under 25 px from its corner), with a
+  terminal loop too small to read as a ring (under 24 px across) drawn as the
+  point where it meets its street: at most 4.9 specks of a route's end, 2.9 km
+  on sheet 1, 720 m on sheet 2, 180 m on sheet 3;
+- a route's end led to its station's mark (within 110 m);
+- a short bulge drawn through: two ways round a strip apart by no more than a
+  slim width plus a snap (and a pixel of rounding) are one street;
+- a divided road drawn down its middle, and corners rounded within the fold
+  distance. On sheet 4, 67% of drawn route lies on its street (within half
+  its drawn width), 31% down the middle of a divided road and 2% rounded.
+Anything else is a fault and is fixed at its cause, not allowed for here.
+
 *Terminals* (`footprints.mjs`; `scripts/build-data.mjs`, `shortenAtHall`;
 #82): each of RTD's bus-station facilities (class `BUS` or `STN` in RTD's
 facilities layer) is drawn as the hall its bus gates stand in, from
@@ -4875,8 +4898,24 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   curve about 450 m inside it (and loops of the PD, 73, 3 and 15 were bent
   the same way on sheets 3 and 4); on sheet 1 the 24's short crossing of
   the strip between Colfax and 14th handed it to the whole strip, so it was
-  drawn to Civic Center. Pieces carrying a route off its GTFS shape: 3 to 0
-  on all four sheets.
+  drawn to Civic Center. Pieces carrying a route off its line (RTD's route
+  layer, which the sheets are drawn from; first written here as its GTFS
+  shape, which agrees with it to a metre): 3 to 0 on all four sheets.
+- 2026-11-15: Route accuracy is checked from data, every sheet, against
+  both of RTD's sources (`npm run check:accuracy`, "Route accuracy" under
+  Bus routes), and what the sheets may leave off or draw simpler is written
+  down there (#117). Fixes: a ring too small to draw leads the streets that
+  met it round to its point (the 169L and AT stopped 1 km short on Peña
+  Boulevard on sheet 2); an end a hair off a street just short of its corner
+  is led to the corner (the 169L dropped by 61st and Peña on sheet 3); a
+  turnaround loop carries only the routes that go round it (the 42, 88 and
+  105 were drawn 80 m round the 28's loop on sheet 3); a strip's ladder
+  rails are never more than a slim width apart (the 72 was drawn on the
+  FF's street on sheet 1); a street is cut wherever its routes change,
+  however short the run, not merged into its neighbours'. Reason: Chris asked that accuracy be settled from
+  GTFS and RTD's published lines, not by eye. What the check couldn't
+  explain: 84 pieces and stretches to 0 (most were the simplifications now
+  written down; the rest came from these causes).
 
 ## Sources
 

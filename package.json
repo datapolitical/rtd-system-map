@@ -18,6 +18,7 @@
     "check:report": "playwright show-report qa/report",
     "check:map": "node qa/checks/report.mjs",
     "check:recall": "node qa/recall/recall.mjs",
+    "check:accuracy": "node qa/accuracy.mjs",
     "sweep": "node qa/sweep/sweep.mjs"
   },
   "devDependencies": {

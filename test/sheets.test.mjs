@@ -339,6 +339,25 @@ test('streets have a corner wherever they meet: at a side street, at a crossing,
   assert.ok(Math.abs(drawn.reduce((n, s) => n + length(s.path), 0) - (300 + 80 + 120 + 70 + 70)) < 3, 'nothing is added or lost');
 });
 
+test('an end a hair off a street just short of its corner is led on to that corner', () => {
+  // Too near the corner for the street to be cut there, and too far from the corner to be one with it.
+  const drawn = noded([st([[0, 0], [70, 0]]), st([[70, 0], [140, 0]]), st([[68, 2.8], [68, 80]])], 3, 7);
+  assert.equal(meets(drawn, [70, 0]), 3, 'the side street meets the corner');
+});
+
+test('a turnaround loop carries only the routes that go round it, not those on a block of its stem', () => {
+  const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  const drawn = busStreets(all([
+    street('c15', '42 28', [at(33, 3), at(100, 3)]), street('c15', '42 28', [at(100, 3), at(200, 3)]),
+    street('c15', '42 28', [at(33, 3), at(33, -2)]),
+    // Route 28 turns round a slim loop; route 42 is only on the five pixels from its corner.
+    street('c15', '28', [at(33, -2), at(15, -1), at(-5, 0), at(15, 2), at(33, 3)]),
+  ]), sheet);
+  const west = drawn.filter((s) => s.path.some((p) => p[0] - origin[0] < 25));
+  assert.ok(west.length, 'the loop is drawn');
+  assert.ok(west.every((s) => !s.routes.split(' ').includes('42')), 'route 42 is not drawn round the loop');
+});
+
 test('a short end that leads nowhere is not drawn, however many pieces it is in; a long one and one at a hall are', () => {
   const wall = { ring: [[300, 20], [320, 20], [320, 40], [300, 40], [300, 20]] };
   const drawn = pruned([
