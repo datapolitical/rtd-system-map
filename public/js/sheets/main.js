@@ -265,6 +265,16 @@ function tell(what) {
   const { title, note, lead, groups = [] } = what;
   const routes = routesOf(what);
   const hint = hintFor(routes);
+  // A picked route's own card: its chip and RTD's name on one line, its ends and how often it
+  // runs under them, and nothing else, so it covers as little of the map as it can (DESIGN.md).
+  card.classList.toggle('route', what.kind === 'route');
+  if (what.kind === 'route') {
+    card.innerHTML = `<div class="head"><div class="routes">${routes.map(chip).join('')}</div><b id="card-title" role="heading" aria-level="2">${esc(what.name)}</b></div>`
+      + `${what.line ? `<span>${esc(what.line)}</span>` : ''}<button type="button" class="close" aria-label="Close">\u00d7</button>`;
+    card.hidden = false;
+    say(cardSaid({ title: what.name, note: what.line, routes }));
+    return;
+  }
   // Each letter is said as its stop ("Stop A"), then its routes.
   const rows = groups.length ? `<div class="rows">${groups.map((g) => `<i><span class="sr">Stop </span>${esc(g.letter)}</i><div class="routes">${g.routes.map(chip).join('')}</div>`).join('')}</div>` : '';
   const list = what.routes?.length ? `${what.also ? `<span>${esc(what.also)}</span>` : ''}<div class="routes">${what.routes.map(chip).join('')}</div>` : '';
@@ -294,9 +304,40 @@ card.addEventListener('click', (e) => {
   for (const other of card.querySelectorAll('button[data-route]')) {
     other.setAttribute('aria-pressed', String(picked?.mode === other.dataset.mode && picked.route === other.dataset.route));
   }
-  if (shown) card.querySelector('.hint').textContent = hintFor(routesOf(shown));
+  const hint = card.querySelector('.hint');
+  if (shown && hint) hint.textContent = hintFor(routesOf(shown));
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') close({ focus: card.contains(document.activeElement) }); });
+// A station's name shows whole or not at all: one the screen's edge, the card, the sheet
+// buttons or the credit line would cut is hidden with its letters until the map moves (DESIGN.md,
+// "Quality floor"). Each name carries its box about its point in screen pixels (`bx`, the build's).
+const ours = ['#card', '#steps', '#credit'].map((q) => document.querySelector(q)).filter(Boolean);
+function unclip() {
+  if (Math.abs(map.getZoom() - zooms[sheet]) > 0.01) return;
+  const view = map.getContainer().getBoundingClientRect();
+  const edge = 2;
+  const blocks = ours.filter((el) => !el.hidden && el.offsetParent !== null).map((el) => el.getBoundingClientRect());
+  const cut = new Set();
+  for (const f of map.querySourceFeatures(`sheet-${SHEETS[sheet].id}`, { filter: ['all', ['==', ['get', 'kind'], 'station'], ['==', ['get', 'shape'], 'name']] })) {
+    const { nid, bx } = f.properties;
+    if (!nid || !bx || cut.has(nid)) continue;
+    const [x0, y0, x1, y1] = String(bx).split(',').map(Number);
+    const p = map.project(f.geometry.coordinates);
+    const box = { left: view.left + p.x + x0, top: view.top + p.y + y0, right: view.left + p.x + x1, bottom: view.top + p.y + y1 };
+    // Wholly off the screen is no cut; partly off, or partly under our own controls, is.
+    const off = box.right < view.left || box.left > view.right || box.bottom < view.top || box.top > view.bottom;
+    if (off) continue;
+    const edged = box.left < view.left + edge || box.right > view.right - edge || box.top < view.top + edge || box.bottom > view.bottom - edge;
+    const under = blocks.some((b) => box.left < b.right && box.right > b.left && box.top < b.bottom && box.bottom > b.top);
+    if (edged || under) cut.add(nid);
+  }
+  const text = cut.size ? `|${[...cut].sort().join('|')}|` : '';
+  if (text !== unclip.last) map.setGlobalStateProperty('clipped', text);
+  unclip.last = text;
+  window.sheetsClipped = [...cut];
+}
+map.on('idle', unclip);
+new ResizeObserver(() => unclip()).observe(card);
 // Each line's colour, as the sheets draw it (a station lists its lines by letter only).
 const colorOf = new Map();
 map.on('idle', () => {
@@ -320,7 +361,7 @@ map.on('click', (e) => {
     return tell({ title: esc(lettered.name), note: `Bus stop ${lettered.letter}${lettered.heading ? ` · ${lettered.heading}` : ''}`,
       groups: groupList(`${lettered.letter} ${routeList(lettered.routes).join(' ')}`) });
   }
-  const bus = hit(['bus', 'pick-bus']).map((f) => f.properties).sort((a, b) => b.n - a.n)[0];
+  const bus = hit(['bus']).map((f) => f.properties).sort((a, b) => b.n - a.n)[0];
   const what = pickFrom({
     station,
     letter: hit(['letter'])[0]?.properties,
@@ -364,16 +405,40 @@ addEventListener('hashchange', () => {
   if (v.center) map.jumpTo({ center: v.center });
   show(nearest(v.zoom));
   setPick(v.pick);
-  openCard(v.pick);
+  openCard(v.pick, { framed: true });
 });
 // A picked route in the address opens its card too, as a tap on it would: closing the card
 // clears the pick, the same as after a tap. A rail line's chip takes its colour from the map.
-function openCard(p) {
-  const what = pickCard(p ?? {});
-  if (!what) return;
-  const fill = () => { if (picked === p) tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] }); };
+let directory = null;
+const routeEntry = (p) => (directory ??= fetch(new URL('../../data/directory.json', import.meta.url)).then((r) => (r.ok ? r.json() : { routes: [] })).catch(() => ({ routes: [] })))
+  .then((d) => d.routes.find((r) => r.route === p.route && r.mode === p.mode) ?? null);
+// A picked route framed whole in the map left clear above its card (DESIGN.md, "the address"):
+// on the closest sheet it fits on, its middle in the middle of that clear area.
+function frame(r) {
+  const [w, s, e, n] = r.bbox ?? [];
+  if (![w, s, e, n].every(Number.isFinite)) return;
+  const box = map.getContainer().getBoundingClientRect();
+  const over = card.hidden ? box.bottom : card.getBoundingClientRect().top;
+  const pad = { top: 16, left: 16, right: 16, bottom: Math.max(16, box.bottom - over + 12) };
+  const fit = map.cameraForBounds([[w, s], [e, n]], { padding: pad });
+  if (!fit) return;
+  let i = 0;
+  for (const [k, z] of zooms.entries()) if (z <= fit.zoom + 0.05) i = k;
+  map.jumpTo({ center: [(w + e) / 2, (s + n) / 2], zoom: zooms[i] }, { settling: true });
+  map.panBy([0, (pad.bottom - pad.top) / 2], { duration: 0 }, { settling: true });
+  show(i);
+}
+function openCard(p, { framed = false } = {}) {
+  if (!pickCard(p ?? {})) return;
+  const fill = (r = null) => {
+    if (picked !== p) return;
+    const what = pickCard(p, r);
+    tell({ ...what, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
+  };
   fill();
-  if (p.mode === 'rail' && !colorOf.has(p.route)) map.once('idle', fill);
+  // RTD's name for it, its ends and how often it runs come from the directory, read once.
+  routeEntry(p).then((r) => { if (!r) return; fill(r); if (framed && picked === p) frame(r); });
+  if (p.mode === 'rail' && !colorOf.has(p.route)) map.once('idle', () => routeEntry(p).then(fill));
 }
 // A picked route the address names is set once the map has its style, and kept only if the
 // sheets still draw it: an old link to a route RTD has dropped opens on the plain map. Sheet 2
@@ -383,7 +448,7 @@ if (asked?.pick) {
   map.once('load', async () => {
     setPick(asked.pick);
     if (!(await check)) { if (picked === asked.pick) setPick(null); return; }
-    if (picked === asked.pick) openCard(asked.pick);
+    if (picked === asked.pick) openCard(asked.pick, { framed: true });
   });
 }
 

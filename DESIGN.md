@@ -2062,14 +2062,28 @@ each route there as a button. Picking one draws that route whole and every
 other street and line faded; the same button, or a tap on empty ground,
 clears it. A picked bus route is one ink and one weight from end to end (the
 sheet's rail width, near-black in the light, near-white in the dark, no rail
-line's hue) on a rim of ground, its pieces joined round, so it reads as one
-line however many streets it takes; its stops are ringed over it on sheet 4,
-and place names step off it rather than cut it. No station name sits on a
-picked bus route: where a route runs under a name, the build gives the name
-(and its row of line letters) a second place off that route, which shows only
-while that route is picked; where there is no such place that reads as its
-own station's, the name's halo widens and knocks the route out under the
-lettering, as a printed map does. A picked rail line keeps its
+line's hue) on a rim of ground, so it reads as one line however many streets
+it takes; its stops are ringed over it on sheet 4, and place names step off
+it rather than cut it. It is drawn from the route's own line on each sheet,
+which the build composes from the street pieces the route takes
+(`scripts/lib/routeline.mjs`): pieces whose ends meet are joined, gaps up to
+`SIZES.pickBridge` closed, the main path taken end to end, a second street
+kept only where it stands more than `SIZES.pickApart` off the main path (so a
+one-way pair the sheet can't tell apart is one line, and an end loop stays),
+dead ends shorter than `SIZES.pickStub` dropped, and every path smoothed over
+`SIZES.pickSmooth` px, so a jog between near streets is a bend, not a stair
+step, with round ends. The smoothing moves the line off its street by under
+a line's width; check:accuracy measures the street pieces, which stay true,
+and the smoothing is the only tolerance the picked line gets. No station
+name sits on a picked bus route: where a route runs under a name, the build
+gives the name (and its row of line letters) a second place off that route,
+which shows only while that route is picked; where there is no such place
+that reads as its own station's, the picked line runs on under a tight halo
+round the lettering, and the name's row of line letters steps aside while
+that route is picked, so the line reads unbroken and the name printed over
+it. A picked route's card is two short lines: its number's chip and RTD's
+name for it, then its two ends and how often it runs, all from the directory
+(`pickCard`). A picked rail line keeps its
 own colour and its stations' bars; the other stations fade, and only half as
 far while a bus is picked, so the places a bus passes still read. What is
 faded is inked nearer the ground, not made see-through, so overlapping
@@ -2668,9 +2682,11 @@ On the sheets page (v1.0) there is no share button: the address is the link
 route, `#14/39.72264/-104.99487/bus/ART` (MapLibre's `#zoom/lat/lon`, which
 the page read before, then the pick), rewritten in place with
 `history.replaceState` each time the map comes to rest or a route is picked,
-so Back still leaves the page. Opening it shows the same sheet, the centre to
-within half a pixel, and the pick, with the picked route's card open, the
-card a tap on its number gives; closing it clears the pick, as after a tap.
+so Back still leaves the page. Opening it without a pick shows the same sheet and the centre to within half
+a pixel. Opening it with a pick shows the pick with the picked route's card
+open, the route framed whole in the map left clear above the card, on the
+closest sheet it fits on (`frame`, main.js), and the address rewritten to
+that view; closing the card clears the pick, as after a tap.
 A plain visit keeps its plain address until
 the view changes. An address that names no view or a centre off the map
 opens the opening view; a pick the sheets no longer draw is dropped. The rules
@@ -2878,6 +2894,16 @@ are deferred, not ruled out. See "Open questions".
 
 ## Quality floor
 
+- **Whole names:** on the sheets a station's name shows whole or not at all.
+  One the screen's edge, the card, the sheet buttons or the credit line would
+  cut is hidden with its letters until the map moves (`unclip`, main.js,
+  from each name's box the build writes as `bx`).
+- **A picked route looks right:** `qa/pickcheck.mjs` picks every bus and
+  rail route on every sheet and counts gaps in the picked line, stubs under
+  a stub's length, self-overlap, turns sharper than a set angle over a
+  short run, station names over the picked line, names cut by the edge or
+  the card, and a pick link that does not frame the whole route. Each count
+  is 0, or each remaining case is explained in #117.
 - **Speed:** a usable map in under 2 seconds on a mid-range phone over
   typical 4G (170 ms latency, 9 Mbps, a 4x slower CPU), with slow 4G (150 ms,
   1.6 Mbps) as a stretch. Measured 2026-11-05 on a 390 px phone: line-end
@@ -4940,6 +4966,18 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   FF's and the 20's streets, and on sheet 2 the 65's end toward Thomas
   Jefferson High School was left off for 590 m. `check:accuracy` holds
   both: 0 on all four sheets.
+- 2026-11-15: Sheets: a picked route reads as one clean line, framed whole,
+  with a two-line card (#117). The picked bus line is the route's own
+  composed line (joined, gaps closed, stubs and a close second street
+  dropped, smoothed, round ends) instead of its street pieces drawn again; a
+  name it runs under keeps a tight halo and drops its letter row while it is
+  picked, not a knockout; a pick link frames the whole route above the card,
+  not the sender's exact view; and a station name the screen's edge or the
+  page's own controls would cut is hidden whole. Reason: Chris, from the 28
+  picked on sheet 1: "this isn't how this should look, right?" (a tangle at
+  Union Station, stair steps, gaps, a knockout reading as a gap, an arrow
+  end, a card saying "Route / Bus / 28" over a quarter of the screen, the
+  route not framed, names cut at the edges).
 - 2026-11-15: Sheets: a picked bus route has no station name on it, and a
   link with a pick opens that route's card (#117). A name a route runs under
   has a second place off it, shown while that route is picked; with none,

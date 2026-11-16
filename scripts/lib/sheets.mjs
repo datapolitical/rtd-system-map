@@ -8,6 +8,7 @@
 // place, a line or a sheet. A sheet is this procedure run at its zoom, so
 // RTD's changes redraw all of them and another sheet is one more row in SHEETS.
 import { textWidth } from '../glyphs.mjs';
+import { routeLine } from './routeline.mjs';
 
 /** The sheets: the zoom each is drawn for and which set of bus streets it uses. */
 export const SHEETS = [
@@ -19,6 +20,16 @@ export const SHEETS = [
 
 /** Sizes in pixels, by sheet id. The page draws with these; so does the build. */
 export const SIZES = {
+  // The picked route's line (routeLine, DESIGN.md "the picked route"): ends this close are one
+  // corner; a dead end shorter than a stub goes; a second street closer than `apart` to the main
+  // path goes; gaps up to `bridge` px are closed; farther gaps up to `pickFar` px close along RTD's line; and the whole is smoothed over `pickSmooth` px.
+  pickSnap: 2,
+  pickStub: { 1: 6, 2: 6, 3: 6, 4: 8 },
+  pickApart: { 1: 5, 2: 5, 3: 6, 4: 8 },
+  pickBridge: { 1: 10, 2: 12, 3: 16, 4: 24 },
+  // Farther gaps, where the sheet draws no street the route takes, close along RTD's own line.
+  pickFar: { 1: 60, 2: 120, 3: 240, 4: 480 },
+  pickSmooth: { 1: 5, 2: 4, 3: 3, 4: 2.5 },
   // Width of a rail line, and the gap between two lines that share track.
   rail: { 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 },
   gap: { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 },
@@ -3309,6 +3320,22 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     const more = on ? { street: shortened(on.street), groups: groupRows(blockRows(s, on)), others: listed(String(s.routes).split(' ').filter((r) => !on.g.all.has(r)).join(' ')) } : {};
     features.push(feature({ kind: 'bus', cls: s.cls, routes: listed(s.routes), n: s.n, hw: s.hw, ...(isExpress(s.routes, airport) ? { airport: true } : {}), ...(isExpress(s.routes, express) ? { express: true, shield: inOrder(String(s.routes).split(/[ ,]+/).filter((r) => express.has(r))).join(' ') } : {}), ...more }, { type: 'LineString', coordinates: s.path.map(back) }));
   }
+  // Each route's picked line: its streets on this sheet composed into one clean path (routeLine).
+  const byRoute = new Map();
+  const guides = new Map();
+  for (const f of routes.features) {
+    if (f.properties.mode !== 'bus') continue;
+    const parts = f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : f.geometry.type === 'LineString' ? [f.geometry.coordinates] : [];
+    for (const part of parts) (guides.get(f.properties.route) ?? guides.set(f.properties.route, []).get(f.properties.route)).push(part.map((c) => toPx(c, sheet.zoom)));
+  }
+  for (const s of bus) for (const r of String(s.routes).split(' ').filter(Boolean)) (byRoute.get(r) ?? byRoute.set(r, []).get(r)).push(s.path);
+  const pickLines = new Map();
+  for (const [r, paths] of byRoute) {
+    const made = routeLine(paths, { snap: SIZES.pickSnap, stub: SIZES.pickStub[sheet.id], apart: SIZES.pickApart[sheet.id], bridge: SIZES.pickBridge[sheet.id], sigma: SIZES.pickSmooth[sheet.id],
+      guide: guides.get(r) ?? [], far: SIZES.pickFar[sheet.id] });
+    pickLines.set(r, made);
+    for (const path of made.paths) features.push(feature({ kind: 'route-line', routes: r }, { type: 'LineString', coordinates: path.map(back) }));
+  }
   // What is labelled along the streets: on a table's streets, only the routes it doesn't name.
   const toLabel = bus.flatMap((s) => {
     const on = groupOf.get(s);
@@ -3558,13 +3585,19 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // (`under`), and each second place which picks show it (`alt`), as "|28|0|"; a name with no
   // place off a route says which picks run under it (`cover`): style.js, name.
   const bars = (routes) => `|${routes.join('|')}|`;
-  for (const n of stationNames) {
+  // Each placing also carries an id (`nid`) and its box about its point in screen pixels (`bx`),
+  // so the page can hide a name, with its letters, that the screen's edge or its own card would cut (main.js).
+  const fixed = (v) => Math.round(v * 10) / 10;
+  for (const [ni, n] of stationNames.entries()) {
     const m = n.mark;
     const under = { ...(n.alts.length ? { under: bars(n.alts.flatMap((a) => a.routes)) } : {}), ...(n.left.length ? { cover: bars(n.left) } : {}) };
-    for (const [at, tag] of [[n, under], ...n.alts.map((a) => [a, { alt: bars(a.routes) }])]) {
-      features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: at.text, anchor: at.anchor, offset: at.offset, justify: at.justify, ...tag },
+    for (const [k, [at, tag]] of [[n, under], ...n.alts.map((a) => [a, { alt: bars(a.routes) }])].entries()) {
+      const nid = `${ni}.${k}`;
+      const reach = [at.box, ...at.letters.map((b) => { const r = SIZES.nameLetter[sheet.id]; return [b.at[0] - r, b.at[1] - r, b.at[0] + r, b.at[1] + r]; })];
+      const bx = [Math.min(...reach.map((b) => b[0])) - n.at[0], Math.min(...reach.map((b) => b[1])) - n.at[1], Math.max(...reach.map((b) => b[2])) - n.at[0], Math.max(...reach.map((b) => b[3])) - n.at[1]].map(fixed).join(',');
+      features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: at.text, anchor: at.anchor, offset: at.offset, justify: at.justify, nid, bx, ...tag },
         { type: 'Point', coordinates: back(n.at) }));
-      for (const b of at.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, ...tag }, { type: 'Point', coordinates: back(b.at) }));
+      for (const b of at.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, nid, ...tag }, { type: 'Point', coordinates: back(b.at) }));
     }
   }
   // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.

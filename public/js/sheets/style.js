@@ -195,7 +195,7 @@ function shortStreet(name) {
 // once, so a pick is one property write, holds on every sheet, and no tile is made again.
 // Everything not on the route is inked nearer the ground rather than made see-through, so
 // pieces that overlap at a corner do not show darker knots.
-export const STATE = { bus: { default: '' }, rail: { default: '' } };
+export const STATE = { bus: { default: '' }, rail: { default: '' }, clipped: { default: '' } };
 const BUS = ['global-state', 'bus'];
 const RAIL_PICK = ['global-state', 'rail'];
 export const PICKED = ['any', ['!=', BUS, ''], ['!=', RAIL_PICK, '']];
@@ -213,6 +213,8 @@ export const namePlace = ['case', ['!=', tagged('alt'), ''], picks('alt'), ['!',
 // Where a name has no place off a picked route (`cover`), its halo widens to knock the route out
 // under the lettering, as a printed map does, so both read.
 export const nameCovers = picks('cover');
+// The names the page has found cut by the screen's edge or its own card, as "|3.0|17.1|" (main.js).
+export const unclipped = ['!', ['in', ['concat', '|', tagged('nid'), '|'], ['global-state', 'clipped']]];
 export const onRail = ['all', ['!=', RAIL_PICK, ''], ['==', ['get', 'route'], RAIL_PICK]];
 // A station on the picked line ("A B C").
 export const atStation = ['all', ['!=', RAIL_PICK, ''], ['in', ['concat', ' ', RAIL_PICK, ' '], ['concat', ' ', ['get', 'lines'], ' ']]];
@@ -347,9 +349,11 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     layer('rail', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': railLine, 'line-width': w } });
 
     // The picked bus route, whole, over everything but the stations: one weight and one ink from
-    // end to end on a rim of ground, its pieces joined round, so it reads as one line however
-    // many streets it takes. Its stops are ringed again on top of it.
-    const pickBus = ['all', ['==', ['get', 'kind'], 'bus'], onBus()];
+    // end to end on a rim of ground, drawn from its route line (the build's routeLine: its streets
+    // composed into one smoothed path, stubs and a one-way pair's second street dropped, gaps
+    // closed, round ends), so it reads as one line however many streets it takes. Its stops are
+    // ringed again on top of it.
+    const pickBus = ['all', ['==', ['get', 'kind'], 'route-line'], onBus()];
     layer('pick-bus-rim', 'line', { filter: pickBus, layout: ROUND, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
     layer('pick-bus', 'line', { filter: pickBus, layout: ROUND, paint: { 'line-color': c.pick, 'line-width': w } });
     if (n >= 4) layers.push({ id: `pick-stop-${n}`, type: 'circle', source, ...band, filter: ['all', ['==', ['get', 'kind'], 'stop'], onBus()],
@@ -449,18 +453,21 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
       paint: { 'text-color': ['case', major, c.city, c.place], 'text-halo-color': c.ground, 'text-halo-width': 2.2, 'text-halo-blur': 0.4 } });
     // A picked bus route holds its ground like rail: placed before the place names, so a town's
     // name and its halo move off the route instead of cutting it.
-    layer('keep-off-pick', 'symbol', { filter: ['all', ['==', ['get', 'kind'], 'bus'], onBus()], ...unseen });
+    layer('keep-off-pick', 'symbol', { filter: pickBus, ...unseen });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
-    layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name'], namePlace),
+    // A name the picked route runs under keeps a tight halo, so the line reads unbroken up to its
+    // letters, and its line letters step aside while that route is picked. A name the screen's
+    // edge or the page's own card would cut is hidden, with its letters (`clipped`, main.js).
+    layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name'], ['all', namePlace, unclipped]),
       layout: { 'text-field': ['get', 'text'], 'text-font': ['case', ['get', 'minor'], ['literal', FONT.medium], ['literal', FONT.semibold]], 'text-size': ['case', ['get', 'minor'], 10, NAME_SIZE[n]], 'text-max-width': 40, 'text-line-height': 1.12,
         'text-anchor': ['get', 'anchor'], 'text-offset': ['get', 'offset'], 'text-justify': ['get', 'justify'], 'text-allow-overlap': true, 'text-padding': 3 },
-      paint: { 'text-color': textInk(c.name, ['any', atStation, ['!=', BUS, '']]), 'text-halo-color': c.ground, 'text-halo-width': ['case', nameCovers, 3.5, 2] } });
+      paint: { 'text-color': textInk(c.name, ['any', atStation, ['!=', BUS, '']]), 'text-halo-color': c.ground, 'text-halo-width': ['case', nameCovers, 1.2, 2] } });
     // Line letters, placed by the build where each line runs alone: a disc in the line's colour.
     const disc = [7.4, 8.2, 9.4, 10.6][i];
     // Beside a station's name the letters are smaller (scripts/lib/sheets.mjs, SIZES.nameLetter).
     const small = [5.6, 6, 6.6, 7.4][i];
-    layer('letter-disc', 'circle', { filter: kind('letter', namePlace), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
-    layer('letter', 'symbol', { filter: kind('letter', namePlace),
+    layer('letter-disc', 'circle', { filter: kind('letter', ['all', namePlace, unclipped, ['!', nameCovers]]), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
+    layer('letter', 'symbol', { filter: kind('letter', ['all', namePlace, unclipped, ['!', nameCovers]]),
       layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * 1.42, disc * 1.42], 'text-allow-overlap': true, 'text-offset': [0, 0.06] },
       paint: { 'text-color': unless(onRail, letterInk, byColor('ink', ['get', 'ink'], FADE.line)) } });
     // Lettering keeps off the lines: unseen marks along rail and the busiest streets hold their

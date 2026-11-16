@@ -22,7 +22,7 @@ test("a drawn route list reads as its routes, a stacked one too, and a tap names
 });
 
 test('a picked route holds on every sheet: its pieces are drawn on top, the rest fades toward the ground', () => {
-  assert.deepEqual(Object.keys(STATE).sort(), ['bus', 'rail']);
+  assert.deepEqual(Object.keys(STATE).sort(), ['bus', 'clipped', 'rail']);
   for (const theme of ['light', 'dark']) {
     const style = sheetStyle(theme, [], ['#57C1E9', '#E31837']);
     assert.deepEqual(style.state, STATE);
@@ -31,10 +31,13 @@ test('a picked route holds on every sheet: its pieces are drawn on top, the rest
       const pick = layer(style, `pick-bus-${n}`);
       assert.ok(pick, `sheet ${n} has the picked route's layer`);
       const on15 = { kind: 'bus', routes: '1, 15, 15L', cls: 'c10' };
-      const on15L = { kind: 'bus', routes: '15L', cls: 'c10' };
-      assert.equal(evaluate(pick.filter, { props: on15, state: { ...none, bus: '15' } }), true);
-      assert.equal(evaluate(pick.filter, { props: on15L, state: { ...none, bus: '15' } }), false, '15 is not 15L');
-      assert.equal(evaluate(pick.filter, { props: on15, state: none }), false, 'nothing picked, nothing drawn on top');
+      // The picked route is drawn from its own composed line (routeLine), not the streets' pieces.
+      const line15 = { kind: 'route-line', routes: '15' };
+      const line15L = { kind: 'route-line', routes: '15L' };
+      assert.equal(evaluate(pick.filter, { props: line15, state: { ...none, bus: '15' } }), true);
+      assert.equal(evaluate(pick.filter, { props: line15L, state: { ...none, bus: '15' } }), false, '15 is not 15L');
+      assert.equal(evaluate(pick.filter, { props: on15, state: { ...none, bus: '15' } }), false, 'the street pieces are not drawn again');
+      assert.equal(evaluate(pick.filter, { props: line15, state: none }), false, 'nothing picked, nothing drawn on top');
       // One ink and one weight from end to end, whatever street the route is on.
       assert.equal(pick.paint['line-color'], c.pick);
       assert.equal(typeof pick.paint['line-width'], 'number');
@@ -68,8 +71,8 @@ test('a link with a picked route opens that route\'s card, the one a tap on its 
   assert.equal(pickCard({}), null);
   // The page opens it wherever it sets a pick from the address: on opening, and when the address changes.
   const main = fs.readFileSync(new URL('../public/js/sheets/main.js', import.meta.url), 'utf8');
-  assert.match(main, /setPick\(asked\.pick\);[\s\S]{0,200}openCard\(asked\.pick\)/);
-  assert.match(main, /setPick\(v\.pick\);\s*openCard\(v\.pick\);/);
+  assert.match(main, /setPick\(asked\.pick\);[\s\S]{0,200}openCard\(asked\.pick, \{ framed: true \}\)/);
+  assert.match(main, /setPick\(v\.pick\);\s*openCard\(v\.pick, \{ framed: true \}\);/, 'and frames the whole route above it');
   // Closing it clears the pick, as it does after a tap.
   assert.match(main, /function close\([^)]*\) \{[\s\S]{0,160}if \(picked\) \{ setPick\(null\)/);
 });
@@ -100,4 +103,19 @@ test('a station name keeps off a picked route: moved where it can be, the route 
       assert.equal(evaluate(halo, { props: { cover: '|28|' }, state: { ...none, bus: '15' } }), evaluate(halo, { props: {}, state: none }));
     }
   }
+});
+
+test('a picked route\'s card says what the route is, from RTD\'s directory, in two short lines (#117)', () => {
+  // Chris: "'Route / Bus / 28' says almost nothing" and "it covers about a quarter of the screen".
+  const r = { route: '28', mode: 'bus', name: '28th Avenue', tier: 'hourly', wk: 60, goes: [{ name: 'Olde Town Arvada Station' }, { name: 'Central Park Station' }] };
+  const card = pickCard({ mode: 'bus', route: '28' }, r);
+  assert.equal(card.kind, 'route');
+  assert.equal(card.name, '28th Avenue');
+  assert.equal(card.line, 'Olde Town Arvada – Central Park · Every 60 min');
+  assert.equal(card.bus, '28', 'its chip still picks and unpicks it');
+  const rail = pickCard({ mode: 'rail', route: 'W' }, { route: 'W', mode: 'rail', name: 'Union Station to Jefferson County Government Center-Golden Station', tier: 'frequent', wk: 15, goes: [{ name: 'Union Station' }, { name: 'Jeffco' }] });
+  assert.equal(rail.name, 'W Line');
+  assert.equal(rail.line, 'Union Station – Jeffco · Every 15 min');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /#card\.route \{[^}]*padding: 6px/, 'the route card is compact');
 });

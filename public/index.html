@@ -79,6 +79,13 @@
   #card { position: absolute; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: max(84px, calc(env(safe-area-inset-bottom) + 76px)); max-width: 420px; padding: 12px 14px; background: var(--card); color: var(--ink);
     border-radius: 14px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); }
   #card[hidden] { display: none; }
+  /* A picked route's card: one line for its chip and name, one for its ends and how often it runs. */
+  #card.route { padding: 6px 10px 7px; max-width: 360px; }
+  #card.route .head { display: flex; align-items: center; gap: 8px; padding-right: 30px; }
+  #card.route .head .routes { flex: none; margin: 0; padding: 0; max-height: none; }
+  #card.route .head b { padding-right: 0; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #card.route span { margin-top: 2px; font-size: 12px; }
+  #card.route button.close { top: 50%; transform: translateY(-50%); }
   #card b { display: block; padding-right: 26px; font-size: 15px; font-weight: 700; line-height: 1.25; }
   #card span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--note); line-height: 1.3; }
   /* Closes the card as a tap on empty ground does, without having to find empty ground. */

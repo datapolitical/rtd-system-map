@@ -1,6 +1,8 @@
 // What a tap on a sheet names, and which routes its card offers to pick (main.js). Pure, so the
 // tests can read it: it takes the properties of the drawn features under the finger.
 
+import { freq } from '../often.js';
+
 const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
 
 /** The routes in a drawn list: "0, 1, 15L" or a stacked "15L,\n19" -> ['0', '1', '15L', '19']. */
@@ -28,8 +30,15 @@ export function pickFrom({ station, letter, rail = [], stop, label, bus } = {}) 
  * The card an address with a picked route opens on (main.js): the card a tap on that route's
  * number gives, so a shared link shows what its sender saw. `{ title, note, rail | bus }`.
  */
-export function pickCard({ mode, route } = {}) {
-  if (mode === 'rail') return { title: 'Line', note: 'Rail', rail: [route] };
-  if (mode === 'bus') return { title: 'Route', note: 'Bus', bus: route };
-  return null;
+export function pickCard({ mode, route } = {}, r = null) {
+  const base = mode === 'rail' ? { title: 'Line', note: 'Rail', rail: [route] } : mode === 'bus' ? { title: 'Route', note: 'Bus', bus: route } : null;
+  if (!base || !r) return base;
+  // With the route's entry in RTD's directory, the card says what the route is in one or two
+  // lines: its chip and RTD's name for it, then its two ends and how often it runs.
+  const name = mode === 'rail' ? `${route} Line` : String(r.name ?? '');
+  const goes = (r.goes ?? []).map((g) => routeEnd(g.name));
+  return { ...base, kind: 'route', name, line: [goes.join(' – '), freq(r)].filter(Boolean).join(' · ') };
 }
+
+/** An end as a card says it: "Olde Town Arvada Station" -> "Olde Town Arvada"; Union Station keeps its name. */
+export const routeEnd = (name) => (/union/i.test(name) ? String(name) : String(name).replace(/\s+Station$/i, ''));
