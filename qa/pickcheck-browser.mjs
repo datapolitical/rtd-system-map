@@ -32,8 +32,11 @@ for (const theme of themes) {
       // The card fills once the directory answers, and the frame follows it.
       for (let i = 0; i < 40 && !document.querySelector('#card.route b')?.textContent; i++) await new Promise((ok) => setTimeout(ok, 50));
       await idle();
-      await new Promise((ok) => setTimeout(ok, 60));
-      if (map.isMoving()) await idle();
+      // The page hides cut names once the map is idle (unclip), which draws once more.
+      const frames = () => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+      await frames();
+      await new Promise((ok) => { const t = setTimeout(ok, 800); map.once('idle', () => { clearTimeout(t); ok(); }); });
+      await frames();
       const card = document.querySelector('#card');
       const name = card.hidden ? '' : card.querySelector('b')?.textContent ?? '';
       const view = map.getContainer().getBoundingClientRect();
@@ -59,6 +62,8 @@ for (const theme of themes) {
         const [x0, y0, x1, y1] = String(bx).split(',').map(Number);
         const p = map.project(f.geometry.coordinates);
         const box = { left: p.x + x0 + view.left, top: p.y + y0 + view.top, right: p.x + x1 + view.left, bottom: p.y + y1 + view.top };
+        // Wholly off the screen shows nothing, so cuts nothing.
+        if (box.right < view.left || box.left > view.right || box.bottom < view.top || box.top > view.bottom) continue;
         const edged = box.left < view.left || box.right > view.right || box.top < view.top || box.bottom > view.bottom;
         const under = blocks.some((k) => box.left < k.right && box.right > k.left && box.top < k.bottom && box.bottom > k.top);
         if (edged || under) cut.add(`${nid} ${String(text).replace(/\n/g, ' / ')}`);

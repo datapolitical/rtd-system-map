@@ -8,8 +8,8 @@
 //   steps     a turn sharper than STEP° followed within JOG px by one back the other way
 //   names     a station name shown while the route is picked whose box the line runs through
 //             (a name it runs under by design, `cover`, is counted apart as `under`)
-//   strays    points of the line farther from the route's own street pieces than the smoothing's
-//             allowance (SIZES.pickSmooth + 1 px; DESIGN.md: the only tolerance the picked line gets)
+//   strays    points of the line farther from the route's own street pieces than a line's width
+//             (DESIGN.md: the smoothing's allowance, the only tolerance the picked line gets)
 // qa/pickcheck-browser.mjs opens a pick link for each route on a phone (chromium, both themes)
 // and counts what only the page shows: routes not framed whole above the card, and names cut by
 // the screen's edge or the card. Prints counts per sheet, and the worst routes; JSON with --json.
@@ -67,7 +67,9 @@ export function checkRoute(paths, names, route, sheet, streets = []) {
   }));
   out.gaps = new Set(paths.map((_, i) => root(i))).size - 1;
   if (out.gaps) out.where.push(...paths.map((p) => p[0]));
-  out.stubs = paths.filter((p) => length(p) < SIZES.pickStub[sheet.id]).length;
+  // A stub: a short part with a loose end (a short link between two parts is no stub).
+  const touches = (p, e) => paths.some((q) => q !== p && nearestD(q, e) <= 2);
+  out.stubs = paths.filter((p) => length(p) < SIZES.pickStub[sheet.id] && !(touches(p, p[0]) && touches(p, p.at(-1)))).length;
   for (const [pi, p] of paths.entries()) {
     out.steps += steps(p);
     for (let i = 1; i < p.length; i++) for (let j = i + 2; j < p.length; j++) if (cross(p[i - 1], p[i], p[j - 1], p[j])) { out.crossings++; out.where.push(p[i]); }
@@ -76,7 +78,7 @@ export function checkRoute(paths, names, route, sheet, streets = []) {
   }
   // Off its streets by more than the smoothing allows (bridges across a gap are measured too).
   if (streets.length) {
-    const allow = SIZES.pickSmooth[sheet.id] + 1;
+    const allow = SIZES.rail[sheet.id];
     for (const p of paths) for (const q of resample(p, 2)) if (!streets.some((st) => nearestD(st, q) <= allow)) { out.strays++; if (out.strays === 1) out.where.push(q); }
   }
   // Names shown while this route is picked, over its line.

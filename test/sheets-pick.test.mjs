@@ -77,7 +77,7 @@ test('a link with a picked route opens that route\'s card, the one a tap on its 
   assert.match(main, /function close\([^)]*\) \{[\s\S]{0,160}if \(picked\) \{ setPick\(null\)/);
 });
 
-test('a station name keeps off a picked route: moved where it can be, the route knocked out under it where not (#117)', () => {
+test('a station name keeps off a picked route: moved where it can be, under a tight halo where not (#117)', () => {
   // Chris: "The Union Station label sits on top of route 28".
   for (const theme of ['light', 'dark']) {
     const style = sheetStyle(theme, [], ['#57C1E9']);
@@ -97,9 +97,14 @@ test('a station name keeps off a picked route: moved where it can be, the route 
         assert.equal(evaluate(layer(style, id).filter, { props: { kind: 'letter', small: true, alt: '|28|' }, state: { ...none, bus: '28' } }), true);
         assert.equal(evaluate(layer(style, id).filter, { props: { kind: 'letter', small: true, under: '|28|' }, state: { ...none, bus: '28' } }), false);
       }
-      // A name with nowhere off the route knocks it out with a wider halo, only while that route is picked.
+      // A name with nowhere off the route lets the line run on under a tight halo, not a knockout
+      // that reads as a gap (Chris), and its letters step aside, only while that route is picked.
       const halo = name.paint['text-halo-width'];
-      assert.ok(evaluate(halo, { props: { cover: '|28|' }, state: { ...none, bus: '28' } }) > evaluate(halo, { props: { cover: '|28|' }, state: none }));
+      assert.ok(evaluate(halo, { props: { cover: '|28|' }, state: { ...none, bus: '28' } }) < evaluate(halo, { props: { cover: '|28|' }, state: none }));
+      for (const id of [`letter-${n}`, `letter-disc-${n}`]) {
+        assert.equal(evaluate(layer(style, id).filter, { props: { kind: 'letter', small: true, cover: '|28|' }, state: { ...none, bus: '28' } }), false);
+        assert.equal(evaluate(layer(style, id).filter, { props: { kind: 'letter', small: true, cover: '|28|' }, state: none }), true);
+      }
       assert.equal(evaluate(halo, { props: { cover: '|28|' }, state: { ...none, bus: '15' } }), evaluate(halo, { props: {}, state: none }));
     }
   }

@@ -133,9 +133,10 @@ export function routeLine(pieces, { snap = 2, stub = 6, apart = 4, bridge = 10, 
       for (const e of edges) { deg[e.a]++; deg[e.b]++; }
       const loose = nodes.map((_, i) => i).filter((i) => deg[i] === 1);
       const fgrid = new Grid(far / 4);
-      for (const i of loose) fgrid.add(nodes[i], i);
+      nodes.forEach((p, j) => { if (part[j] >= 0) fgrid.add(p, j); });
+      const isLoose = new Set(loose);
       for (const i of loose) for (const j of fgrid.near(nodes[i], far)) {
-        if (j <= i || part[j] === part[i]) continue;
+        if ((isLoose.has(j) && j <= i) || part[j] === part[i]) continue;
         const d = dist(nodes[i], nodes[j]);
         if (d > bridge && d <= far) pairs.push([d, i, j, true]);
       }
@@ -144,7 +145,7 @@ export function routeLine(pieces, { snap = 2, stub = 6, apart = 4, bridge = 10, 
     for (const [d, i, j, along] of pairs) {
       const [ri, rj] = [root(part[i]), root(part[j])];
       if (ri === rj) continue;
-      const path = along ? guided(guide, nodes[i], nodes[j], 2 * snap + 4) : [nodes[i], nodes[j]];
+      const path = along ? guided(guide, nodes[i], nodes[j], bridge) : [nodes[i], nodes[j]];
       if (!path) continue;
       up.set(ri, rj);
       edges.push({ a: i, b: j, path, len: length(path) });
@@ -210,15 +211,50 @@ export function routeLine(pieces, { snap = 2, stub = 6, apart = 4, bridge = 10, 
   }
   // Smoothed: the main path, then each piece beside it, its ends set back on the smoothed main path.
   const smoothMain = smoothed(main, sigma);
-  const others = chained(rest.map((e) => e.path), snap).map((p) => {
-    const s = smoothed(p, sigma);
-    for (const k of [0, s.length - 1]) {
-      const h = nearest(smoothMain, s[k]);
-      if (h.d <= 3 * snap) s[k] = h.at;
+  const others = chained(rest.map((e) => e.path), snap).map((p) => smoothed(p, sigma));
+  // Each branch's ends set back on the line it leaves, which the smoothing moved.
+  const all = [smoothMain, ...others];
+  for (const [i, p] of all.entries()) {
+    if (!i) continue;
+    for (const k of [0, p.length - 1]) {
+      let best = null;
+      for (const [j, q] of all.entries()) {
+        if (j === i) continue;
+        const h = nearest(q, p[k]);
+        if (!best || h.d < best.d) best = h;
+      }
+      if (best && best.d > 0 && best.d <= sigma + 2 * snap) p[k] = best.at;
     }
-    return s;
-  });
-  return { paths: [smoothMain, ...others], ...report };
+  }
+  // Last, parts that still stand apart (a branch whose link the steps above lost) are tied to
+  // the part holding the main path: from the nearer end, along RTD's line where it runs there,
+  // else straight where the gap is within a bridge.
+  for (let again = true; again; ) {
+    again = false;
+    const group = all.map((_, i) => i);
+    const root = (i) => (group[i] === i ? i : (group[i] = root(group[i])));
+    all.forEach((p, i) => all.forEach((q, j) => { if (i < j && [p[0], p.at(-1)].some((e) => nearest(q, e).d <= snap) || i < j && [q[0], q.at(-1)].some((e) => nearest(p, e).d <= snap)) group[root(i)] = root(j); }));
+    let best = null;
+    for (const [i, p] of all.entries()) {
+      if (root(i) === root(0)) continue;
+      for (const e of [p[0], p.at(-1)]) for (const [j, q] of all.entries()) {
+        if (root(j) !== root(0)) continue;
+        const h = nearest(q, e);
+        if (h.d <= far && (!best || h.d < best.d)) best = { d: h.d, from: e, to: h.at };
+      }
+    }
+    if (!best) break;
+    const link = guided(guide, best.from, best.to, bridge) ?? (best.d <= 2 * bridge ? [best.from, best.to] : null);
+    if (!link) break;
+    all.push(smoothed(link, sigma));
+    report.bridged++;
+    again = true;
+  }
+  // A branch left shorter than a stub, both its ends on the line, adds nothing a reader can see.
+  const touches = (p, e) => all.some((q) => q !== p && nearest(q, e).d <= snap);
+  const kept = all.filter((p, i) => !i || length(p) >= stub || (touches(p, p[0]) && touches(p, p.at(-1))));
+  report.stubs += all.length - kept.length;
+  return { paths: kept, ...report };
 }
 
 /** The stretch of a guide line from near `a` to near `b`, its ends set on them; null if neither line passes both within `reach`, or the way round is far longer than the gap. */

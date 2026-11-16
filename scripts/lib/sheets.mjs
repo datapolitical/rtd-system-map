@@ -24,8 +24,8 @@ export const SIZES = {
   // corner; a dead end shorter than a stub goes; a second street closer than `apart` to the main
   // path goes; gaps up to `bridge` px are closed; farther gaps up to `pickFar` px close along RTD's line; and the whole is smoothed over `pickSmooth` px.
   pickSnap: 2,
-  pickStub: { 1: 6, 2: 6, 3: 6, 4: 8 },
-  pickApart: { 1: 5, 2: 5, 3: 6, 4: 8 },
+  pickStub: { 1: 12, 2: 14, 3: 14, 4: 16 },
+  pickApart: { 1: 8, 2: 8, 3: 8, 4: 8 },
   pickBridge: { 1: 10, 2: 12, 3: 16, 4: 24 },
   // Farther gaps, where the sheet draws no street the route takes, close along RTD's own line.
   pickFar: { 1: 60, 2: 120, 3: 240, 4: 480 },

@@ -413,7 +413,8 @@ let directory = null;
 const routeEntry = (p) => (directory ??= fetch(new URL('../../data/directory.json', import.meta.url)).then((r) => (r.ok ? r.json() : { routes: [] })).catch(() => ({ routes: [] })))
   .then((d) => d.routes.find((r) => r.route === p.route && r.mode === p.mode) ?? null);
 // A picked route framed whole in the map left clear above its card (DESIGN.md, "the address"):
-// on the closest sheet it fits on, its middle in the middle of that clear area.
+// on the link's own sheet, its middle in the middle of that clear area, where it fits there. A
+// link to a closer sheet than the whole route fits on keeps its view: it shows a place on the route.
 function frame(r) {
   const [w, s, e, n] = r.bbox ?? [];
   if (![w, s, e, n].every(Number.isFinite)) return;
@@ -421,12 +422,9 @@ function frame(r) {
   const over = card.hidden ? box.bottom : card.getBoundingClientRect().top;
   const pad = { top: 16, left: 16, right: 16, bottom: Math.max(16, box.bottom - over + 12) };
   const fit = map.cameraForBounds([[w, s], [e, n]], { padding: pad });
-  if (!fit) return;
-  let i = 0;
-  for (const [k, z] of zooms.entries()) if (z <= fit.zoom + 0.05) i = k;
-  map.jumpTo({ center: [(w + e) / 2, (s + n) / 2], zoom: zooms[i] }, { settling: true });
+  if (!fit || fit.zoom < zooms[sheet] - 0.05) return;
+  map.jumpTo({ center: [(w + e) / 2, (s + n) / 2], zoom: zooms[sheet] }, { settling: true });
   map.panBy([0, (pad.bottom - pad.top) / 2], { duration: 0 }, { settling: true });
-  show(i);
 }
 function openCard(p, { framed = false } = {}) {
   if (!pickCard(p ?? {})) return;

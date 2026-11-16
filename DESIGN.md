@@ -2684,9 +2684,10 @@ the page read before, then the pick), rewritten in place with
 `history.replaceState` each time the map comes to rest or a route is picked,
 so Back still leaves the page. Opening it without a pick shows the same sheet and the centre to within half
 a pixel. Opening it with a pick shows the pick with the picked route's card
-open, the route framed whole in the map left clear above the card, on the
-closest sheet it fits on (`frame`, main.js), and the address rewritten to
-that view; closing the card clears the pick, as after a tap.
+open. Where the whole route fits on the link's sheet, it is framed whole in
+the map left clear above the card (`frame`, main.js) and the address
+rewritten to that view; a link to a closer sheet keeps its exact view, since
+it shows a place on the route. Closing the card clears the pick, as after a tap.
 A plain visit keeps its plain address until
 the view changes. An address that names no view or a centre off the map
 opens the opening view; a pick the sheets no longer draw is dropped. The rules
@@ -4971,8 +4972,8 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   composed line (joined, gaps closed, stubs and a close second street
   dropped, smoothed, round ends) instead of its street pieces drawn again; a
   name it runs under keeps a tight halo and drops its letter row while it is
-  picked, not a knockout; a pick link frames the whole route above the card,
-  not the sender's exact view; and a station name the screen's edge or the
+  picked, not a knockout; a pick link frames the whole route above the card
+  where it fits on the link's sheet; and a station name the screen's edge or the
   page's own controls would cut is hidden whole. Reason: Chris, from the 28
   picked on sheet 1: "this isn't how this should look, right?" (a tangle at
   Union Station, stair steps, gaps, a knockout reading as a gap, an arrow
