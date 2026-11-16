@@ -71,6 +71,9 @@ export const SIZES = {
   // A loose end with none of its stops this near is a spur in the data, and a spur shorter than
   // busSpurMetres back to the street it leaves is not drawn.
   busEndMetres: 320,
+  // A route's end at least this long is always drawn, however few pixels it is on a sheet: a rider
+  // must see where the bus goes (#117).
+  busEndKeep: 250,
   busSpurMetres: 1600,
   // Two ways round that enclose a strip thinner than this are drawn as one street.
   busSlim: 6,
@@ -1078,7 +1081,7 @@ function cornered(streets) {
  * its routes, and a street that met the way not drawn is led across to the one that is. A thin
  * loop that hangs from one corner is made one closed street, for `unlooped` to draw.
  */
-function unslivered(streets, most, slim, snap) {
+function unslivered(streets, most, slim, snap, fold = Infinity) {
   const edges = cornered(streets);
   const at = new Map();
   const add = (e) => { for (const k of new Set([e.a, e.b])) at.set(k, [...(at.get(k) ?? []), e]); };
@@ -1175,6 +1178,9 @@ function unslivered(streets, most, slim, snap) {
     const bulge = ladder ? 0 : 3 * slim;
     const apart = (path) => { let n = 0; for (const p of resample(path, 1)) { n = kept.every((k) => nearest(k, p).d > slim) ? n + 1 : 0; if (n > bulge) return true; } return false; };
     if (drop.filter((side) => long(side) > slim).some((side) => side.some((r) => apart(r.o.st.path)))) continue;
+    // Drawn as one only where the side not drawn lies within the street drawn: farther than that it
+    // is another street, and a route drawn on it would be on a street it doesn't take.
+    if (drop.some((side) => side.some((r) => resample(r.o.st.path, 1).some((p) => kept.every((k) => nearest(k, p).d > fold))))) continue;
     if (ladder) {
       const gone1 = drop[0];
       const n = sides.length;
@@ -1884,6 +1890,10 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
     if (!corners.has(k)) corners.set(k, []);
     corners.get(k).push(e.moved[i]);
   }
+  const endAt = [...corners.values()].map((all) => [all.reduce((x, q) => x + q[0], 0) / all.length, all.reduce((y, q) => y + q[1], 0) / all.length]);
+  const endGrid = new Map();
+  for (const p of endAt) { const k = `${Math.floor(p[0] / 8)},${Math.floor(p[1] / 8)}`; endGrid.set(k, [...(endGrid.get(k) ?? []), p]); }
+  const endsNear = (p) => [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => (endGrid.get(`${Math.floor(p[0] / 8) + dx},${Math.floor(p[1] / 8) + dy}`) ?? []).some((q) => dist(p, q) < 0.5)));
   for (const e of kept) {
     const path = [...e.moved];
     for (const i of [0, path.length - 1]) {
@@ -1903,7 +1913,10 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
       }
       return true;
     });
-    e.path = rounded(path, cell);
+    // Rounded in parts between the corners where other streets end on it, so a corner stays put
+    // (rounded through, the tip of a street drawn out and back moves off the street it meets there).
+    const fixed = path.map((p, i) => (i > 0 && i < path.length - 1 && endsNear(p) ? i : -1)).filter((i) => i > 0);
+    e.path = [0, ...fixed].flatMap((from, n) => { const part = rounded(path.slice(from, (n < fixed.length ? fixed[n] : path.length - 1) + 1), cell); return n ? part.slice(1) : part; });
     e.len = length(e.path);
     // Where the folded routes start and stop along it, by point (the joined-on tails at either end
     // carry the routes of the point they leave from).
@@ -1929,7 +1942,11 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
   // that met it elsewhere round it is led on round the ring to that point, the way its routes go
   // (else the shorter way), so it does not stop short in mid-air and is not then taken for a spur
   // where the data stops short, and dropped.
-  const ringed = (e) => dist(e.path[0], e.path.at(-1)) < 1 && Math.max(...e.path.map((p) => dist(p, e.path[0]))) < 2.4 * SIZES.busSpeck;
+  // A short end that leads nowhere is left off, and a terminal loop too small to read as a ring is
+  // the point where it meets its street, but only while short on the ground too (busEndKeep).
+  const keepEnd = SIZES.busEndKeep * perMetre;
+  const stub = Math.min(2.5 * SIZES.busSpeck, keepEnd);
+  const ringed = (e) => dist(e.path[0], e.path.at(-1)) < 1 && Math.max(...e.path.map((p) => dist(p, e.path[0]))) < Math.min(2.4 * SIZES.busSpeck, keepEnd);
   for (const ring of kept.filter(ringed)) {
     const to = ring.path[0];
     const round = ring.unrounded;
@@ -1954,16 +1971,19 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
     .filter((e) => {
       if (ringed(e)) return false;
       // A short spur off a street reads as a barb, not a route.
-      return !(e.free && e.len < 2.5 * SIZES.busSpeck);
+      return !(e.free && e.len < stub);
     })
     .flatMap((e) => byRoutes(e).map(({ routes, path }) => ({ cls: CLASS_ORDER[e.rank], routes, n: Math.max(e.n, routes.split(' ').length), hw: e.hw, path: simplify(rounded(simplify(path, 2), 2), 0.3) })));
   // Corners first, then the rings, strips and loops they show. Taking a side away can leave an
   // end a hair from the street it met, so the round is made twice.
-  const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), SIZES.busRing), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
+  // A ring gathered to the point where its streets meet takes its routes no farther than busEndKeep
+  // from where they run: half round it is its reach at most.
+  const ring = Math.min(SIZES.busRing, 2 * keepEnd);
+  const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), ring), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap, SIZES.busMerge[sheet.id] + SIZES.rail[sheet.id]), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
   // How far a point is from the nearest rail line or station bar.
   const inked = [...lines.flatMap((l) => l.paths), ...marks.flatMap((m) => [m.ends, ...(m.more ?? [])])];
   const railOff = (p) => inked.reduce((d, path) => (boxed(path, p, d) ? Math.min(d, nearest(path, p).d) : d), 1e9);
-  return gathered(unstubbed(onWalls(toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing), railOff, SIZES.rail[sheet.id] + 1.5 * SIZES.gap[sheet.id] + SIZES.rail[sheet.id] / 2 + 3, SIZES.rail[sheet.id]), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre, walls), walls, SIZES.hallReach), sheet, SIZES.busTick));
+  return gathered(unstubbed(onWalls(toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), stub, walls), SIZES.busStraight), SIZES.busRing), railOff, SIZES.rail[sheet.id] + 1.5 * SIZES.gap[sheet.id] + SIZES.rail[sheet.id] / 2 + 3, SIZES.rail[sheet.id]), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre, walls), walls, SIZES.hallReach), sheet, SIZES.busTick));
 }
 
 /**
@@ -2072,17 +2092,29 @@ export function noded(streets, snap, reach = snap) {
   const cornerAt = (p) => corners.find((c) => Math.abs(c[0] - p[0]) <= snap && Math.abs(c[1] - p[1]) <= snap && dist(c, p) <= snap);
   const near = new Map();
   const cellOf = (p) => `${Math.floor(p[0] / 16)},${Math.floor(p[1] / 16)}`;
+  // An end within `snap` of one already welded to a corner joins that corner too, so ends a hair
+  // apart in a row are one corner, not two a little more than `snap` apart.
+  const welded = new Map();
   const weld = (p) => {
     const [x, y] = [Math.floor(p[0] / 16), Math.floor(p[1] / 16)];
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const c of near.get(`${x + dx},${y + dy}`) ?? []) if (dist(c, p) <= snap) return c;
+    // The nearest corner, not the first found: an end between two is not taken from the one it is on.
+    let best = null;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const c of near.get(`${x + dx},${y + dy}`) ?? []) if (dist(c, p) <= snap && (!best || dist(c, p) < dist(best, p))) best = c;
+    if (best) return best;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const w of welded.get(`${x + dx},${y + dy}`) ?? []) if (dist(w.p, p) <= snap && dist(w.c, p) <= 2 * snap) return w.c;
     const c = [...p];
     near.set(cellOf(c), [...(near.get(cellOf(c)) ?? []), c]);
     corners.push(c);
     return c;
   };
+  const weldEnd = (p) => {
+    const c = weld(p);
+    welded.set(cellOf(p), [...(welded.get(cellOf(p)) ?? []), { p: [...p], c }]);
+    return c;
+  };
   for (const path of paths) {
-    path[0] = weld(path[0]);
-    path[path.length - 1] = weld(path.at(-1));
+    path[0] = weldEnd(path[0]);
+    path[path.length - 1] = weldEnd(path.at(-1));
   }
   const nearCorner = (p) => {
     const [x, y] = [Math.floor(p[0] / 16), Math.floor(p[1] / 16)];
@@ -2248,6 +2280,9 @@ export function termini(streets, stops, perMetre, bars = [], walls = []) {
         else ends.push({ at, cls: x.st.cls, routes: x.st.routes });
         continue;
       }
+      // A stop of its routes a little farther off (its loop drawn simpler took the end that far from
+      // it, up to busEndKeep) is still where it ends: the end is drawn as it is, without a mark.
+      if (stops.some((s) => s.routes.some((r) => mine.has(r)) && dist(s.at, x.p) <= reach + SIZES.busEndKeep * perMetre)) continue;
       // Back along the street from the loose end to the first corner where streets part.
       const run = [x.st];
       let far = length(x.st.path);

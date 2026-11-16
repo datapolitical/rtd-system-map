@@ -6,12 +6,11 @@
 // feed (downloaded once to qa/.scratch/gtfs.zip, or RTD_GTFS_ZIP), and for each sheet reports:
 //
 // - wrong street: a drawn piece that carries a route for most of its length where neither
-//   RTD's route line nor the route's GTFS shapes run (one that keeps within a short bulge the
-//   sheet draws through, SIZES.busSlim + busSnap, is counted apart);
+//   RTD's route line nor the route's GTFS shapes run;
 // - missing: stretches of a route's line with no drawn piece carrying that route nearby,
 //   each sorted into: a loop, ramp or divided road the street graph draws simpler on every
 //   sheet (DESIGN.md, "Bus routes": within LOOP_REACH of the route's street); a stretch
-//   reaching less than the short end the sheet leaves off; a route end drawn to its station; a place where RTD's two
+//   reaching less than the short end the sheet leaves off (and under SIZES.busEndKeep); a route end drawn to its station; a place where RTD's two
 //   sources disagree; or a fault;
 // - off: stretches of drawn route farther from the route than the sheet's fold distance
 //   plus a street's width, sorted the same way;
@@ -172,19 +171,16 @@ export async function accuracy() {
     // A short end that leads nowhere (DESIGN.md: under 25 px, 2.5 specks, from where it leaves the
     // drawn streets) is left off by design, a terminal loop with it: what counts is how far it
     // reaches from the drawn route, not how long it is round the loop.
-    // A terminal loop under 2.4 specks' reach is drawn as the point where it meets its street (it is
-    // too small to read as a ring), and the stub to that point is then a short end: together a
-    // route's end can stop up to 4.9 specks short.
-    const small = (2.5 + 2.4) * SIZES.busSpeck * m;
+    // A short end that leads nowhere, with a terminal loop too small to read as a ring drawn as the
+    // point where it meets its street, is left off (DESIGN.md, "Route accuracy"), but only while it
+    // is short on the ground too: what counts is how far it reaches from the drawn route.
+    const small = Math.min((2.5 + 2.4) * SIZES.busSpeck * m, SIZES.busEndKeep);
     const pieces = read(`sheet-${sheet.id}`).filter((f) => f.properties.kind === 'bus');
     const drawn = new Index();
     for (const f of pieces) for (const r of routesOf(f.properties.routes)) drawn.add(r, f.geometry.coordinates);
 
     // Wrong street: most of a piece is far from every source of a route it carries.
     const wrong = [];
-    const through = [];
-    // (and a pixel for the corners later rounded to whole pixels)
-    const bulge = (SIZES.busSlim + SIZES.busSnap + 1) * m + width / 2 + SLACK;
     const offs = { arc: [], gtfs: [] };
     const why = { street: 0, middle: 0, simpler: 0, other: 0 };
     const off = [];
@@ -206,15 +202,13 @@ export async function accuracy() {
           why[hit.d <= width / 2 ? 'street' : arc.to(r, other, hit.d * 1.5 + SLACK) <= hit.d * 0.5 + SLACK / 3 ? 'middle' : hit.d <= fold + width / 2 ? 'simpler' : 'other']++;
         }
         const far = d.filter((x) => x > near).length;
-        // A strip whose two ways round part by no more than a slim width plus a snap for most of
-        // it is drawn as one street (DESIGN.md, "a shorter bulge is drawn through"): by design.
-        if (far > s.length / 2 && len > near) (d.every((x) => x <= bulge) ? through : wrong).push({ route: r, routes: f.properties.routes, metres: Math.round(len), most: Math.round(Math.max(...d)), at: back(s[Math.floor(s.length / 2)]) });
+        if (far > s.length / 2 && len > near) wrong.push({ route: r, routes: f.properties.routes, metres: Math.round(len), at: back(s[Math.floor(s.length / 2)]) });
         // Off: a stretch longer than three street widths farther than `near`.
         for (const [a, b] of runs(d, (x) => x > near)) {
           const metres = (b - a + 1) * STEP;
           if (metres <= 3 * width) continue;
           const at = s.slice(a, b + 1);
-          const kind = at.some(nearStation) ? 'station' : d.slice(a, b + 1).every((x) => x <= bulge) ? 'bulge' : 'fault';
+          const kind = at.some(nearStation) ? 'station' : 'fault';
           off.push({ route: r, kind, metres, at: back(at[Math.floor(at.length / 2)]) });
         }
       }
@@ -246,7 +240,6 @@ export async function accuracy() {
       sheet: sheet.id, zoom: sheet.zoom,
       metres: { width: round(width), fold: round(fold), near: round(near), small: round(small) },
       wrong,
-      through,
       missing: { count: tally(missing), metres: metres(missing), samples, list: missing.sort((a, b) => b.metres - a.metres) },
       off: { count: tally(off), list: off.sort((a, b) => b.metres - a.metres) },
       why: Object.fromEntries(Object.entries(why).map(([k, n]) => [k, Math.round((1000 * n) / (Object.values(why).reduce((a, b) => a + b, 0) || 1)) / 1000])),
@@ -267,7 +260,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   for (const s of report.sheets) {
     const faults = (s.missing.count.fault ?? 0) + (s.off.count.fault ?? 0);
     bad += s.wrong.length + faults;
-    console.log(`sheet ${s.sheet} (near ${s.metres.near} m, street ${s.metres.width} m): wrong street ${s.wrong.length} (bulges drawn through ${s.through.length}); missing ${JSON.stringify(s.missing.count)} ${JSON.stringify(s.missing.metres)} m; off ${JSON.stringify(s.off.count)}; offsets to RTD's line p50/p90 ${s.offsets.arc.p50}/${s.offsets.arc.p90} m, to GTFS ${s.offsets.gtfs.p50}/${s.offsets.gtfs.p90} m; drawn ${Object.entries(s.why).map(([k, v]) => `${k} ${(v * 100).toFixed(1)}%`).join(', ')}`);
+    console.log(`sheet ${s.sheet} (near ${s.metres.near} m, street ${s.metres.width} m): wrong street ${s.wrong.length}; missing ${JSON.stringify(s.missing.count)} ${JSON.stringify(s.missing.metres)} m; off ${JSON.stringify(s.off.count)}; offsets to RTD's line p50/p90 ${s.offsets.arc.p50}/${s.offsets.arc.p90} m, to GTFS ${s.offsets.gtfs.p50}/${s.offsets.gtfs.p90} m; drawn ${Object.entries(s.why).map(([k, v]) => `${k} ${(v * 100).toFixed(1)}%`).join(', ')}`);
     for (const w of s.wrong.slice(0, 5)) console.log(`  wrong: ${w.route} on "${w.routes}" ${w.metres} m at ${w.at}`);
     for (const x of [...s.missing.list, ...s.off.list].filter((x) => x.kind === 'fault').slice(0, +(process.env.V ?? 8))) console.log(`  fault: ${x.route} ${x.metres} m at ${x.at}`);
   }

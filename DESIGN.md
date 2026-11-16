@@ -1655,13 +1655,19 @@ what it draws as one street: the fold distance (`busMerge`) plus a street's
 width plus 30 m. What a sheet may leave off or draw simpler, by design:
 - a loop, ramp or divided road the street graph draws simpler (above), within
   250 m of the route's own street, on every sheet;
-- a short end that leads nowhere (under 25 px from its corner), with a
-  terminal loop too small to read as a ring (under 24 px across) drawn as the
-  point where it meets its street: at most 4.9 specks of a route's end, 2.9 km
-  on sheet 1, 720 m on sheet 2, 180 m on sheet 3;
+- a short end that leads nowhere, with a terminal loop too small to read as a
+  ring drawn as the point where it meets its street, only while it is both
+  under 25 px (a loop under 24 px across) and under 250 m on the ground
+  (`busEndKeep`): a rider must see where the bus goes, so on sheets 1 and 2
+  an end of 250 m or more is drawn however few pixels it is, and a ring is
+  gathered to a point only while half round it is under 250 m. An end whose
+  loop was drawn simpler is kept when a stop of its routes is within 320 m
+  plus 250 m of it;
 - a route's end led to its station's mark (within 110 m);
-- a short bulge drawn through: two ways round a strip apart by no more than a
-  slim width plus a snap (and a pixel of rounding) are one street;
+- two ways round a strip drawn as one street only where the way not drawn
+  lies within the street drawn (the fold distance plus a street's width): a
+  route is never drawn on another real street, even if keeping it on its
+  own adds a small jog;
 - a divided road drawn down its middle, and corners rounded within the fold
   distance. On sheet 4, 67% of drawn route lies on its street (within half
   its drawn width), 31% down the middle of a divided road and 2% rounded.
@@ -2159,7 +2165,7 @@ How it is built:
   corridor's corner and a fork of hourly streets read as a stub ending in
   nothing; now the corner reads as the fork it is. A short end that leads nowhere (under 25 px from its
   loose end to the first corner where streets part, however many pieces it
-  is in) is left off; this is the one thing not drawn.
+  is in, and under 250 m) is left off; this is the one thing not drawn.
   A turnaround loop too small to read as a ring is drawn as the point where
   its streets meet, and a street that runs straight through that point
   stays straight: the point is on it, not beside it. A turnaround drawn as
@@ -4910,13 +4916,23 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   is led to the corner (the 169L dropped by 61st and Peña on sheet 3); a
   turnaround loop carries only the routes that go round it (the 42, 88 and
   105 were drawn 80 m round the 28's loop on sheet 3); a strip's ladder
-  rails are never more than a slim width apart (the 72 was drawn on the
-  FF's street on sheet 1); a street is cut wherever its routes change,
+  rails are never more than a slim width apart; a street is cut wherever its routes change,
   however short the run, not merged into its neighbours'. Reason: Chris asked that accuracy be settled from
   GTFS and RTD's published lines, not by eye. What the check couldn't
   explain: 84 pieces and stretches to 0 (most were the simplifications now
   written down; the rest came from these causes).
 
+- 2026-11-15: No route is drawn on a street it doesn't take, and no
+  route's end of 250 m or more is left off, on any sheet (#117). Two ways
+  round a strip are one street only where the way not drawn lies within the
+  street drawn; a short end, a terminal loop and a ring gathered to a point
+  are left off only while under 250 m too; ends a hair apart in a row weld
+  to one corner (the nearest), and a street drawn out and back keeps its
+  tip where another street meets it. Reason: Chris's bar is a map that is
+  accurate: on sheet 1 the 72 and the 28 were drawn up to 670 m off, on the
+  FF's and the 20's streets, and on sheet 2 the 65's end toward Thomas
+  Jefferson High School was left off for 590 m. `check:accuracy` holds
+  both: 0 on all four sheets.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in
