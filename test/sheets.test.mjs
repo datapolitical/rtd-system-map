@@ -260,6 +260,21 @@ test('two ways round a strip too thin to see into are drawn as one street with t
   assert.deepEqual(middle.routes.split(' ').sort(), ['1', '2']);
 });
 
+test('a route that only crosses a thin strip is not drawn round it', () => {
+  const s1 = SHEETS[0];
+  const o = toPx([-105, 39.75], s1.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s1.zoom);
+  const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  // Two streets five pixels apart, tied at both ends; route 3 crosses them at x = 60.
+  const drawn = busStreets(all([
+    street('c15', '1', [ll(-100, 0), ll(0, 0)]), street('c15', '1', [ll(0, 0), ll(60, 0)]), street('c15', '1', [ll(60, 0), ll(120, 0)]), street('c15', '1', [ll(120, 0), ll(220, 0)]),
+    street('c15', '2', [ll(0, 0), ll(0, 5)]), street('c15', '2', [ll(0, 5), ll(60, 5)]), street('c15', '2', [ll(60, 5), ll(120, 5)]), street('c15', '2', [ll(120, 5), ll(120, 0)]),
+    street('c60', '3', [ll(60, -100), ll(60, 0)]), street('c60', '3', [ll(60, 0), ll(60, 5)]), street('c60', '3', [ll(60, 5), ll(60, 100)]),
+  ]), s1);
+  const off = drawn.filter((s) => s.routes.split(' ').includes('3') && s.path.some((p) => Math.abs(p[0] - o[0] - 60) > 3));
+  assert.deepEqual(off.map((s) => s.routes), [], 'route 3 stays on its own street');
+});
+
 test('a street is labelled with its whole list, only where the list fits, and labels of one street stand well apart', () => {
   const st = (x0, x1, routes = '1', y = 0) => ({ routes, cls: 'c15', n: 1, path: [[x0, y], [x1, y]] });
   const ends = (runs) => runs.map((r) => [Math.round(Math.min(r.path[0][0], r.path.at(-1)[0])), Math.round(Math.max(r.path[0][0], r.path.at(-1)[0]))]);
@@ -977,6 +992,16 @@ test("a stop's ring sits on the street its buses are drawn on, and the two sides
   assert.equal(rings[0].heading, '', 'two ways, so no one heading');
   assert.deepEqual(rel(rings[1]), [300, 0]);
   assert.deepEqual(rel(rings[2]), [200, 5], 'a stop with no street of its own drawn near stays where it is');
+});
+
+test('a loop round blocks keeps its own path: a sweep is drawn only where it stays within a street of it', () => {
+  // Out along y = 0, round a block 300 wide and 150 deep, back along y = -150 to a corner above the start.
+  const loop = [[0, 0], [-300, 0], [-300, -150], [0, -150]];
+  const [kept] = arced([st(loop), st([[0, 0], [0, -150]])], () => Infinity, 0, 6);
+  assert.deepEqual(kept.path, loop, 'the loop is drawn where the route runs');
+  const bow = [[0, 0], [-10, -20], [5, -45], [-5, -60], [20, -80], [60, -85], [100, 0]];
+  const [smooth] = arced([st(bow), st([[0, 0], [100, 0]])], () => Infinity, 0, 30);
+  assert.notDeepEqual(smooth.path, bow, 'a wandering bow is still drawn in one sweep');
 });
 
 test("a turnaround's bow is drawn tighter where it would run against rail, and a line's lead-in starts from its station, not its tail track's end", () => {

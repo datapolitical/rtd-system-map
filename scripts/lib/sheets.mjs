@@ -1183,9 +1183,17 @@ function unslivered(streets, most, slim, snap) {
         }
       }
     }
-    const routes = routesOf(drop.flat().map((r) => r.o));
     const top = ladder ? busy(drop[0]) : -1;
+    // A street not drawn hands its routes to the ones drawn beside it, and only those: a short
+    // rung across the strip runs beside none, so its routes go on from its corners as they did,
+    // not round the strip (the 24 was drawn along Colfax to Civic Center on sheet 1, #117).
+    const beside = (o, side) => {
+      const pts = resample(o.st.path, 1);
+      const paths = side.map((r) => r.o.st.path);
+      return pts.filter((p) => paths.some((path) => nearest(path, p).d <= slim + snap)).length >= pts.length / 2;
+    };
     for (const r of keep.flat()) {
+      const routes = routesOf(drop.filter((side) => beside(r.o, side)).flat().map((x) => x.o));
       const all = [...new Set([...String(r.o.st.routes).split(' '), ...routes])];
       r.o.st = { ...r.o.st, routes: all.join(' '), n: Math.max(r.o.st.n ?? 0, all.length), cls: CLASS_ORDER[Math.max(rank(r.o), top)] };
     }
@@ -1281,9 +1289,10 @@ export function unjogged(streets, most) {
  * Loops drawn in one sweep. Where two streets run between the same two corners and one bows out
  * well past the other (a turnaround: out one way, back the other), the route data along the bow
  * wanders, bulging and pinching. The bow is drawn as one smooth curve that leaves each corner the
- * way the street does and reaches out as far as it did.
+ * way the street does and reaches out as far as it did, if that stays within `along` pixels of the
+ * street all the way.
  */
-export function arced(streets, away = () => Infinity, clear = 0) {
+export function arced(streets, away = () => Infinity, clear = 0, along = Infinity) {
   const edges = cornered(streets);
   const out = streets.map((st) => st);
   const pairs = new Map();
@@ -1323,6 +1332,11 @@ export function arced(streets, away = () => Infinity, clear = 0) {
     let h = Math.min(1.5 * chord, far / pull);
     let curve = sweep(h);
     for (const least = h / 2; h > least && curve.some((p) => away(p) < clear); curve = sweep(h)) h *= 0.94;
+    // A sweep only smooths the street: it stays within `along` pixels of it all the way, both ways, or the
+    // street keeps its own path (a loop around blocks is not a bow, and a curve across it would
+    // draw the route where it never runs and leave out where it does).
+    const within = (x, y) => resample(x, 2).every((p) => nearest(y, p).d <= along);
+    if (!within(curve, path) || !within(path, curve)) continue;
     out[i] = { ...edges[i].st, path: curve };
   }
   return out;
@@ -1924,7 +1938,7 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
   // How far a point is from the nearest rail line or station bar.
   const inked = [...lines.flatMap((l) => l.paths), ...marks.flatMap((m) => [m.ends, ...(m.more ?? [])])];
   const railOff = (p) => inked.reduce((d, path) => (boxed(path, p, d) ? Math.min(d, nearest(path, p).d) : d), 1e9);
-  return gathered(unstubbed(onWalls(toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing), railOff, SIZES.rail[sheet.id] + 1.5 * SIZES.gap[sheet.id] + SIZES.rail[sheet.id] / 2 + 3), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre, walls), walls, SIZES.hallReach), sheet, SIZES.busTick));
+  return gathered(unstubbed(onWalls(toStations(filleted(arced(evened(straightened(pruned(walled(tidied(tidied(drawn)), walls), 2.5 * SIZES.busSpeck, walls), SIZES.busStraight), SIZES.busRing), railOff, SIZES.rail[sheet.id] + 1.5 * SIZES.gap[sheet.id] + SIZES.rail[sheet.id] / 2 + 3, SIZES.rail[sheet.id]), SIZES.busTurn[sheet.id]), marks, SIZES.busBridgeMetres * perMetre, walls), walls, SIZES.hallReach), sheet, SIZES.busTick));
 }
 
 /**

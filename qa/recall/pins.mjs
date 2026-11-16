@@ -37,6 +37,8 @@ const VIEWS = {
   broadway: '11/39.70050/-104.98950',
   // 2026-11-15, the signoff-fixes build (40f14d7), sheet 2 by County Line.
   countyLine: '12/39.57500/-104.84500',
+  loop59: '16/39.60500/-105.13600',
+  colfax24: '10/39.74100/-104.97300',
 };
 
 // Chris's review of the stations build on 2026-11-11: his words on the
@@ -121,6 +123,22 @@ const PINS = [
     pinned: 'Claude, from the build\'s data (ground points on the street wrongly given the AT), 2026-11-15',
     id: '117-at-off-route', place: 'County Line to E-470', view: 'countyLine', at: [[-104.87590, 39.57860], [-104.87189, 39.56305]],
     said: 'I don\'t think the AT goes off that way', kind: 'route-off-shape', caught_by: ['route-off-shape'], confidence: 'clear', radius: 30 },
+  // The 59's end loop runs round blocks (west on one street, north, back east on another). On
+  // sheet 4 the bow-smoothing step swapped it for one curve that cut ~450 m inside it (fixed: a
+  // sweep is drawn only where it stays within a street's width of the street).
+  { issue: 117, seen: 'eac892f', latestBuild: 'eac892f', looked: '2026-11-15', latest: 'still there on eac892f; fixed in the next signoff-fixes build',
+    found: 'Claude, checking every sheet street piece against its routes\' GTFS shapes, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from the build\'s data (ground points on the curve drawn where the 59 never runs), 2026-11-15',
+    id: '117-59-loop-off-shape', place: 'Bowles and Wadsworth, the 59\'s end loop', view: 'loop59', at: [[-105.13900, 39.60560], [-105.13720, 39.60410]],
+    said: 'the 59\'s end loop is drawn about 450 m off its own path', kind: 'route-off-shape', caught_by: ['route-off-shape'], confidence: 'clear', radius: 30 },
+  // On sheet 1 the 24 (on University) was drawn west along Colfax and 14th to Civic Center: a thin
+  // strip between those two streets was drawn as one, and the 24's short crossing of it handed
+  // its route to every side of the strip (fixed: only the sides drawn beside a dropped side take its routes).
+  { issue: 117, seen: 'eac892f', latestBuild: 'eac892f', looked: '2026-11-15', latest: 'still there on eac892f; fixed in the next signoff-fixes build',
+    found: 'Claude, checking every sheet street piece against its routes\' GTFS shapes, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from the build\'s data (ground points on Colfax wrongly given the 24), 2026-11-15',
+    id: '117-24-colfax', place: 'Colfax, Downing to Broadway', view: 'colfax24', at: [[-104.98000, 39.74100], [-104.96600, 39.74100]],
+    said: 'the 24 is drawn along Colfax to Civic Center, where it never runs', kind: 'route-off-shape', caught_by: ['route-off-shape'], confidence: 'clear', radius: 20 },
 ];
 
 // The picture point (CSS px in a phone capture of `view`) of a ground point.

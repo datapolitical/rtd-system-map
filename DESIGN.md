@@ -2278,9 +2278,11 @@ How it is built:
 - **More fudges for a clean bus drawing.** A loose end with a street of the
   same route a short walk away (110 m) is led to it, so a turnaround is a
   closed shape. Where two ways between the same corners enclose a strip
-  under six pixels wide, the quietest side is not drawn and the others carry
-  its routes: a route that leaves a street and rejoins it a block later is
-  no longer a notch. A short stretch takes the weight of the busier longer
+  under six pixels wide, the quietest side is not drawn and the sides drawn
+  beside it carry its routes: a route that leaves a street and rejoins it a
+  block later is no longer a notch. A short side that only crosses the strip
+  runs beside none, so its routes go on from its corners and are never drawn
+  round the strip. A short stretch takes the weight of the busier longer
   street it runs into, not merely the longer one.
 - **Streets meet at corners.** Before any of those rules run, every place
   two streets meet is made a corner both share: where one ends on the
@@ -2318,7 +2320,9 @@ How it is built:
   and reaches as far out as it did: the route data along it bulges and
   pinches. The bow gives way to rail: where it would run against a line or a
   station's bar it is drawn tighter, down to half its reach, until it stands
-  a line's width clear.
+  a line's width clear. The curve only smooths the street: it is drawn only
+  where it stays within a street's width of it all the way, both ways. A
+  loop round blocks is not a bow and keeps its own path.
 - **A stop's ring sits on its street.** The streets are drawn, not traced,
   so a stop at its true place can sit beside its line or between two. Each
   ring is moved to the nearest point of the nearest street, within two
@@ -4864,6 +4868,15 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   a thin strip of two streets is drawn as one at that scale, and on sheet 4
   the 59's end loop, drawn off its own shape (a shape fault, not a route on
   the wrong street).
+- 2026-11-15: Sheets: a turnaround's sweep is drawn only where it stays
+  within a street's width of the street, and a side of a thin strip that is
+  not drawn hands its routes only to the sides drawn beside it (#117).
+  Reason: on sheet 4 the 59's end loop round blocks was swapped for one
+  curve about 450 m inside it (and loops of the PD, 73, 3 and 15 were bent
+  the same way on sheets 3 and 4); on sheet 1 the 24's short crossing of
+  the strip between Colfax and 14th handed it to the whole strip, so it was
+  drawn to Civic Center. Pieces carrying a route off its GTFS shape: 3 to 0
+  on all four sheets.
 
 ## Sources
 

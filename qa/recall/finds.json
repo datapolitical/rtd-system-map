@@ -1339,6 +1339,108 @@
       "found_by": "Chris, on a phone, dark mode, the signoff-fixes preview, 2026-11-15 (issue #117)",
       "pinned_by": "Claude, from the build's data (ground points on the street wrongly given the AT), 2026-11-15",
       "confidence": "clear"
+    },
+    {
+      "id": "117-59-loop-off-shape",
+      "issue": 117,
+      "place": "Bowles and Wadsworth, the 59's end loop",
+      "said": "the 59's end loop is drawn about 450 m off its own path",
+      "kind": "route-off-shape",
+      "caught_by": [
+        "route-off-shape"
+      ],
+      "seen_on": [
+        "eac892f"
+      ],
+      "latest": {
+        "build": "eac892f",
+        "looked": "2026-11-15",
+        "status": "still there on eac892f; fixed in the next signoff-fixes build"
+      },
+      "theme": "dark",
+      "zoom": 16,
+      "points": [
+        [
+          -105.139,
+          39.6056
+        ],
+        [
+          -105.1372,
+          39.6041
+        ]
+      ],
+      "radius_px": 30,
+      "capture": {
+        "view": "16/39.60500/-105.13600",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            -79,
+            364
+          ],
+          [
+            89,
+            546
+          ]
+        ]
+      },
+      "found_by": "Claude, checking every sheet street piece against its routes' GTFS shapes, 2026-11-15 (issue #117)",
+      "pinned_by": "Claude, from the build's data (ground points on the curve drawn where the 59 never runs), 2026-11-15",
+      "confidence": "clear"
+    },
+    {
+      "id": "117-24-colfax",
+      "issue": 117,
+      "place": "Colfax, Downing to Broadway",
+      "said": "the 24 is drawn along Colfax to Civic Center, where it never runs",
+      "kind": "route-off-shape",
+      "caught_by": [
+        "route-off-shape"
+      ],
+      "seen_on": [
+        "eac892f"
+      ],
+      "latest": {
+        "build": "eac892f",
+        "looked": "2026-11-15",
+        "status": "still there on eac892f; fixed in the next signoff-fixes build"
+      },
+      "theme": "dark",
+      "zoom": 10,
+      "points": [
+        [
+          -104.98,
+          39.741
+        ],
+        [
+          -104.966,
+          39.741
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "10/39.74100/-104.97300",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            191,
+            437
+          ],
+          [
+            211,
+            437
+          ]
+        ]
+      },
+      "found_by": "Claude, checking every sheet street piece against its routes' GTFS shapes, 2026-11-15 (issue #117)",
+      "pinned_by": "Claude, from the build's data (ground points on Colfax wrongly given the 24), 2026-11-15",
+      "confidence": "clear"
     }
   ]
 }
