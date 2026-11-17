@@ -22,6 +22,7 @@ import { buildStreets } from './lib/streets.mjs';
 import { BUILDING_R, terminalFootprints } from './lib/footprints.mjs';
 import { extendLineToPlatforms, hallRoofs, platformsToMarks, stationStructures } from './lib/structures.mjs';
 import { clipAtHalls, shortenAtHall, stopsOfHalls } from './lib/halls.mjs';
+import { countProblems } from './lib/counts.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
@@ -124,7 +125,15 @@ function assignRoles(layers) {
 
 async function main() {
   const started = Date.now();
-  const previous = JSON.parse(await readFile(path.join(OUT, 'meta.json'), 'utf8').catch(() => 'null'));
+  // The last good build's counts, for the checks (DESIGN.md, "Rule 3"): this
+  // folder's, or on a fresh checkout (every Cloudflare build) the published
+  // site's, which is the last build that passed them.
+  const previous =
+    JSON.parse(await readFile(path.join(OUT, 'meta.json'), 'utf8').catch(() => 'null')) ??
+    (await fetch(`${SITE}/data/meta.json`, { signal: AbortSignal.timeout(20_000) })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null));
+  console.log(`Checking counts against ${previous?.counts ? (previous.built ?? 'the last build') : 'nothing (no last build found)'}`);
 
   console.log("Reading RTD's map and downloading GTFS…");
   const [source, gtfs] = await Promise.all([discoverLayers(EXPERIENCE.portal, EXPERIENCE.id), loadGtfs(GTFS_URL, GTFS_CACHE)]);
@@ -286,12 +295,7 @@ async function main() {
   const rail = geo.routes.filter((f) => f.properties.mode === 'rail');
   counts.rail = rail.length;
   counts.stations_served = geo.stations.length - unserved.length;
-  const problems = [];
-  for (const [role, n] of Object.entries(counts)) {
-    if (!n) problems.push(`No ${role} downloaded`);
-    const before = previous?.counts?.[role];
-    if (before && n < before * 0.7) problems.push(`${role} dropped from ${before} to ${n}`);
-  }
+  const problems = countProblems(counts, previous?.counts);
   const matchedShare = 1 - unmatched.length / members.size;
   if (matchedShare < 0.95) problems.push(`Only ${Math.round(matchedShare * 100)}% of map routes match GTFS (unmatched: ${unmatched.join(', ')})`);
   for (const f of rail) if (!f.properties.color) problems.push(`Rail line ${f.properties.route} has no color in GTFS`);
@@ -439,6 +443,7 @@ async function main() {
     indexes: busStations,
     stops: geo.stops,
     previous: hallsBefore,
+    previousRoofs: (structuresPrevious ?? []).filter((f) => f.properties?.terminal),
     busOnly: new Set(busStations.filter((i) => nearRail(geo.facilities[i].geometry.coordinates))),
   });
   geo.terminals = [...footprints.terminals.values()].map((t) => t.feature);
@@ -782,6 +787,17 @@ async function main() {
   counts.terminals = geo.terminals.filter((f) => !f.properties.underground).length;
   counts.terminals_under = geo.terminals.filter((f) => f.properties.underground).length;
   counts.structures = geo.structures.length;
+  // The shapes from OpenStreetMap get the same checks (#69). A station OSM
+  // doesn't answer for keeps last build's shapes, so these only fall when OSM
+  // answers with much less than before, or doesn't answer and there is no
+  // last build to draw from: then the build fails and the site keeps the last
+  // good map, instead of publishing one with its stations' buildings gone.
+  const osmProblems = countProblems(counts, previous?.counts, { roles: ['terminals', 'terminals_under', 'structures'], source: 'OpenStreetMap' });
+  if (osmProblems.length) {
+    console.error(`\nBuild checks failed; ${OUT_NAME} was left as it was:`);
+    for (const p of osmProblems) console.error(`  - ${p}`);
+    process.exit(1);
+  }
 
   // Write to a fresh folder, then swap it in, so a crash mid-write can't leave
   // half a dataset behind.

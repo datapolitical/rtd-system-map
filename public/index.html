@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>RTD system map</title>
-<meta name="theme-color" content="#f5f3ef" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0e141d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5f3ef">
 <meta name="description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs.">
 <!-- What a shared link shows in messages and social posts (DESIGN.md, "Link preview"). The picture is made by scripts/og-image.mjs. -->
 <meta property="og:type" content="website">
@@ -21,13 +20,23 @@
 <meta property="og:image:alt" content="Dark map of central Denver: the colored rail lines fanning out from Union Station past Ball Arena and Empower Field.">
 <meta name="twitter:card" content="summary_large_image">
 <script>
+  // Resolve the theme before paint, including a saved choice on a returning visit.
+  const scheme = matchMedia('(prefers-color-scheme: dark)');
+  const validTheme = (value) => value === 'light' || value === 'dark' ? value : null;
+  const addressTheme = validTheme(new URLSearchParams(location.search).get('theme'));
+  let savedTheme;
+  try { savedTheme = validTheme(localStorage.getItem('rtd-sheets-theme')); } catch {}
+  const chosenTheme = addressTheme ?? savedTheme;
+  document.documentElement.dataset.theme = chosenTheme ?? (scheme.matches ? 'dark' : 'light');
+  document.documentElement.dataset.themeManual = String(Boolean(chosenTheme));
+  document.querySelector('meta[name="theme-color"]').content = document.documentElement.dataset.theme === 'dark' ? '#0e141d' : '#f5f3ef';
   // The loading picture (#poster below) is asked for first, before anything the map needs: it is
   // what the reader sees until the map is drawn. Only on a plain visit; a link to a view, or a theme
   // the address forces, shows no picture. Before the stylesheet, so this runs without waiting for it.
   if (!location.hash && !new URLSearchParams(location.search).has('theme')) {
-    const theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    const theme = document.documentElement.dataset.theme;
     const link = Object.assign(document.createElement('link'), { rel: 'preload', as: 'image', fetchPriority: 'high' });
-    if (matchMedia('(max-width: 600px)').matches) link.href = `/poster/phone-${theme}.webp`;
+    if (matchMedia('(max-width: 480px)').matches) link.href = `/poster/phone-${theme}.webp`;
     else link.imageSrcset = `/poster/wide-${theme}-1x.webp 1x, /poster/wide-${theme}-2x.webp 2x`;
     document.head.append(link);
   }
@@ -39,6 +48,10 @@
 <link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
 <link rel="modulepreload" href="/js/sheets/style.js">
 <link rel="modulepreload" href="/js/sheets/settle.js">
+<link rel="modulepreload" href="/js/sheets/pick.js">
+<link rel="modulepreload" href="/js/sheets/address.js">
+<link rel="modulepreload" href="/js/sheets/say.js">
+<link rel="modulepreload" href="/js/sheets/view.js">
 <link rel="preload" href="/data/meta.json" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="/data/sheets.json" as="fetch" crossorigin="anonymous">
 <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
@@ -51,9 +64,11 @@
 <link rel="preload" href="/vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
   @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: block; }
-  :root { --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; }
-  @media (prefers-color-scheme: dark) { :root { --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; } }
+  /* --note is the card's and the credit's quieter text, and --rim a route button's ring: AA on the card and the ground in both themes (#14). */
+  :root { color-scheme: light; --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; --note: #656a74; --rim: #8b8f98; }
+  :root[data-theme="dark"] { color-scheme: dark; --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; --note: #8592a6; --rim: #6c7890; }
   html, body, #map { margin: 0; height: 100%; background: var(--ground); }
+  main { position: absolute; inset: 0; }
   /* A pinch or double tap on the map is the map's, never the page's, even before the map script has run. */
   #map { touch-action: none; }
   /* Nothing that reads as a browser (DESIGN.md): no pull-to-refresh or bounce (iOS needs it on html too), no gray tap flash. */
@@ -63,17 +78,69 @@
     background: var(--card); border-radius: 22px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); -webkit-touch-callout: none; user-select: none; }
   #steps button { all: unset; touch-action: manipulation; width: 44px; height: 44px; text-align: center; font-size: 24px; line-height: 44px; color: var(--ink); cursor: pointer; }
   #steps button:disabled { color: var(--quiet); opacity: 0.5; }
+  #steps button:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; border-radius: 22px; }
+  #theme-toggle { all: unset; position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(28px, calc(env(safe-area-inset-bottom) + 20px));
+    display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--ink);
+    box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); cursor: pointer; touch-action: manipulation; user-select: none; }
+  #theme-toggle:disabled { opacity: 0.5; cursor: default; }
+  #theme-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; }
+  #theme-toggle svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  #theme-toggle .sun, :root[data-theme="dark"] #theme-toggle .moon { display: none; }
+  :root[data-theme="dark"] #theme-toggle .sun { display: block; }
+  /* Said to a screen reader, not shown. */
+  .sr, #card .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   #sheets { display: flex; gap: 6px; padding: 0 2px; }
   #sheets i { width: 5px; height: 5px; border-radius: 50%; background: var(--quiet); opacity: 0.5; }
   #sheets i.on { background: var(--ink); opacity: 1; }
-  #credit { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--quiet); padding: 2px 6px; margin-left: -6px; border-radius: 8px; background: color-mix(in srgb, var(--ground) 82%, transparent); }
+  #credit { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--note); padding: 2px 6px; margin-left: -6px; border-radius: 8px; background: color-mix(in srgb, var(--ground) 82%, transparent); }
   #credit a { color: inherit; }
+  #credit .sep, #card .sep { display: inline-block; margin: 0 0.35em; color: inherit; font: inherit; }
   #card { position: absolute; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: max(84px, calc(env(safe-area-inset-bottom) + 76px)); max-width: 420px; padding: 12px 14px; background: var(--card); color: var(--ink);
-    border-radius: 14px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); }
+    border-radius: 14px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); max-height: calc(100dvh - 112px); overflow-y: auto; overscroll-behavior: contain; }
   #card[hidden] { display: none; }
-  #card b { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; }
-  #card span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--quiet); line-height: 1.3; }
+  /* A picked route's card: one line for its chip and name, one for its ends and how often it runs. */
+  #card.route { padding: 6px 10px 7px; max-width: 360px; }
+  #card.route .head { display: flex; align-items: center; gap: 8px; padding-right: 30px; }
+  #card.route .head .routes { flex: none; margin: 0; padding: 0; max-height: none; }
+  #card.route .head b { padding-right: 0; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #card.route span { margin-top: 2px; font-size: 12px; }
+  #card.route button.close { top: 50%; transform: translateY(-50%); }
+  #card b { display: block; padding-right: 26px; font-size: 15px; font-weight: 700; line-height: 1.25; }
+  #card span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--note); line-height: 1.3; }
+  /* Closes the card as a tap on empty ground does, without having to find empty ground. */
+  #card button.close { all: unset; position: absolute; top: 4px; right: 4px; width: 36px; height: 36px; border-radius: 18px; text-align: center;
+    font-size: 22px; line-height: 36px; color: var(--note); cursor: pointer; touch-action: manipulation; }
+  #card button.close:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
+  /* Each route on the card is a button: picking one draws it whole on every sheet, the rest faded (js/sheets/main.js). */
+  #card .routes { display: flex; flex-wrap: wrap; gap: 6px; margin: 5px -4px 0; padding: 4px; max-height: 128px; overflow-y: auto; }
+  #card .routes button { all: unset; box-sizing: border-box; touch-action: manipulation; cursor: pointer; min-width: 36px; height: 32px; padding: 0 10px; border-radius: 16px;
+    text-align: center; font-size: 14px; font-weight: 700; line-height: 33px; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--rim); font-variant-numeric: tabular-nums; }
+  #card .routes button.rail { min-width: 32px; padding: 0; box-shadow: none; font-weight: 800; }
+  #card .routes button[aria-pressed="true"] { background: var(--ink); color: var(--card); box-shadow: none; }
+  #card .routes button.rail[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink); }
+  #card .routes button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  /* In a stop-group row the routes sit beside their letter, a row of the same buttons. */
+  #card .rows .routes { margin: 0; padding: 2px; max-height: none; gap: 5px; }
+  #card span.hint { margin-top: 4px; font-size: 11.5px; }
+  /* What's in view (#135): its places one under another, each opening its card. */
+  #card.list { max-height: calc(100% - 200px); overflow-y: auto; }
+  #card span.head { margin-top: 10px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  #card .places { display: flex; flex-direction: column; margin: 2px -6px 0; }
+  #card .places button { all: unset; box-sizing: border-box; cursor: pointer; touch-action: manipulation; min-height: 36px; padding: 8px 6px; border-radius: 8px; font-size: 14px; line-height: 1.3; color: var(--ink); }
+  #card .places button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+  #card.list .routes { max-height: none; }
+  /* The list's button sits out of sight until a keyboard reaches it, like a skip link. */
+  #inview { all: unset; position: absolute; left: max(12px, env(safe-area-inset-left)); top: max(12px, calc(env(safe-area-inset-top) + 8px)); padding: 9px 15px 8px; border-radius: 18px;
+    background: var(--card); color: var(--ink); box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); font-size: 14px; font-weight: 600; cursor: pointer; }
+  #inview:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  #inview:not(:focus) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #card span.hint:empty { display: none; }
   #card i { display: inline-block; min-width: 1.5em; height: 1.5em; margin-right: 6px; border-radius: 0.75em; text-align: center; font-style: normal; line-height: 1.55em; }
+  /* A stop group's routes, a row per letter: the letter in a small square of ink, as on the map. */
+  #card .rows { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 5px 8px; margin-top: 8px; font-size: 14px; font-weight: 600; }
+  #card .rows i { min-width: 18px; height: 18px; margin: 0; border-radius: 4px; background: var(--ink); color: var(--card); font-size: 11.5px; font-weight: 700; line-height: 19px; }
+  #card .rows i.selected { outline: 2px solid var(--ink); outline-offset: 2px; }
+  #card .rows em { font-style: normal; word-spacing: 0.15em; }
   /* While the map loads: a picture of the view it opens on, centred as the map is, and a line saying so (scripts/poster.mjs). */
   /* Touches go through the picture to the map under it: a pinch on the picture zoomed the page, not the map. */
   #poster { position: absolute; inset: 0; overflow: hidden; background: var(--ground); transition: opacity 250ms ease-out; pointer-events: none; }
@@ -89,11 +156,16 @@
 </style>
 </head>
 <body>
+<main>
 <div id="map"></div>
-<div id="poster" data-view="10/39.7192/-105.0018" data-bounds="-105.8841,39.1565,-104.3693,40.5067">
+<!-- What a tap names. Next after the map, so a screen reader reaches it from there (#14). -->
+<div id="card" role="region" aria-labelledby="card-title" hidden></div>
+<!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
+<button id="inview" type="button">List what's in view</button>
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="fff3bea4d2548e912d4d81481e20b757409851277b31922a896abf239f469212" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261115_080022_pt/{z}/{x}/{y}.pbf&quot;]">
   <picture>
-    <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
-    <source media="(max-width: 600px)" srcset="/poster/phone-light.webp 2x">
+    <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
+    <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">
     <source media="(prefers-color-scheme: dark)" srcset="/poster/wide-dark-1x.webp 1x, /poster/wide-dark-2x.webp 2x">
     <img src="/poster/wide-light-1x.webp" srcset="/poster/wide-light-1x.webp 1x, /poster/wide-light-2x.webp 2x" alt="" fetchpriority="high" draggable="false">
   </picture>
@@ -115,6 +187,13 @@
     const y = (la) => ((180 - (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + (la * Math.PI) / 360))) / 360) * world;
     const fit = (c, lo, hi, half) => (hi - lo < 2 * half ? (lo + hi) / 2 : Math.min(Math.max(c, lo + half), hi - half));
     const img = poster.querySelector('img');
+    // The picture element's media queries follow the device. A saved manual choice
+    // needs that theme's assets even when it differs from the device setting.
+    const activeTheme = document.documentElement.dataset.theme;
+    for (const source of poster.querySelectorAll('source')) source.srcset = source.srcset.replace(/-(light|dark)/g, `-${activeTheme}`);
+    img.src = img.getAttribute('src').replace(/-(light|dark)/g, `-${activeTheme}`);
+    img.srcset = img.getAttribute('srcset').replace(/-(light|dark)/g, `-${activeTheme}`);
+
     const place = () => {
       if (![west, south, east, north].every(Number.isFinite)) return;
       const dx = x(lon) - fit(x(lon), x(west), x(east), innerWidth / 2);
@@ -124,7 +203,16 @@
     place();
     addEventListener('resize', place);
     // Shown whole, not drawn in strips as it arrives.
-    const whole = () => img.classList.add('whole');
+    // A deployment rebuilds the drawing from current data. An older screenshot must
+    // never flash before a different drawing, even if its centre is unchanged.
+    const json = (url) => fetch(url).then((r) => r.ok ? r.json() : null);
+    const matches = poster.dataset.source ? Promise.all([json('/data/sheets.json'), json(poster.dataset.source)])
+      .then(([s, ground]) => Boolean(s?.drawing && s.drawing === poster.dataset.drawing &&
+        JSON.stringify(ground?.tiles) === poster.dataset.tiles)).catch(() => false) : Promise.resolve(false);
+    const whole = async () => {
+      if (await matches) img.classList.add('whole');
+      else img.closest('picture')?.remove();
+    };
     if (img.complete && img.naturalWidth) whole();
     else img.addEventListener('load', whole);
   })();
@@ -132,11 +220,16 @@
 <div id="steps" role="group" aria-label="Map sheet">
   <!-- As the page opens, on the widest sheet; the script sets these for a link to another. -->
   <button id="out" aria-label="Wider sheet" disabled>&minus;</button>
-  <div id="sheets" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
+  <div id="sheets" role="img" aria-label="Sheet 1 of 4"><i class="on"></i><i></i><i></i><i></i></div>
   <button id="in" aria-label="Closer sheet">+</button>
 </div>
-<div id="card" role="status" hidden></div>
-<div id="credit">Unofficial. Data: RTD · <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · <a href="https://openfreemap.org">OpenFreeMap</a></div>
+<button id="theme-toggle" type="button" aria-label="Dark mode" aria-pressed="false" title="Switch to dark mode" disabled>
+  <svg class="moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.8 13.1A9 9 0 0 1 10.9 3.2 9 9 0 1 0 20.8 13.1Z"/></svg>
+  <svg class="sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+</button>
+<p id="say" class="sr" role="status"></p>
+</main>
+<footer id="credit">Unofficial. Data: RTD<span class="sep" aria-hidden="true">·</span><a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a><span class="sep" aria-hidden="true">·</span><a href="https://openfreemap.org">OpenFreeMap</a></footer>
 <script type="module" src="/js/sheets/main.js"></script>
 </body>
 </html>

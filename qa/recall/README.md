@@ -53,6 +53,12 @@ make a fault by itself (MapLibre tries every anchor and usually places both
 names), so a label plant needs the placement replay to know its name really
 lands on a line or is hidden. That comes with the label work (#47).
 
+A fixture's `plant_avoid` list freezes the find IDs used to keep its planted
+faults clear of known faults when its baseline was made. Adding pins from a
+newer build must not move the older fixture's planted targets. All finds are
+still scored on the builds where they were seen; removing a frozen exclusion
+is an error. A new fixture freezes the current find IDs with its first score.
+
 ## Two numbers for each
 
 - **caught by the report**: by `qa/checks/run.mjs` as `check:map` runs it,

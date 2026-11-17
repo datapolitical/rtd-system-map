@@ -3,12 +3,21 @@
 // geometry it says it does. Plain Node: no fixture, no browser.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { catches, metresPerPx } from '../qa/recall/recall.mjs';
+import { catches, metresPerPx, plantingAvoid } from '../qa/recall/recall.mjs';
 import { KINDS, lengthM, metres, plant } from '../qa/recall/plant.mjs';
 
 const LAT = 39.74;
 const at = (dx, dy) => [-105 + dx / (111_320 * Math.cos((LAT * Math.PI) / 180)), LAT + dy / 110_540];
 const finding = (kind, p, check = 'lines') => ({ check, kind, lon: p[0], lat: p[1], zoom: 17, where: 'district', msg: '' });
+
+test('new pins leave a frozen fixture’s planting exclusions unchanged', () => {
+  const old = { id: 'old', points: [at(0, 0)] };
+  const fresh = { id: 'fresh', points: [at(500, 0)] };
+  const fixture = { plant_avoid: ['old'] };
+  assert.deepEqual(plantingAvoid([old, fresh], fixture), plantingAvoid([old], fixture));
+  assert.throws(() => plantingAvoid([fresh], fixture), /Missing frozen planting exclusion/);
+  assert.deepEqual(plantingAvoid([old, fresh]), [...old.points, ...fresh.points]);
+});
 
 test('a finding of a listed kind within the radius catches the fault', () => {
   const target = { points: [at(0, 0)], radius_px: 30, caught_by: ['gap'] };

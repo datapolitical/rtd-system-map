@@ -303,6 +303,22 @@ The build checks the data before it deploys:
 - Every rail line has a color.
 - At least half of the map's stations have trains (see "Station service").
 
+OpenStreetMap's shapes are checked the same way (#69). A station or hall whose
+box OSM doesn't answer for (an error or a timeout) keeps the last good build's
+shapes, roofs included: this folder's, or on a fresh checkout (every
+Cloudflare build) the published site's. The count checks compare with the
+same last good build. So OSM being down costs nothing, and a build fails when:
+
+- OSM answers with much less than before: the stations' shapes (platforms,
+  canopies, buildings, hall roofs) or the bus halls, above or below ground,
+  fall by more than 30% or to none.
+- OSM is down and there is no last build to fall back on either.
+
+A smaller change, such as one station's platforms redrawn or removed in OSM,
+is taken as a change in the place and drawn. The drills are in
+`qa/drills/mock-fetch.mjs` (`DRILL=osm-down`, `osm-empty`, `osm-half`,
+`osm-down-cold`).
+
 If any check fails, the build fails, and Cloudflare keeps serving the last good
 version. The live `meta.json` still shows the old versions, so the next hourly
 check tries again. A temporary outage at RTD therefore fixes itself.
@@ -473,8 +489,21 @@ drawn side by side, never on top of each other.
 
 ## Data
 
-All data is public and comes from RTD. Nothing depends on a private key, a
-private server, or the departures project on mini.
+All data is public. The network, its schedules and its live trains come from
+RTD. Two things come from OpenStreetMap:
+
+- **The basemap** (streets, water, parks, place names), as OpenFreeMap's
+  vector tiles, read by the page ("Basemap").
+- **The shapes of stations**, read by the build from OpenStreetMap's map API
+  (`api.openstreetmap.org/api/0.6/map`, a box around each station): rail
+  platforms, the canopies over them and station buildings
+  (`scripts/lib/structures.mjs`, "Stations"), and the halls of RTD's bus
+  stations with their roofs (`scripts/lib/footprints.mjs`, "Terminals").
+  Nothing about a station's shape is written down here: a station draws what
+  OSM has, and one with nothing in OSM is drawn from RTD's data alone.
+
+Nothing depends on a private key, a private server, or the departures project
+on mini. The credit names both sources.
 
 ### Map geometry: RTD's own system map
 
@@ -1615,6 +1644,35 @@ streets that no longer met):
   dashed or dotted line (`n: 0`, `tier`), so it meets the streets it joins
   and moves with a divided road.
 
+*Route accuracy* (`qa/accuracy.mjs`, `npm run check:accuracy`; #117): every
+sheet's bus lines are checked against both of RTD's sources, its route layer
+(the lines the sheets are drawn from) and its GTFS trip shapes. The two agree
+to a metre (p99) for every route, so a difference between the map and either
+is the map's. For each sheet the check reports pieces carrying a route on a
+street it doesn't take, stretches of a route with no line carrying it, and how
+far lines sit from their route, and fails on any fault. "Near" on a sheet is
+what it draws as one street: the fold distance (`busMerge`) plus a street's
+width plus 30 m. What a sheet may leave off or draw simpler, by design:
+- a loop, ramp or divided road the street graph draws simpler (above), within
+  250 m of the route's own street, on every sheet;
+- a short end that leads nowhere, with a terminal loop too small to read as a
+  ring drawn as the point where it meets its street, only while it is both
+  under 25 px (a loop under 24 px across) and under 250 m on the ground
+  (`busEndKeep`): a rider must see where the bus goes, so on sheets 1 and 2
+  an end of 250 m or more is drawn however few pixels it is, and a ring is
+  gathered to a point only while half round it is under 250 m. An end whose
+  loop was drawn simpler is kept when a stop of its routes is within 320 m
+  plus 250 m of it;
+- a route's end led to its station's mark (within 110 m);
+- two ways round a strip drawn as one street only where the way not drawn
+  lies within the street drawn (the fold distance plus a street's width): a
+  route is never drawn on another real street, even if keeping it on its
+  own adds a small jog;
+- a divided road drawn down its middle, and corners rounded within the fold
+  distance. On sheet 4, 67% of drawn route lies on its street (within half
+  its drawn width), 31% down the middle of a divided road and 2% rounded.
+Anything else is a fault and is fixed at its cause, not allowed for here.
+
 *Terminals* (`footprints.mjs`; `scripts/build-data.mjs`, `shortenAtHall`;
 #82): each of RTD's bus-station facilities (class `BUS` or `STN` in RTD's
 facilities layer) is drawn as the hall its bus gates stand in, from
@@ -1925,9 +1983,14 @@ the only strongly colored elements in the interface itself.
 
 ### Dark mode
 
-The site follows the system setting (`prefers-color-scheme`). There is no
-toggle and nothing is stored. If the setting changes while the page is open,
-the map and interface re-color in place and the map stays where it was.
+The Classic map follows the system setting (`prefers-color-scheme`). The
+sheets start with that setting too, and have a 44 px circular sun/moon button
+in the lower-right corner. It switches the map and interface together and
+remembers the reader's choice locally. Until a choice is made, system changes
+recolour the open map. Theme changes preserve the view, card and picked route.
+A saved choice is applied before paint, including to the loading picture.
+The button has a stable accessible name, “Dark mode”, and reports its pressed
+state; its icon and tooltip show the mode a tap will choose.
 
 - **One palette, two themes.** Every map color, including the symbols drawn
   on canvas (tags, shields, station capsules, signs, key swatches), comes
@@ -1976,7 +2039,10 @@ do not change it); carried more than a third of the way past that sheet it
 goes on to the one after. The move is counted from where the reader's zoom
 began, not from the sheet shown, so a second scroll that catches the map on
 its way to a sheet carries on to that sheet and never sends it back. Issue
-#117 holds the work.
+#117 holds the work. At a fixed sheet zoom, panning moves the drawing without
+repositioning, shortening or hiding its labels to fit the screen. Names may
+be cropped by the viewport, as on a printed map. Zooming selects another
+built drawing; choosing a route may select its built name alternatives.
 
 The sheets are `public/index.html`. The map they took the front page from is
 the Classic map, `public/classic/index.html`; the sheets do not link to it.
@@ -1997,6 +2063,42 @@ holds these rules.
 | 2 | 12 | Every station named, route numbers along bus streets. |
 | 3 | 14 | One-way pairs on their own streets, names of the main streets. |
 | 4 | 16 | Every stop, buildings, platforms apart from each other. |
+
+**Tap a route to highlight it** (#118). A tap on a street, its route numbers,
+a line letter, a rail line, a station or a stop opens the card, which lists
+each route there as a button. Picking one draws that route whole and every
+other street and line faded; the same button, or a tap on empty ground,
+clears it. A picked bus route is one ink and one weight from end to end (the
+sheet's rail width, near-black in the light, near-white in the dark, no rail
+line's hue) on a rim of ground, so it reads as one line however many streets
+it takes; its stops are ringed over it on sheet 4, and place names step off
+it rather than cut it. It is drawn from the route's own line on each sheet,
+which the build composes from the street pieces the route takes
+(`scripts/lib/routeline.mjs`): pieces whose ends meet are joined, gaps up to
+`SIZES.pickBridge` closed, the main path taken end to end, a second street
+kept only where it stands more than `SIZES.pickApart` off the main path (so a
+one-way pair the sheet can't tell apart is one line, and an end loop stays),
+dead ends shorter than `SIZES.pickStub` dropped, and every path smoothed over
+`SIZES.pickSmooth` px, so a jog between near streets is a bend, not a stair
+step, with round ends. The smoothing moves the line off its street by under
+a line's width; check:accuracy measures the street pieces, which stay true,
+and the smoothing is the only tolerance the picked line gets. No station
+name sits on a picked bus route: where a route runs under a name, the build
+gives the name (and its row of line letters) a second place off that route,
+which shows only while that route is picked; where there is no such place
+that reads as its own station's, the picked line runs on under a tight halo
+round the lettering, and the name's row of line letters steps aside while
+that route is picked, so the line reads unbroken and the name printed over
+it. A picked route's card is two short lines: its number's chip and RTD's
+name for it, then its two ends and how often it runs, all from the directory
+(`pickCard`). A picked rail line keeps its
+own colour and its stations' bars; the other stations fade, and only half as
+far while a bus is picked, so the places a bus passes still read. What is
+faded is inked nearer the ground, not made see-through, so overlapping
+pieces show no darker knots. Ground, streets' names and place names stay as
+they are. The pick is MapLibre global state (`bus`, `rail`) that each sheet's
+layers read, so it holds on every sheet and through zooms with no tile made
+again (`public/js/sheets/style.js`, `pick.js`).
 
 How it is built:
 
@@ -2055,8 +2157,15 @@ How it is built:
   From sheet 3 a bus street is named from its stops: the street most of
   the stops its routes serve along it give (RTD names a stop "Colfax Ave &
   Hudson St"), set beside the street like its route list, in a quieter
-  grey, on a stretch no list is on, about once a screen. Route lists are
-  placed first, so a name never costs one. The streets between bus streets
+  grey, on a stretch no list is on, about once a screen (on sheet 4 a little
+  more often than a phone is wide, so a street across the screen is named
+  on it). Where a list's block holds both, the street's name leads the list
+  ("Colfax  15, 15L"), the name in the names' grey; otherwise the name takes
+  a stretch of its own, half a line of type clear of any list, sliding along
+  its street to the nearest stretch between stop rings (which keep lettering
+  off them) and inside one of the page's tiles (MapLibre may drop a label
+  across a tile's edge). Route lists are placed first, and a list a name
+  leads stays in its block, so a name never costs one. The streets between bus streets
   keep the ground map's names, shortened ("W 13th Ave"), on the centreline,
   at about 3:1. Lines that end over a bus station's hall end at the
   wall they come in through, with their bar on it, not at a point inside the
@@ -2076,9 +2185,14 @@ How it is built:
   its own buses by a street of other routes: a heavy street does not run on
   past the corner its routes turn at. (A tick a few pixels long may lose
   its weight to the pale street it ends, and a blip between two stretches
-  that agree takes theirs.) A short end that leads nowhere (under 25 px from its
+  that agree takes theirs.) A run a tick long (under 14 px) that leaves a
+  street at least as wide and ends at a fork of streets all drawn at most
+  half its width takes the weight of the widest of them: on the opening
+  sheet, where the quiet step is a hairline, a frequent piece between a
+  corridor's corner and a fork of hourly streets read as a stub ending in
+  nothing; now the corner reads as the fork it is. A short end that leads nowhere (under 25 px from its
   loose end to the first corner where streets part, however many pieces it
-  is in) is left off; this is the one thing not drawn.
+  is in, and under 250 m) is left off; this is the one thing not drawn.
   A turnaround loop too small to read as a ring is drawn as the point where
   its streets meet, and a street that runs straight through that point
   stays straight: the point is on it, not beside it. A turnaround drawn as
@@ -2108,15 +2222,39 @@ How it is built:
   `public/js/sheets/style.js` is a table of colours and widths per sheet.
   The build's six bus classes are drawn as three steps: a bus every 10
   minutes or better, every 15, and every 30 or less often (more steps than
-  three don't read as steps). Each step is 1.6 times as wide as the one
-  below, the busiest as wide as the sheet's rail, none under a pixel; their
-  greys are evenly spaced in lightness, and the quietest reads clearly in
-  both themes (in the dark, where a thin line of light reads faint, more
-  so). The opening sheet steps more steeply (1.9), so its quiet step is a
-  one-pixel hairline, half a lightness step nearer the ground: there it is
-  the whole outer street grid, and the sheet's job is where service is
-  frequent, so the frequent streets read first and the grid sits back. Rail reads first by its colour: in each theme the busiest bus grey
-  has less contrast with the ground than any rail line, by at least 15%.
+  three don't read as steps). A street with a bus every 10 minutes is as
+  wide as the sheet's rail, never wider: wider bands made downtown, where
+  every street is frequent, a heavy mat. The very busiest, a bus every
+  5 minutes or better (the build's two top classes: Colfax, the 16th Street
+  shuttle, and a few downtown blocks where many routes share a street), are
+  a size up on sheets 1 to 3: 1.3 times rail's width, band and spine with
+  them. They are a few streets, not a district (about an eighth of the bus
+  ink downtown on sheet 3), so they read as the spine without making the
+  mat. Sheet 4 keeps them at rail's width, under a stop's ring.
+  Bus streets are one blue, in the hue RTD's rail colours leave free: the
+  middle of the widest gap their hues leave round the OKLCh colour wheel
+  (greys don't count), worked out by the page from the line colours in
+  `sheets.json`, so a new line colour moves the blue with no change here.
+  Today it is about 265°, at least 38° from every line. The steps are
+  lighter and a little stronger in the dark, darker in the light (OKLCh
+  lightness and chroma per step in `PALETTES`). A frequent street (a bus
+  every 15 minutes or better) is a tint: a pale band of the blue at the
+  street's width, laid over the ground as a mixed colour (not see-through,
+  so crossings show no knot), with a spine of the step's ink down the
+  middle, 0.42 of the band's width (0.45 for a bus every 15 minutes, whose
+  band is paler). A quiet street is a plain line in its ink. Each step
+  stands at least a quarter again above the one below in contrast with the
+  ground, so 15, 10 and 5 minutes read in order. The quiet step is the
+  sheet's rail width over 1.6 twice, and on the opening sheet a one-pixel
+  hairline, nearer the ground: there it is the whole outer street grid, and
+  the sheet's job is where service is frequent, so the grid sits back. The
+  middle step is rail's width over 1.4. The quietest reads clearly in both
+  themes (in the dark, where a thin line of light reads faint, more so).
+  Rail reads first by its colour and width: every rail line has at least
+  10% more contrast with the ground than the busiest band, and the spine
+  is under half a band, thinner than any rail line. Rail's own inks are
+  set as before, at least 15% above the contrast the busiest bus street
+  had when bus streets were grey (`railFloor`).
   The page takes each line's colour from RTD's data (the build lists them
   in `sheets.json`) and, where one is too dim for that, lifts it in the dark
   (lighter, same hue, keeping its share of the most chroma that hue can
@@ -2124,10 +2262,58 @@ How it is built:
   colour that would need more (lime, gold, orange, sky blue on cream) keeps
   RTD's colour and gets a thin casing of itself, darker. Pure white is for
   station marks. A stop's ring on sheet 4 is wider than the busiest street.
+  A bus line never ends in the open. Where it ends (no other street, rail
+  station or bus station's hall meets it) and a stop of one of its routes is
+  within 320 m, it is led on to that stop and ends on a ring there: ground
+  inside, in the line's own ink, a little wider than the line. Lines that
+  end at one stop, or at stops a ring's width apart (gates either side of a
+  highway), share one ring. An end with none of its stops that near is a
+  spur in the data, and the run back to the street it leaves is not drawn
+  when it is shorter than 1.6 km. Sheet 4 draws every stop, so its lines
+  already end on one.
+- **The express** (the Flatiron Flyer, FF) is drawn in rose. Which routes
+  get it follows RTD's route category: the routes in the service category
+  RTD files the FF under in its routes layer, read by the build
+  (`expressRoutes` and `EXPRESS_CATEGORY` in `scripts/lib/sheets.mjs`),
+  never a list of routes. Today that is the FF alone; the 15 and 15L and
+  RTD's regional routes stay regular buses. The map calls it an express
+  (Chris), never by RTD's category name. A street the FF runs on is marked
+  `express` and drawn exactly as any bus street of its frequency (the same
+  band and spine, or plain line on a quieter stretch, the same widths,
+  steps and order among the buses, the same end ring), with only the hue
+  changed: rose (OKLCh hue 355°) in place of the blue, at the same
+  lightness and chroma. No casing and no station dots: it is a bus, not a
+  rail line (Chris: a rail-like drawing "looks too much like a rail line,
+  and not like the 15"). The rose is at least 30° from every rail hue
+  (clear of the purple N and E lines and the red T line, never red), and
+  rail stands above its band as above the blue's. It fades with the bus
+  streets when another route is picked; a tap says "Express" on the card.
+  Two marks say it is special: where it runs often, a thin pale dashed line
+  down its spine, highway style; and along it, every 160 to 320 px by
+  sheet, a small slanted shield (a lozenge) in its rose on a rim of ground,
+  carrying the route's name from RTD's data ("FF"). A quiet stretch keeps
+  the plain line, so it never looks more frequent than it is.
+- **Airport buses** are drawn the same way in indigo, with a plane. Which
+  routes follows RTD's route category for its airport buses (SkyRide, read
+  by the build: `airportRoutes` and `AIRPORT_CATEGORY` in
+  `scripts/lib/sheets.mjs`), never a list; today that is the AB and AT.
+  Their streets are marked `airport` and drawn as any bus street of their
+  frequency in indigo (OKLCh hue 278°, `AIRPORT` in `style.js`): between the
+  bus blue and the E Line's purple, a little stronger than the blue so the
+  colour shows on a quiet line, and lifted a little lighter so it tells
+  from the E Line in the light theme. Never light blue: that is the A Line,
+  the airport train. Where it runs often it gets the same dashed spine as
+  the express; along it, a small plane seen from above, nose along the line,
+  on a disc of ground. Where an airport bus shares a street with the
+  express, the street stays rose. A tap says "Airport bus", never RTD's
+  category name. The shields and planes are placed before the labels, so
+  labels and stop names keep clear of them, and they never stack.
 - **Every route is drawn.** A bus street too short to read at a sheet's scale
   takes the weight of the street it joins; none is dropped for tidiness.
   Streets too close to tell apart at a sheet's scale are drawn as one street
-  that carries the routes of both.
+  that carries the routes of both, only along the stretch where they run
+  together: where one turns away, the other goes on with its own routes
+  alone (Chris saw the AT drawn far down a street it never takes).
   `test/sheets.test.mjs` holds the rules.
 - **Bus stations are rooms.** Where buses go indoors (the halls in
   `terminals.geojson`) RTD's route lines stop at the door. A hall at least
@@ -2148,9 +2334,11 @@ How it is built:
 - **More fudges for a clean bus drawing.** A loose end with a street of the
   same route a short walk away (110 m) is led to it, so a turnaround is a
   closed shape. Where two ways between the same corners enclose a strip
-  under six pixels wide, the quietest side is not drawn and the others carry
-  its routes: a route that leaves a street and rejoins it a block later is
-  no longer a notch. A short stretch takes the weight of the busier longer
+  under six pixels wide, the quietest side is not drawn and the sides drawn
+  beside it carry its routes: a route that leaves a street and rejoins it a
+  block later is no longer a notch. A short side that only crosses the strip
+  runs beside none, so its routes go on from its corners and are never drawn
+  round the strip. A short stretch takes the weight of the busier longer
   street it runs into, not merely the longer one.
 - **Streets meet at corners.** Before any of those rules run, every place
   two streets meet is made a corner both share: where one ends on the
@@ -2188,7 +2376,9 @@ How it is built:
   and reaches as far out as it did: the route data along it bulges and
   pinches. The bow gives way to rail: where it would run against a line or a
   station's bar it is drawn tighter, down to half its reach, until it stands
-  a line's width clear.
+  a line's width clear. The curve only smooths the street: it is drawn only
+  where it stays within a street's width of it all the way, both ways. A
+  loop round blocks is not a bow and keeps its own path.
 - **A stop's ring sits on its street.** The streets are drawn, not traced,
   so a stop at its true place can sit beside its line or between two. Each
   ring is moved to the nearest point of the nearest street, within two
@@ -2209,13 +2399,38 @@ How it is built:
   holds it and runs on across cross streets only where none does. A run too
   short for its list in one row has it in two, stacked beside the street
   and turned the way it runs, where the street is straight for their
-  length. Where routes join and leave a street block by block (15th and
-  17th downtown), no run of one list holds it: there the label runs on
-  across runs and lists every route on the stretch it is lettered along,
-  grown from the longest unlabelled run one run at a time, taking the
-  neighbour that adds the fewest routes, in one row where the street can
-  hold it and two stacked only where it can't. A street too short even for
-  that is not labelled on that sheet, and a tap gives the list anywhere.
+  length. Where routes join and leave a street block by block and no run
+  of one list holds it, the label runs on across runs and lists every
+  route on the stretch it is lettered along, grown from the longest
+  unlabelled run one run at a time, taking the neighbour that adds the
+  fewest routes, in one row where the street can hold it and two stacked
+  only where it can't. A street too short even for that is not labelled on
+  that sheet, and a tap gives the list anywhere.
+  Where RTD letters a street's stops ("... [ X Stop ]", 15th and 17th
+  downtown), a bus stops only at its letter's stops, so a stop serves one
+  group, not the whole list. There the routes are said once in a table, not
+  along the street. Streets whose lettered stops share a letter and a route
+  are one table (a one-way pair), titled with their names ("15th & 17th
+  St"), with a row for each letter: the letter in a small dark square, then
+  its routes, spaced, no commas. The table is a level plate in the ground's
+  colour with a hairline edge, which the build places on open ground
+  nearest the middle of the lettered stops, clear of rail, bus streets,
+  station names, route lists and the letters on the streets; place and
+  street names give way to it. No bracket or leader ties it to the
+  streets: the letters on them, in the table's squares, do that. On sheet 3
+  the table replaces the lists along those streets, and each lettered stop
+  shows its letter on its street, in the table's small dark square with a
+  thin rim of ground, centred on the line at the stop's place as a rail
+  line's letter sits on its line, so the street reads X Y Z block by block
+  and matches the table. A square keeps off cross streets, rail, route
+  numbers and names, moving along its street within its block as little as
+  it must, and two that would touch both stay, moved apart: none is
+  dropped. On sheet 2 the table is set where it fits, and the streets
+  carry no numbers where it doesn't. On sheet 4 each lettered stop shows
+  its letter in a small square in the stops' grey in place of its ring,
+  and the table is set once where it fits. A tap on these streets, a
+  lettered stop or the table lists the routes by letter. Routes on those
+  streets that stop at no lettered stop are still listed along the street.
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
   and a comma reads as a dash.
@@ -2470,6 +2685,22 @@ The URL reflects what's open (`#route=15`, `#station=…`, `#here=lat,lon`) and
 when (`#at=sunday`, `#at=2026-11-27T18:00`, `#live`), so any view can be
 shared or bookmarked.
 
+On the sheets page (v1.0) there is no share button: the address is the link
+(#14, Chris 2026-11-14). It always holds the sheet, the centre and a picked
+route, `#14/39.72264/-104.99487/bus/ART` (MapLibre's `#zoom/lat/lon`, which
+the page read before, then the pick), rewritten in place with
+`history.replaceState` each time the map comes to rest or a route is picked,
+so Back still leaves the page. Opening it without a pick shows the same sheet and the centre to within half
+a pixel. Opening it with a pick shows the pick with the picked route's card
+open. Where the whole route fits on the link's sheet, it is framed whole in
+the map left clear above the card (`frame`, main.js) and the address
+rewritten to that view; a link to a closer sheet keeps its exact view, since
+it shows a place on the route. Closing the card clears the pick, as after a tap.
+A plain visit keeps its plain address until
+the view changes. An address that names no view or a centre off the map
+opens the opening view; a pick the sheets no longer draw is dropped. The rules
+are in `public/js/sheets/address.js`, with tests.
+
 ### Link preview
 
 A link to the site shows the title "RTD system map", the page's description
@@ -2672,6 +2903,19 @@ are deferred, not ruled out. See "Open questions".
 
 ## Quality floor
 
+- **Stable names:** a sheet keeps the station-name positions chosen by the
+  build while it is panned. Screen edges and controls crop the drawing;
+  they do not trigger alternate positions or abbreviations. Place names
+  have a fixed centre anchor. `qa/labels.mjs` compares label pixels at the
+  same world positions before and after pans on all four sheets.
+- **A picked route looks right:** `qa/pickcheck.mjs` picks every bus and
+  rail route on every sheet and counts gaps in the picked line, stubs under
+  a stub's length, self-overlap, turns sharper than a set angle over a
+  short run, station names over the picked line, and a pick link that does
+  not frame the whole route. Each fault count is 0, or each remaining case
+  is explained in #117. The browser report also records cropped names as
+  information; cropping at screen edges and controls is expected while
+  panning a fixed drawing.
 - **Speed:** a usable map in under 2 seconds on a mid-range phone over
   typical 4G (170 ms latency, 9 Mbps, a 4x slower CPU), with slow 4G (150 ms,
   1.6 Mbps) as a stretch. Measured 2026-11-05 on a 390 px phone: line-end
@@ -2711,8 +2955,11 @@ are deferred, not ruled out. See "Open questions".
     (`public/poster/`, one per theme for a phone and for a wider screen, about
     60 to 150 KB each) are taken from the live site by `scripts/poster.mjs`,
     after each change to how the sheets look and daily
-    (`.github/workflows/poster.yml`), so they are the map the page then draws.
-    The page centres the picture as the map is centred, and shifts it as the
+    (`.github/workflows/poster.yml`). A fingerprint of the opening drawing
+    and its rendering code is captured with the pictures, along with the
+    basemap tile version. The picture stays
+    hidden unless its fingerprint matches the current `sheets.json`; a stale
+    picture cannot jump to a different drawing. The page centres the picture as the map is centred, and shifts it as the
     map's bounds shift the view on a very wide screen. A link to another view,
     or an address forcing a theme, gets the line on plain ground instead.
   - MapLibre and the Overpass font are served from the site itself: no extra
@@ -2728,9 +2975,41 @@ are deferred, not ruled out. See "Open questions".
   This is dependable only once the site is on the Home Screen, where
   Safari's seven-day deletion of a site's storage does not apply (see
   "Installed on a phone").
+  The sheets page has this from v1.0 (`public/sw.js`, #14): its page,
+  scripts, styles, font, glyphs, route directory and the four sheets' data go
+  to the network first. A failure or 2.5-second stall uses a saved copy;
+  a slow successful response still refreshes it for the next visit. A new deploy
+  reaches everyone online on their next load and nobody is held on an old
+  version (a cache-first copy with versioned names would need a build step to
+  name every file, and would show the old version once after each deploy).
+  Basemap tiles are cache-first, since their addresses name the tile build,
+  up to 3000 tiles, oldest dropped first. The worker is registered only after
+  the opening view is drawn, so it never slows the first load; the files that
+  load fetched are handed to it then. Navigation preload keeps it from
+  delaying later loads. The Live relay and other pages are never touched.
 - **Accessibility:** WCAG AA contrast for text, visible keyboard focus, every
   action reachable by keyboard, motion reduced when the user prefers it, and
-  nothing identified by color alone.
+  nothing identified by color alone. On the sheets page (#14) a screen reader
+  hears it all: the map's canvas is labelled and Tab moves on from it; the
+  − / + buttons are named, and the dots between them say "Sheet 2 of 4";
+  each route button on the card is "Route 15" or "W Line", pressed or not,
+  and each stop letter is "Stop A" before its routes. The card is a region
+  with a heading, next after the map, and a polite live region says what
+  changed: the card's title and how many routes it offers when it opens, the
+  sheet on a step, "Route 15 shown, the rest faded" or "Cleared". A × in the
+  card's corner (or Esc) closes it as a tap on empty ground does, and
+  returns focus to the map. The card's quieter text (`--note`) and a route
+  button's ring (`--rim`) meet AA (4.5:1 and 3:1) in both themes; a line's
+  label on the card takes whichever of near-black and white reads better on
+  its colour. Nobody can tap a chosen spot on the canvas without seeing it,
+  so next after the map a button, "List what's in view", lists what the
+  sheet draws on screen (#135): its stations and stops, each opening its own
+  card, and its rail lines and bus routes, each picked as on a card. It is
+  out of sight until a keyboard reaches it, like a skip link, so the map
+  shows no extra control; the canvas's label names it, and closing a card
+  opened from it returns focus to it. `qa/a11y.mjs` checks the tree,
+  axe-core, the live region and that keyboard path in headless Chromium; a
+  real VoiceOver pass on a phone is a person's check.
 - **Resilience:** if the live feed fails, the map still works and says live
   data is unavailable. If ArcGIS is down, the site uses the last built
   snapshot.
@@ -3315,7 +3594,8 @@ work against the real structure before asking for evaluation.
 Decided 2026-11-13. The site is called launched at **v1.0**, when the
 "Launch (v1.0)" milestone closes: Chris has signed off the four sheets on
 his phone in both themes, the sheets can highlight one route, and the
-version is closed (#14: domain, share links, screen reader, offline). V1 to
+version is closed (#14: view URLs, screen reader, offline). The page address
+is its share link; a custom domain is not a launch requirement. V1 to
 V3 above are the names of the design stages that led there, not releases.
 What comes after launch is in four milestones, in this order (decided
 2026-11-13):
@@ -3342,9 +3622,9 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
 ## Open questions
 
 - **Shared streets by combined frequency (decided 2026-11-08):** each
-  street is drawn once at the rider's combined rate (see "Bus routes"). Still
-  open: whether the busiest streets should be capped at rail's width rather
-  than drawn wider, and the right threshold for strands against a core line
+  street is drawn once at the rider's combined rate (see "Bus routes"). The
+  busiest are no longer capped at rail's width on sheets 1 to 3 (decided
+  2026-11-15, decision log). Still open: the right threshold for strands against a core line
   (six routes today).
 - **Span (decided 2026-11-08):** "Frequent" does not also require all-day
   service. A strict test (4 or more departures in every hour from 6am to 8pm)
@@ -3414,6 +3694,49 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   audience, but not the default view.
 
 ## Decision log
+
+- 2026-11-17: Chris requested a light/dark toggle in the lower-right corner
+  of the sheets. Use a 44 px sun/moon button aligned with the zoom controls,
+  clear of the credit and safe areas. Save a manual choice, apply it before
+  paint, and keep the map's view and route selection through a theme change.
+
+- 2026-11-17: Chris clarified that panning at a given zoom must leave the
+  drawing static. This supersedes #147's earlier screen-fit alternatives:
+  station names keep their built positions and are cropped at the screen
+  edge. Remove viewport-driven name flips and suppression, and use a fixed
+  centre anchor for place names. The first-load picture must match the
+  current drawing fingerprint before it is shown; refreshing an old picture
+  alone cannot prevent a later data rebuild from bringing the jump back.
+
+- 2026-11-17: A rail line left without a letter may use the configured
+  minimum air around a station bar instead of the preferred extra air
+  (#145). Measure that minimum from the whole bar. The fresh deployment
+  had no T letter: its clearest point was 20.6 px from a station, just under
+  the preferred 21 px, while the configured minimum is 15 px. The fallback
+  keeps the line identified without touching station marks or other discs.
+
+- 2026-11-16: Launch cleanup combines the signoff drawing and the keyboard
+  list / first-visit offline fixes in one candidate. A picked route keeps
+  its name while the map is dragged, Escape clears it, and an invalid route
+  in an updated address is dropped. Route hints promise highlighting.
+  Stop-group tables keep their full ink while a route is picked, with the
+  matching row emphasized. Rail cards name the line; visual separators are
+  left out of speech. A tapped place is moved clear of its card, including
+  in landscape. Zoom buttons from the opening view keep the hub in view.
+  Station names use measured font widths and can use a build-approved
+  alternative that fits inside the screen and clears other names and
+  controls. A short rail line sharing all its track still gets its letter;
+  a bus stop with no served bus route is omitted. Branch smoothing holds
+  shared junctions so the picked route stays connected. The directory is
+  saved on the first visit, and a network request stalled for 2.5 seconds
+  falls back to a saved copy while its refresh continues. These changes
+  address the audited launch and sheets-polish faults; phone signoff and
+  a real screen reader pass remain release requirements.
+- 2026-11-16: Capture scripts preserve the map's `main` landmark and fail
+  if it is hidden, so loading and sharing images contain the drawing after
+  the accessibility changes. Recall fixtures freeze their original planting
+  exclusions: adding a fault seen on a newer build must not move an older
+  fixture's planted faults or change what its baseline compares.
 
 - 2026-11-01: Objective set: frequency map answering "what can I take from
   here, and how often?" Live vehicles are a bonus layer.
@@ -4515,6 +4838,57 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   so sheet 3 named West 14th Avenue and Pine Street but not Colfax or
   Broadway; set on a bus street's centreline they cut its line and read
   muddy, and set ahead of the route lists they took 8 of 18 downtown.
+- 2026-11-12: On the sheets a street with a bus every 10 minutes is a band
+  at least 7 pixels wide, wider than rail on sheets 1 to 3, and the middle
+  step sits evenly between it and the quiet step (#117). Reason: Chris
+  asked why the Flatiron Flyer was "so insubstantial" and for the very
+  frequent lines to be more significant; at rail's width in a grey kept
+  under rail's contrast the frequent streets read as no more than the
+  grid. The pieces of the Flatiron Flyer still drawn as a hairline (to
+  Anschutz along I-70 and I-225, and through downtown to Civic Center) are
+  its peak-only legs, 4 to 17 trips a weekday with none at midday, so they
+  stay quiet.
+- 2026-11-13: The busiest bus step is back to rail's width, never wider,
+  and the two frequent steps read by a lit core down their middle instead
+  (#117). Reason: Chris found the 7 px band too heavy downtown, where
+  every street is frequent, and asked for a better way than width. A core
+  adds contrast without width, so Colfax and US 36 stand out on the
+  opening sheet while downtown weighs about what it did before the band.
+- 2026-11-13: Bus lines end on a mark: the ring of the stop their route
+  ends at, or, for a short spur near none of its stops, not drawn (#117).
+  Reason: Chris found line ends around US 36 and Interlocken that "don't
+  make any sense": AB and 228 stopped short of the US 36 & Flatiron
+  station, AB with a hook. Ends in the open went from 25 to 2 on sheet 1
+  and from 27 to 1 on sheet 2. The three left (the airport, Evergreen and
+  Parker) are where RTD's route data stops 400 m to 1 km short of the
+  stop, too far to lead on to by rule.
+- 2026-11-12: Sheet 4 names its bus streets: a name leads its street's
+  route list where the block holds both, and a name of its own slides along
+  its street to a stretch between stops and within one of the page's tiles
+  (#117). Reason: on sheet 4 a stop's ring every half block keeps lettering
+  off the street, so almost no name was set (none at Colfax and Broadway).
+  Over eight sheet-4 views names went from 7 to 17 and over three sheet-3
+  views from 6 to 14, with no route list lost. Colfax between Broadway and
+  Lincoln still has no room: two stops and its list fill the block.
+- 2026-11-13: Where RTD letters a street's stops (15th and 17th downtown),
+  the sheets give the routes in one table by letter, tied to the streets by
+  a bracket, and on sheet 4 each lettered stop shows its letter (#126).
+  Reason: the long row of every route on those streets was hard to read
+  and misleading, since any one stop serves one group. Chris approved the
+  table after a mock.
+- 2026-11-13: The table's bracket crosses its streets mid-block, at least
+  8 px off any street it doesn't cross, or where it has the most room if no
+  block gives that; and sheet 3 shows each lettered stop's letter in a
+  square on its street (#126). Reason: on sheet 3 the bracket ran about
+  3 px beside a cross street and read as a doubled street; and Chris asked
+  for the letters along 15th and 17th so the streets read X Y Z block by
+  block, matching the table. With the letters in the blocks, the bracket
+  has about 5 px at its best place on sheet 3, and a version without it
+  went to Chris to choose between.
+- 2026-11-13: Bracket removed: the table has no bracket or leader on any
+  sheet, and stays where it was (#126). Reason: with each stop's letter on
+  its street, the matching squares tie the table to the streets, and the
+  bracket was too faint to see on a phone.
 
 - 2026-11-13: Work is no longer credited by model: the `made_by` script,
   its `gh` wrapper and the instruction to run it are gone. Reason: Chris
@@ -4557,7 +4931,143 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   loads them ahead (MapLibre has no public way to, so it uses its tile
   managers) and keeps room for them in a larger tile cache. Measured on the
   live data, every first step in and out drew with no blank frame on both.
+- 2026-11-14: Sheets: tap a route to highlight it, the rest faded (#118). A
+  picked bus route is drawn in one ink and weight end to end, not each
+  street's grey, so it reads as one line; fading mixes colours toward the
+  ground instead of using opacity, so overlaps leave no knots.
+- 2026-11-14: Sheets: the address is the share link, no share button (#14,
+  Chris). It holds the sheet, centre and picked route, rewritten in place as
+  the view settles; old and malformed addresses open the opening view.
+- 2026-11-14: Sheets work offline after one visit (#14): a service worker,
+  network-first for the page's own files so a deploy is never held back,
+  cache-first for basemap tiles (versioned addresses), registered after the
+  first draw so the first load is no slower.
+- 2026-11-14: OpenStreetMap is named as a data source (#69): the basemap
+  and the stations' shapes. Its shapes join the count checks, which now
+  compare with the published site's counts on a fresh checkout (before, a
+  Cloudflare build had nothing to compare with and skipped them), and a hall
+  kept from the last build keeps its roof. OSM down falls back; OSM
+  answering with less than 70% of last time, or nothing, fails the build.
+- 2026-11-14: Screen reader pass on the sheets page (#14): named controls,
+  "Sheet N of 4", "Route 15" buttons, "Stop A" letters, a live region for
+  the card, steps and picks, a close button on the card, and AA tokens for
+  the card's quieter text (`--note`) and route rings (`--rim`).
+- 2026-11-14: Sheets: a street folded into a nearby one adds its routes
+  only along the stretch where the two run together, not along the whole
+  kept street (#136). Before, a block of two streets side by side put
+  routes on kilometres of street they never use (route 1 on Colfax from
+  Federal to downtown).
+- 2026-11-14: Sheets offline after one visit, for real (#133). The map's
+  drawing worker starts before the service worker exists, so on a first
+  visit its fetches (every sheet's drawing, the basemap tiles) never reached
+  the cache and the page opened offline only after a second visit. The page
+  now names them to the service worker: all four sheets, and the basemap
+  tiles of every sheet around each view it rests at during that first visit.
+- 2026-11-14: Sheets: "List what's in view" for a keyboard or a screen
+  reader (#135). The cards could only be opened by tapping the map, which a
+  screen reader can't aim. A button next after the map lists the stations,
+  stops, lines and routes drawn on screen; it shows only with the keyboard's
+  focus, so the map gains no visible control.
+- 2026-11-15: Sheets: no bright tick into faint streets (#117, Chris's phone
+  check: a stub east of US 36 at I-25 on sheet 1). A run of bus street
+  shorter than 14 px from a corner, leaving a street at least as wide, that
+  ends at a fork where every street going on is drawn at most half its
+  width, takes the widest of those streets' weight. Judged by the page's
+  widths, so it acts where the quiet step is a hairline (sheet 1: 11
+  places) and almost nowhere else (sheet 3: 1, a stub into a transit
+  centre's loop; sheets 2 and 4: none).
+- 2026-11-15: Sheets: the busiest streets a size up (#117, Chris: "Colfax
+  should be thicker"). A bus every 5 minutes or better (classes `c5`, `c3`)
+  is drawn 1.3 times rail's width on sheets 1 to 3, core included; a bus
+  every 10 minutes stays at rail's width. Taken from the build's classes,
+  so it is whichever streets RTD runs that often. Downtown stays open:
+  those classes are about an eighth of its bus ink on sheet 3.
+- 2026-11-15: Sheets: bus streets in blue, frequent ones as a tint (#117,
+  Chris picked "Tint firmer" of eight options). The greys and lit core give
+  way to one blue in the hue the rail colours leave free; a frequent street
+  is a pale band with a spine of its step's ink. Teal was dropped: it sat
+  10° from the W line. Rail's inks are unchanged.
+- 2026-11-15: Sheets: the Flatiron Flyer in rose (#117, Chris picked "Rose"
+  over silver and none). First drawn as a cased line a step below rail with
+  station dots; Chris: it "looks too much like a rail line, and not like
+  the 15". Now drawn as any bus street of its frequency with only the hue
+  changed. Which routes are rose follows RTD's route category (the one RTD
+  files the FF under); RTD's regional routes stay regular buses ("the
+  flyer can stay a separate color"). Silver was dropped: near the white of
+  station marks in the dark.
+- 2026-11-15: FF drawn as an express in rose, not called BRT (Chris, 2026-11-15).
+- 2026-11-15: Express and airport marks (#117). Chris picked a dashed
+  centre plus shields for the FF over a shadow and chevrons (chevrons read
+  as stop marks at phone size), then a lozenge shield over a diamond and a
+  hexagon. Airport buses (RTD's SkyRide category) get their own colour, the
+  dashed centre and a plane; Chris picked indigo over jade. Slate was
+  dropped (looked like any street), amber can't fit between the C and G
+  lines, and light blue is the A Line's. The indigo was lifted a little
+  lighter after the pick so it tells from the E Line in the light theme.
+- 2026-11-15: Sheets: a street folded into one beside it adds its routes
+  only along the stretch they share (#117). Before, the kept street took
+  them along its whole length, so a route a block beside a long street was
+  drawn all down it (Chris: the AT east of County Line). Every sheet's bus
+  pieces checked against each route's own GTFS shape: 655 piece-routes off
+  their shape before, 3 after: on sheet 1 the 24 near Civic Center, where
+  a thin strip of two streets is drawn as one at that scale, and on sheet 4
+  the 59's end loop, drawn off its own shape (a shape fault, not a route on
+  the wrong street).
+- 2026-11-15: Sheets: a turnaround's sweep is drawn only where it stays
+  within a street's width of the street, and a side of a thin strip that is
+  not drawn hands its routes only to the sides drawn beside it (#117).
+  Reason: on sheet 4 the 59's end loop round blocks was swapped for one
+  curve about 450 m inside it (and loops of the PD, 73, 3 and 15 were bent
+  the same way on sheets 3 and 4); on sheet 1 the 24's short crossing of
+  the strip between Colfax and 14th handed it to the whole strip, so it was
+  drawn to Civic Center. Pieces carrying a route off its line (RTD's route
+  layer, which the sheets are drawn from; first written here as its GTFS
+  shape, which agrees with it to a metre): 3 to 0 on all four sheets.
+- 2026-11-15: Route accuracy is checked from data, every sheet, against
+  both of RTD's sources (`npm run check:accuracy`, "Route accuracy" under
+  Bus routes), and what the sheets may leave off or draw simpler is written
+  down there (#117). Fixes: a ring too small to draw leads the streets that
+  met it round to its point (the 169L and AT stopped 1 km short on Peña
+  Boulevard on sheet 2); an end a hair off a street just short of its corner
+  is led to the corner (the 169L dropped by 61st and Peña on sheet 3); a
+  turnaround loop carries only the routes that go round it (the 42, 88 and
+  105 were drawn 80 m round the 28's loop on sheet 3); a strip's ladder
+  rails are never more than a slim width apart; a street is cut wherever its routes change,
+  however short the run, not merged into its neighbours'. Reason: Chris asked that accuracy be settled from
+  GTFS and RTD's published lines, not by eye. What the check couldn't
+  explain: 84 pieces and stretches to 0 (most were the simplifications now
+  written down; the rest came from these causes).
 
+- 2026-11-15: No route is drawn on a street it doesn't take, and no
+  route's end of 250 m or more is left off, on any sheet (#117). Two ways
+  round a strip are one street only where the way not drawn lies within the
+  street drawn; a short end, a terminal loop and a ring gathered to a point
+  are left off only while under 250 m too; ends a hair apart in a row weld
+  to one corner (the nearest), and a street drawn out and back keeps its
+  tip where another street meets it. Reason: Chris's bar is a map that is
+  accurate: on sheet 1 the 72 and the 28 were drawn up to 670 m off, on the
+  FF's and the 20's streets, and on sheet 2 the 65's end toward Thomas
+  Jefferson High School was left off for 590 m. `check:accuracy` holds
+  both: 0 on all four sheets.
+- 2026-11-15: Sheets: a picked route reads as one clean line, framed whole,
+  with a two-line card (#117). The picked bus line is the route's own
+  composed line (joined, gaps closed, stubs and a close second street
+  dropped, smoothed, round ends) instead of its street pieces drawn again; a
+  name it runs under keeps a tight halo and drops its letter row while it is
+  picked, not a knockout; a pick link frames the whole route above the card
+  where it fits on the link's sheet; and a station name the screen's edge or the
+  page's own controls would cut is hidden whole. Reason: Chris, from the 28
+  picked on sheet 1: "this isn't how this should look, right?" (a tangle at
+  Union Station, stair steps, gaps, a knockout reading as a gap, an arrow
+  end, a card saying "Route / Bus / 28" over a quarter of the screen, the
+  route not framed, names cut at the edges).
+- 2026-11-15: Sheets: a picked bus route has no station name on it, and a
+  link with a pick opens that route's card (#117). A name a route runs under
+  has a second place off it, shown while that route is picked; with none,
+  its halo knocks the route out under the name. Reason: Chris, from a review
+  link with the 28 picked: "The Union Station label sits on top of route
+  28", and the route lit up with no card saying which route it was until he
+  tapped it.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in
