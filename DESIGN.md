@@ -2986,8 +2986,15 @@ are deferred, not ruled out. See "Open questions".
   returns focus to the map. The card's quieter text (`--note`) and a route
   button's ring (`--rim`) meet AA (4.5:1 and 3:1) in both themes; a line's
   label on the card takes whichever of near-black and white reads better on
-  its colour. `qa/a11y.mjs` checks the tree, axe-core and the live region in
-  headless Chromium; a real VoiceOver pass on a phone is a person's check.
+  its colour. Nobody can tap a chosen spot on the canvas without seeing it,
+  so next after the map a button, "List what's in view", lists what the
+  sheet draws on screen (#135): its stations and stops, each opening its own
+  card, and its rail lines and bus routes, each picked as on a card. It is
+  out of sight until a keyboard reaches it, like a skip link, so the map
+  shows no extra control; the canvas's label names it, and closing a card
+  opened from it returns focus to it. `qa/a11y.mjs` checks the tree,
+  axe-core, the live region and that keyboard path in headless Chromium; a
+  real VoiceOver pass on a phone is a person's check.
 - **Resilience:** if the live feed fails, the map still works and says live
   data is unavailable. If ArcGIS is down, the site uses the last built
   snapshot.
@@ -4886,6 +4893,22 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   "Sheet N of 4", "Route 15" buttons, "Stop A" letters, a live region for
   the card, steps and picks, a close button on the card, and AA tokens for
   the card's quieter text (`--note`) and route rings (`--rim`).
+- 2026-11-14: Sheets: a street folded into a nearby one adds its routes
+  only along the stretch where the two run together, not along the whole
+  kept street (#136). Before, a block of two streets side by side put
+  routes on kilometres of street they never use (route 1 on Colfax from
+  Federal to downtown).
+- 2026-11-14: Sheets offline after one visit, for real (#133). The map's
+  drawing worker starts before the service worker exists, so on a first
+  visit its fetches (every sheet's drawing, the basemap tiles) never reached
+  the cache and the page opened offline only after a second visit. The page
+  now names them to the service worker: all four sheets, and the basemap
+  tiles of every sheet around each view it rests at during that first visit.
+- 2026-11-14: Sheets: "List what's in view" for a keyboard or a screen
+  reader (#135). The cards could only be opened by tapping the map, which a
+  screen reader can't aim. A button next after the map lists the stations,
+  stops, lines and routes drawn on screen; it shows only with the keyboard's
+  focus, so the map gains no visible control.
 - 2026-11-15: Sheets: no bright tick into faint streets (#117, Chris's phone
   check: a stub east of US 36 at I-25 on sheet 1). A run of bus street
   shorter than 14 px from a corner, leaving a street at least as wide, that
