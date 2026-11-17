@@ -4,3 +4,7 @@
 # one font is about 80 KB; as protobuf Cloudflare compresses them to about a third.
 /vendor/glyphs/*
   Content-Type: application/x-protobuf
+
+# The offline worker (sw.js): checked on every load, so a new one reaches people at once.
+/sw.js
+  Cache-Control: no-cache

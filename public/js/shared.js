@@ -141,15 +141,8 @@ export const date = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-
 export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-// How often a route comes on a weekday midday, in a few words. `r` is a route
-// (or one stretch of a route) with its tier and weekday headway.
-export function freq(r) {
-  if (r.tier === 'none' || r.tier === 'unknown') return 'No weekday service';
-  if (r.tier === 'peak') return 'Rush hours only';
-  if (r.tier === 'limited') return 'A few trips a day';
-  if (r.wk) return `Every ${r.wk} min`;
-  return 'A few trips a day';
-}
+// How often a route comes on a weekday midday (often.js, which the sheets' card reads too).
+export { freq } from './often.js';
 
 // The same for Saturday or Sunday: "Every 30 min", "A few trips", "No Sunday service".
 export function dayFreq(headway, trips, day) {

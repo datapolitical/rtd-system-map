@@ -35,6 +35,12 @@ const VIEWS = {
   airport: '16/39.84700/-104.67396',
   alameda: '16/39.70868/-104.99316',
   broadway: '11/39.70050/-104.98950',
+  // 2026-11-15, the signoff-fixes build (40f14d7), sheet 2 by County Line.
+  countyLine: '12/39.57500/-104.84500',
+  loop59: '16/39.60500/-105.13600',
+  colfax24: '10/39.74100/-104.97300',
+  // 2026-11-15, the signoff-fixes build (c2bf817), sheet 1 with the 28 picked from a link.
+  pick28: '10/39.77160/-104.98630',
 };
 
 // Chris's review of the stations build on 2026-11-11: his words on the
@@ -112,6 +118,91 @@ const PINS = [
     said: 'the rail lines look jerky rather than clean and hand drawn.', kind: 'drift', caught_by: ['drift', 'steep-ease', 'step'], confidence: 'clear', radius: 40 },
   { ...REVIEW, id: '103-broadway-break', latest: 'gone: C eases over 1.4 km', place: 'I-25 / Broadway', view: 'broadway', at: [[-104.98990, 39.69910]],
     said: 'The rail line breaks at I-25 and Broadway', kind: 'steep-ease', caught_by: ['steep-ease', 'step', 'gap'], confidence: 'clear', radius: 12 },
+  // The AT drawn on the 402L/PD street east of County Line: a short stretch where the AT runs beside
+  // that street was folded into it, and the whole street took the AT (fixed in the sheets build's fold).
+  { issue: 117, seen: '40f14d7', latestBuild: '40f14d7', looked: '2026-11-15', latest: 'still there on 40f14d7; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from the build\'s data (ground points on the street wrongly given the AT), 2026-11-15',
+    id: '117-at-off-route', place: 'County Line to E-470', view: 'countyLine', at: [[-104.87590, 39.57860], [-104.87189, 39.56305]],
+    said: 'I don\'t think the AT goes off that way', kind: 'route-off-shape', caught_by: ['route-off-shape'], confidence: 'clear', radius: 30 },
+  // The 59's end loop runs round blocks (west on one street, north, back east on another). On
+  // sheet 4 the bow-smoothing step swapped it for one curve that cut ~450 m inside it (fixed: a
+  // sweep is drawn only where it stays within a street's width of the street).
+  { issue: 117, seen: 'eac892f', latestBuild: 'eac892f', looked: '2026-11-15', latest: 'still there on eac892f; fixed in the next signoff-fixes build',
+    found: 'Claude, checking every sheet street piece against its routes\' GTFS shapes, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from the build\'s data (ground points on the curve drawn where the 59 never runs), 2026-11-15',
+    id: '117-59-loop-off-shape', place: 'Bowles and Wadsworth, the 59\'s end loop', view: 'loop59', at: [[-105.13900, 39.60560], [-105.13720, 39.60410]],
+    said: 'the 59\'s end loop is drawn about 450 m off its own path', kind: 'route-off-shape', caught_by: ['route-off-shape'], confidence: 'clear', radius: 30 },
+  // On sheet 1 the 24 (on University) was drawn west along Colfax and 14th to Civic Center: a thin
+  // strip between those two streets was drawn as one, and the 24's short crossing of it handed
+  // its route to every side of the strip (fixed: only the sides drawn beside a dropped side take its routes).
+  { issue: 117, seen: 'eac892f', latestBuild: 'eac892f', looked: '2026-11-15', latest: 'still there on eac892f; fixed in the next signoff-fixes build',
+    found: 'Claude, checking every sheet street piece against its routes\' GTFS shapes, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from the build\'s data (ground points on Colfax wrongly given the 24), 2026-11-15',
+    id: '117-24-colfax', place: 'Colfax, Downing to Broadway', view: 'colfax24', at: [[-104.98000, 39.74100], [-104.96600, 39.74100]],
+    said: 'the 24 is drawn along Colfax to Civic Center, where it never runs', kind: 'route-off-shape', caught_by: ['route-off-shape'], confidence: 'clear', radius: 20 },
+  // With the 28 picked on sheet 1, the hub's name sat on the 28 where it runs east from the
+  // station (fixed: a name has a second place off a route that runs under it, shown while that
+  // route is picked, and where it has none its halo knocks the route out under the lettering).
+  { issue: 117, seen: 'c2bf817', latestBuild: 'c2bf817', looked: '2026-11-15', latest: 'still there on c2bf817; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from his screenshot and a capture of the same link (ground points along the name), 2026-11-15',
+    id: '117-name-on-pick-28', place: 'Union Station\'s name, sheet 1, the 28 picked', view: 'pick28', at: [[-104.98530, 39.75420], [-104.93510, 39.75420]],
+    said: 'The Union Station label sits on top of route 28', kind: 'name-on-pick', caught_by: ['name-on-pick'], confidence: 'clear', radius: 20 },
+  // A link with a picked route (#z/lat/lon/bus/28) lit the route but opened no card saying which
+  // route it was until it was tapped (fixed: the address's pick opens the card a tap would).
+  { issue: 117, seen: 'c2bf817', latestBuild: 'c2bf817', looked: '2026-11-15', latest: 'still there on c2bf817; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, at the picked route in the same link\'s view (the card is the page\'s, not a place on the map), 2026-11-15',
+    id: '117-pick-link-no-card', place: 'Any link with a picked route; seen on the 28, sheet 1', view: 'pick28', at: [[-105.07000, 39.75900]],
+    said: 'when I click the link, the route is highlighted, but there is no modal box that comes up showing which route it is until I click on the route again', kind: 'pick-no-card', caught_by: ['pick-no-card'], confidence: 'clear', radius: 30 },
+  // Chris's screenshot of the 28 picked on sheet 1, dark, from review r-20261115-222036-7101f0 on b35d56b
+  // ("this isn't how this should look, right?"); the faults he and the parent session named.
+  { issue: 117, seen: 'b35d56b', latestBuild: 'b35d56b', looked: '2026-11-15', latest: 'still there on b35d56b; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from Chris\'s screenshot in the pick28 view, 2026-11-15',
+    id: '117-pick-28-tangle', place: 'The 28 through Union Station, sheet 1', view: 'pick28', at: [[-104.99729, 39.75049]],
+    said: 'the 28 is a tangle of overlapping strokes and short stubs through the station mark and its letter row', kind: 'pick-tangle', caught_by: ['pick-crossing', 'pick-stub'], confidence: 'clear', radius: 20 },
+  { issue: 117, seen: 'b35d56b', latestBuild: 'b35d56b', looked: '2026-11-15', latest: 'still there on b35d56b; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from Chris\'s screenshot in the pick28 view, 2026-11-15',
+    id: '117-pick-28-steps', place: 'The 28 east of downtown and into the A Line near Peoria, sheet 1', view: 'pick28', at: [[-104.95952, 39.75946], [-104.90116, 39.76210]],
+    said: 'stair-step jogs east of downtown and into the A Line station near Peoria', kind: 'pick-step', caught_by: ['pick-step'], confidence: 'clear', radius: 20 },
+  { issue: 117, seen: 'b35d56b', latestBuild: 'b35d56b', looked: '2026-11-15', latest: 'still there on b35d56b; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from Chris\'s screenshot in the pick28 view, 2026-11-15',
+    id: '117-pick-28-gaps', place: 'The 28 east of Union Station, sheet 1', view: 'pick28', at: [[-104.97325, 39.75313], [-104.94922, 39.75418]],
+    said: 'a small square notch and short separate dashes', kind: 'pick-gap', caught_by: ['pick-gap', 'pick-stub'], confidence: 'clear', radius: 20 },
+  { issue: 117, seen: 'b35d56b', latestBuild: 'b35d56b', looked: '2026-11-15', latest: 'still there on b35d56b; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from Chris\'s screenshot in the pick28 view, 2026-11-15',
+    id: '117-pick-28-knockout', place: 'Union Station\'s name over the 28, sheet 1', view: 'pick28', at: [[-104.98530, 39.75420]],
+    said: 'the Union Station name knockout reads as a gap in the route', kind: 'pick-knockout', caught_by: ['pick-gap', 'pick-name'], confidence: 'clear', radius: 20 },
+  { issue: 117, seen: 'b35d56b', latestBuild: 'b35d56b', looked: '2026-11-15', latest: 'still there on b35d56b; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from Chris\'s screenshot in the pick28 view, 2026-11-15',
+    id: '117-pick-28-v-end', place: 'The 28\'s west end at the G Line, sheet 1', view: 'pick28', at: [[-105.07968, 39.79640]],
+    said: 'the west end at the G Line station is an arrow-like V', kind: 'pick-end', caught_by: ['pick-end'], confidence: 'clear', radius: 20 },
+  { issue: 117, seen: 'b35d56b', latestBuild: 'b35d56b', looked: '2026-11-15', latest: 'still there on b35d56b; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from Chris\'s screenshot in the pick28 view, 2026-11-15',
+    id: '117-pick-card-thin', place: 'The picked route\'s card', view: 'pick28', at: [[-104.98699, 39.68024]],
+    said: 'Route / Bus / 28 says almost nothing', kind: 'card-thin', caught_by: ['pick-no-card'], confidence: 'clear', radius: 20 },
+  { issue: 117, seen: 'b35d56b', latestBuild: 'b35d56b', looked: '2026-11-15', latest: 'still there on b35d56b; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from Chris\'s screenshot in the pick28 view, 2026-11-15',
+    id: '117-pick-card-big', place: 'The picked route\'s card', view: 'pick28', at: [[-104.98699, 39.68024]],
+    said: 'it covers about a quarter of the screen', kind: 'card-big', caught_by: ['card-big'], confidence: 'clear', radius: 20 },
+  { issue: 117, seen: 'b35d56b', latestBuild: 'b35d56b', looked: '2026-11-15', latest: 'still there on b35d56b; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from Chris\'s screenshot in the pick28 view, 2026-11-15',
+    id: '117-pick-unframed', place: 'The 28 on opening its link', view: 'pick28', at: [[-104.98630, 39.77160]],
+    said: 'opening a pick link should frame the whole route in the visible area above the card', kind: 'pick-unframed', caught_by: ['pick-unframed'], confidence: 'clear', radius: 20 },
+  { issue: 117, seen: 'b35d56b', latestBuild: 'b35d56b', looked: '2026-11-15', latest: 'still there on b35d56b; fixed in the next signoff-fixes build',
+    found: 'Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)',
+    pinned: 'Claude, from Chris\'s screenshot in the pick28 view, 2026-11-15',
+    id: '117-names-clipped', place: 'Names at the screen\'s edges and under the card, sheet 1', view: 'pick28', at: [[-104.87026, 39.87444], [-105.11951, 39.74521], [-105.10715, 39.71616], [-104.85172, 39.68341], [-105.02132, 39.70982], [-105.05565, 39.60516]],
+    said: 'Thornton Crossroads / 104th, Oak, Federal Ctr, Fl… cut at the edges; Alameda, Littleton / Downtown under the card and credit', kind: 'name-clipped', caught_by: ['name-clipped'], confidence: 'clear', radius: 20 },
 ];
 
 // The picture point (CSS px in a phone capture of `view`) of a ground point.

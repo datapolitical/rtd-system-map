@@ -226,7 +226,7 @@ const isRoof = (tags) => tags.building === 'roof' || tags['man_made'] === 'canop
  * Returns `{ terminals, canopies }`: a Map from facility index to `{ rings,
  * feature }`, and the roofs over those shapes, to draw as canopies.
  */
-export async function terminalFootprints({ facilities, indexes, stops, previous = [], busOnly = new Set(), markStops = true, fetchText = defaultFetch, log = console.log }) {
+export async function terminalFootprints({ facilities, indexes, stops, previous = [], previousRoofs = [], busOnly = new Set(), markStops = true, fetchText = defaultFetch, log = console.log }) {
   const before = new Map(previous.map((f) => [String(f.properties.id), f]));
   const terminals = new Map();
   const canopies = [];
@@ -271,6 +271,8 @@ export async function terminalFootprints({ facilities, indexes, stops, previous 
       }
       const rings = ringsOfFeature(before.get(id));
       terminals.set(i, { rings, feature: before.get(id) });
+      // Its roof too, as last built (`previousRoofs`: last build's structures with a `terminal`).
+      canopies.push(...previousRoofs.filter((f) => String(f.properties?.terminal ?? '') === id));
       fellBack.push(facility.properties.name);
       if (markStops) markIn(rings);
       continue;

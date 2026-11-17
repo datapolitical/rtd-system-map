@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -159,6 +159,17 @@ test('the two halves of a divided road are one line down the middle with the rou
   assert.ok(Math.min(...ys) > 0.5 && Math.max(...ys) < 3.5, `drawn between the two, at ${ys[0].toFixed(1)}`);
 });
 
+test('a street folded into one beside it adds its routes only along the stretch they share, not along all of the other', () => {
+  // A long street (route 1) and a second street (route 2) beside it for its first 100 px that then turns away.
+  const street = (routes, coords) => line({ mode: 'bus', cls: 'c15', routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  const drawn = busStreets(all([street('1', [at(0, 0), at(600, 0)]), street('2', [at(0, 3), at(100, 3), at(100, 200)])]), sheet);
+  const carry2 = drawn.filter((s) => s.routes.split(' ').includes('2'));
+  const xs = carry2.flatMap((s) => s.path.filter((p) => Math.abs(p[1] - origin[1]) < 6).map((p) => p[0] - origin[0]));
+  assert.ok(xs.length && Math.max(...xs) < 140, `route 2 stops where the streets part, not at ${Math.max(...xs).toFixed(0)} px along route 1's street`);
+  const far = drawn.filter((s) => s.path.some((p) => p[0] - origin[0] > 300));
+  assert.ok(far.length && far.every((s) => s.routes === '1'), 'route 1 runs on alone past the turn');
+});
+
 test('a short break between two ends that share a route is bridged, and a short stretch takes the weight of the street it runs into', () => {
   const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
   const drawn = busStreets(all([
@@ -249,6 +260,21 @@ test('two ways round a strip too thin to see into are drawn as one street with t
   assert.deepEqual(middle.routes.split(' ').sort(), ['1', '2']);
 });
 
+test('a route that only crosses a thin strip is not drawn round it', () => {
+  const s1 = SHEETS[0];
+  const o = toPx([-105, 39.75], s1.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s1.zoom);
+  const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  // Two streets five pixels apart, tied at both ends; route 3 crosses them at x = 60.
+  const drawn = busStreets(all([
+    street('c15', '1', [ll(-100, 0), ll(0, 0)]), street('c15', '1', [ll(0, 0), ll(60, 0)]), street('c15', '1', [ll(60, 0), ll(120, 0)]), street('c15', '1', [ll(120, 0), ll(220, 0)]),
+    street('c15', '2', [ll(0, 0), ll(0, 5)]), street('c15', '2', [ll(0, 5), ll(60, 5)]), street('c15', '2', [ll(60, 5), ll(120, 5)]), street('c15', '2', [ll(120, 5), ll(120, 0)]),
+    street('c60', '3', [ll(60, -100), ll(60, 0)]), street('c60', '3', [ll(60, 0), ll(60, 5)]), street('c60', '3', [ll(60, 5), ll(60, 100)]),
+  ]), s1);
+  const off = drawn.filter((s) => s.routes.split(' ').includes('3') && s.path.some((p) => Math.abs(p[0] - o[0] - 60) > 3));
+  assert.deepEqual(off.map((s) => s.routes), [], 'route 3 stays on its own street');
+});
+
 test('a street is labelled with its whole list, only where the list fits, and labels of one street stand well apart', () => {
   const st = (x0, x1, routes = '1', y = 0) => ({ routes, cls: 'c15', n: 1, path: [[x0, y], [x1, y]] });
   const ends = (runs) => runs.map((r) => [Math.round(Math.min(r.path[0][0], r.path.at(-1)[0])), Math.round(Math.max(r.path[0][0], r.path.at(-1)[0]))]);
@@ -280,6 +306,14 @@ test('a street is labelled with its whole list, only where the list fits, and la
   assert.ok(Math.max(joined.path[0][0], joined.path.at(-1)[0]) <= 300, 'and stays off the block with a route it does not name');
   // A stretch with no room beside it gives its turn to another.
   assert.equal(labelRuns(streets.slice(0, 4), 200, () => 60, (path) => path[0][0] > 250).length, 1);
+  // Sliding (a street's name): one turned down where it would sit moves along its run, within a block
+  // first, to the nearest place it is taken; without sliding it is simply left off.
+  const stopAt = 50;
+  const offStop = (path) => !path.some((p, k) => k && Math.min(path[k - 1][0], p[0]) - 8 < stopAt && Math.max(path[k - 1][0], p[0]) + 8 > stopAt);
+  assert.equal(labelRuns([st(0, 100)], 1000, () => 30, offStop).length, 0);
+  const [slid] = labelRuns([st(0, 100)], 1000, () => 30, offStop, { slide: true });
+  const [lo, hi] = ends([slid])[0];
+  assert.ok(lo >= stopAt + 8 || hi <= stopAt - 8, `slid off the stop (${lo}-${hi})`);
   assert.deepEqual(inOrder(['FreeRide', '15L', '120X', '9', '15', 'FF']), ['9', '15', '15L', '120X', 'FF', 'FreeRide']);
 });
 
@@ -303,6 +337,25 @@ test('streets have a corner wherever they meet: at a side street, at a crossing,
   assert.equal(meets(drawn, [260, 0]), 3, 'the near end is led onto the street');
   assert.equal(meets(drawn, [40, 20]), 1, 'the far end is left where it is');
   assert.ok(Math.abs(drawn.reduce((n, s) => n + length(s.path), 0) - (300 + 80 + 120 + 70 + 70)) < 3, 'nothing is added or lost');
+});
+
+test('an end a hair off a street just short of its corner is led on to that corner', () => {
+  // Too near the corner for the street to be cut there, and too far from the corner to be one with it.
+  const drawn = noded([st([[0, 0], [70, 0]]), st([[70, 0], [140, 0]]), st([[68, 2.8], [68, 80]])], 3, 7);
+  assert.equal(meets(drawn, [70, 0]), 3, 'the side street meets the corner');
+});
+
+test('a turnaround loop carries only the routes that go round it, not those on a block of its stem', () => {
+  const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
+  const drawn = busStreets(all([
+    street('c15', '42 28', [at(33, 3), at(100, 3)]), street('c15', '42 28', [at(100, 3), at(200, 3)]),
+    street('c15', '42 28', [at(33, 3), at(33, -2)]),
+    // Route 28 turns round a slim loop; route 42 is only on the five pixels from its corner.
+    street('c15', '28', [at(33, -2), at(15, -1), at(-5, 0), at(15, 2), at(33, 3)]),
+  ]), sheet);
+  const west = drawn.filter((s) => s.path.some((p) => p[0] - origin[0] < 25));
+  assert.ok(west.length, 'the loop is drawn');
+  assert.ok(west.every((s) => !s.routes.split(' ').includes('42')), 'route 42 is not drawn round the loop');
 });
 
 test('a short end that leads nowhere is not drawn, however many pieces it is in; a long one and one at a hall are', () => {
@@ -497,7 +550,7 @@ test('a route number never sits on a stop: each stop holds its ground, placed be
   for (const theme of ['light', 'dark']) {
     const layers = sheetStyle(theme).layers;
     const isStop = (l) => JSON.stringify(l.filter) === JSON.stringify(['==', ['get', 'kind'], 'stop']);
-    const rings = layers.filter((l) => isStop(l) && l.type === 'circle');
+    const rings = layers.filter((l) => /^stop-\d+$/.test(l.id) && l.type === 'circle');
     assert.ok(rings.length, 'the closest sheet rings its stops');
     for (const ring of rings) {
       const n = ring.id.split('-').pop();
@@ -514,29 +567,37 @@ test('a route number never sits on a stop: each stop holds its ground, placed be
   }
 });
 
-test('bus streets are three steps, evenly spaced in lightness, the busiest under every rail line', async () => {
-  const { PALETTES, BUS_STEP, railInk } = await import('../public/js/sheets/style.js');
-  const { contrast, lightness } = await import('../public/js/color.js');
+test('bus streets are three steps of one blue in the hue the rail colours leave free; each frequent street a band under every rail line with a spine down it', async () => {
+  const { PALETTES, BUS_STEP, BUS_SPINE, railInk, busInk, busWash, busHue } = await import('../public/js/sheets/style.js');
+  const { contrast, toOklch } = await import('../public/js/color.js');
   // A thin line of light on dark ground reads fainter than the same contrast in ink on paper.
   const least = { light: 1.8, dark: 2.2 };
-  // Line colours as RTD gives them, dark and pale; the rule must hold for any of them.
-  const colors = ['#552683', '#B71318', '#9F26B5', '#C4D600', '#F6B221', '#57C1E9', '#F79239', '#009DAA', '#4E9D2D', '#000000', '#ffffff'];
+  // Line colours as RTD gives them; the rule must hold for any of them.
+  const colors = ['#57C1E9', '#4E9D2D', '#F79239', '#552683', '#F6B221', '#9F26B5', '#C4D600', '#B71318', '#009DAA'];
+  const deg = (a, b) => { const d = Math.abs(a - b) * 180 / Math.PI % 360; return Math.min(d, 360 - d); };
+  const h = busHue(colors);
+  for (const color of colors) assert.ok(deg(h, toOklch(color)[2]) >= 30, `the bus hue keeps 30 degrees off ${color} (${deg(h, toOklch(color)[2]).toFixed(0)})`);
+  assert.ok(deg(busHue(['#57C1E9', '#000000', '#ffffff', '#888888']), toOklch('#57C1E9')[2]) > 90, 'greys do not count as hues');
   for (const theme of ['light', 'dark']) {
     const c = PALETTES[theme];
-    const steps = [0, 1, 2].map((s) => Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => c.bus[cls]));
-    for (const step of steps) assert.equal(new Set(step).size, 1, `${theme}: the classes in a step share one colour`);
-    const ink = steps.map((step) => step[0]);
-    const [q, m, t] = ink.map((x) => contrast(x, c.ground));
+    const ink = busInk(theme, 2, colors);
+    const steps = [0, 1, 2].map((s) => Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => ink[cls]));
+    for (const step of steps) assert.equal(new Set(step).size, 1, `${theme}: the classes in a step share one ink`);
+    for (const x of Object.values(ink)) assert.ok(deg(toOklch(x)[2], h) < 8, `${theme}: ${x} is in the bus hue`);
+    const [q, m, t] = steps.map((step) => contrast(step[0], c.ground));
     assert.ok(q >= least[theme], `${theme}: the quietest street reads (${q.toFixed(2)})`);
     assert.ok(m >= q * 1.25 && t >= m * 1.25, `${theme}: each step stands above the one below (${[q, m, t].map((x) => x.toFixed(2))})`);
-    const [lq, lm, lt] = ink.map(lightness);
-    assert.ok(Math.abs((lm - lq) - (lt - lm)) < 0.01, `${theme}: the steps are evenly spaced in lightness`);
     if (theme === 'dark') assert.ok(t < contrast(c.mark, c.ground) / 2, 'dark: no bus street comes near the white of station marks');
+    const wash = busWash(theme, colors);
+    assert.deepEqual(Object.keys(wash).sort(), ['c10', 'c15', 'c3', 'c5'], `${theme}: only the frequent steps have a band`);
+    const [bm, bt] = [wash.c15, wash.c10].map((x) => contrast(x, c.ground));
+    assert.ok(bt > bm && bm > 1.3, `${theme}: the bands read, the busier stronger (${bm.toFixed(2)}, ${bt.toFixed(2)})`);
+    assert.ok(BUS_SPINE.mid < 0.5 && BUS_SPINE.top < 0.5, 'a spine is under half its band');
     for (const color of colors) {
       const r = railInk(theme, color);
       // A cased line stands off the ground by its casing.
       const stands = contrast(r.casing ?? r.line, c.ground);
-      assert.ok(stands > t * 1.1, `${theme} ${color}: rail stands above the busiest bus street (${stands.toFixed(2)} against ${t.toFixed(2)})`);
+      assert.ok(stands > bt * 1.1, `${theme} ${color}: rail stands above the busiest band (${stands.toFixed(2)} against ${bt.toFixed(2)})`);
       if (r.casing) assert.equal(r.line, color, `${theme} ${color}: a cased line keeps RTD's colour`);
       if (theme === 'dark') assert.ok(!r.casing, 'in the dark a line is lifted, not cased');
     }
@@ -548,16 +609,86 @@ test('the opening sheet draws its quiet step fainter than the quiet step elsewhe
   const { contrast } = await import('../public/js/color.js');
   for (const theme of ['light', 'dark']) {
     const c = PALETTES[theme];
-    const one = busInk(theme, 1);
-    assert.equal(one.c60, c.busHairline);
-    assert.equal(one.c15, c.bus.c15, `${theme}: only the quiet step changes`);
-    assert.deepEqual(busInk(theme, 2), c.bus, `${theme}: the other sheets keep the three greys`);
-    const faint = contrast(c.busHairline, c.ground);
-    assert.ok(faint < contrast(c.bus.c60, c.ground) && faint >= 1.6, `${theme}: fainter, still seen (${faint.toFixed(2)})`);
+    const [one, two] = [busInk(theme, 1), busInk(theme, 2)];
+    assert.equal(one.c15, two.c15, `${theme}: only the quiet step changes`);
+    assert.equal(one.c10, two.c10, `${theme}: only the quiet step changes`);
+    const faint = contrast(one.c60, c.ground);
+    assert.ok(faint < contrast(two.c60, c.ground) && faint >= 1.6, `${theme}: fainter, still seen (${faint.toFixed(2)})`);
   }
   const { sheetStyle } = await import('../public/js/sheets/style.js');
+  const { evaluate } = await import('../public/js/evaluate.js');
   const bus1 = sheetStyle('dark').layers.find((l) => l.id === 'bus-1').paint['line-color'];
-  assert.equal(bus1[bus1.indexOf('c60') + 1], PALETTES.dark.busHairline, 'sheet 1 paints it');
+  assert.equal(evaluate(bus1, { props: { cls: 'c60' }, state: { bus: '', rail: '' } }), busInk('dark', 1).c60, 'sheet 1 paints it');
+});
+
+test('the express is drawn as any bus street of its frequency, in rose: same band, spine, widths and order, no casing or station dots', async () => {
+  const { sheetStyle, busInk, expressInk, expressWash, busWash, EXPRESS_HUE, PALETTES, railInk } = await import('../public/js/sheets/style.js');
+  const { toOklch, contrast } = await import('../public/js/color.js');
+  const { evaluate } = await import('../public/js/evaluate.js');
+  const colors = ['#57C1E9', '#4E9D2D', '#F79239', '#552683', '#F6B221', '#9F26B5', '#C4D600', '#B71318', '#009DAA'];
+  const deg = (a, b) => { const d = Math.abs(a - b) * 180 / Math.PI % 360; return Math.min(d, 360 - d); };
+  for (const color of colors) assert.ok(deg((EXPRESS_HUE * Math.PI) / 180, toOklch(color)[2]) >= 30, `rose keeps 30 degrees off ${color}`);
+  for (const theme of ['light', 'dark']) {
+    const layers = sheetStyle(theme, [], colors).layers;
+    assert.ok(!layers.some((l) => /^brt|^express(?!-shield-)/.test(l.id) || (l.type === 'circle' && /express/.test(JSON.stringify(l.filter)))), `${theme}: no casing or dots of its own, only its shield`);
+    const paint = (id, cls, express) => evaluate(layers.find((l) => l.id === id).paint['line-color'], { props: { cls, ...(express ? { express: true } : {}) }, state: { bus: '', rail: '' } });
+    const [blue, rose] = [busInk(theme, 2, colors), expressInk(theme, 2)];
+    for (const cls of ['c60', 'c15', 'c10', 'c5']) {
+      assert.equal(paint('bus-2', cls, false), { ...blue, ...busWash(theme, colors) }[cls], `${theme} ${cls}: a bus street in blue`);
+      assert.equal(paint('bus-2', cls, true), { ...rose, ...expressWash(theme) }[cls], `${theme} ${cls}: an express street in rose`);
+      assert.deepEqual(toOklch(rose[cls]).slice(0, 1).map((x) => x.toFixed(2)), toOklch(blue[cls]).slice(0, 1).map((x) => x.toFixed(2)), `${theme} ${cls}: only the hue changes`);
+    }
+    assert.equal(paint('bus-spine-2', 'c10', true), rose.c10, `${theme}: its spine in rose`);
+    const g = PALETTES[theme].ground;
+    const band = contrast(expressWash(theme).c10, g);
+    for (const color of colors) {
+      const r = railInk(theme, color);
+      assert.ok(contrast(r.casing ?? r.line, g) > band * 1.1, `${theme} ${color}: rail stands above an express band`);
+    }
+  }
+});
+
+test('the build finds the express by RTD\'s route category, not a route list', () => {
+  const routes = { features: [
+    { properties: { route: 'FF1', category: 'BUS RAPID TRANSIT' } }, { properties: { route: '15', category: 'METRO LOCAL' } }, { properties: { route: 'A', category: 'COMMUTER RAIL' } }] };
+  const express = expressRoutes(routes);
+  assert.deepEqual([...express], ['FF1']);
+  assert.ok(isExpress('15 FF1', express) && isExpress('15, FF1', express) && !isExpress('15 15L', express));
+});
+
+test('the build finds the airport buses by RTD\'s route category, not a route list', () => {
+  const routes = { features: [
+    { properties: { route: 'AT', category: 'SKYRIDE' } }, { properties: { route: 'AB', category: ' SkyRide ' } }, { properties: { route: 'FF1', category: 'BUS RAPID TRANSIT' } }, { properties: { route: '15', category: 'METRO LOCAL' } }] };
+  assert.deepEqual([...airportRoutes(routes)].sort(), ['AB', 'AT']);
+});
+
+test('the airport buses are drawn as any bus street of their frequency, in indigo, with a plane; clear of the rail lines and the bus blue', async () => {
+  const { sheetStyle, busInk, airportInk, airportWash, AIRPORT } = await import('../public/js/sheets/style.js');
+  const { toOklch } = await import('../public/js/color.js');
+  const { evaluate } = await import('../public/js/evaluate.js');
+  const colors = ['#57C1E9', '#4E9D2D', '#F79239', '#552683', '#F6B221', '#9F26B5', '#C4D600', '#B71318', '#009DAA'];
+  const deg = (a, b) => { const d = Math.abs(a - b) * 180 / Math.PI % 360; return Math.min(d, 360 - d); };
+  const lab = (c) => { const [L, C, h] = toOklch(c); return [L, C * Math.cos(h), C * Math.sin(h)]; };
+  const dE = (a, b) => Math.hypot(...lab(a).map((v, i) => v - lab(b)[i]));
+  for (const color of colors) assert.ok(deg((AIRPORT.hue * Math.PI) / 180, toOklch(color)[2]) >= 20, `indigo keeps 20 degrees off ${color}`);
+  for (const theme of ['light', 'dark']) {
+    const layers = sheetStyle(theme, [], colors).layers;
+    const paint = (id, cls, props) => evaluate(layers.find((l) => l.id === id).paint['line-color'], { props: { cls, ...props }, state: { bus: '', rail: '' } });
+    const [blue, air] = [busInk(theme, 2, colors), airportInk(theme, 2)];
+    for (const cls of ['c60', 'c15', 'c10']) {
+      assert.equal(paint('bus-2', cls, { airport: true }), { ...air, ...airportWash(theme) }[cls], `${theme} ${cls}: an airport street in indigo`);
+      assert.equal(paint('bus-2', cls, { airport: true, express: true }), paint('bus-2', cls, { express: true }), `${theme} ${cls}: the express wins where both run`);
+      assert.ok(dE(air[cls], blue[cls]) >= 0.045, `${theme} ${cls}: indigo tells from the bus blue`);
+      assert.ok(dE(air[cls], '#552683') >= 0.09, `${theme} ${cls}: indigo tells from the E Line`);
+    }
+    assert.equal(paint('bus-spine-2', 'c10', { airport: true }), air.c10, `${theme}: its spine in indigo`);
+    const plane = layers.find((l) => l.id === 'airport-plane-2');
+    assert.equal(plane.layout['icon-image'], `airport-plane-${theme}`);
+    const dash = layers.find((l) => l.id === 'marked-dash-2');
+    const on = (props) => evaluate(dash.filter, { props: { kind: 'bus', ...props }, state: { bus: '', rail: '' } });
+    assert.ok(on({ cls: 'c15', airport: true }) && on({ cls: 'c10', express: true }), `${theme}: frequent airport and express streets get the dash`);
+    assert.ok(!on({ cls: 'c60', airport: true }) && !on({ cls: 'c10' }), `${theme}: a quiet one, or a plain bus street, doesn't`);
+  }
 });
 
 test('in the dark a lifted line keeps its hue and stays a strong colour: red stays red, not salmon', async () => {
@@ -593,24 +724,38 @@ test('the page inks each line from the colours the build found: pale ones cased 
   assert.ok(light.findIndex((l) => l.id === 'rail-casing-2') < light.findIndex((l) => l.id === 'rail-2'), 'under the line');
   const dark = sheetStyle('dark', [], colors).layers;
   assert.ok(!dark.some((l) => l.id.startsWith('rail-casing')));
+  // With no route picked (style.js, PICKED), the line's own ink.
+  const { evaluate } = await import('../public/js/evaluate.js');
+  const unpicked = (expr, color) => evaluate(expr, { props: { color }, state: { bus: '', rail: '' } });
   const rail = dark.find((l) => l.id === 'rail-2').paint['line-color'];
-  assert.equal(rail[rail.indexOf('#552683') + 1], railInk('dark', '#552683').line, 'the dim purple is drawn lifted');
-  assert.deepEqual(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], ['get', 'color'], 'without the list, RTD\'s own colours');
+  assert.equal(unpicked(rail, '#552683'), railInk('dark', '#552683').line, 'the dim purple is drawn lifted');
+  assert.equal(unpicked(sheetStyle('dark').layers.find((l) => l.id === 'rail-2').paint['line-color'], '#123456'), '#123456', 'without the list, RTD\'s own colours');
 });
 
-test('bus widths step up by about 1.6 to the rail width (steeper on the opening sheet), none under a pixel, and numbers still clear the widest', async () => {
-  const { BUS_WIDTH, BUS_STEP, STEP_RATIO } = await import('../public/js/sheets/style.js');
+test('bus widths: the frequent step as wide as rail, the busiest few a size up on sheets 1 to 3, the middle step under it, the quiet step as before; the frequent steps read by a spine', async () => {
+  const { sheetStyle, BUS_WIDTH, BUS_STEP, MID_UNDER_TOP, BUSIEST, BUSIEST_OVER_RAIL } = await import('../public/js/sheets/style.js');
   for (const sheet of SHEETS) {
     const w = BUS_WIDTH[sheet.id];
-    const steps = [0, 1, 2].map((s) => [...new Set(Object.entries(BUS_STEP).filter(([, k]) => k === s).map(([cls]) => w[cls]))]);
+    const steps = [0, 1, 2].map((s) => [...new Set(Object.entries(BUS_STEP).filter(([k, x]) => x === s && !BUSIEST.includes(k)).map(([cls]) => w[cls]))]);
     assert.ok(steps.every((x) => x.length === 1), `sheet ${sheet.id}: one width per step`);
     const [q, m, t] = steps.map((x) => x[0]);
-    assert.equal(t, SIZES.rail[sheet.id], `sheet ${sheet.id}: the busiest step is as wide as rail`);
+    const rail = SIZES.rail[sheet.id];
+    assert.ok(Math.abs(t - rail) < 0.01, `sheet ${sheet.id}: a bus every 10 minutes is as wide as rail`);
+    for (const k of BUSIEST) {
+      assert.equal(BUS_STEP[k], 2, `${k} is in the frequent step's grey`);
+      assert.ok(Math.abs(w[k] - rail * BUSIEST_OVER_RAIL[sheet.id]) < 0.01, `sheet ${sheet.id}: ${k} is the busiest size`);
+      if (sheet.id <= 3) assert.ok(w[k] >= 1.25 * t, `sheet ${sheet.id}: the busiest read a size up`);
+    }
+    for (const cls of Object.keys(w)) assert.ok(Math.abs(busWide(cls, sheet) - w[cls]) < 0.011, `sheet ${sheet.id}: the build places ${cls} at the page's width`);
+    assert.ok(Math.abs(m - rail / MID_UNDER_TOP) < 0.01 && m > q, `sheet ${sheet.id}: the middle step sits between`);
     assert.ok(q >= 1, `sheet ${sheet.id}: no line under a pixel`);
-    const ratio = STEP_RATIO[sheet.id];
-    for (const [lo, hi] of [[q, m], [m, t]]) assert.ok(Math.abs(hi / lo - ratio) < 0.05, `sheet ${sheet.id}: each step ${ratio} times the one below`);
-    if (sheet.id === 1) assert.ok(ratio > STEP_RATIO[2] && q <= 1.05, 'the opening sheet steps more steeply, its quiet step a hairline');
-    else assert.ok(ratio >= 1.5 && ratio <= 1.7, `sheet ${sheet.id}: about 1.6`);
+    if (sheet.id === 1) assert.ok(q <= 1.05, 'the opening sheet\'s quiet step is a hairline');
+    else assert.ok(Math.abs(q - rail / 1.6 ** 2) < 0.01, `sheet ${sheet.id}: the quiet step is rail over 1.6 twice`);
+  }
+  for (const theme of ['dark', 'light']) {
+    const spine = sheetStyle(theme).layers.find((l) => l.id === 'bus-spine-2');
+    assert.ok(spine, `${theme}: the frequent steps carry a spine`);
+    assert.ok(!JSON.stringify(spine.filter).match(/c30|c60/), `${theme}: the quiet steps carry none`);
   }
 });
 
@@ -868,6 +1013,16 @@ test("a stop's ring sits on the street its buses are drawn on, and the two sides
   assert.deepEqual(rel(rings[2]), [200, 5], 'a stop with no street of its own drawn near stays where it is');
 });
 
+test('a loop round blocks keeps its own path: a sweep is drawn only where it stays within a street of it', () => {
+  // Out along y = 0, round a block 300 wide and 150 deep, back along y = -150 to a corner above the start.
+  const loop = [[0, 0], [-300, 0], [-300, -150], [0, -150]];
+  const [kept] = arced([st(loop), st([[0, 0], [0, -150]])], () => Infinity, 0, 6);
+  assert.deepEqual(kept.path, loop, 'the loop is drawn where the route runs');
+  const bow = [[0, 0], [-10, -20], [5, -45], [-5, -60], [20, -80], [60, -85], [100, 0]];
+  const [smooth] = arced([st(bow), st([[0, 0], [100, 0]])], () => Infinity, 0, 30);
+  assert.notDeepEqual(smooth.path, bow, 'a wandering bow is still drawn in one sweep');
+});
+
 test("a turnaround's bow is drawn tighter where it would run against rail, and a line's lead-in starts from its station, not its tail track's end", () => {
   // A bow from (0,0) round to (0,100) that reaches 120 out; rail runs down x = 125.
   const loop = [st([[0, 0], [60, -10], [120, 50], [60, 110], [0, 100]]), st([[0, 0], [0, 100]])];
@@ -912,6 +1067,33 @@ test('a short stretch is made heavier only by a stretch of the same routes', () 
   // The same routes: a short stretch weighed a class apart is the measure's noise, either way.
   const same = evened([st([[0, 100], [100, 100]], { cls: 'c15', routes: '8' }), st([[100, 100], [112, 100]], { cls: 'c60', routes: '8' }), ...corner(112).map((s) => ({ ...s, path: s.path.map(([x, y]) => [x, y + 100]) }))], 32);
   assert.ok(same.filter((s) => s.routes === '8').every((s) => s.cls === 'c15'));
+});
+
+test('a short run off a corridor into streets drawn far fainter takes their weight, not a stub ending in nothing', async () => {
+  const { unstubbed } = await import('../scripts/lib/sheets.mjs');
+  const [one, two] = [SHEETS.find((s) => s.id === 1), SHEETS.find((s) => s.id === 2)];
+  // A corridor turns at a corner; a 7 px piece leaves it east to a fork of hourly streets.
+  const place = (stub) => [
+    st([[-100, 0], [0, 0]], { routes: 'FF LD1', cls: 'c15', hw: 15 }),
+    st([[0, 0], [0, 100]], { routes: 'FF LD1 120X', cls: 'c15', hw: 15 }),
+    st([[0, 0], [stub, 0]], { routes: 'FF LD1 120X', cls: 'c15', hw: 15 }),
+    st([[stub, 0], [stub + 100, 0]], { routes: 'FF', cls: 'c60', hw: 60 }),
+    st([[stub, 0], [stub, -100]], { routes: '120X', cls: 'c60', hw: 60 }),
+  ];
+  const stubOf = (out, stub) => out.find((s) => s.path[0][0] === 0 && s.path.at(-1)[0] === stub && s.path.at(-1)[1] === 0);
+  // On the opening sheet the hourly streets are hairlines: the piece takes their weight and headway.
+  const fixed = stubOf(unstubbed(place(7), one, SIZES.busTick), 7);
+  assert.equal(fixed.cls, 'c60');
+  assert.equal(fixed.hw, 60);
+  // The corridor it left keeps its weight.
+  assert.ok(unstubbed(place(7), one, SIZES.busTick).filter((s) => s.path[0][0] === -100 || s.path.at(-1)[1] === 100).every((s) => s.cls === 'c15'));
+  // On the next sheet the quiet step reads as a street: the corner is a fork and stays as it is.
+  assert.equal(stubOf(unstubbed(place(7), two, SIZES.busTick), 7).cls, 'c15');
+  // A run as long as a tick is a street of its own.
+  assert.equal(stubOf(unstubbed(place(SIZES.busTick + 6), one, SIZES.busTick), SIZES.busTick + 6).cls, 'c15');
+  // A run of two short pieces through a bend is measured whole.
+  const bent = unstubbed([...place(7).filter((s) => s.path[0][0] !== 0 || s.path.at(-1)[1] !== 0), st([[0, 0], [4, 0]], { routes: 'FF', cls: 'c15' }), st([[4, 0], [7, 0]], { routes: 'FF', cls: 'c15' })], one, SIZES.busTick);
+  assert.ok(bent.filter((s) => s.path[0][1] === 0 && s.path.at(-1)[1] === 0 && s.path.at(-1)[0] <= 7 && s.path[0][0] >= 0).every((s) => s.cls === 'c60'));
 });
 
 test('a weight gathered at a corner is not handed on down a route, and not taken from buses with another street to take', async () => {
@@ -1059,6 +1241,25 @@ test('a name that cannot sit right beside its bar stands off only as far as it m
   assert.ok(off(beside) < 11, `but no further than it must: ${off(beside).toFixed(1)} px`);
 });
 
+test('a name set on a route\'s street has a second place off that route, for when it is picked (#117)', () => {
+  // Chris: "The Union Station label sits on top of route 28".
+  const s1 = SHEETS[0];
+  const o1 = toPx([-105, 39.75], s1.zoom);
+  const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
+  const lines = railLines(all([line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(0, -300), at1(0, 300)])]), s1);
+  const marks = stationMarks(all([point({ id: 1, name: 'City', served: true, lines: 'E' }, at1(0, 0))]), lines, s1);
+  // Quiet streets every 12 px across the line, one vertex at each end: the 28 on the one level with the bar.
+  const streets = [-24, -12, 0, 12, 24].map((y) => ({ cls: 'c30', routes: y ? '1' : '28', n: 1, hw: 30, path: [[o1[0] - 200, o1[1] + y], [o1[0] + 200, o1[1] + y]] }));
+  const [n] = names(marks, lines, [], s1, streets);
+  const on = (box, y) => box[1] < o1[1] + y + 2 && box[3] > o1[1] + y - 2;
+  assert.ok(on(n.box, 0), 'the name sits level with its bar, on the 28');
+  const alt = n.alts.find((a) => a.routes.includes('28'));
+  assert.ok(alt, 'it has a second place for the 28');
+  assert.ok(!on(alt.box, 0), 'off the 28');
+  assert.equal(alt.text, n.text);
+  assert.deepEqual(n.left, []);
+});
+
 test('where a line at the side of a pack ends, the lines beside it carry straight on; where one in the middle ends, the others close up', () => {
   const s1 = SHEETS[0];
   const pitch = SIZES.rail[s1.id] + SIZES.gap[s1.id];
@@ -1106,4 +1307,121 @@ test('a label run takes its street from the names of the stops its routes serve 
   assert.equal(runStreet(run, [stop(10, 'Colfax Ave'), stop(100, 'Colfax Ave'), stop(150, 'Broadway', ['0']), stop(200, 'Broadway', ['0'])], 8), 'Colfax Ave', "another route's stops don't vote");
   assert.equal(runStreet(run, [stop(10, 'Colfax Ave'), stop(100, 'Colfax Ave'), stop(150, 'Broadway'), stop(200, 'Broadway')], 8), null, 'no clear majority, no name');
   assert.equal(runStreet(run, [stop(10, 'Colfax Ave', ['15']), { at: [100, 40], routes: ['15'], street: 'Colfax Ave' }], 8), null, 'a stop off the run does not count');
+});
+
+test('a bus line ends on a mark: led on to the stop its route ends at, lines ending at one stop share it; a spur near none of its stops goes', () => {
+  const st = (path, routes) => ({ cls: 'c30', routes, path });
+  const main = st([[0, 0], [400, 0]], 'FF');
+  const ab = st([[100, 0], [100, 60]], 'AB');
+  const ab2 = st([[100, 60], [106, 6]], 'AB');
+  const twoTwoEight = st([[200, 0], [200, 50], [112, 8]], '228');
+  const spur = st([[300, 0], [300, 20]], 'X');
+  const stops = [{ at: [108, 4], routes: ['AB'] }, { at: [110, 5], routes: ['228'] }, { at: [0, 0], routes: ['FF'] }, { at: [400, 0], routes: ['FF'] }];
+  const { streets, ends } = termini([main, ab, ab2, twoTwoEight, spur], stops, 1);
+  assert.ok(!streets.includes(spur), 'the spur near none of its stops is not drawn');
+  assert.equal(ends.filter((e) => e.at[0] > 50 && e.at[0] < 150).length, 1, 'AB and 228 end on one mark at their stop');
+  const mark = ends.find((e) => e.at[0] > 50 && e.at[0] < 150);
+  assert.deepEqual(mark.at, [108, 4], 'the mark is on the stop');
+  assert.deepEqual(twoTwoEight.path.at(-1), [108, 4], '228 is led on to it');
+  assert.ok(String(mark.routes).includes('228') && String(mark.routes).includes('AB'));
+  assert.equal(ends.length, 3, 'each end of the line along the street is on its stop');
+});
+
+test("RTD's stop groups: a stop's letter from its name, and a pair of streets that share letters and routes is one table", async () => {
+  const { stopLetter, stopName, stopGroups, groupTitle, groupRows } = await import('../scripts/lib/sheets.mjs');
+  assert.equal(stopLetter('Oak St & 1st Ave [ X Stop ]'), 'X');
+  assert.equal(stopLetter('Oak St & 1st Ave'), null, 'a stop RTD names without a letter has none');
+  assert.equal(stopName('Oak St & 1st Ave [ X Stop ]'), 'Oak St & 1st Ave');
+  const stop = (name, lines) => point({ name, lines }, [-105, 39.75]);
+  const groups = stopGroups(all([
+    stop('Oak St & 1st Ave [ X Stop ]', '5 7'), stop('Oak St & 2nd Ave [ Y Stop ]', '9'), stop('Oak St & 3rd Ave', '21'),
+    stop('Elm St & 1st Ave [ X Stop ]', '7 11'), stop('Elm St & 2nd Ave [ Y Stop ]', '9 13'),
+    // Another street with lettered stops but no route in common with these: a table of its own.
+    stop('Pine St & 1st Ave [ A Stop ]', '40'),
+  ]));
+  assert.equal(groups.length, 2);
+  const [pair] = groups.filter((g) => g.streets.length === 2);
+  assert.deepEqual(pair.streets, ['Elm St', 'Oak St']);
+  assert.equal(pair.title, 'Elm & Oak St');
+  assert.deepEqual(pair.rows, [{ letter: 'X', routes: ['5', '7', '11'] }, { letter: 'Y', routes: ['9', '13'] }]);
+  assert.equal(groupRows(pair.rows), 'X 5 7 11 | Y 9 13');
+  assert.deepEqual(pair.byStreet['Oak St'], [{ letter: 'X', routes: ['5', '7'] }, { letter: 'Y', routes: ['9'] }]);
+  assert.equal(pair.stops.length, 4, 'the unlettered stop is in no table');
+  assert.equal(groups.find((g) => g !== pair).title, 'Pine St');
+  assert.equal(groupTitle(['Oak Street', 'Elm Avenue']), 'Oak St & Elm Ave', 'streets of different kinds keep their own');
+  assert.deepEqual(stopGroups(all([stop('Oak St & 1st Ave', '5')])), [], 'no letters: no tables');
+});
+
+test('on sheet 3 a lettered pair gets one table in place of its route lists, tied to its streets by their letters, with no bracket; with no letters, the lists stay', () => {
+  // Two one-way streets 50 px apart carrying the same six routes, each stop serving two of them.
+  const routes = '1 2 3 4 5 6';
+  const street = (y) => line({ mode: 'bus', cls: 'c10', routes, n: 6, hw: 5, zoom: 'near' }, [at3(0, y), at3(900, y)]);
+  const lettered = (named) => ['Oak', 'Elm'].flatMap((name, k) => [0, 1, 2, 3, 4, 5].map((i) => {
+    const letter = 'XYZ'[i % 3];
+    return point({ id: `${name}${i}`, name: `${name} St & ${i + 1}th Ave${named ? ` [ ${letter} Stop ]` : ''}`, lines: ['1 2', '3 4', '5 6'][i % 3] }, at3(150 + i * 110, k * 50));
+  }));
+  const draw = (named) => drawSheet({ routes: all([]), stations: all([]), terminals: null, streets: all([street(0), street(50)]), stops: all(lettered(named)) }, near).features;
+  const kinds = (features, kind) => features.filter((f) => f.properties.kind === kind);
+
+  const plain = draw(false);
+  assert.equal(plain.filter((f) => String(f.properties.kind).startsWith('group')).length, 0, 'no letters: no table');
+  assert.ok(kinds(plain, 'bus-label').some((f) => f.properties.label === '1, 2, 3, 4, 5, 6'), "no letters: today's lists");
+
+  const grouped = draw(true);
+  assert.equal(kinds(grouped, 'group-plate').length, 1, 'one table for the pair');
+  assert.equal(kinds(grouped, 'group-bracket').length, 0, 'no bracket: the letters on the streets tie the table to them');
+  assert.equal(kinds(grouped, 'group-stop').length, 12, 'each lettered stop shows its letter on its street');
+  assert.equal(kinds(grouped, 'group-area').length, 1, 'a tap on the plate finds the table');
+  assert.deepEqual(kinds(grouped, 'group-badge').map((f) => f.properties.letter), ['X', 'Y', 'Z']);
+  const rows = kinds(grouped, 'group-text').filter((f) => f.properties.role === 'row').map((f) => f.properties.text);
+  assert.deepEqual(rows, ['1 2', '3 4', '5 6'], 'routes spaced, no commas');
+  assert.equal(kinds(grouped, 'group-text').find((f) => f.properties.role === 'title').properties.text, 'ELM & OAK ST');
+  assert.equal(kinds(grouped, 'bus-label').length, 0, 'the long lists are gone');
+  assert.ok(kinds(grouped, 'bus').every((f) => f.properties.groups === 'X 1 2 | Y 3 4 | Z 5 6'), 'a tap on either street gives its routes by letter');
+  // The plate is level, clear of both streets, and near its stops.
+  const plate = kinds(grouped, 'group-plate')[0];
+  const at = toPx(plate.geometry.coordinates, near.zoom);
+  const box = [at[0] + plate.properties.off[0] - origin3[0], at[1] + plate.properties.off[1] - origin3[1]];
+  const [w, h] = [plate.properties.w, plate.properties.h];
+  assert.ok(box[1] + h < -2 || box[1] > 52 || (box[1] > 2 && box[1] + h < 48), 'the plate keeps off both streets');
+  assert.ok(Math.hypot(box[0] + w / 2 - 425, box[1] + h / 2 - 25) <= SIZES.groupReach, 'near the middle of its stops');
+  assert.ok(w > 40 && h > 40);
+});
+
+// Two one-way streets 50 px apart on sheet 3 carrying the same six routes, each lettered stop
+// serving two of them, with cross streets (`across`, x in pixels) and stops at `xs` on each.
+const lettered3 = ({ across = [], xs = [150, 260, 370, 480, 590, 700], extra = [] } = {}, sheet3 = near) => {
+  const street = (y) => line({ mode: 'bus', cls: 'c10', routes: '1 2 3 4 5 6', n: 6, hw: 5, zoom: 'near' }, [at3(0, y), at3(900, y)]);
+  const cross = (x) => line({ mode: 'bus', cls: 'c30', routes: '99', n: 1, hw: 30, zoom: 'near' }, [at3(x, -30), at3(x, 80)]);
+  const stop = (name, k, i, x) => {
+    const letter = 'XYZ'[i % 3];
+    return point({ id: `${name}${k}`, name: `${name} St & ${k + 1}th Ave [ ${letter} Stop ]`, lines: ['1 2', '3 4', '5 6'][i % 3] }, at3(x, name === 'Oak' ? 0 : 50));
+  };
+  const stops = ['Oak', 'Elm'].flatMap((name) => xs.map((x, i) => stop(name, i, i, x)));
+  stops.push(...extra.map(([i, x], k) => stop('Oak', 100 + k, i, x)));
+  return drawSheet({ routes: all([]), stations: all([]), terminals: null, streets: all([street(0), street(50), ...across.map(cross)]), stops: all(stops) }, sheet3).features;
+};
+const kinds3 = (features, kind) => features.filter((f) => f.properties.kind === kind);
+const px3 = (f) => { const p = toPx(f.geometry.coordinates, near.zoom); return [p[0] - origin3[0], p[1] - origin3[1]]; };
+
+test('on sheet 3 every lettered stop shows its letter in a square on its street, off the cross streets, and none is dropped', () => {
+  // A cross street right at the first stops' place, and two Oak St stops a few pixels apart.
+  const features = lettered3({ across: [150], extra: [[1, 405]] });
+  const squares = kinds3(features, 'group-stop');
+  assert.equal(squares.length, 13, 'every lettered stop on both streets');
+  for (const [y, letters] of [[0, 'XYZYXYZ'], [50, 'XYZXYZ']]) {
+    const mine = squares.filter((f) => Math.abs(px3(f)[1] - y) < 1).sort((p, q) => px3(p)[0] - px3(q)[0]);
+    assert.equal(mine.map((f) => f.properties.letter).join(''), letters, 'in order along the street, on its line');
+  }
+  const side = SIZES.group.badge + 2 * SIZES.groupStreetRim;
+  for (const f of squares) assert.ok(Math.abs(px3(f)[0] - 150) >= side / 2 + busWide('c30', near) / 2, 'off the cross street');
+  const close = squares.filter((f) => px3(f)[1] < 1 && Math.abs(px3(f)[0] - 400) < 30).map((f) => px3(f)[0]);
+  assert.equal(close.length, 2, 'both close stops keep their squares');
+  assert.ok(Math.abs(close[0] - close[1]) >= side + SIZES.groupStreetApart, 'moved apart along the street');
+  const tap = squares.find((f) => f.properties.letter === 'Y');
+  assert.equal(tap.properties.routes, '3, 4', 'a tap gives its routes');
+  // The fourth sheet draws its stops, with their own letters, and no squares; no sheet draws a bracket.
+  const s4 = lettered3({ across: [150] }, SHEETS[3]);
+  assert.equal(kinds3(s4, 'group-stop').length, 0);
+  assert.equal(kinds3(s4, 'group-bracket').length + kinds3(features, 'group-bracket').length, 0);
 });
