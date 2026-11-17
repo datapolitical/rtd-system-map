@@ -2034,7 +2034,10 @@ do not change it); carried more than a third of the way past that sheet it
 goes on to the one after. The move is counted from where the reader's zoom
 began, not from the sheet shown, so a second scroll that catches the map on
 its way to a sheet carries on to that sheet and never sends it back. Issue
-#117 holds the work.
+#117 holds the work. At a fixed sheet zoom, panning moves the drawing without
+repositioning, shortening or hiding its labels to fit the screen. Names may
+be cropped by the viewport, as on a printed map. Zooming selects another
+built drawing; choosing a route may select its built name alternatives.
 
 The sheets are `public/index.html`. The map they took the front page from is
 the Classic map, `public/classic/index.html`; the sheets do not link to it.
@@ -2895,10 +2898,11 @@ are deferred, not ruled out. See "Open questions".
 
 ## Quality floor
 
-- **Whole names:** on the sheets a station's name shows whole or not at all.
-  One the screen's edge, the card, the sheet buttons or the credit line would
-  cut is hidden with its letters until the map moves (`unclip`, main.js,
-  from each name's box the build writes as `bx`).
+- **Stable names:** a sheet keeps the station-name positions chosen by the
+  build while it is panned. Screen edges and controls crop the drawing;
+  they do not trigger alternate positions or abbreviations. Place names
+  have a fixed centre anchor. `qa/labels.mjs` compares label pixels at the
+  same world positions before and after pans on all four sheets.
 - **A picked route looks right:** `qa/pickcheck.mjs` picks every bus and
   rail route on every sheet and counts gaps in the picked line, stubs under
   a stub's length, self-overlap, turns sharper than a set angle over a
@@ -2944,8 +2948,11 @@ are deferred, not ruled out. See "Open questions".
     (`public/poster/`, one per theme for a phone and for a wider screen, about
     60 to 150 KB each) are taken from the live site by `scripts/poster.mjs`,
     after each change to how the sheets look and daily
-    (`.github/workflows/poster.yml`), so they are the map the page then draws.
-    The page centres the picture as the map is centred, and shifts it as the
+    (`.github/workflows/poster.yml`). A fingerprint of the opening drawing
+    and its rendering code is captured with the pictures, along with the
+    basemap tile version. The picture stays
+    hidden unless its fingerprint matches the current `sheets.json`; a stale
+    picture cannot jump to a different drawing. The page centres the picture as the map is centred, and shifts it as the
     map's bounds shift the view on a very wide screen. A link to another view,
     or an address forcing a theme, gets the line on plain ground instead.
   - MapLibre and the Overpass font are served from the site itself: no extra
@@ -3680,6 +3687,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   audience, but not the default view.
 
 ## Decision log
+
+- 2026-11-17: Chris clarified that panning at a given zoom must leave the
+  drawing static. This supersedes #147's earlier screen-fit alternatives:
+  station names keep their built positions and are cropped at the screen
+  edge. Remove viewport-driven name flips and suppression, and use a fixed
+  centre anchor for place names. The first-load picture must match the
+  current drawing fingerprint before it is shown; refreshing an old picture
+  alone cannot prevent a later data rebuild from bringing the jump back.
 
 - 2026-11-17: A rail line left without a letter may use the configured
   minimum air around a station bar instead of the preferred extra air

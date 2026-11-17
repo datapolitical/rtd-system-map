@@ -195,7 +195,7 @@ export function shortStreet(name) {
 // once, so a pick is one property write, holds on every sheet, and no tile is made again.
 // Everything not on the route is inked nearer the ground rather than made see-through, so
 // pieces that overlap at a corner do not show darker knots.
-export const STATE = { bus: { default: '' }, rail: { default: '' }, clipped: { default: '' }, edgeNames: { default: '' } };
+export const STATE = { bus: { default: '' }, rail: { default: '' } };
 const BUS = ['global-state', 'bus'];
 const RAIL_PICK = ['global-state', 'rail'];
 export const PICKED = ['any', ['!=', BUS, ''], ['!=', RAIL_PICK, '']];
@@ -213,10 +213,9 @@ export const namePlace = ['case', ['!=', tagged('alt'), ''], picks('alt'), ['!',
 // Where a name has no place off a picked route (`cover`), its halo widens to knock the route out
 // under the lettering, as a printed map does, so both read.
 export const nameCovers = picks('cover');
-// The names the page has found cut by the screen's edge or its own card, as "|3.0|17.1|" (main.js).
-export const unclipped = ['case', ['!=', tagged('edge'), ''],
-  ['in', ['concat', '|', ['get', 'edge'], '|'], ['global-state', 'edgeNames']],
-  ['!', ['in', ['concat', '|', tagged('nid'), '|'], ['global-state', 'clipped']]]];
+// Older cached drawings include alternate places for screen edges. Never show those:
+// a name keeps its built position while panning, including at the screen boundary.
+export const fixedName = ['==', tagged('edge'), ''];
 export const onRail = ['all', ['!=', RAIL_PICK, ''], ['==', ['get', 'route'], RAIL_PICK]];
 // A station on the picked line ("A B C").
 export const atStation = ['all', ['!=', RAIL_PICK, ''], ['in', ['concat', ' ', RAIL_PICK, ' '], ['concat', ' ', ['get', 'lines'], ' ']]];
@@ -449,8 +448,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
         ['!', ['in', 'historic district', ['downcase', ['get', 'name']]]]],
       layout: { 'text-field': ['upcase', ['get', 'name']], 'text-font': ['case', major, ['literal', FONT.semibold], ['literal', FONT.medium]],
         'text-size': ['case', major, PLACE_SIZE[n] + 2, PLACE_SIZE[n]], 'text-letter-spacing': ['case', major, 0.26, 0.22], 'text-padding': 4, 'text-max-width': 8,
-        // Where the place's own point is taken (a city's point is often its busiest corner), its name may sit just beside it.
-        'text-variable-anchor': ['center', 'top', 'bottom', 'left', 'right'], 'text-radial-offset': 0.6,
+        'text-anchor': 'center',
         'symbol-sort-key': ['+', ['*', 100, ['index-of', ['get', 'class'], ['literal', classes]]], ['to-number', ['get', 'rank'], 99]] },
       paint: { 'text-color': ['case', major, c.city, c.place], 'text-halo-color': c.ground, 'text-halo-width': 2.2, 'text-halo-blur': 0.4 } });
     // A picked bus route holds its ground like rail: placed before the place names, so a town's
@@ -458,9 +456,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     layer('keep-off-pick', 'symbol', { filter: pickBus, ...unseen });
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
     // A name the picked route runs under keeps a tight halo, so the line reads unbroken up to its
-    // letters, and its line letters step aside while that route is picked. A name the screen's
-    // edge or the page's own card would cut is hidden, with its letters (`clipped`, main.js).
-    layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name'], ['all', namePlace, unclipped]),
+    // letters, and its line letters step aside while that route is picked. Panning keeps
+    // the built name in place, even when the screen edge cuts it.
+    layer('name', 'symbol', { filter: kind('station', ['==', ['get', 'shape'], 'name'], ['all', namePlace, fixedName]),
       layout: { 'text-field': ['get', 'text'], 'text-font': ['case', ['get', 'minor'], ['literal', FONT.medium], ['literal', FONT.semibold]], 'text-size': ['case', ['get', 'minor'], 10, NAME_SIZE[n]], 'text-max-width': 40, 'text-line-height': 1.12,
         'text-anchor': ['get', 'anchor'], 'text-offset': ['get', 'offset'], 'text-justify': ['get', 'justify'], 'text-allow-overlap': true, 'text-padding': 3 },
       paint: { 'text-color': textInk(c.name, ['any', atStation, ['!=', BUS, '']]), 'text-halo-color': c.ground, 'text-halo-width': ['case', nameCovers, 1.2, 2] } });
@@ -468,8 +466,8 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     const disc = [7.4, 8.2, 9.4, 10.6][i];
     // Beside a station's name the letters are smaller (scripts/lib/sheets.mjs, SIZES.nameLetter).
     const small = [5.6, 6, 6.6, 7.4][i];
-    layer('letter-disc', 'circle', { filter: kind('letter', ['all', namePlace, unclipped, ['!', nameCovers]]), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
-    layer('letter', 'symbol', { filter: kind('letter', ['all', namePlace, unclipped, ['!', nameCovers]]),
+    layer('letter-disc', 'circle', { filter: kind('letter', ['all', namePlace, fixedName, ['!', nameCovers]]), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
+    layer('letter', 'symbol', { filter: kind('letter', ['all', namePlace, fixedName, ['!', nameCovers]]),
       layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * 1.42, disc * 1.42], 'text-allow-overlap': true, 'text-offset': [0, 0.06] },
       paint: { 'text-color': unless(onRail, letterInk, byColor('ink', ['get', 'ink'], FADE.line)) } });
     // Lettering keeps off the lines: unseen marks along rail and the busiest streets hold their

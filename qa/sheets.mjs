@@ -111,29 +111,25 @@ try {
       const title = await page.locator('#card-title').textContent();
       assert.match(title, /\S+ Line/); assert.ok(!['Line', 'Lines'].includes(title));
     });
-    await check('#147 visible station names are whole on sheets 1 and 2', async () => {
+    await check('#147 station names keep their built places while panning', async () => {
       const snapshots = [];
       for (const zoom of [10, 12]) {
         await visit(`#${zoom}/39.71919/-105.00184`);
-        await page.waitForTimeout(400);
-        const names = await page.evaluate((n) => {
-          const m = window.sheetsMap, c = m.getContainer();
-          const seen = new Set();
-          const drawn = m.queryRenderedFeatures({ layers: [`name-${n}`] });
-          const cut = [];
-          for (const f of drawn) {
-            const p = m.project(f.geometry.coordinates), [a, b, x, y] = String(f.properties.bx).split(',').map(Number);
-            if (p.x + x < 0 || p.y + y < 0 || p.x + a > c.clientWidth || p.y + b > c.clientHeight) continue;
-            seen.add(f.properties.nid);
-            if (p.x + a < 0 || p.y + b < 0 || p.x + x > c.clientWidth || p.y + y > c.clientHeight) cut.push(f.properties.name);
-          }
-          const missing = [...new Map(m.querySourceFeatures(`sheet-${n}`, { filter: ['all', ['==', ['get', 'shape'], 'name'], ['!', ['has', 'edge']], ['!', ['has', 'alt']]] }).map((f) => [f.properties.nid, f])).values()]
-            .filter((f) => { const p = m.project(f.geometry.coordinates); return p.x >= 6 && p.x <= c.clientWidth - 6 && p.y >= 6 && p.y <= c.clientHeight - 100 && !seen.has(f.properties.nid); }).map((f) => f.properties.name);
-          return { cut, missing, moved: window.sheetsNamePlaces };
-        }, zoom === 10 ? 1 : 2);
-        assert.deepEqual(names.cut, []); assert.deepEqual(names.missing, []);
-        snapshots.push(names);
-        await page.screenshot({ path: path.join(OUT, `${theme}-sheet-${zoom}.png`) });
+        const n = [10, 12, 14, 16].indexOf(zoom) + 1;
+        const names = () => page.evaluate((sheet) => {
+          const m = window.sheetsMap;
+          return [...new Map(m.queryRenderedFeatures({ layers: [`name-${sheet}`] }).map((f) => [f.properties.nid, {
+            text: f.properties.text, anchor: f.properties.anchor, offset: f.properties.offset, edge: f.properties.edge ?? null,
+          }])).entries()];
+        }, n);
+        const before = new Map(await names());
+        await page.evaluate(() => window.sheetsMap.panBy([100, 0], { duration: 0 }));
+        await page.waitForFunction(() => window.sheetsMap.loaded() && !window.sheetsMap.isMoving());
+        const after = new Map(await names());
+        const common = [...before.keys()].filter((id) => after.has(id));
+        assert.ok(common.length, `zoom ${zoom} has names in the common area`);
+        for (const id of common) { assert.deepEqual(after.get(id), before.get(id)); assert.equal(after.get(id).edge, null); }
+        snapshots.push({ zoom, compared: common.length });
       }
       return snapshots;
     });

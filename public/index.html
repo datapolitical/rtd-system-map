@@ -27,7 +27,7 @@
   if (!location.hash && !new URLSearchParams(location.search).has('theme')) {
     const theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     const link = Object.assign(document.createElement('link'), { rel: 'preload', as: 'image', fetchPriority: 'high' });
-    if (matchMedia('(max-width: 600px)').matches) link.href = `/poster/phone-${theme}.webp`;
+    if (matchMedia('(max-width: 480px)').matches) link.href = `/poster/phone-${theme}.webp`;
     else link.imageSrcset = `/poster/wide-${theme}-1x.webp 1x, /poster/wide-${theme}-2x.webp 2x`;
     document.head.append(link);
   }
@@ -145,10 +145,10 @@
 <div id="card" role="region" aria-labelledby="card-title" hidden></div>
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
-<div id="poster" data-view="10/39.7193/-105.0019" data-bounds="-105.8841,39.1565,-104.3693,40.5067">
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="05ec5d1b6e817913035a188f1e6fc86cf510ce534da394d7e15c6aafc611bdd4" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261115_080022_pt/{z}/{x}/{y}.pbf&quot;]">
   <picture>
-    <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
-    <source media="(max-width: 600px)" srcset="/poster/phone-light.webp 2x">
+    <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
+    <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">
     <source media="(prefers-color-scheme: dark)" srcset="/poster/wide-dark-1x.webp 1x, /poster/wide-dark-2x.webp 2x">
     <img src="/poster/wide-light-1x.webp" srcset="/poster/wide-light-1x.webp 1x, /poster/wide-light-2x.webp 2x" alt="" fetchpriority="high" draggable="false">
   </picture>
@@ -179,7 +179,16 @@
     place();
     addEventListener('resize', place);
     // Shown whole, not drawn in strips as it arrives.
-    const whole = () => img.classList.add('whole');
+    // A deployment rebuilds the drawing from current data. An older screenshot must
+    // never flash before a different drawing, even if its centre is unchanged.
+    const json = (url) => fetch(url).then((r) => r.ok ? r.json() : null);
+    const matches = poster.dataset.source ? Promise.all([json('/data/sheets.json'), json(poster.dataset.source)])
+      .then(([s, ground]) => Boolean(s?.drawing && s.drawing === poster.dataset.drawing &&
+        JSON.stringify(ground?.tiles) === poster.dataset.tiles)).catch(() => false) : Promise.resolve(false);
+    const whole = async () => {
+      if (await matches) img.classList.add('whole');
+      else img.closest('picture')?.remove();
+    };
     if (img.complete && img.naturalWidth) whole();
     else img.addEventListener('load', whole);
   })();

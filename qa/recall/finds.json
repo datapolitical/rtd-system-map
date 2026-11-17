@@ -1903,7 +1903,7 @@
       "id": "117-names-clipped",
       "issue": 117,
       "place": "Names at the screen's edges and under the card, sheet 1",
-      "said": "Thornton Crossroads / 104th, Oak, Federal Ctr, Fl… cut at the edges; Alameda, Littleton / Downtown under the card and credit",
+      "said": "Thornton Crossroads / 104th, Oak, Federal Ctr, Fl\u2026 cut at the edges; Alameda, Littleton / Downtown under the card and credit",
       "kind": "name-clipped",
       "caught_by": [
         "name-clipped"
@@ -1980,6 +1980,70 @@
       },
       "found_by": "Chris, on a phone, dark mode, the signoff-fixes preview opened from a review link with the 28 picked, 2026-11-15 (issue #117)",
       "pinned_by": "Claude, from Chris's screenshot in the pick28 view, 2026-11-15",
+      "confidence": "clear"
+    },
+    {
+      "id": "150-pan-flips-station-name",
+      "issue": 150,
+      "place": "Thornton Crossroads / 104th Ave",
+      "said": "labels change when scrolling left and right; at a fixed zoom the map should be static",
+      "kind": "label-pan",
+      "caught_by": [
+        "label-pan"
+      ],
+      "seen_on": [
+        "a1bd3fd"
+      ],
+      "theme": "light",
+      "zoom": 10,
+      "points": [
+        [
+          -104.943037,
+          39.881486
+        ]
+      ],
+      "radius_px": 170,
+      "capture": {
+        "view": "10/39.719193/-105.001838",
+        "size": [
+          393,
+          760
+        ]
+      },
+      "found_by": "Chris, on the launch-cleanup preview, 2026-11-17",
+      "pinned_by": "Codex, from before/after pan captures of a1bd3fd, 2026-11-17",
+      "confidence": "clear"
+    },
+    {
+      "id": "150-loading-picture-jump",
+      "issue": 150,
+      "place": "A Line near the right edge of the opening view",
+      "said": "the image jumps on first load, especially the A Line label on the right",
+      "kind": "poster-mismatch",
+      "caught_by": [
+        "poster-mismatch"
+      ],
+      "seen_on": [
+        "a1bd3fd"
+      ],
+      "theme": "light",
+      "zoom": 10,
+      "points": [
+        [
+          -104.871368,
+          39.769228
+        ]
+      ],
+      "radius_px": 35,
+      "capture": {
+        "view": "10/39.719193/-105.001838",
+        "size": [
+          393,
+          760
+        ]
+      },
+      "found_by": "Chris, on the launch-cleanup preview, 2026-11-17",
+      "pinned_by": "Codex, comparing the loading picture with the live map at a1bd3fd, 2026-11-17",
       "confidence": "clear"
     }
   ]

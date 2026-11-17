@@ -60,7 +60,7 @@ test('a sheet not yet wanted starts with no drawing, and its layers are there to
 
 test('the front page shows a picture of its opening view while the map loads', () => {
   const html = read('');
-  const [, view, bounds] = html.match(/<div id="poster" data-view="([^"]*)" data-bounds="([^"]*)">/) ?? [];
+  const [, view, bounds] = html.match(/<div id="poster" data-view="([^"]*)" data-bounds="([^"]*)" data-drawing="[^"]*"[^>]*>/) ?? [];
   // scripts/poster.mjs writes these: the view the pictures show, and the map's bounds the page shifts them by.
   assert.match(view ?? '', /^\d+(\.\d+)?\/-?\d+\.\d+\/-?\d+\.\d+$/, 'the view the pictures show');
   const [w, s, e, n] = (bounds ?? '').split(',').map(Number);

@@ -23,7 +23,7 @@ test("a drawn route list reads as its routes, a stacked one too, and a tap names
 });
 
 test('a picked route holds on every sheet: its pieces are drawn on top, the rest fades toward the ground', () => {
-  assert.deepEqual(Object.keys(STATE).sort(), ['bus', 'clipped', 'edgeNames', 'rail']);
+  assert.deepEqual(Object.keys(STATE).sort(), ['bus', 'rail']);
   for (const theme of ['light', 'dark']) {
     const style = sheetStyle(theme, [], ['#57C1E9', '#E31837']);
     assert.deepEqual(style.state, STATE);

@@ -6,7 +6,7 @@ import { pickFrom, pickCard, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
 import { routeName, sheetName, pickSaid, cardSaid, inkOn } from './say.js';
-import { clearPoint, nameChoices } from './view.js';
+import { clearPoint } from './view.js';
 
 // Start the map's worker downloading while the two small files below load.
 maplibregl.prewarm();
@@ -19,10 +19,11 @@ const theme = () => forced ?? (scheme.matches ? 'dark' : 'light');
 const zooms = SHEETS.map((s) => s.zoom);
 
 // Both at once: neither needs the other (index.html has already asked for them).
-const [meta, { hub, stations, colors } = {}] = await Promise.all([
+const [meta, { hub, stations, colors, drawing } = {}] = await Promise.all([
   fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json()),
   fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({})),
 ]);
+window.sheetsDrawing = drawing;
 const [[west, south], [east, north]] = meta.bounds.core;
 
 // Only the sheet the page opens on loads first: the others are most of the page's weight and
@@ -63,8 +64,6 @@ map.keyboard.disableRotation();
 // A new theme is a new style; the picked route is set on it again (pick, below).
 scheme.addEventListener('change', () => {
   if (forced) return;
-  unclip.clipped = undefined;
-  unclip.edgeNames = undefined;
   map.setStyle(sheetStyle(theme(), stations, colors, wanted));
   map.once('styledata', () => setPick(picked));
 });
@@ -339,30 +338,9 @@ card.addEventListener('click', (e) => {
   if (shown && hint) hint.textContent = hintFor(routesOf(shown));
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') close({ focus: card.contains(document.activeElement) }); });
-// A station's name shows whole or not at all: one the screen's edge, the card, the sheet
-// buttons or the credit line would cut is hidden with its letters until the map moves (DESIGN.md,
-// "Quality floor"). Each name carries its box about its point in screen pixels (`bx`, the build's).
-const ours = ['#card', '#steps', '#credit'].map((q) => document.querySelector(q)).filter(Boolean);
-function unclip() {
-  if (!map.isStyleLoaded() || Math.abs(map.getZoom() - zooms[sheet]) > 0.01) return;
-  const view = map.getContainer().getBoundingClientRect();
-  const blocks = ours.filter((el) => !el.hidden && el.offsetParent !== null).map((el) => {
-    const r = el.getBoundingClientRect();
-    return { left: r.left - view.left, top: r.top - view.top, right: r.right - view.left, bottom: r.bottom - view.top };
-  });
-  const features = map.querySourceFeatures(`sheet-${SHEETS[sheet].id}`, { filter: ['all', ['==', ['get', 'kind'], 'station'], ['==', ['get', 'shape'], 'name']] })
-    .map((f) => { const p = map.project(f.geometry.coordinates); return { properties: f.properties, at: [p.x, p.y] }; });
-  const { clipped, edges } = nameChoices(features, view, blocks, picked?.mode === 'bus' ? picked.route : '');
-  for (const [key, ids] of [['clipped', clipped], ['edgeNames', edges]]) {
-    const text = ids.length ? `|${ids.join('|')}|` : '';
-    if (text !== unclip[key]) map.setGlobalStateProperty(key, text);
-    unclip[key] = text;
-  }
-  window.sheetsClipped = clipped;
-  window.sheetsNamePlaces = edges;
-}
-map.on('idle', () => { keepVisible(); unclip(); });
-new ResizeObserver(() => { keepVisible(); unclip(); }).observe(card);
+// Panning only moves the sheet. Names keep the places chosen by the build.
+map.on('idle', keepVisible);
+new ResizeObserver(keepVisible).observe(card);
 // Each line's colour, as the sheets draw it (a station lists its lines by letter only).
 const colorOf = new Map();
 map.on('idle', () => {
@@ -550,8 +528,8 @@ if (asked?.pick) map.once('load', () => applyAddressPick(asked.pick));
 
 // --- The picture shown while the map loads (index.html, #poster) -----------------
 
-// It goes once the map has drawn the same view, fading so the few labels the two place
-// differently near the screen's edges change softly. A step the reader takes before then
+// It goes once the map has drawn the same view. The page only shows a picture whose
+// drawing fingerprint matches this build. A step the reader takes before then
 // clears it at once: the map is moving away from the view it shows.
 const poster = document.querySelector('#poster');
 function reveal() {
