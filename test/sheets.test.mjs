@@ -139,6 +139,17 @@ test('a short line wholly sharing a pack still carries its own letter', () => {
   assert.ok(set.filter((p) => p.route === 'B').every((p) => p.at[0] >= 80 && p.at[0] <= 200 && p.at[1] === 6));
 });
 
+test('a shared line stays lettered between dense station bars without touching them', () => {
+  const lines = [
+    { route: 'A', color: '#ff0000', paths: [[[0, 0], [500, 0]]] },
+    { route: 'B', color: '#0000ff', paths: [[[80, 6], [400, 6]]] },
+  ];
+  const marks = Array.from({ length: 14 }, (_, i) => ({ ends: [[i * 38, -4], [i * 38, 10]], more: [] }));
+  const set = letters(lines, marks, sheet);
+  assert.deepEqual([...new Set(set.map((p) => p.route))].sort(), ['A', 'B']);
+  for (const p of set) for (const m of marks) assert.ok(nearest(m.ends, p.at).d >= SIZES.letterClear[sheet.id], 'the disc keeps the minimum air around the entire station bar');
+});
+
 test('a station bar is square across its line, and a line that ends at a station ends on its bar', () => {
   const rail = line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at(0, 0), at(300, 120)]);
   const lines = railLines(all([rail]), sheet);

@@ -796,7 +796,8 @@ function crossing(p, u, ring) {
  */
 export function letters(lines, marks, sheet) {
   const placed = [];
-  const stops = marks.flatMap((m) => [m.ends, ...m.more].flat());
+  const bars = marks.flatMap((m) => [m.ends, ...m.more]);
+  const stops = bars.flat();
   const clear = SIZES.letterClear[sheet.id];
   const every = SIZES.letterEvery[sheet.id];
   const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
@@ -806,10 +807,10 @@ export function letters(lines, marks, sheet) {
       const pts = resample(path, 2);
       const mine = [];
       const near = Math.round(clear / 4);
-      const fits = (i, alone = true) => {
+      const fits = (i, alone = true, markClear = 1.4 * clear) => {
         const p = pts[i];
         return Math.min(i, pts.length - 1 - i) * 2 >= 2 * clear
-          && !stops.some((s) => dist(s, p) < 1.4 * clear)
+          && !stops.some((s) => dist(s, p) < markClear)
           && ![...placed, ...mine].some((s) => dist(s.at, p) < 2 * clear)
           // Alone means alone for a letter's width each way, so no letter sits where lines part.
           && !(alone && [i - near, i, i + near].some((j) => pts[j] && others.some((o) => nearest(o, pts[j]).d < SIZES.alone * pitch)));
@@ -836,9 +837,11 @@ export function letters(lines, marks, sheet) {
       // prefers open track; if there is none, use the clearest point on this line among its
       // neighbours rather than leaving it identified only by colour.
       if (!mine.length && !placed.some((p) => p.route === line.route)) {
-        const candidates = pts.map((p, i) => ({ p, i })).filter(({ i }) => fits(i, false));
+        // Dense station marks can leave no place with the preferred extra air.
+        // Keep the configured minimum clearance from each complete bar instead.
+        const candidates = pts.map((p, i) => ({ p, i })).filter(({ p, i }) => fits(i, false, clear) && bars.every((bar) => nearest(bar, p).d >= clear));
         candidates.sort((a, b) => {
-          const room = (p) => Math.min(...stops.map((s) => dist(s, p)), ...placed.map((s) => dist(s.at, p)), every);
+          const room = (p) => Math.min(...bars.map((bar) => nearest(bar, p).d), ...placed.map((s) => dist(s.at, p)), every);
           return room(b.p) - room(a.p);
         });
         if (candidates.length) put(candidates[0].i);

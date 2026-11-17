@@ -3681,6 +3681,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
 
 ## Decision log
 
+- 2026-11-17: A rail line left without a letter may use the configured
+  minimum air around a station bar instead of the preferred extra air
+  (#145). Measure that minimum from the whole bar. The fresh deployment
+  had no T letter: its clearest point was 20.6 px from a station, just under
+  the preferred 21 px, while the configured minimum is 15 px. The fallback
+  keeps the line identified without touching station marks or other discs.
+
 - 2026-11-16: Launch cleanup combines the signoff drawing and the keyboard
   list / first-visit offline fixes in one candidate. A picked route keeps
   its name while the map is dragged, Escape clears it, and an invalid route
