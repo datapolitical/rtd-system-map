@@ -38,7 +38,8 @@ try {
         await page.goto(site, { timeout: 60_000 });
         await page.waitForFunction(() => window.sheetsReady && window.sheetsMap.loaded(), null, { timeout: 90_000 });
         // The map alone: no buttons, credit, card, or an earlier picture over it.
-        await page.addStyleTag({ content: 'body > *:not(#map) { display: none !important }' });
+        await page.addStyleTag({ content: 'body > :not(main):not(#map), main > :not(#map) { display: none !important }' });
+        if (!await page.locator('#map').isVisible()) throw new Error('The loading picture must contain the visible map');
         await page.waitForTimeout(500);
         const [view, limits] = await page.evaluate(() => {
           const m = window.sheetsMap;

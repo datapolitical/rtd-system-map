@@ -21,7 +21,7 @@ export async function writeSheets(dir) {
     for (const f of drawn.features) if (f.properties.kind === 'rail') colors.add(f.properties.color);
     await writeFile(path.join(dir, `sheet-${sheet.id}.geojson`), JSON.stringify(drawn));
     const count = (kind) => drawn.features.filter((f) => f.properties.kind === kind).length;
-    console.log(`sheet ${sheet.id} (zoom ${sheet.zoom}): ${count('rail')} rail lines, ${drawn.features.filter((f) => f.properties.shape === 'name' && !f.properties.alt).length} station names (${drawn.features.filter((f) => f.properties.shape === 'name' && f.properties.alt).length} placed again for a pick), ${count('letter')} letters, ${count('bus')} bus streets`);
+    console.log(`sheet ${sheet.id} (zoom ${sheet.zoom}): ${count('rail')} rail lines, ${drawn.features.filter((f) => f.properties.shape === 'name' && !f.properties.alt && !f.properties.edge).length} station names (${drawn.features.filter((f) => f.properties.shape === 'name' && f.properties.alt && !f.properties.edge).length} placed again for a pick), ${drawn.features.filter((f) => f.properties.kind === 'letter' && !f.properties.edge).length} letters, ${count('bus')} bus streets`);
   }
   await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ hub, stations: [...named], colors: [...colors] }));
 }

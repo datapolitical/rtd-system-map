@@ -2962,8 +2962,9 @@ are deferred, not ruled out. See "Open questions".
   Safari's seven-day deletion of a site's storage does not apply (see
   "Installed on a phone").
   The sheets page has this from v1.0 (`public/sw.js`, #14): its page,
-  scripts, styles, font, glyphs and the four sheets' data go to the network
-  first and to the offline copy only when the network fails, so a new deploy
+  scripts, styles, font, glyphs, route directory and the four sheets' data go
+  to the network first. A failure or 2.5-second stall uses a saved copy;
+  a slow successful response still refreshes it for the next visit. A new deploy
   reaches everyone online on their next load and nobody is held on an old
   version (a cache-first copy with versioned names would need a build step to
   name every file, and would show the old version once after each deploy).
@@ -3579,7 +3580,8 @@ work against the real structure before asking for evaluation.
 Decided 2026-11-13. The site is called launched at **v1.0**, when the
 "Launch (v1.0)" milestone closes: Chris has signed off the four sheets on
 his phone in both themes, the sheets can highlight one route, and the
-version is closed (#14: domain, share links, screen reader, offline). V1 to
+version is closed (#14: view URLs, screen reader, offline). The page address
+is its share link; a custom domain is not a launch requirement. V1 to
 V3 above are the names of the design stages that led there, not releases.
 What comes after launch is in four milestones, in this order (decided
 2026-11-13):
@@ -3678,6 +3680,29 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   audience, but not the default view.
 
 ## Decision log
+
+- 2026-11-16: Launch cleanup combines the signoff drawing and the keyboard
+  list / first-visit offline fixes in one candidate. A picked route keeps
+  its name while the map is dragged, Escape clears it, and an invalid route
+  in an updated address is dropped. Route hints promise highlighting.
+  Stop-group tables keep their full ink while a route is picked, with the
+  matching row emphasized. Rail cards name the line; visual separators are
+  left out of speech. A tapped place is moved clear of its card, including
+  in landscape. Zoom buttons from the opening view keep the hub in view.
+  Station names use measured font widths and can use a build-approved
+  alternative that fits inside the screen and clears other names and
+  controls. A short rail line sharing all its track still gets its letter;
+  a bus stop with no served bus route is omitted. Branch smoothing holds
+  shared junctions so the picked route stays connected. The directory is
+  saved on the first visit, and a network request stalled for 2.5 seconds
+  falls back to a saved copy while its refresh continues. These changes
+  address the audited launch and sheets-polish faults; phone signoff and
+  a real screen reader pass remain release requirements.
+- 2026-11-16: Capture scripts preserve the map's `main` landmark and fail
+  if it is hidden, so loading and sharing images contain the drawing after
+  the accessibility changes. Recall fixtures freeze their original planting
+  exclusions: adding a fault seen on a newer build must not move an older
+  fixture's planted faults or change what its baseline compares.
 
 - 2026-11-01: Objective set: frequency map answering "what can I take from
   here, and how often?" Live vehicles are a bonus layer.

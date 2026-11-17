@@ -11,9 +11,10 @@
 const PAGE = 'sheets-page-v1';
 const TILES = 'sheets-tiles-v1';
 const TILE_CAP = 3000; // about 100 MB at the most; the oldest go first
+const NETWORK_WAIT_MS = 2500;
 
 // The sheets page and what it fetches. Other pages (the classic map) are left to the network.
-const OWN = /^\/(?:|index\.html|js\/.+|vendor\/.+|data\/(?:meta\.json|sheets\.json|sheet-\d+\.geojson)|poster\/.+)$/;
+const OWN = /^\/(?:|index\.html|js\/.+|vendor\/.+|data\/(?:meta\.json|sheets\.json|directory\.json|sheet-\d+\.geojson)|poster\/.+)$/;
 const TILE_HOST = 'tiles.openfreemap.org';
 const TILE = /^\/planet\/[^/]+\/\d+\/\d+\/\d+\.pbf$/;
 
@@ -27,7 +28,7 @@ self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     // A cache this version doesn't name is an old one's.
-    for (const name of await caches.keys()) if (![PAGE, TILES].includes(name)) await caches.delete(name);
+    for (const name of await caches.keys()) if (name.startsWith('sheets-') && ![PAGE, TILES].includes(name)) await caches.delete(name);
     // The page's request leaves at once instead of waiting for this worker to start.
     await self.registration.navigationPreload?.enable();
     await self.clients.claim();
@@ -47,15 +48,28 @@ async function keep(cacheName, request, response) {
 }
 
 async function networkFirst(event, key) {
-  try {
+  const refresh = (async () => {
     const response = (await event.preloadResponse) ?? (await fetch(event.request));
-    if (response.ok) event.waitUntil(keep(PAGE, key, response.clone()));
+    if (response.ok) await keep(PAGE, key, response.clone());
+    return response;
+  })();
+  // If the saved copy wins, a slow but successful response still updates it for next time.
+  event.waitUntil(refresh.then(() => {}, () => {}));
+  let timer;
+  try {
+    const response = await Promise.race([refresh, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Network did not answer in time')), NETWORK_WAIT_MS);
+    })]);
+    if (!response.ok) {
+      const cached = await caches.match(key, { ignoreSearch: event.request.mode === 'navigate' });
+      if (cached) return cached;
+    }
     return response;
   } catch (error) {
     const cached = await caches.match(key, { ignoreSearch: event.request.mode === 'navigate' });
     if (cached) return cached;
-    throw error;
-  }
+    return refresh; // without a saved copy, a slow first visit still gets its answer
+  } finally { clearTimeout(timer); }
 }
 
 async function cacheFirst(event) {

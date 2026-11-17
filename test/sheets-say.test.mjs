@@ -44,3 +44,7 @@ test("the sheets page's quieter text and rings meet AA in both themes", async ()
     assert.ok(contrast(t.rim, t.card) >= 3, `${name}: a route button's ring on the card`);
   }
 });
+test('visual separators are phrased as punctuation in speech', () => {
+  assert.equal(cardSaid({ title: 'Route 15', note: 'Colfax · Every 10 min' }), 'Route 15. Colfax, Every 10 min');
+  assert.equal(cardSaid({ title: 'Stop', note: 'Bus stop · Southwest-bound' }), 'Stop. Bus stop, Southwest-bound');
+});

@@ -179,7 +179,7 @@ const PLACE_SIZE = { 1: 10.5, 2: 10.5, 3: 10, 4: 10.5 };
 const STREET_PREFIX = { 'North ': 'N ', 'South ': 'S ', 'East ': 'E ', 'West ': 'W ' };
 const STREET_SUFFIX = { ' Avenue': ' Ave', ' Street': ' St', ' Boulevard': ' Blvd', ' Parkway': ' Pkwy', ' Road': ' Rd', ' Drive': ' Dr',
   ' Place': ' Pl', ' Court': ' Ct', ' Lane': ' Ln', ' Highway': ' Hwy', ' Circle': ' Cir', ' Way': ' Way' };
-function shortStreet(name) {
+export function shortStreet(name) {
   const n = ['var', 'n'];
   const head = ['case', ...Object.entries(STREET_PREFIX).flatMap(([long, short]) => [
     ['==', ['slice', name, 0, long.length], long], ['concat', short, ['slice', name, long.length]]]), name];
@@ -195,7 +195,7 @@ function shortStreet(name) {
 // once, so a pick is one property write, holds on every sheet, and no tile is made again.
 // Everything not on the route is inked nearer the ground rather than made see-through, so
 // pieces that overlap at a corner do not show darker knots.
-export const STATE = { bus: { default: '' }, rail: { default: '' }, clipped: { default: '' } };
+export const STATE = { bus: { default: '' }, rail: { default: '' }, clipped: { default: '' }, edgeNames: { default: '' } };
 const BUS = ['global-state', 'bus'];
 const RAIL_PICK = ['global-state', 'rail'];
 export const PICKED = ['any', ['!=', BUS, ''], ['!=', RAIL_PICK, '']];
@@ -214,7 +214,9 @@ export const namePlace = ['case', ['!=', tagged('alt'), ''], picks('alt'), ['!',
 // under the lettering, as a printed map does, so both read.
 export const nameCovers = picks('cover');
 // The names the page has found cut by the screen's edge or its own card, as "|3.0|17.1|" (main.js).
-export const unclipped = ['!', ['in', ['concat', '|', tagged('nid'), '|'], ['global-state', 'clipped']]];
+export const unclipped = ['case', ['!=', tagged('edge'), ''],
+  ['in', ['concat', '|', ['get', 'edge'], '|'], ['global-state', 'edgeNames']],
+  ['!', ['in', ['concat', '|', tagged('nid'), '|'], ['global-state', 'clipped']]]];
 export const onRail = ['all', ['!=', RAIL_PICK, ''], ['==', ['get', 'route'], RAIL_PICK]];
 // A station on the picked line ("A B C").
 export const atStation = ['all', ['!=', RAIL_PICK, ''], ['in', ['concat', ' ', RAIL_PICK, ' '], ['concat', ' ', ['get', 'lines'], ' ']]];
@@ -383,7 +385,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
       const roadClasses = n === 3 ? ['trunk', 'primary', 'secondary', 'tertiary'] : ['trunk', 'primary', 'secondary', 'tertiary', 'minor'];
       layers.push({ id: `street-name-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band,
         filter: ['in', ['get', 'class'], ['literal', roadClasses]],
-        layout: { 'symbol-placement': 'line', 'symbol-spacing': 420, 'text-field': shortStreet(['get', 'name']), 'text-font': FONT.regular, 'text-size': n === 3 ? 9.5 : 10.5,
+        layout: { 'symbol-placement': 'line', 'symbol-spacing': 420, 'text-field': shortStreet(['let', 'label', ['to-string', ['coalesce', ['get', 'name'], '']], ['case', ['==', ['var', 'label'], ''], ['to-string', ['coalesce', ['get', 'ref'], '']], ['var', 'label']]]), 'text-font': FONT.regular, 'text-size': n === 3 ? 9.5 : 10.5,
           'text-max-angle': 25, 'text-padding': 10, 'symbol-sort-key': ['index-of', ['get', 'class'], ['literal', roadClasses]] },
         paint: { 'text-color': c.streetName, 'text-halo-color': c.ground, 'text-halo-width': 1.4 } });
     }
@@ -492,18 +494,19 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
       const fixed = { 'icon-allow-overlap': true, 'text-allow-overlap': true, 'text-max-width': 60, 'text-anchor': 'left', 'icon-anchor': 'top-left' };
       layer('group-plate', 'symbol', { filter: kind('group-plate'),
         layout: { ...fixed, 'icon-image': ['concat', `stopgroup-plate-${theme}-`, ['to-string', ['get', 'w']], 'x', ['to-string', ['get', 'h']]], 'icon-offset': ['get', 'off'] },
-        // A picked route fades the table with the rest of the lettering; the card still lists it.
-        paint: { 'icon-opacity': ['case', PICKED, 1 - FADE.text, 1] } });
+        // The table is a key to the selected route, so it stays readable while the map fades.
+        paint: { 'icon-opacity': 1 } });
       layer('group-badge', 'symbol', { filter: kind('group-badge'),
         layout: { ...fixed, 'icon-anchor': 'center', 'text-anchor': 'center', 'icon-image': `stopgroup-badge-${theme}`, 'icon-offset': ['get', 'off'],
-          'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.letter, 'text-offset': ['get', 'toff'] },
-        paint: { 'text-color': c.ground, 'icon-opacity': ['case', PICKED, 1 - FADE.text, 1], 'text-opacity': ['case', PICKED, 1 - FADE.text, 1] } });
+          'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.letter, 'text-offset': ['get', 'toff'],
+          'icon-size': ['case', onBus(), 1.15, 1] },
+        paint: { 'text-color': c.ground, 'icon-opacity': 1, 'text-opacity': 1 } });
       layer('group-text', 'symbol', { filter: kind('group-text'),
         layout: { ...fixed, 'text-field': ['get', 'text'], 'text-offset': ['get', 'off'],
-          'text-font': ['case', ['==', ['get', 'role'], 'title'], ['literal', GROUP_FONT.title], ['literal', GROUP_FONT.row]],
+          'text-font': ['case', ['any', ['==', ['get', 'role'], 'title'], onBus()], ['literal', GROUP_FONT.title], ['literal', GROUP_FONT.row]],
           'text-size': ['case', ['==', ['get', 'role'], 'title'], GROUP.title, GROUP.row],
           'text-letter-spacing': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleSpacing, GROUP.rowSpacing] },
-        paint: { 'text-color': c.number, 'text-opacity': ['*', ['case', ['==', ['get', 'role'], 'title'], GROUP.titleInk, 1], ['case', PICKED, 1 - FADE.text, 1]] } });
+        paint: { 'text-color': ['case', onBus(), c.pick, c.number], 'text-opacity': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleInk, 1] } });
       // A lettered stop's letter on its street, in the table's square: placed first of all, so
       // nothing is set over it (the build kept route numbers and names off it).
       layer('group-stop', 'symbol', { filter: kind('group-stop'),

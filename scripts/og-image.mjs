@@ -35,7 +35,8 @@ try {
     });
     await page.waitForFunction(() => window.__map.loaded(), null, { timeout: 30_000 });
   }
-  await page.addStyleTag({ content: 'body > *:not(#map):not(.maplibregl-map) { visibility: hidden !important } .maplibregl-control-container { display: none !important }' });
+  await page.addStyleTag({ content: 'body > :not(main):not(#map):not(.maplibregl-map), main > :not(#map):not(.maplibregl-map) { visibility: hidden !important } .maplibregl-control-container { display: none !important }' });
+  if (!await page.locator('#map, .maplibregl-map').first().isVisible()) throw new Error('The sharing image must contain the visible map');
   await page.waitForTimeout(2500);
   await page.screenshot({ path: out });
   console.log(`wrote ${out}`);

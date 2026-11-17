@@ -6,6 +6,7 @@ import { pickFrom, pickCard, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
 import { routeName, sheetName, pickSaid, cardSaid, inkOn } from './say.js';
+import { clearPoint, nameChoices } from './view.js';
 
 // Start the map's worker downloading while the two small files below load.
 maplibregl.prewarm();
@@ -35,6 +36,7 @@ const start = nearest(asked?.zoom ?? zooms[0]);
 const wanted = new Set([SHEETS[start].id]);
 // The page opens on the hub, a little above the middle so the lines south of it show.
 const home = hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2];
+let openingSteps = !asked;
 
 const map = new maplibregl.Map({
   container: 'map',
@@ -61,6 +63,8 @@ map.keyboard.disableRotation();
 // A new theme is a new style; the picked route is set on it again (pick, below).
 scheme.addEventListener('change', () => {
   if (forced) return;
+  unclip.clipped = undefined;
+  unclip.edgeNames = undefined;
   map.setStyle(sheetStyle(theme(), stations, colors, wanted));
   map.once('styledata', () => setPick(picked));
 });
@@ -224,8 +228,9 @@ map.on('zoomstart', (e) => {
   began = null;
   requestAnimationFrame(() => show(sheet + 1, around));
 });
-document.querySelector('#in').addEventListener('click', () => show(sheet + 1));
+document.querySelector('#in').addEventListener('click', () => show(sheet + 1, openingSteps && hub ? hub : undefined));
 document.querySelector('#out').addEventListener('click', () => show(sheet - 1));
+map.on('movestart', (e) => { if (e.originalEvent) openingSteps = false; });
 show(sheet);
 
 // --- What is this? Tap a line, a station or a stop --------------------------------
@@ -238,7 +243,10 @@ const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&
 let picked = null; // { mode: 'bus' | 'rail', route }
 let shown = null; // what the card names: { title, note, routes: [{ mode, route, color }] }
 let opener = null; // the button the card was opened from (the list, #135), where closing it returns
+let selectedAt = null;
+let pickRevision = 0;
 function setPick(p) {
+  pickRevision++;
   picked = p;
   map.setGlobalStateProperty('bus', p?.mode === 'bus' ? p.route : '');
   map.setGlobalStateProperty('rail', p?.mode === 'rail' ? p.route : '');
@@ -260,7 +268,21 @@ const groupList = (rows) => String(rows ?? '').split(' | ').filter(Boolean).map(
 const routesOf = (what) => [...(what.routes ?? []), ...(what.groups ?? []).flatMap((g) => g.routes)];
 function hintFor(routes) {
   if (!routes.length || shown?.list) return '';
-  return picked && routes.some((r) => r.mode === picked.mode && r.route === picked.route) ? 'Tap empty ground to clear' : `Tap ${routes.length > 1 ? 'a route' : 'it'} to show its whole way`;
+  return picked && routes.some((r) => r.mode === picked.mode && r.route === picked.route) ? 'Tap empty ground to clear' : routes.length > 1 ? 'Tap a route to highlight it' : 'Tap to highlight this route';
+}
+// A visual separator gets its spacing from layout; speech uses punctuation (say.js).
+const detail = (text) => esc(text).replace(/\s*·\s*/g, '<span class="sep" aria-hidden="true">·</span>');
+function keepVisible() {
+  if (!selectedAt || card.hidden || !map.isStyleLoaded()) return;
+  const box = map.getContainer().getBoundingClientRect();
+  const p = map.project(selectedAt);
+  const blocks = [card, document.querySelector('#steps'), document.querySelector('#credit')]
+    .filter((el) => el && !el.hidden).map((el) => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left - box.left, top: r.top - box.top, right: r.right - box.left, bottom: r.bottom - box.top };
+    });
+  const to = clearPoint([p.x, p.y], box, blocks);
+  if (to && Math.hypot(p.x - to[0], p.y - to[1]) > 1) map.panBy([p.x - to[0], p.y - to[1]], { duration: 0 });
 }
 function tell(what) {
   shown = what;
@@ -272,27 +294,30 @@ function tell(what) {
   card.classList.toggle('route', what.kind === 'route');
   if (what.kind === 'route') {
     card.innerHTML = `<div class="head"><div class="routes">${routes.map(chip).join('')}</div><b id="card-title" role="heading" aria-level="2">${esc(what.name)}</b></div>`
-      + `${what.line ? `<span>${esc(what.line)}</span>` : ''}<button type="button" class="close" aria-label="Close">\u00d7</button>`;
+      + `${what.line ? `<span>${detail(what.line)}</span>` : ''}<button type="button" class="close" aria-label="Close">\u00d7</button>`;
     card.hidden = false;
     say(cardSaid({ title: what.name, note: what.line, routes }));
+    requestAnimationFrame(keepVisible);
     return;
   }
   // Each letter is said as its stop ("Stop A"), then its routes.
   const rows = groups.length ? `<div class="rows">${groups.map((g) => `<i><span class="sr">Stop </span>${esc(g.letter)}</i><div class="routes">${g.routes.map(chip).join('')}</div>`).join('')}</div>` : '';
   const list = what.routes?.length ? `${what.also ? `<span>${esc(what.also)}</span>` : ''}<div class="routes">${what.routes.map(chip).join('')}</div>` : '';
   // A plain card says what it is before its routes; a stop-group card leads with its letters.
-  const said = note ? `<span>${esc(note)}</span>` : '';
+  const said = note ? `<span>${detail(note)}</span>` : '';
   card.innerHTML = `<b id="card-title" role="heading" aria-level="2">${title}</b>${lead ? `<span>${esc(lead)}</span>` : ''}${groups.length ? '' : said}${rows}${list}${groups.length ? said : ''}<span class="hint">${hint}</span>`
     + '<button type="button" class="close" aria-label="Close">\u00d7</button>';
   card.classList.remove('list');
   card.hidden = false;
   say(cardSaid({ title: card.querySelector('#card-title').textContent, note, lead, routes }));
+  requestAnimationFrame(keepVisible);
 }
 // Closing the card is a tap on empty ground: the card goes, and so does a pick.
 function close({ focus = false } = {}) {
-  if (card.hidden) return;
+  if (card.hidden && !picked) return;
   card.hidden = true;
   shown = null;
+  selectedAt = null;
   if (picked) { setPick(null); say(pickSaid(null)); }
   if (focus) (opener ?? map.getCanvas()).focus({ preventScroll: true });
 }
@@ -309,6 +334,7 @@ card.addEventListener('click', (e) => {
   for (const other of card.querySelectorAll('button[data-route]')) {
     other.setAttribute('aria-pressed', String(picked?.mode === other.dataset.mode && picked.route === other.dataset.route));
   }
+  for (const row of card.querySelectorAll('.rows > .routes')) row.previousElementSibling.classList.toggle('selected', !!row.querySelector('[aria-pressed="true"]'));
   const hint = card.querySelector('.hint');
   if (shown && hint) hint.textContent = hintFor(routesOf(shown));
 });
@@ -318,31 +344,25 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape') close({ focus: card
 // "Quality floor"). Each name carries its box about its point in screen pixels (`bx`, the build's).
 const ours = ['#card', '#steps', '#credit'].map((q) => document.querySelector(q)).filter(Boolean);
 function unclip() {
-  if (Math.abs(map.getZoom() - zooms[sheet]) > 0.01) return;
+  if (!map.isStyleLoaded() || Math.abs(map.getZoom() - zooms[sheet]) > 0.01) return;
   const view = map.getContainer().getBoundingClientRect();
-  const edge = 2;
-  const blocks = ours.filter((el) => !el.hidden && el.offsetParent !== null).map((el) => el.getBoundingClientRect());
-  const cut = new Set();
-  for (const f of map.querySourceFeatures(`sheet-${SHEETS[sheet].id}`, { filter: ['all', ['==', ['get', 'kind'], 'station'], ['==', ['get', 'shape'], 'name']] })) {
-    const { nid, bx } = f.properties;
-    if (!nid || !bx || cut.has(nid)) continue;
-    const [x0, y0, x1, y1] = String(bx).split(',').map(Number);
-    const p = map.project(f.geometry.coordinates);
-    const box = { left: view.left + p.x + x0, top: view.top + p.y + y0, right: view.left + p.x + x1, bottom: view.top + p.y + y1 };
-    // Wholly off the screen is no cut; partly off, or partly under our own controls, is.
-    const off = box.right < view.left || box.left > view.right || box.bottom < view.top || box.top > view.bottom;
-    if (off) continue;
-    const edged = box.left < view.left + edge || box.right > view.right - edge || box.top < view.top + edge || box.bottom > view.bottom - edge;
-    const under = blocks.some((b) => box.left < b.right && box.right > b.left && box.top < b.bottom && box.bottom > b.top);
-    if (edged || under) cut.add(nid);
+  const blocks = ours.filter((el) => !el.hidden && el.offsetParent !== null).map((el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left - view.left, top: r.top - view.top, right: r.right - view.left, bottom: r.bottom - view.top };
+  });
+  const features = map.querySourceFeatures(`sheet-${SHEETS[sheet].id}`, { filter: ['all', ['==', ['get', 'kind'], 'station'], ['==', ['get', 'shape'], 'name']] })
+    .map((f) => { const p = map.project(f.geometry.coordinates); return { properties: f.properties, at: [p.x, p.y] }; });
+  const { clipped, edges } = nameChoices(features, view, blocks, picked?.mode === 'bus' ? picked.route : '');
+  for (const [key, ids] of [['clipped', clipped], ['edgeNames', edges]]) {
+    const text = ids.length ? `|${ids.join('|')}|` : '';
+    if (text !== unclip[key]) map.setGlobalStateProperty(key, text);
+    unclip[key] = text;
   }
-  const text = cut.size ? `|${[...cut].sort().join('|')}|` : '';
-  if (text !== unclip.last) map.setGlobalStateProperty('clipped', text);
-  unclip.last = text;
-  window.sheetsClipped = [...cut];
+  window.sheetsClipped = clipped;
+  window.sheetsNamePlaces = edges;
 }
-map.on('idle', unclip);
-new ResizeObserver(() => unclip()).observe(card);
+map.on('idle', () => { keepVisible(); unclip(); });
+new ResizeObserver(() => { keepVisible(); unclip(); }).observe(card);
 // Each line's colour, as the sheets draw it (a station lists its lines by letter only).
 const colorOf = new Map();
 map.on('idle', () => {
@@ -352,6 +372,7 @@ const rails = (list) => list.map((route) => ({ mode: 'rail', route, color: color
 const buses = (text) => routeList(text).map((route) => ({ mode: 'bus', route }));
 map.on('click', (e) => {
   opener = null;
+  selectedAt = e.lngLat;
   const n = SHEETS[sheet].id;
   const reach = 9;
   const box = [[e.point.x - reach, e.point.y - reach], [e.point.x + reach, e.point.y + reach]];
@@ -386,7 +407,15 @@ map.on('click', (e) => {
   }
   tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
 });
-map.on('dragstart', () => { card.hidden = true; });
+map.on('dragstart', () => {
+  selectedAt = null;
+  if (picked) {
+    // A selected route remains named while panning; its compact card takes little room.
+    const focused = card.contains(document.activeElement);
+    if (shown?.kind !== 'route') openCard(picked);
+    if (focused) map.getCanvas().focus({ preventScroll: true });
+  } else close();
+});
 
 // A station's or a stop's card, from a tap or from the list of what's in view.
 function placeCard({ station, lettered, stop }, { focus = false } = {}) {
@@ -424,6 +453,7 @@ function inView() {
   return { places: [...stations, ...stops], stations: stations.length, routes: [...lines, ...routes], lines: lines.length };
 }
 function showList() {
+  selectedAt = null;
   const { places, stations, routes, lines } = inView();
   shown = { list: true, places, routes };
   opener = listButton;
@@ -458,13 +488,16 @@ function remember() {
 }
 map.on('moveend', remember);
 // An address edited in place, or a link to this page followed from itself.
-addEventListener('hashchange', () => {
-  const v = readView(location.hash);
+addEventListener('hashchange', (event) => {
+  // A resize can rewrite the address before this queued event is handled. Read the
+  // address that was followed, so its view wins over that intervening map update.
+  const v = readView(new URL(event.newURL).hash);
   if (!v || (v.center && !onMap(v.center))) return;
+  openingSteps = false;
+  selectedAt = null;
   if (v.center) map.jumpTo({ center: v.center });
   show(nearest(v.zoom));
-  setPick(v.pick);
-  openCard(v.pick, { framed: true });
+  applyAddressPick(v.pick);
 });
 // A picked route in the address opens its card too, as a tap on it would: closing the card
 // clears the pick, the same as after a tap. A rail line's chip takes its colour from the map.
@@ -500,14 +533,20 @@ function openCard(p, { framed = false } = {}) {
 // A picked route the address names is set once the map has its style, and kept only if the
 // sheets still draw it: an old link to a route RTD has dropped opens on the plain map. Sheet 2
 // draws every route; its file is read as text, not parsed, from the browser's cache.
-if (asked?.pick) {
-  const check = fetch(sheetData(2)).then((r) => (r.ok ? r.text() : '')).then((text) => drawsRoute(text, asked.pick), () => true);
-  map.once('load', async () => {
-    setPick(asked.pick);
-    if (!(await check)) { if (picked === asked.pick) setPick(null); return; }
-    if (picked === asked.pick) openCard(asked.pick, { framed: true });
-  });
+let routeText;
+async function applyAddressPick(p) {
+  const revision = ++pickRevision;
+  const text = p ? await (routeText ??= fetch(sheetData(2)).then((r) => r.ok ? r.text() : '').catch(() => '')) : '';
+  if (revision !== pickRevision) return; // a later address or a reader's choice wins
+  if (p && drawsRoute(text, p)) {
+    setPick(p);
+    openCard(p, { framed: true });
+  } else {
+    close();
+    setPick(null); // also removes an invalid route from the address when no card was open
+  }
 }
+if (asked?.pick) map.once('load', () => applyAddressPick(asked.pick));
 
 // --- The picture shown while the map loads (index.html, #poster) -----------------
 
@@ -565,7 +604,7 @@ if ('serviceWorker' in navigator) {
         sent = entries.length;
         reg.active?.postMessage({ type: 'keep', urls });
       };
-      hand(firstVisit ? [...SHEETS.map((s) => sheetData(s.id)), ...groundTiles()] : []);
+      hand(firstVisit ? [...SHEETS.map((s) => sheetData(s.id)), new URL('../../data/directory.json', import.meta.url).href, ...groundTiles()] : []);
       // What came in between, until the worker sees requests itself.
       if (!navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', () => hand(), { once: true });
       // The drawing worker never comes under it on this visit, so the tiles of each new view are named too.

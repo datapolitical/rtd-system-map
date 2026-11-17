@@ -151,6 +151,18 @@ export function routeLine(pieces, { snap = 2, stub = 6, apart = 4, bridge = 10, 
       edges.push({ a: i, b: j, path, len: length(path) });
       report.bridged++;
     }
+    // Try fragmented guides only after the original joins: already connected
+    // drawings keep the same choices, while a remaining gap can cross features.
+    if (parts().n > 1) for (const [, i, j, along] of pairs) {
+      if (!along) continue;
+      const [ri, rj] = [root(part[i]), root(part[j])];
+      if (ri === rj) continue;
+      const path = throughGuides(guide, nodes[i], nodes[j], bridge);
+      if (!path) continue;
+      up.set(ri, rj);
+      edges.push({ a: i, b: j, path, len: length(path) });
+      report.bridged++;
+    }
     report.gaps = parts().n - 1;
   }
   // The main path: the longest of the shortest ways between two corners (two sweeps).
@@ -209,9 +221,29 @@ export function routeLine(pieces, { snap = 2, stub = 6, apart = 4, bridge = 10, 
     const keep = rest.filter((e) => !((deg[e.a] === 1 || deg[e.b] === 1) && e.len < stub));
     if (keep.length < rest.length) { report.stubs += rest.length - keep.length; rest = keep; again = true; }
   }
-  // Smoothed: the main path, then each piece beside it, its ends set back on the smoothed main path.
+  // Smooth between graph junctions, holding their shared positions. Smoothing a
+  // whole chain can move an internal junction away from the branch meeting it.
+  const degree = nodes.map(() => 0);
+  for (const e of [...mainEdges, ...rest]) { degree[e.a]++; degree[e.b]++; }
+  const junctions = new Set(nodes.filter((_, i) => degree[i] > 2));
+  const sections = (p, held) => {
+    const cuts = [0, ...p.map((q, i) => i > 0 && i < p.length - 1 && held.has(q) ? i : -1).filter((i) => i >= 0), p.length - 1];
+    return cuts.slice(1).map((end, i) => smoothed(p.slice(cuts[i], end + 1), sigma));
+  };
   const smoothMain = smoothed(main, sigma);
-  const others = chained(rest.map((e) => e.path), snap).map((p) => smoothed(p, sigma));
+  // Removing an indistinguishable parallel street can leave a branch's join up
+  // to `apart` pixels off the main path. Give every use of that corner one anchor.
+  const anchors = new Map();
+  const anchor = (i) => {
+    if (!anchors.has(i)) {
+      const h = nearest(smoothMain, nodes[i]);
+      anchors.set(i, junctions.has(nodes[i]) && h.d <= apart + sigma + snap ? h.at : nodes[i]);
+    }
+    return anchors.get(i);
+  };
+  const held = new Set(nodes.flatMap((p, i) => junctions.has(p) ? [anchor(i)] : []));
+  const others = chained(rest.map((e) => [anchor(e.a), ...e.path.slice(1, -1), anchor(e.b)]), snap)
+    .flatMap((p) => sections(p, held));
   // Each branch's ends set back on the line it leaves, which the smoothing moved.
   const all = [smoothMain, ...others];
   for (const [i, p] of all.entries()) {
@@ -234,17 +266,21 @@ export function routeLine(pieces, { snap = 2, stub = 6, apart = 4, bridge = 10, 
     const group = all.map((_, i) => i);
     const root = (i) => (group[i] === i ? i : (group[i] = root(group[i])));
     all.forEach((p, i) => all.forEach((q, j) => { if (i < j && [p[0], p.at(-1)].some((e) => nearest(q, e).d <= snap) || i < j && [q[0], q.at(-1)].some((e) => nearest(p, e).d <= snap)) group[root(i)] = root(j); }));
-    let best = null;
+    const candidates = [];
     for (const [i, p] of all.entries()) {
       if (root(i) === root(0)) continue;
       for (const e of [p[0], p.at(-1)]) for (const [j, q] of all.entries()) {
         if (root(j) !== root(0)) continue;
         const h = nearest(q, e);
-        if (h.d <= far && (!best || h.d < best.d)) best = { d: h.d, from: e, to: h.at };
+        if (h.d <= far) candidates.push({ d: h.d, from: e, to: h.at });
       }
     }
-    if (!best) break;
-    const link = guided(guide, best.from, best.to, bridge) ?? (best.d <= 2 * bridge ? [best.from, best.to] : null);
+    // The nearest pair can have no guide between it while another pair has a valid one.
+    let link = null;
+    for (const c of candidates.sort((a, b) => a.d - b.d)) {
+      link = guided(guide, c.from, c.to, bridge) ?? throughGuides(guide, c.from, c.to, bridge) ?? (c.d <= 2 * bridge ? [c.from, c.to] : null);
+      if (link) break;
+    }
     if (!link) break;
     all.push(smoothed(link, sigma));
     report.bridged++;
@@ -271,6 +307,70 @@ function guided(guide, a, b, reach) {
     return path;
   }
   return null;
+}
+
+// RTD can split a route's guide into many features. A connection may cross
+// several of them even though no single feature passes both loose ends.
+const guideGraphs = new WeakMap();
+function throughGuides(guide, a, b, reach) {
+  if (!guide.length) return null;
+  let graph = guideGraphs.get(guide);
+  if (!graph) {
+    const snap = 0.5, points = [], edges = [], adj = [], grid = new Grid(snap);
+    const node = (p) => {
+      const found = grid.near(p, snap).find((i) => dist(points[i], p) <= snap);
+      if (found !== undefined) return found;
+      const i = points.length; points.push(p); adj.push([]); grid.add(p, i); return i;
+    };
+    const tips = guide.filter((p) => p.length > 1).flatMap((p) => [p[0], p.at(-1)]);
+    for (const g of guide.filter((p) => p.length > 1)) {
+      const L = length(g);
+      const cuts = tips.map((p) => nearest(g, p)).filter((h) => h.d <= snap && h.along > snap && h.along < L - snap).map((h) => h.along);
+      for (const part of cutAt(g, cuts)) for (let i = 1; i < part.length; i++) {
+        const u = node(part[i - 1]), v = node(part[i]);
+        if (u === v) continue;
+        const e = { u, v, len: dist(points[u], points[v]) };
+        edges.push(e); adj[u].push(e); adj[v].push(e);
+      }
+    }
+    graph = { points, edges, adj }; guideGraphs.set(guide, graph);
+  }
+  const { points, edges, adj } = graph;
+  const limit = 3 * dist(a, b) + 20;
+  const costs = points.map(() => Infinity), via = points.map(() => null), ends = new Map(), open = new Set();
+  for (const e of edges) {
+    const segment = [points[e.u], points[e.v]], ha = nearest(segment, a), hb = nearest(segment, b);
+    for (const [i, along] of [[e.u, 0], [e.v, e.len]]) {
+      if (ha.d <= reach) {
+        const cost = ha.d + Math.abs(ha.along - along);
+        if (cost < costs[i]) { costs[i] = cost; via[i] = { path: [a, ha.at, points[i]] }; open.add(i); }
+      }
+      if (hb.d <= reach) {
+        const cost = hb.d + Math.abs(hb.along - along);
+        if (!ends.has(i) || cost < ends.get(i).cost) ends.set(i, { cost, path: [points[i], hb.at, b] });
+      }
+    }
+  }
+  let best = null;
+  while (open.size) {
+    let i;
+    for (const j of open) if (i === undefined || costs[j] < costs[i]) i = j;
+    open.delete(i);
+    if (costs[i] > (best?.cost ?? limit)) break;
+    const end = ends.get(i);
+    if (end && costs[i] + end.cost <= limit && (!best || costs[i] + end.cost < best.cost)) best = { i, cost: costs[i] + end.cost, path: end.path };
+    for (const e of adj[i]) {
+      const j = e.u === i ? e.v : e.u, cost = costs[i] + e.len;
+      if (cost < costs[j] && cost <= limit) { costs[j] = cost; via[j] = { from: i, path: [points[i], points[j]] }; open.add(j); }
+    }
+  }
+  if (!best) return null;
+  let path = best.path;
+  for (let i = best.i; via[i]; i = via[i].from) {
+    path = [...via[i].path.slice(0, -1), ...path];
+    if (via[i].from === undefined) break;
+  }
+  return path;
 }
 
 /** Points in square cells, for what lies near a point. */

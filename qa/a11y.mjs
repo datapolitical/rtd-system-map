@@ -22,9 +22,18 @@ for (const theme of ['light', 'dark']) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(BASE);
-  await page.waitForFunction(() => window.sheetsReady, null, { timeout: 60_000 });
-  await page.waitForTimeout(500);
+  const settled = async () => {
+    await page.waitForFunction(() => window.sheetsMap?.isStyleLoaded() && window.sheetsMap.areTilesLoaded() && !window.sheetsMap.isMoving(), null, { timeout: 60_000 });
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  };
+  let visits = 0;
+  const visit = async () => {
+    const url = new URL(BASE); url.searchParams.set('qa-a11y', ++visits);
+    await page.goto(url.href);
+    await page.waitForFunction(() => window.sheetsReady && window.sheetsAll, null, { timeout: 60_000 });
+    await settled();
+  };
+  await visit();
   const said = () => page.waitForTimeout(250).then(() => page.locator('#say').textContent());
   const axe = async (label, include) => {
     let b = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']);
@@ -45,7 +54,7 @@ for (const theme of ['light', 'dark']) {
   await page.locator('#in').click();
   check(theme, 'a step is said', (await said()) === 'Sheet 2 of 4', await page.locator('#say').textContent());
   check(theme, 'dots say the sheet', (await page.locator('#sheets').getAttribute('aria-label')) === 'Sheet 2 of 4');
-  await page.waitForTimeout(600);
+  await settled();
 
   // A card: tap the first bus line found near the middle.
   const at = await page.evaluate(() => {
@@ -102,9 +111,8 @@ for (const theme of ['light', 'dark']) {
 
   // A stop group, on a fresh page: the closest sheet, at the hub, a street whose stops are
   // lettered, its first point in the middle of the screen.
-  await page.goto(BASE);
-  await page.waitForFunction(() => window.sheetsReady, null, { timeout: 60_000 });
-  for (let i = 0; i < 3; i++) { await page.locator('#in').click(); await page.waitForTimeout(600); }
+  await visit();
+  for (let i = 0; i < 3; i++) { await page.locator('#in').click(); await settled(); }
   await page.evaluate(async () => {
     const { hub } = await (await fetch('/data/sheets.json')).json();
     window.sheetsMap.jumpTo({ center: hub });

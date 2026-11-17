@@ -5,6 +5,7 @@ import { evaluate } from '../public/js/evaluate.js';
 import { sheetStyle, PALETTES, STATE, mix } from '../public/js/sheets/style.js';
 import { pickFrom, pickCard, routeList } from '../public/js/sheets/pick.js';
 import fs from 'node:fs';
+import { createExpression } from '@maplibre/maplibre-gl-style-spec';
 
 const layer = (style, id) => style.layers.find((l) => l.id === id);
 const none = { bus: '', rail: '' };
@@ -22,7 +23,7 @@ test("a drawn route list reads as its routes, a stacked one too, and a tap names
 });
 
 test('a picked route holds on every sheet: its pieces are drawn on top, the rest fades toward the ground', () => {
-  assert.deepEqual(Object.keys(STATE).sort(), ['bus', 'clipped', 'rail']);
+  assert.deepEqual(Object.keys(STATE).sort(), ['bus', 'clipped', 'edgeNames', 'rail']);
   for (const theme of ['light', 'dark']) {
     const style = sheetStyle(theme, [], ['#57C1E9', '#E31837']);
     assert.deepEqual(style.state, STATE);
@@ -65,16 +66,43 @@ test('a link with a picked route opens that route\'s card, the one a tap on its 
   // Chris: "when I click the link, the route is highlighted, but there is no modal box that comes up
   // showing which route it is until I click on the route again".
   assert.deepEqual(pickCard({ mode: 'bus', route: '28' }), { title: 'Route', note: 'Bus', bus: '28' });
-  assert.deepEqual(pickCard({ mode: 'rail', route: 'W' }), { title: 'Line', note: 'Rail', rail: ['W'] });
+  assert.deepEqual(pickCard({ mode: 'rail', route: 'W' }), { title: 'W Line', note: 'Rail', rail: ['W'] });
   const { title, note, bus } = pickFrom({ label: { label: '28' } });
   assert.deepEqual(pickCard({ mode: 'bus', route: '28' }), { title, note, bus }, 'the same card as a tap on the route\'s number');
   assert.equal(pickCard({}), null);
-  // The page opens it wherever it sets a pick from the address: on opening, and when the address changes.
-  const main = fs.readFileSync(new URL('../public/js/sheets/main.js', import.meta.url), 'utf8');
-  assert.match(main, /setPick\(asked\.pick\);[\s\S]{0,200}openCard\(asked\.pick, \{ framed: true \}\)/);
-  assert.match(main, /setPick\(v\.pick\);\s*openCard\(v\.pick, \{ framed: true \}\);/, 'and frames the whole route above it');
-  // Closing it clears the pick, as it does after a tap.
-  assert.match(main, /function close\([^)]*\) \{[\s\S]{0,160}if \(picked\) \{ setPick\(null\)/);
+  // Address changes, validation, focus and dismissal are exercised on the page by qa/sheets.mjs.
+});
+
+test('a tap names the actual rail lines, including shared track', () => {
+  assert.equal(pickFrom({ letter: { route: 'W' } }).title, 'W Line');
+  assert.equal(pickFrom({ rail: [{ route: 'G' }, { route: 'B' }] }).title, 'G and B Lines');
+  assert.equal(pickFrom({ rail: [{ route: 'A' }, { route: 'B' }, { route: 'C' }] }).title, 'A, B and C Lines');
+});
+
+test('the stop-group table stays readable and distinguishes only the selected route row', () => {
+  for (const theme of ['light', 'dark']) {
+    const style = sheetStyle(theme, [], ['#57C1E9']);
+    const state = { ...none, bus: '15L' };
+    assert.equal(layer(style, 'group-plate-3').paint['icon-opacity'], 1);
+    assert.equal(layer(style, 'group-badge-3').paint['text-opacity'], 1);
+    const text = layer(style, 'group-text-3');
+    const selected = { role: 'row', routes: '1, 15, 15L, 20' };
+    const other = { role: 'row', routes: '10, 28, 32' };
+    assert.equal(evaluate(text.paint['text-opacity'], { props: selected, state }), 1);
+    assert.equal(evaluate(text.paint['text-opacity'], { props: other, state }), 1);
+    assert.notEqual(evaluate(text.paint['text-color'], { props: selected, state }), evaluate(text.paint['text-color'], { props: other, state }));
+    assert.deepEqual(evaluate(text.layout['text-font'], { props: selected, state: { ...none, bus: '15' } }), evaluate(text.layout['text-font'], { props: selected, state }));
+    assert.notDeepEqual(evaluate(text.layout['text-font'], { props: selected, state: { ...none, bus: '5' } }), evaluate(text.layout['text-font'], { props: selected, state }), 'not a substring of a route number');
+  }
+});
+
+test('street names accept number-only roads and shorten ordinary names without null warnings', () => {
+  const text = layer(sheetStyle('light'), 'street-name-3').layout['text-field'];
+  const compiled = createExpression(text, 'layers[street-name-3].layout.text-field');
+  assert.equal(compiled.result, 'success');
+  for (const [props, wanted] of [[{ name: null, ref: '120' }, '120'], [{ ref: 7 }, '7'], [{ name: '', ref: '36' }, '36'], [{}, ''], [{ name: 'West Colfax Avenue' }, 'W Colfax Ave']]) {
+    assert.equal(compiled.value.evaluate({ zoom: 14 }, { properties: props, type: 2 }), wanted);
+  }
 });
 
 test('a station name keeps off a picked route: moved where it can be, under a tight halo where not (#117)', () => {

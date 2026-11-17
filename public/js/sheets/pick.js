@@ -7,6 +7,7 @@ const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&
 
 /** The routes in a drawn list: "0, 1, 15L" or a stacked "15L,\n19" -> ['0', '1', '15L', '19']. */
 export const routeList = (text) => String(text ?? '').split(/,\s*/).map((r) => r.trim()).filter(Boolean);
+const railTitle = (routes) => routes.length === 1 ? `${routes[0]} Line` : `${routes.slice(0, -1).join(', ')} and ${routes.at(-1)} Lines`;
 
 /**
  * The card for the features under a tap, nearest kind first: a station, a line letter, a rail
@@ -15,8 +16,8 @@ export const routeList = (text) => String(text ?? '').split(/,\s*/).map((r) => r
  */
 export function pickFrom({ station, letter, rail = [], stop, label, bus } = {}) {
   if (station) return { title: esc(station.name), note: 'Rail station', rail: String(station.lines ?? '').split(' ').filter(Boolean) };
-  if (letter) return { title: 'Line', note: 'Rail', rail: [letter.route] };
-  if (rail.length) return { title: rail.length > 1 ? 'Lines' : 'Line', note: 'Rail', rail: rail.map((r) => r.route) };
+  if (letter) return { title: esc(railTitle([letter.route])), note: 'Rail', rail: [letter.route] };
+  if (rail.length) return { title: esc(railTitle(rail.map((r) => r.route))), note: 'Rail', rail: rail.map((r) => r.route) };
   if (stop) return { title: esc(stop.name), note: ['Bus stop', stop.heading].filter(Boolean).join(' · '), bus: stop.routes };
   if (label) return { title: routeList(label.label).length > 1 ? 'Routes on this street' : 'Route', note: 'Bus', bus: label.label };
   if (bus) {
@@ -31,7 +32,7 @@ export function pickFrom({ station, letter, rail = [], stop, label, bus } = {}) 
  * number gives, so a shared link shows what its sender saw. `{ title, note, rail | bus }`.
  */
 export function pickCard({ mode, route } = {}, r = null) {
-  const base = mode === 'rail' ? { title: 'Line', note: 'Rail', rail: [route] } : mode === 'bus' ? { title: 'Route', note: 'Bus', bus: route } : null;
+  const base = mode === 'rail' ? { title: esc(railTitle([route])), note: 'Rail', rail: [route] } : mode === 'bus' ? { title: 'Route', note: 'Bus', bus: route } : null;
   if (!base || !r) return base;
   // With the route's entry in RTD's directory, the card says what the route is in one or two
   // lines: its chip and RTD's name for it, then its two ends and how often it runs.

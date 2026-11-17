@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { routeLine } from '../scripts/lib/routeline.mjs';
-import { length } from '../scripts/lib/sheets.mjs';
+import { length, nearest } from '../scripts/lib/sheets.mjs';
 
 const turn = (a, b, c) => {
   const u = [b[0] - a[0], b[1] - a[1]];
@@ -34,4 +34,29 @@ test('a stair step between near streets is drawn as a bend, and a loop far off i
   assert.ok(sharpest < 60, `no turn sharper than 60° (was ${sharpest.toFixed(0)}°)`);
   const loop = [[[0, 0], [100, 0]], [[40, 0], [40, 20], [60, 20], [60, 0]]];
   assert.equal(routeLine(loop, { apart: 4 }).paths.length, 2, 'a branch standing off the main path stays');
+});
+
+test('smoothing a loop holds the junction shared with another branch', () => {
+  const junction = [300, 100];
+  const pieces = [
+    [[0, 0], [1000, 0]],
+    [[300, 0], junction],
+    [junction, [400, 100], [400, 0]],
+    [junction, [250, 140]],
+    [[400, 100], [450, 140]],
+  ];
+  const { paths } = routeLine(pieces, { sigma: 5 });
+  assert.equal(paths.filter((p) => nearest(p, junction).d < 0.01).length, 3,
+    'all three arms meet at their shared junction after smoothing');
+});
+
+test('a gap can follow a route guide split across several features', () => {
+  const pieces = [[[0, 0], [20, 0]], [[80, 0], [100, 0]]];
+  const guide = [[[20, 0], [40, 0]], [[40, 0], [60, 0]], [[60, 0], [80, 0]]];
+  const { paths, gaps } = routeLine(pieces, { bridge: 5, far: 100, sigma: 0, guide });
+  assert.equal(gaps, 0);
+  assert.equal(paths.length, 1);
+  assert.equal(length(paths[0]), 100);
+  assert.equal(routeLine(pieces, { bridge: 5, far: 100, guide: [guide[0], guide[2]] }).gaps, 1,
+    'a missing guide section is not invented');
 });

@@ -110,7 +110,7 @@ for (const sheet of SHEETS) {
     const p = f.properties;
     if (p.kind === 'bus') for (const r of String(p.routes).split(/,\s*/)) (streets.get(r) ?? streets.set(r, []).get(r)).push(f.geometry.coordinates.map(px));
     if (p.kind === 'route-line') (lines.get(p.routes) ?? lines.set(p.routes, []).get(p.routes)).push(f.geometry.coordinates.map(px));
-    if (p.kind === 'station' && p.shape === 'name' && p.bx) {
+    if (p.kind === 'station' && p.shape === 'name' && p.bx && !p.edge) {
       const at = px(f.geometry.coordinates);
       const [a, b, c, d] = String(p.bx).split(',').map(Number);
       names.push({ ...p, box: [at[0] + a, at[1] + b, at[0] + c, at[1] + d] });

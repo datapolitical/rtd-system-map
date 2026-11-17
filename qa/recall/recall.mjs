@@ -54,6 +54,16 @@ const brief = (f) => `${f.check}/${f.kind} z${f.zoom} ${f.where}: ${f.msg}`;
 // The frozen builds, their tarballs and checksums (fixtures.json).
 export const FIXTURE_LIST = JSON.parse(fs.readFileSync(path.join(HERE, 'fixtures.json'), 'utf8'));
 
+// Keep a frozen fixture's planted faults stable when newer builds get new pins.
+export function plantingAvoid(finds, fixture = {}) {
+  const byId = new Map(finds.map((f) => [f.id, f]));
+  const chosen = fixture.plant_avoid?.map((id) => {
+    if (!byId.has(id)) throw new Error(`Missing frozen planting exclusion: ${id}`);
+    return byId.get(id);
+  }) ?? finds;
+  return chosen.flatMap((f) => f.points);
+}
+
 // A fixture on disk, or downloaded from the checks-fixtures release, checked
 // against its sha256 and unpacked into qa/recall/fixtures/.
 export async function ensureFixture(id) {
@@ -99,7 +109,7 @@ async function child() {
     }
   }
   const planting = doPlant
-    ? await plant(data, { root, seed: Number(arg('seed', '1')), per: Number(arg('per', '5')), avoid: all.flatMap((f) => f.points), drawnKeys })
+    ? await plant(data, { root, seed: Number(arg('seed', '1')), per: Number(arg('per', '5')), avoid: plantingAvoid(all, FIXTURE_LIST.fixtures[id]), drawnKeys })
     : { data, planted: [] };
 
   const places = [

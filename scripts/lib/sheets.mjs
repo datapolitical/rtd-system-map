@@ -832,6 +832,17 @@ export function letters(lines, marks, sheet) {
         if (mine.some((m) => m.i === i)) from = i;
         else if ((i - from) * 2 >= 2 * every && !mine.some((m) => m.i > i && (m.i - i) * 2 < every) && fits(i, false)) { put(i); from = i; }
       }
+      // A short line wholly inside a shared pack still needs its own letter. The first pass
+      // prefers open track; if there is none, use the clearest point on this line among its
+      // neighbours rather than leaving it identified only by colour.
+      if (!mine.length && !placed.some((p) => p.route === line.route)) {
+        const candidates = pts.map((p, i) => ({ p, i })).filter(({ i }) => fits(i, false));
+        candidates.sort((a, b) => {
+          const room = (p) => Math.min(...stops.map((s) => dist(s, p)), ...placed.map((s) => dist(s.at, p)), every);
+          return room(b.p) - room(a.p);
+        });
+        if (candidates.length) put(candidates[0].i);
+      }
       placed.push(...mine);
     }
   }
@@ -919,11 +930,12 @@ export function names(marks, lines, discs, sheet, streets = []) {
     // `extra` adds a cost to a box (a picked route under it, below); `self` is the name being moved.
     const placed = (text, extra = null, self = null) => {
       const rows = text.split('\n');
-      const wide = Math.max(...rows.map((t) => t.length)) * size * 0.56;
+      const wide = Math.max(...rows.map((t) => textWidth(t, minor ? 'Overpass Medium' : 'Overpass SemiBold', size)));
       const tall = rows.length * size * 1.12;
       // The row of letters sits under the name, and the name's room includes it.
       const [w, h] = [Math.max(wide, row.length * (2 * r + 2)), tall + (row.length ? 2 * r + 5 : 0)];
       let best = null;
+      const choices = [];
       for (const reach of [1, 1.4, 1.8, 2.8]) {
         for (const [dx, dy, anchor, cost] of sides) {
           const n = Math.hypot(dx, dy);
@@ -940,36 +952,52 @@ export function names(marks, lines, discs, sheet, streets = []) {
           const hits = set.filter((o) => o !== self && touch(box, o.box)).length + (strays ? 1 : 0);
           const beyond = last && ((c[0] - before[0]) * dx + (c[1] - before[1]) * dy) / n / dist(c, before) > 0.9;
           const crowded = last && dist(c, before) < tall && !beyond;
-          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0) + (extra ? extra(box) : 0);
-          if (!best || score < best.score) best = { text, score, hits, box, anchor, tall, offset: [(at[0] - c[0]) / size, (ty - c[1]) / size] };
+          const extraScore = extra ? extra(box) : 0;
+          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0) + extraScore;
+          const candidate = { text, score, hits, box, anchor, tall, extraScore, offset: [(at[0] - c[0]) / size, (ty - c[1]) / size] };
+          choices.push(candidate);
+          if (!best || score < best.score) best = candidate;
         }
       }
-      return best;
+      return { ...best, choices };
     };
     // A name is written out where it has room; where it would sit on lines or stand off from
     // its mark, the shortened name is used if that sits better.
     // Between stations too close for two rows, it is set in one.
     const texts = [wrapped(m.name), wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')];
     const choose = (extra = null, self = null) => {
-      let best = placed(texts[0], extra, self);
-      for (const other of texts.slice(1)) {
-        if (other === best.text || best.score < SIZES.nameShorten) continue;
-        const tried = placed(other, extra, self);
+      const triedPlaces = [...new Set(texts)].map((text) => placed(text, extra, self));
+      let best = triedPlaces[0];
+      for (const tried of triedPlaces.slice(1)) {
+        if (best.score < SIZES.nameShorten) continue;
         if (tried.score < best.score - 1) best = tried;
       }
-      return best;
+      return { ...best, choices: triedPlaces.flatMap((p) => p.choices) };
     };
     const best = choose();
     // Where every station is named, a name gives way only to another name; where they are
     // not, it also gives way to lines.
     if (!must && (best.hits || (minor && best.score >= SIZES.nameCrowd))) continue;
-    const finish = (b) => {
+    const finish = (b, alternatives = true) => {
       const justify = b.anchor.includes('left') ? 'left' : b.anchor.includes('right') ? 'right' : 'center';
       const [x0, , x1] = b.box;
       const span = row.length * (2 * r + 2) - 2;
       const left = justify === 'left' ? x0 : justify === 'right' ? x1 - span : (x0 + x1 - span) / 2;
       const letters = row.map((l, i) => ({ route: l.route, color: l.color, ink: inkOn(l.color), at: [left + r + i * (2 * r + 2), b.box[1] + b.tall + 3 + r] }));
-      return { text: b.text, box: b.box, anchor: b.anchor, offset: b.offset, justify, letters, hits: b.hits };
+      const result = { text: b.text, box: b.box, anchor: b.anchor, offset: b.offset, justify, letters, hits: b.hits };
+      if (alternatives) {
+        const bySide = new Map();
+        const narrow = new Map();
+        for (const c of [...b.choices].sort((a, b) => a.score - b.score)) {
+          if (c.hits || c.extraScore > b.extraScore || (c.text === b.text && c.anchor === b.anchor && c.offset.every((x, i) => x === b.offset[i]))) continue;
+          if (!bySide.has(c.anchor)) bySide.set(c.anchor, c);
+          const width = c.box[2] - c.box[0];
+          const previous = narrow.get(c.anchor);
+          if (width < b.box[2] - b.box[0] - 1 && (!previous || width < previous.box[2] - previous.box[0] - 1)) narrow.set(c.anchor, c);
+        }
+        result.edges = [...new Set([...bySide.values(), ...narrow.values()])].map((c) => finish(c, false));
+      }
+      return result;
     };
     const { hits, ...chosen } = finish(best);
     const entry = { mark: m, at: c, minor, ...chosen, alts: [], left: [] };
@@ -1932,34 +1960,6 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
       return lerp(w.p, mid, 0.5);
     });
   }
-  // A kept street that took routes along part of its length is cut where the list changes, so
-  // each piece carries its own routes. A tail still finds its point on the street it was joined
-  // to (`moved` of the street before the cut), and the cut ends meet at one corner below.
-  for (const e of [...kept]) {
-    if (!e.adds) continue;
-    const base = e.routes.split(' ');
-    const at = e.pts.map((_, i) => {
-      const routes = new Set(base);
-      for (const a of e.adds) if (i >= a.lo && i <= a.hi) for (const r of a.routes.split(' ')) routes.add(r);
-      return [...routes].join(' ');
-    });
-    const pieces = [];
-    for (let i = 0; i < at.length;) {
-      let j = i;
-      while (j < at.length && at[j] === at[i]) j++;
-      // Each piece runs to the first point of the next, so the pieces meet.
-      pieces.push({ from: i, to: Math.min(j, at.length - 1), routes: at[i] });
-      i = j;
-    }
-    const routesOf = (p) => p.routes.split(' ').length;
-    const cut = pieces.filter((p) => p.to > p.from).map((p) => ({
-      ...e, origin: e, routes: p.routes, n: Math.max(e.n, routesOf(p)),
-      pts: e.pts.slice(p.from, p.to + 1), moved: e.moved.slice(p.from, p.to + 1),
-      tails: e.tails.filter((t) => (t.end === 0 && p.from === 0) || (t.end === 1 && p.to === e.pts.length - 1)),
-    }));
-    if (cut.length) kept.splice(kept.indexOf(e), 1, ...cut);
-    else e.routes = at[0];
-  }
   const corners = new Map();
   for (const e of kept) for (const i of [0, e.pts.length - 1]) {
     const k = key(e.pts[i].p);
@@ -1985,7 +1985,7 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
       if (corners.get(key(e.pts[i].p)).length > 1 || e.tails.some((tl) => tl.end === end)) return false;
       const p = e.pts[i].p;
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-        if ((grid.get(at(p, dx, dy)) ?? []).some((hit) => hit.e !== (e.origin ?? e) && dist(hit.p, p) <= cell)) return false;
+        if ((grid.get(at(p, dx, dy)) ?? []).some((hit) => hit.e !== e && dist(hit.p, p) <= cell)) return false;
       }
       return true;
     });
@@ -2876,7 +2876,7 @@ export function busStops(stops, routes) {
   return stops.features.filter((f) => {
     const q = f.properties;
     const served = String(q.lines ?? q.routes ?? '').split(/[ ,]+/).filter(Boolean);
-    return !q.terminal && !(served.length && served.every((r) => rail.has(r)));
+    return !q.terminal && served.some((r) => !rail.has(r));
   });
 }
 
@@ -3554,8 +3554,9 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     features.push(feature({ kind: 'group-area', ...common }, { type: 'Polygon', coordinates: [[[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]].map(back)] }));
     features.push(feature({ kind: 'group-text', ...common, role: 'title', text: layout.title.text, off: off(layout.title.at, G.title) }, here));
     for (const row of layout.rows) {
-      features.push(feature({ kind: 'group-badge', ...common, letter: row.letter, off: off(row.badge), toff: off(row.badge, G.letter) }, here));
-      features.push(feature({ kind: 'group-text', ...common, role: 'row', text: row.text, off: off(row.at, G.row) }, here));
+      const routes = g.table.rows.find((r) => r.letter === row.letter).routes.join(', ');
+      features.push(feature({ kind: 'group-badge', ...common, routes, letter: row.letter, off: off(row.badge), toff: off(row.badge, G.letter) }, here));
+      features.push(feature({ kind: 'group-text', ...common, routes, role: 'row', text: row.text, off: off(row.at, G.row) }, here));
     }
   }
   // Each lettered stop's square on its street: its letter, and for a tap its name and routes.
@@ -3621,11 +3622,14 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     const under = { ...(n.alts.length ? { under: bars(n.alts.flatMap((a) => a.routes)) } : {}), ...(n.left.length ? { cover: bars(n.left) } : {}) };
     for (const [k, [at, tag]] of [[n, under], ...n.alts.map((a) => [a, { alt: bars(a.routes) }])].entries()) {
       const nid = `${ni}.${k}`;
-      const reach = [at.box, ...at.letters.map((b) => { const r = SIZES.nameLetter[sheet.id]; return [b.at[0] - r, b.at[1] - r, b.at[0] + r, b.at[1] + r]; })];
-      const bx = [Math.min(...reach.map((b) => b[0])) - n.at[0], Math.min(...reach.map((b) => b[1])) - n.at[1], Math.max(...reach.map((b) => b[2])) - n.at[0], Math.max(...reach.map((b) => b[3])) - n.at[1]].map(fixed).join(',');
-      features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: at.text, anchor: at.anchor, offset: at.offset, justify: at.justify, nid, bx, ...tag },
-        { type: 'Point', coordinates: back(n.at) }));
-      for (const b of at.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, nid, ...tag }, { type: 'Point', coordinates: back(b.at) }));
+      for (const [v, place] of [at, ...(at.edges ?? [])].entries()) {
+        const edge = v ? { edge: `${nid}:${v}` } : {};
+        const reach = [place.box, ...place.letters.map((b) => { const r = SIZES.nameLetter[sheet.id]; return [b.at[0] - r, b.at[1] - r, b.at[0] + r, b.at[1] + r]; })];
+        const bx = [Math.min(...reach.map((b) => b[0])) - n.at[0], Math.min(...reach.map((b) => b[1])) - n.at[1], Math.max(...reach.map((b) => b[2])) - n.at[0], Math.max(...reach.map((b) => b[3])) - n.at[1]].map(fixed).join(',');
+        features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: place.text, anchor: place.anchor, offset: place.offset, justify: place.justify, nid, bx, ...tag, ...edge },
+          { type: 'Point', coordinates: back(n.at) }));
+        for (const b of place.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, nid, ...tag, ...edge }, { type: 'Point', coordinates: back(b.at) }));
+      }
     }
   }
   // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.

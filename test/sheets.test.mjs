@@ -129,6 +129,16 @@ test('a second track beside a line is not drawn, and a line that never runs alon
   assert.deepEqual([...new Set(set.map((l) => l.route))].sort(), ['A', 'B']);
 });
 
+test('a short line wholly sharing a pack still carries its own letter', () => {
+  const lines = [
+    { route: 'A', color: '#ff0000', paths: [[[0, 0], [500, 0]]] },
+    { route: 'B', color: '#0000ff', paths: [[[80, 6], [200, 6]]] },
+  ];
+  const set = letters(lines, [], sheet);
+  assert.ok(set.some((p) => p.route === 'B'));
+  assert.ok(set.filter((p) => p.route === 'B').every((p) => p.at[0] >= 80 && p.at[0] <= 200 && p.at[1] === 6));
+});
+
 test('a station bar is square across its line, and a line that ends at a station ends on its bar', () => {
   const rail = line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at(0, 0), at(300, 120)]);
   const lines = railLines(all([rail]), sheet);
@@ -844,7 +854,7 @@ test('a block too short for its numbers and some air before its cross streets is
 test("a stop the build counted as a bus station's, or one only trains call at, is not ringed: the hall and the bar stand for it", async () => {
   const { busStops } = await import('../scripts/lib/sheets.mjs');
   const pt = (id, props) => ({ type: 'Feature', properties: { id, ...props }, geometry: { type: 'Point', coordinates: [0, 0] } });
-  const stops = { features: [pt('street', { lines: '15 19' }), pt('gate', { lines: '15', terminal: 1 }), pt('track', { lines: 'A B' }), pt('both', { lines: 'A 15' })] };
+  const stops = { features: [pt('street', { lines: '15 19' }), pt('gate', { lines: '15', terminal: 1 }), pt('track', { lines: 'A B' }), pt('both', { lines: 'A 15' }), pt('unserved', { lines: '' }), pt('unknown', {})] };
   const routes = { features: [{ properties: { mode: 'rail', route: 'A' } }, { properties: { mode: 'rail', route: 'B' } }, { properties: { mode: 'bus', route: '15' } }] };
   assert.deepEqual(busStops(stops, routes).map((f) => f.properties.id), ['street', 'both']);
   assert.deepEqual(busStops(null, routes), []);

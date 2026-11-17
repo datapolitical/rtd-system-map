@@ -16,7 +16,7 @@ export const pickSaid = (pick) => (pick ? `${routeName(pick)} shown, the rest fa
 export function cardSaid({ title, note, lead, routes = [] }) {
   const names = routes.map(routeName);
   const parts = [title, note || lead, names.length > 3 ? `${names.length} routes` : names.join(', ')];
-  return parts.map((p) => String(p ?? '').trim().replace(/\.$/, '')).filter(Boolean).join('. ');
+  return parts.map((p) => String(p ?? '').replace(/\s*·\s*/g, ', ').trim().replace(/\.$/, '')).filter(Boolean).join('. ');
 }
 
 // WCAG 2 relative luminance and contrast ratio, from #rrggbb.
