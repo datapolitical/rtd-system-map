@@ -11,8 +11,8 @@
 //   strays    points of the line farther from the route's own street pieces than a line's width
 //             (DESIGN.md: the smoothing's allowance, the only tolerance the picked line gets)
 // qa/pickcheck-browser.mjs opens a pick link for each route on a phone (chromium, both themes)
-// and counts what only the page shows: routes not framed whole above the card, and names cut by
-// the screen's edge or the card. Prints counts per sheet, and the worst routes; JSON with --json.
+// and counts routes not framed whole above the card. Cropped names are reported as information
+// on the fixed printed sheet. Prints counts per sheet and the worst routes; JSON with --json.
 import fs from 'node:fs';
 import { SHEETS, SIZES, toPx, length, resample } from '../scripts/lib/sheets.mjs';
 

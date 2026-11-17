@@ -2906,9 +2906,11 @@ are deferred, not ruled out. See "Open questions".
 - **A picked route looks right:** `qa/pickcheck.mjs` picks every bus and
   rail route on every sheet and counts gaps in the picked line, stubs under
   a stub's length, self-overlap, turns sharper than a set angle over a
-  short run, station names over the picked line, names cut by the edge or
-  the card, and a pick link that does not frame the whole route. Each count
-  is 0, or each remaining case is explained in #117.
+  short run, station names over the picked line, and a pick link that does
+  not frame the whole route. Each fault count is 0, or each remaining case
+  is explained in #117. The browser report also records cropped names as
+  information; cropping at screen edges and controls is expected while
+  panning a fixed drawing.
 - **Speed:** a usable map in under 2 seconds on a mid-range phone over
   typical 4G (170 ms latency, 9 Mbps, a 4x slower CPU), with slow 4G (150 ms,
   1.6 Mbps) as a stretch. Measured 2026-11-05 on a 390 px phone: line-end

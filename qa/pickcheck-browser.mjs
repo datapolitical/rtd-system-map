@@ -2,8 +2,8 @@
 // (chromium, 393×760, both themes), and what only the page shows counted per sheet:
 //   unframed  the route's bounds not wholly in the map left clear above the card, where they fit
 //             on the widest sheet (`toobig` counts the routes that don't)
-//   clipped   station names drawn that the screen's edge, the card, the sheet buttons or the
-//             credit line cut
+//   clipped   informational: names cropped by the screen edge or page controls
+//             (allowed on the fixed printed sheet; not a fault on its own)
 //   nocard    no card, or a card without RTD's name for the route
 // node qa/pickcheck-browser.mjs <base> [--json] [--route 28]
 import { chromium } from '@playwright/test';
@@ -32,7 +32,7 @@ for (const theme of themes) {
       // The card fills once the directory answers, and the frame follows it.
       for (let i = 0; i < 40 && !document.querySelector('#card.route b')?.textContent; i++) await new Promise((ok) => setTimeout(ok, 50));
       await idle();
-      // The page hides cut names once the map is idle (unclip), which draws once more.
+      // Wait for the drawing to settle before measuring its framing.
       const frames = () => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
       await frames();
       await new Promise((ok) => { const t = setTimeout(ok, 800); map.once('idle', () => { clearTimeout(t); ok(); }); });
@@ -77,7 +77,7 @@ for (const theme of themes) {
     else if (!res.inside) sum.unframed++;
     sum.clipped += res.clipped.length;
     if (!res.name) sum.nocard++;
-    if ((res.fits && !res.inside) || res.clipped.length || !res.name) worst.push({ theme, ...r, bbox: undefined, ...res });
+    if ((res.fits && !res.inside) || !res.name) worst.push({ theme, ...r, bbox: undefined, ...res });
   }
   await page.close();
 }
