@@ -14,8 +14,9 @@ maplibregl.prewarm();
 performance.setResourceTimingBufferSize?.(2000);
 
 const scheme = matchMedia('(prefers-color-scheme: dark)');
-const forced = new URLSearchParams(location.search).get('theme');
-const theme = () => forced ?? (scheme.matches ? 'dark' : 'light');
+const root = document.documentElement;
+let manualTheme = root.dataset.themeManual === 'true';
+const theme = () => root.dataset.theme ?? (scheme.matches ? 'dark' : 'light');
 const zooms = SHEETS.map((s) => s.zoom);
 
 // Both at once: neither needs the other (index.html has already asked for them).
@@ -61,11 +62,38 @@ const map = new maplibregl.Map({
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
-// A new theme is a new style; the picked route is set on it again (pick, below).
-scheme.addEventListener('change', () => {
-  if (forced) return;
-  map.setStyle(sheetStyle(theme(), stations, colors, wanted));
+// A theme change only recolours the drawing; keep its camera, card and route selection.
+const themeButton = document.querySelector('#theme-toggle');
+function themeButtonState() {
+  const dark = theme() === 'dark';
+  themeButton.setAttribute('aria-pressed', String(dark));
+  themeButton.title = `Switch to ${dark ? 'light' : 'dark'} mode`;
+}
+function changeTheme(next) {
+  if (next === theme()) return;
+  root.dataset.theme = next;
+  document.querySelector('meta[name="theme-color"]').content = PALETTES[next].ground;
+  themeButtonState();
+  reveal();
+  map.setStyle(sheetStyle(next, stations, colors, wanted));
   map.once('styledata', () => setPick(picked));
+}
+themeButtonState();
+themeButton.disabled = false;
+themeButton.addEventListener('click', () => {
+  const next = theme() === 'dark' ? 'light' : 'dark';
+  manualTheme = true;
+  try { localStorage.setItem('rtd-sheets-theme', next); } catch {}
+  // Keep an explicitly themed link consistent with the choice on reload.
+  const url = new URL(location.href);
+  if (url.searchParams.has('theme')) {
+    url.searchParams.set('theme', next);
+    history.replaceState(null, '', url);
+  }
+  changeTheme(next);
+});
+scheme.addEventListener('change', () => {
+  if (!manualTheme) changeTheme(scheme.matches ? 'dark' : 'light');
 });
 
 // --- The other sheets, once the first is drawn ----------------------------------
@@ -275,7 +303,7 @@ function keepVisible() {
   if (!selectedAt || card.hidden || !map.isStyleLoaded()) return;
   const box = map.getContainer().getBoundingClientRect();
   const p = map.project(selectedAt);
-  const blocks = [card, document.querySelector('#steps'), document.querySelector('#credit')]
+  const blocks = [card, document.querySelector('#steps'), document.querySelector('#credit'), themeButton]
     .filter((el) => el && !el.hidden).map((el) => {
       const r = el.getBoundingClientRect();
       return { left: r.left - box.left, top: r.top - box.top, right: r.right - box.left, bottom: r.bottom - box.top };

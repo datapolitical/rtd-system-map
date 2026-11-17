@@ -1983,9 +1983,14 @@ the only strongly colored elements in the interface itself.
 
 ### Dark mode
 
-The site follows the system setting (`prefers-color-scheme`). There is no
-toggle and nothing is stored. If the setting changes while the page is open,
-the map and interface re-color in place and the map stays where it was.
+The Classic map follows the system setting (`prefers-color-scheme`). The
+sheets start with that setting too, and have a 44 px circular sun/moon button
+in the lower-right corner. It switches the map and interface together and
+remembers the reader's choice locally. Until a choice is made, system changes
+recolour the open map. Theme changes preserve the view, card and picked route.
+A saved choice is applied before paint, including to the loading picture.
+The button has a stable accessible name, “Dark mode”, and reports its pressed
+state; its icon and tooltip show the mode a tap will choose.
 
 - **One palette, two themes.** Every map color, including the symbols drawn
   on canvas (tags, shields, station capsules, signs, key swatches), comes
@@ -3689,6 +3694,11 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   audience, but not the default view.
 
 ## Decision log
+
+- 2026-11-17: Chris requested a light/dark toggle in the lower-right corner
+  of the sheets. Use a 44 px sun/moon button aligned with the zoom controls,
+  clear of the credit and safe areas. Save a manual choice, apply it before
+  paint, and keep the map's view and route selection through a theme change.
 
 - 2026-11-17: Chris clarified that panning at a given zoom must leave the
   drawing static. This supersedes #147's earlier screen-fit alternatives:

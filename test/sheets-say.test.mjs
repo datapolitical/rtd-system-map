@@ -35,7 +35,7 @@ test("the sheets page's quieter text and rings meet AA in both themes", async ()
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const tokens = (block) => Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})/g)].map((m) => [m[1], m[2]]));
   const light = tokens(html.match(/:root \{([^}]*)\}/)[1]);
-  const dark = { ...light, ...tokens(html.match(/prefers-color-scheme: dark\) \{ :root \{([^}]*)\}/)[1]) };
+  const dark = { ...light, ...tokens(html.match(/:root\[data-theme="dark"\] \{([^}]*)\}/)[1]) };
   for (const [name, t] of Object.entries({ light, dark })) {
     for (const bg of ['card', 'ground']) {
       assert.ok(contrast(t.note, t[bg]) >= 4.5, `${name}: --note on --${bg}`);
