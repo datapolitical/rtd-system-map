@@ -126,3 +126,11 @@ test("the checks' in-page helpers ask for the site's files from its root, wherev
   const code = fs.readFileSync(fileURLToPath(new URL('../qa/lib/inpage.js', import.meta.url)), 'utf8');
   assert.doesNotMatch(code, /(?:fetch|import)\(\s*['"`](?!https?:|\/)/);
 });
+
+test('every script the pages run parses as a module (#152: a name declared twice stopped the page)', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? walk(path.join(dir, d.name)) : d.name.endsWith('.js') ? [path.join(dir, d.name)] : []));
+  for (const file of walk(path.join(PUBLIC, 'js'))) {
+    assert.doesNotThrow(() => execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' }), path.relative(PUBLIC, file));
+  }
+});

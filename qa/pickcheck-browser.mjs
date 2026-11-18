@@ -1,7 +1,7 @@
 // The page's half of qa/pickcheck.mjs: for every bus and rail route, a pick link opened on a phone
 // (chromium, 393×760, both themes), and what only the page shows counted per sheet:
 //   unframed  the route's bounds not wholly in the map left clear above the card, where they fit
-//             on the widest sheet (`toobig` counts the routes that don't)
+//             on the sheet the links open on (`toobig` counts the routes that don't)
 //   clipped   informational: names cropped by the screen edge or page controls
 //             (allowed on the fixed printed sheet; not a fault on its own)
 //   nocard    no card, or a card without RTD's name for the route
@@ -41,16 +41,18 @@ for (const theme of themes) {
       const name = card.hidden ? '' : card.querySelector('b')?.textContent ?? '';
       const view = map.getContainer().getBoundingClientRect();
       const cardTop = card.hidden ? view.bottom : card.getBoundingClientRect().top;
-      const zooms = [10, 12, 14, 16];
+      // The sheets as the page has them (#152 added a wider sheet 0 the links here don't open on).
+      const { SHEETS, OPENING } = await import('/js/sheets/style.js');
+      const zooms = SHEETS.map((x) => x.zoom);
       const z = map.getZoom();
-      const sheet = zooms.reduce((b, x, i) => (Math.abs(x - z) < Math.abs(zooms[b] - z) ? i : b), 0) + 1;
+      const sheet = SHEETS[zooms.reduce((b, x, i) => (Math.abs(x - z) < Math.abs(zooms[b] - z) ? i : b), 0)].id;
       const [w, s, e, n] = bbox[0].length ? bbox[0] : bbox;
       const a = map.project([w, n]);
       const b = map.project([e, s]);
       const tol = 2;
       const inside = a.x >= -tol && a.y >= -tol && b.x <= view.width + tol && b.y <= cardTop - view.top + tol;
-      // Would it fit on the widest sheet at all? Its size there against the clear area.
-      const scale = 2 ** (zooms[0] - z);
+      // Would it fit on the sheet these links open on? Its size there against the clear area.
+      const scale = 2 ** (zooms[OPENING] - z);
       const fits = (b.x - a.x) * scale <= view.width - 32 && (b.y - a.y) * scale <= cardTop - view.top - 28;
       // Names drawn now, their boxes from the build's `bx`, against the edge and our controls.
       const blocks = ['#card', '#steps', '#credit'].map((q) => document.querySelector(q)).filter((el) => el && !el.hidden && el.offsetParent !== null).map((el) => el.getBoundingClientRect());

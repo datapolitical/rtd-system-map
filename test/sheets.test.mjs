@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -1461,4 +1461,61 @@ test('on sheet 3 every lettered stop shows its letter in a square on its street,
   const s4 = lettered3({ across: [150] }, SHEETS.find((s) => s.id === 4));
   assert.equal(kinds3(s4, 'group-stop').length, 0);
   assert.equal(kinds3(s4, 'group-bracket').length + kinds3(features, 'group-bracket').length, 0);
+});
+
+test('the whole district names only the hub and each line\'s far end, inward, with the far ends\' letters (#152)', () => {
+  const whole = SHEETS.find((s) => s.whole);
+  const ink = (route) => ({ route, color: '#57C1E9' });
+  const mark = (id, name, [x, y], ending, extra = {}) => ({ id, name, lines: ending.join(' '), count: Math.max(1, ending.length), ends: [[x, y - 5], [x, y + 5]], more: [], span: 10, fat: false,
+    end: ending.length > 0, bars: [{ ends: [[x, y - 5], [x, y + 5]], ending: ending.map(ink) }], ...extra });
+  // A runs from the hub east to the airport, B north-west, E and R south; R starts at Mid, L stops just past the hub.
+  const marks = [
+    mark(1, 'Hub', [500, 500], ['A', 'B', 'E', 'L'], { hub: true }),
+    mark(2, 'Airport', [900, 500], ['A']),
+    mark(3, 'West', [300, 300], ['B']),
+    mark(4, 'South', [700, 800], ['E', 'R']),
+    mark(5, 'Mid', [700, 500], ['R']),
+    mark(6, 'Near', [512, 500], ['L']),
+  ];
+  const lines = [[[500, 500], [900, 500]], [[500, 500], [300, 300]], [[500, 500], [700, 800]], [[700, 500], [700, 800]], [[500, 500], [512, 500]]].map((p) => ({ paths: [p] }));
+  const set = names(marks, lines, [], whole);
+  assert.deepEqual(set.map((n) => n.mark.name).sort(), ['Airport', 'Hub', 'South', 'West'], 'Mid is only R\'s near end; Near is within the hub\'s reach');
+  assert.equal(set.find((n) => n.mark.name === 'South').letters.map((l) => l.route).join(''), 'ER');
+  assert.equal(set.find((n) => n.mark.name === 'Hub').letters.length, 0, 'no line\'s far end is the hub');
+  assert.equal(set.find((n) => n.mark.name === 'West').letters.map((l) => l.route).join(''), 'B', 'one line\'s far end carries its letter too');
+  const airport = set.find((n) => n.mark.name === 'Airport');
+  assert.ok(airport.box[2] <= 901, `the airport's name turns in from the network's east end (${airport.box})`);
+  // The sheet the page opens on names every line end, as before.
+  const opening = SHEETS.find((s) => s.opens);
+  assert.ok(names(marks, lines, [], opening).some((n) => n.mark.name === 'Mid'));
+});
+
+test('RTD\'s boundary mask becomes the district: its cut-outs, the places in them not in the district as holes (#152)', () => {
+  const square = (w, s, e, n) => [[w, s], [e, s], [e, n], [w, n], [w, s]];
+  const mask = { type: 'FeatureCollection', features: [
+    { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: [
+      [square(-110, 35, -100, 42), square(-105.2, 39.5, -104.8, 39.9), square(-104, 39, -103.999, 39.001)],
+      [square(-105.0, 39.7, -104.95, 39.75)],
+    ] } },
+  ] };
+  const d = districtShape(mask);
+  assert.equal(d.type, 'MultiPolygon');
+  assert.equal(d.coordinates.length, 1, 'the speck smaller than a square kilometre is dropped');
+  assert.equal(d.coordinates[0].length, 2, 'the district with its one hole');
+  assert.deepEqual(d.coordinates[0][0].map(([x]) => x).sort((a, b) => a - b).at(0), -105.2);
+  const plain = districtShape({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [square(-105.2, 39.5, -104.8, 39.9)] } }] });
+  assert.equal(plain.coordinates[0][0].length, 5, 'a boundary that is no mask is the district itself');
+  assert.equal(districtShape(null), null);
+});
+
+test('the frame of the whole district holds its lines and its names\' boxes (#152)', () => {
+  const whole = SHEETS.find((s) => s.whole);
+  const o = toPx([-105, 39.75], whole.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], whole.zoom);
+  const drawn = all([line({ kind: 'rail' }, [ll(0, 0), ll(100, 0)]), point({ kind: 'station', shape: 'name', bx: '6,-6,80,6' }, ll(100, 0)), point({ kind: 'station', shape: 'name', alt: '|1|', bx: '6,-6,500,6' }, ll(100, 0))]);
+  const [w, s, e, n] = sheetExtent(drawn, whole);
+  const [west, north] = toPx([w, n], whole.zoom);
+  const [east, south] = toPx([e, s], whole.zoom);
+  assert.ok(Math.abs(west - o[0]) < 0.5 && Math.abs(east - (o[0] + 180)) < 0.5, `east to the name's end, not its second place's (${east - o[0]})`);
+  assert.ok(Math.abs(north - (o[1] - 6)) < 0.5 && Math.abs(south - (o[1] + 6)) < 0.5);
 });

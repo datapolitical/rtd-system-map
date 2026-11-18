@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SHEETS, drawSheet } from './lib/sheets.mjs';
+import { SHEETS, drawSheet, districtShape, sheetExtent } from './lib/sheets.mjs';
 
 // The picture must match both the built transit drawing and the code that inks it.
 export async function drawingFingerprint(sheet) {
@@ -25,8 +25,11 @@ export async function writeSheets(dir) {
   const named = new Set();
   // Each rail line's colour from RTD's data: the page sets each theme's ink from these (public/js/sheets/style.js).
   const colors = new Set();
+  // What the whole-district sheet draws, end to end: stepping out to it frames this (#152).
+  let frame = null;
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
+    if (sheet.whole) frame = sheetExtent(drawn, sheet);
     if (sheet.opens) { hub = drawn.hub; opening = drawn; }
     for (const f of drawn.features) if (f.properties.shape === 'name') named.add(f.properties.name);
     for (const f of drawn.features) if (f.properties.kind === 'rail') colors.add(f.properties.color);
@@ -34,7 +37,9 @@ export async function writeSheets(dir) {
     const count = (kind) => drawn.features.filter((f) => f.properties.kind === kind).length;
     console.log(`sheet ${sheet.id} (zoom ${sheet.zoom}): ${count('rail')} rail lines, ${drawn.features.filter((f) => f.properties.shape === 'name' && !f.properties.alt && !f.properties.edge).length} station names (${drawn.features.filter((f) => f.properties.shape === 'name' && f.properties.alt && !f.properties.edge).length} placed again for a pick), ${drawn.features.filter((f) => f.properties.kind === 'letter' && !f.properties.edge).length} letters, ${count('bus')} bus streets`);
   }
-  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), hub, stations: [...named], colors: [...colors] }));
+  // RTD's district, for the towns the whole-district sheet names (#152). A build without it names every town.
+  const district = districtShape(await read('boundary').catch(() => null));
+  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), hub, stations: [...named], colors: [...colors], district, frame }));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -4,9 +4,10 @@
 // file is only ink.
 import { contrast, darkenTo, liftTo, lightness, toOklch, fromOklch } from '../color.js';
 
-// Sheet 0 is the whole district on one screen (#152), one step wider than the sheet the page opens on.
+// Sheet 0 is the whole district on one screen (#152), one step wider than the sheet the page opens
+// on: stepping out to it frames the whole network (main.js), and it names only the towns in RTD's district.
 export const SHEETS = [
-  { id: 0, zoom: 8 },
+  { id: 0, zoom: 8, whole: true },
   { id: 1, zoom: 10, opens: true },
   { id: 2, zoom: 12 },
   { id: 3, zoom: 14 },
@@ -252,7 +253,7 @@ const NOTHING = { type: 'FeatureCollection', features: [] };
  * `wanted` is the sheets whose drawings load now (all of them when not given); the rest start
  * empty, so the opening view doesn't wait on sheets it can't show (DESIGN.md, "Quality floor").
  */
-export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
+export function sheetStyle(theme, stations = [], colors = [], wanted = null, district = null) {
   // A place that shares a station's name is not lettered twice: the station's own name says it.
   const named = stations.map((s) => s.toUpperCase());
   const c = PALETTES[theme];
@@ -449,10 +450,13 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     const major = ['all', ['==', ['get', 'class'], 'city'], ['<=', ['to-number', ['get', 'rank'], 99], PLACE_MAJOR_RANK]];
     layers.push({ id: `place-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'place', ...band,
       filter: ['all', ['in', ['get', 'class'], ['literal', classes]], ['!', ['in', ['upcase', ['get', 'name']], ['literal', named]]],
-        ['!', ['in', 'historic district', ['downcase', ['get', 'name']]]]],
+        ['!', ['in', 'historic district', ['downcase', ['get', 'name']]]],
+        // The whole district names its own towns, not the next county's (#152): district is from sheets.json.
+        ...(sheet.whole && district ? [['within', district]] : [])],
       layout: { 'text-field': ['upcase', ['get', 'name']], 'text-font': ['case', major, ['literal', FONT.semibold], ['literal', FONT.medium]],
         'text-size': ['case', major, PLACE_SIZE[n] + 2, PLACE_SIZE[n]], 'text-letter-spacing': ['case', major, 0.26, 0.22], 'text-padding': 4, 'text-max-width': 8,
-        'text-anchor': 'center',
+        // On the whole district Denver and Aurora sit among the lines: there a name may stand to a side of its point.
+        ...(sheet.whole ? { 'text-variable-anchor': ['center', 'top', 'bottom', 'left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right'], 'text-radial-offset': 0.9 } : { 'text-anchor': 'center' }),
         'symbol-sort-key': ['+', ['*', 100, ['index-of', ['get', 'class'], ['literal', classes]]], ['to-number', ['get', 'rank'], 99]] },
       paint: { 'text-color': ['case', major, c.city, c.place], 'text-halo-color': c.ground, 'text-halo-width': 2.2, 'text-halo-blur': 0.4 } });
     // A picked bus route holds its ground like rail: placed before the place names, so a town's

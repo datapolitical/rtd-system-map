@@ -20,7 +20,7 @@ const theme = () => root.dataset.theme ?? (scheme.matches ? 'dark' : 'light');
 const zooms = SHEETS.map((s) => s.zoom);
 
 // Both at once: neither needs the other (index.html has already asked for them).
-const [meta, { hub, stations, colors, drawing } = {}] = await Promise.all([
+const [meta, { hub, stations, colors, drawing, district, frame: wholeFrame } = {}] = await Promise.all([
   fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json()),
   fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({})),
 ]);
@@ -40,14 +40,31 @@ const wanted = new Set([SHEETS[start].id]);
 const home = hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2];
 let openingSteps = !asked;
 
+// How far the reader can pan: the routes and a margin (`bounded`, which the loading picture's
+// placing assumes: index.html, data-bounds). On the whole district (#152) they reach half a
+// screen further each way, so any part of the network can be brought to the middle and the
+// screen always fits at zoom 8: MapLibre raises the zoom of a screen larger than its bounds.
+const bounded = [[minLon - 0.3, minLat - 0.3], [maxLon + 0.3, maxLat + 0.3]];
+function roomy() {
+  const x = (lon) => (lon + 180) / 360;
+  const y = (lat) => 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
+  const lon = (u) => u * 360 - 180;
+  const lat = (v) => (360 / Math.PI) * Math.atan(Math.exp((0.5 - v) * 2 * Math.PI)) - 90;
+  const box = document.getElementById('map');
+  const world = 512 * 2 ** zooms[0];
+  const [halfX, halfY] = [box.clientWidth / world / 2, box.clientHeight / world / 2];
+  const [[w, s], [e, n]] = bounded;
+  return [[lon(x(w) - halfX), lat(y(s) + halfY)], [lon(x(e) + halfX), lat(y(n) - halfY)]];
+}
+
 const map = new maplibregl.Map({
   container: 'map',
-  style: sheetStyle(theme(), stations, colors, wanted),
+  style: sheetStyle(theme(), stations, colors, wanted, district),
   center: asked?.center ?? home,
   zoom: zooms[start],
   minZoom: zooms[0] - 0.6,
   maxZoom: zooms.at(-1) + 0.6,
-  maxBounds: [[minLon - 0.3, minLat - 0.3], [maxLon + 0.3, maxLat + 0.3]],
+  maxBounds: SHEETS[start].whole ? roomy() : bounded,
   dragRotate: false,
   pitchWithRotate: false,
   touchPitch: false,
@@ -75,7 +92,7 @@ function changeTheme(next) {
   document.querySelector('meta[name="theme-color"]').content = PALETTES[next].ground;
   themeButtonState();
   reveal();
-  map.setStyle(sheetStyle(next, stations, colors, wanted));
+  map.setStyle(sheetStyle(next, stations, colors, wanted, district));
   map.once('styledata', () => setPick(picked));
 }
 themeButtonState();
@@ -206,14 +223,40 @@ function say(text) {
   clearTimeout(quiet);
   quiet = setTimeout(() => { voice.textContent = text; }, 60);
 }
-function show(index, around) {
+// The middle of what the whole-district sheet draws (the build's `frame`), in the map's own
+// (Mercator) terms, so the network sits in the middle of the screen however far north it reaches.
+const frameCentre = wholeFrame && (() => {
+  const [w, s, e, n] = wholeFrame;
+  const y = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  const mid = (y(s) + y(n)) / 2;
+  return [(w + e) / 2, (2 * Math.atan(Math.exp(mid)) - Math.PI / 2) * (180 / Math.PI)];
+})();
+// Where the reader was before stepping out to the whole district: the button back in returns
+// there, unless the reader has moved the map on the whole district since.
+let cameFrom = null;
+// How much of the map the sheet buttons sit over at its foot: the whole district centres in the rest.
+function underSteps() {
+  const box = map.getContainer().getBoundingClientRect();
+  const steps = document.querySelector('#steps')?.getBoundingClientRect();
+  return steps ? Math.max(0, box.bottom - steps.top) : 0;
+}
+// `keep`: a link names this view's centre, so stepping to the whole district keeps it.
+function show(index, around, keep = false) {
   const was = sheet;
   sheet = Math.max(0, Math.min(zooms.length - 1, index));
   const dots = document.querySelector('#sheets');
   dots.setAttribute('aria-label', sheetName(sheet, zooms.length));
   if (sheet !== was) say(sheetName(sheet, zooms.length));
   want(sheet);
-  map.easeTo({ zoom: zooms[sheet], around, duration: 380 }, { settling: true });
+  // Stepping out to the whole district shows all of it, wherever the reader was (#152).
+  const whole = SHEETS[sheet].whole && frameCentre && sheet !== was && !keep;
+  const back = !whole && cameFrom && SHEETS[was]?.whole && sheet === was + 1 && !around ? cameFrom : null;
+  if (whole) cameFrom = map.getCenter().toArray();
+  else if (!SHEETS[sheet].whole) cameFrom = null;
+  // The whole district's room is given before the move there, and taken back after the move off it.
+  if (SHEETS[sheet].whole) map.setMaxBounds(roomy());
+  else if (SHEETS[was]?.whole) map.once('moveend', () => { if (!SHEETS[sheet].whole) map.setMaxBounds(bounded); });
+  map.easeTo({ zoom: zooms[sheet], ...(whole ? { center: frameCentre, offset: [0, -underSteps() / 2] } : back ? { center: back } : { around }), duration: 380 }, { settling: true });
   for (const [i, dot] of [...document.querySelectorAll('#sheets i')].entries()) dot.classList.toggle('on', i === sheet);
   document.querySelector('#out').disabled = sheet === 0;
   document.querySelector('#in').disabled = sheet === zooms.length - 1;
@@ -255,9 +298,10 @@ map.on('zoomstart', (e) => {
   began = null;
   requestAnimationFrame(() => show(sheet + 1, around));
 });
-document.querySelector('#in').addEventListener('click', () => show(sheet + 1, openingSteps && hub ? hub : undefined));
+document.querySelector('#in').addEventListener('click', () => show(sheet + 1, !cameFrom && openingSteps && hub ? hub : undefined));
 document.querySelector('#out').addEventListener('click', () => show(sheet - 1));
 map.on('movestart', (e) => { if (e.originalEvent) openingSteps = false; });
+map.on('dragstart', () => { if (SHEETS[sheet].whole) cameFrom = null; });
 show(sheet);
 
 // --- What is this? Tap a line, a station or a stop --------------------------------
@@ -493,6 +537,8 @@ function remember() {
   history.replaceState(history.state, '', hash);
 }
 map.on('moveend', remember);
+// A turned phone or a resized window on the whole district needs room for its new screen.
+map.on('resize', () => { if (SHEETS[sheet].whole) map.setMaxBounds(roomy()); });
 // An address edited in place, or a link to this page followed from itself.
 addEventListener('hashchange', (event) => {
   // A resize can rewrite the address before this queued event is handled. Read the
@@ -502,7 +548,7 @@ addEventListener('hashchange', (event) => {
   openingSteps = false;
   selectedAt = null;
   if (v.center) map.jumpTo({ center: v.center });
-  show(nearest(v.zoom));
+  show(nearest(v.zoom), undefined, Boolean(v.center));
   applyAddressPick(v.pick);
 });
 // A picked route in the address opens its card too, as a tap on it would: closing the card
