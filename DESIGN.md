@@ -2154,7 +2154,9 @@ routes there a few pixels off their street, where streets closer than
 
 **Tap a route to highlight it** (#118). A tap on a street, its route numbers,
 a line letter, a rail line, a station or a stop opens the card, which lists
-each route there as a button. Picking one draws that route whole and every
+each route there as a button. A tap on a line or a street that has only one
+route picks that route at once and opens its own small card, since there is
+nothing to choose between; a station or a stop keeps its own card. Picking one draws that route whole and every
 other street and line faded; the same button, or a tap on empty ground,
 clears it. A picked bus route is one ink and one weight from end to end (the
 sheet's rail width, near-black in the light, near-white in the dark, no rail
@@ -5189,6 +5191,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   isn't pointing to the right place"; "Maybe it literally says Denver
   airport with an arrow". It had been set where the line crosses the
   frame's side, below the bend where the line turns north to the airport.
+- 2026-11-18: A tap on a line or street with one route picks it at once and
+  shows the route's small card, not the full card with its one route as a
+  button to tap. Reason: Chris, on a tap on the T line: "the box that comes
+  up showing the line is huge compared to what it needs to be, and it only
+  has one line, so obviously that one is the one that should be selected
+  automatically".
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in

@@ -473,11 +473,12 @@ map.on('click', (e) => {
   const lettered = station ? null : hit(['group-stop', 'stop-letter'])[0]?.properties;
   if (lettered?.letter) return placeCard({ lettered });
   const bus = hit(['bus']).map((f) => f.properties).sort((a, b) => b.n - a.n)[0];
+  const stop = hit(['stop'])[0]?.properties;
   const what = pickFrom({
     station,
     letter: hit(['letter'])[0]?.properties,
     rail: [...new Map(hit(['rail']).map((f) => [f.properties.route, f.properties])).values()],
-    stop: hit(['stop'])[0]?.properties,
+    stop,
     label: hit(['bus-number', 'bus-stack'])[0]?.properties,
     bus,
   });
@@ -492,7 +493,15 @@ map.on('click', (e) => {
     return tell({ title: esc(bus.street), lead: 'Routes by the letter of their stop', groups: groupList(bus.groups),
       routes: buses(bus.others ?? ''), also: bus.others ? 'Also on this street' : '', note: what.note === 'Bus' ? '' : what.note });
   }
-  tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
+  const routes = [...rails(what.rail ?? []), ...buses(what.bus ?? '')];
+  // A line with only one route on it can mean only that route: it is picked at once, and named
+  // on its own small card, not a card asking the reader to pick it.
+  if (routes.length === 1 && !station && !stop) {
+    const p = { mode: routes[0].mode, route: routes[0].route };
+    setPick(p);
+    return openCard(p);
+  }
+  tell({ title: what.title, note: what.note, routes });
 });
 map.on('dragstart', () => {
   selectedAt = null;
