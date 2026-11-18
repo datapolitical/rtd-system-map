@@ -138,6 +138,21 @@ test('a station name keeps off a picked route: moved where it can be, under a ti
   }
 });
 
+test('a picked route has no other line\'s letter on it (#153)', () => {
+  // Chris: a faded E disc sat on the shared track and covered the picked T line.
+  const style = sheetStyle('dark', [], ['#57C1E9']);
+  for (const n of SHEETS.map((s) => s.id)) {
+    for (const id of [`letter-${n}`, `letter-disc-${n}`]) {
+      const shows = (props, state) => evaluate(layer(style, id).filter, { props: { kind: 'letter', ...props }, state: { ...none, ...state } });
+      assert.equal(shows({ route: 'E' }, {}), true, 'nothing picked: every letter');
+      assert.equal(shows({ route: 'T' }, { rail: 'T' }), true, 'the picked line keeps its own letters');
+      assert.equal(shows({ route: 'E' }, { rail: 'T' }), false);
+      assert.equal(shows({ route: 'E' }, { bus: '0' }), false);
+      assert.equal(shows({ route: 'E', small: true }, { rail: 'T' }), true, 'a station name\'s letters stay');
+    }
+  }
+});
+
 test('a picked route\'s card says what the route is, from RTD\'s directory, in two short lines (#117)', () => {
   // Chris: "'Route / Bus / 28' says almost nothing" and "it covers about a quarter of the screen".
   const r = { route: '28', mode: 'bus', name: '28th Avenue', tier: 'hourly', wk: 60, goes: [{ name: 'Olde Town Arvada Station' }, { name: 'Central Park Station' }] };

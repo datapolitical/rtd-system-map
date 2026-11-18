@@ -13,7 +13,7 @@ import { lightenTo, shade, textOn } from './color.js';
 import { DARK_RAIL_MIN, P, PALETTES } from './palette.js';
 import { CLASS_RANK, DETAIL_FROM, PART_TIME, byZoom, classMatch, classWidth, classWidthAt, classWidthTimes, tierMatch, tierWidth } from './shared.js';
 import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
-import { fade, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
+import { fade, hide, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
 import { edgeLetterLayer } from './edgeletters.js';
 
 // Rail is heavier than any bus at every zoom. On shared track, lines run side
@@ -788,7 +788,7 @@ export function transitMarks(lines) {
         }),
         'text-offset': letterOffset(() => LETTER_SIZE),
       },
-      paint: { 'text-color': lines.letter, 'icon-opacity': fade(isRoute()), 'text-opacity': fade(isRoute()) },
+      paint: { 'text-color': lines.letter, 'icon-opacity': hide(isRoute()), 'text-opacity': hide(isRoute()) },
     },
     // No bus route numbers on the map (DESIGN.md, "Bus routes", "Numbers").
     // Three tries at them (one number per frequent route, rows of numbers in

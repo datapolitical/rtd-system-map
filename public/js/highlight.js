@@ -22,6 +22,9 @@ export const STATE = { sel: { default: '' }, selStations: { default: '' } };
 
 // Full strength unless something is chosen and this feature isn't part of it.
 export const fade = (hit) => ['case', none, 1, hit, 1, DIM];
+// Gone unless nothing is chosen or this feature is part of it: another line's letter, which
+// would sit on the chosen route where they share track (#153).
+export const hide = (hit) => ['case', none, 1, hit, 1, 0];
 // The feature is the chosen route (its own `route`, or another property).
 export const isRoute = (prop = 'route') => ['==', ['get', prop], SEL];
 // The chosen route is one of the words in a list property.

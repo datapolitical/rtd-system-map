@@ -2181,7 +2181,9 @@ round the lettering, and the name's row of line letters steps aside while
 that route is picked, so the line reads unbroken and the name printed over
 it. A picked route's card is two short lines: its number's chip and RTD's
 name for it, then its two ends and how often it runs, all from the directory
-(`pickCard`). A picked rail line keeps its
+(`pickCard`). While a route is picked, other lines' letters on their lines
+are not drawn, since one on shared track would sit on the picked line; the
+small letters beside station names stay. A picked rail line keeps its
 own colour and its stations' bars; the other stations fade, and only half as
 far while a bus is picked, so the places a bus passes still read. What is
 faded is inked nearer the ground, not made see-through, so overlapping
@@ -5197,6 +5199,10 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   up showing the line is huge compared to what it needs to be, and it only
   has one line, so obviously that one is the one that should be selected
   automatically".
+- 2026-11-18: Other lines' letters are hidden, not faded, while a route is
+  picked, on the sheets and the classic map (#153). Reason: a faded E disc on
+  the shared track sat on the picked T line, so it didn't read as one
+  unbroken line.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in

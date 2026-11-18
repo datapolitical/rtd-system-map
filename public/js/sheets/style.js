@@ -228,6 +228,10 @@ export const nameCovers = picks('cover');
 // a name keeps its built position while panning, including at the screen boundary.
 export const fixedName = ['==', tagged('edge'), ''];
 export const onRail = ['all', ['!=', RAIL_PICK, ''], ['==', ['get', 'route'], RAIL_PICK]];
+// Another line's letter on its line while a route is picked (#153): it goes, since a disc on
+// shared track or a shared street would sit on the picked route. The small letters beside
+// station names stay.
+export const otherLineLetter = ['all', PICKED, ['!', onRail], ['!=', ['coalesce', ['get', 'small'], false], true]];
 // A station on the picked line ("A B C").
 export const atStation = ['all', ['!=', RAIL_PICK, ''], ['in', ['concat', ' ', RAIL_PICK, ' '], ['concat', ' ', ['get', 'lines'], ' ']]];
 // How far toward the ground what is off the route goes: lines to about a fifth of their
@@ -483,8 +487,8 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     // Its letter is LETTER_TEXT times the disc's radius, a little below the middle (LETTER_LIFT ems).
     const held = ['==', ['coalesce', ['get', 'held'], false], true];
     const loose = ['!', held];
-    layer('letter-disc', 'circle', { filter: kind('letter', ['all', loose, namePlace, fixedName, ['!', nameCovers]]), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
-    layer('letter', 'symbol', { filter: kind('letter', ['all', loose, namePlace, fixedName, ['!', nameCovers]]),
+    layer('letter-disc', 'circle', { filter: kind('letter', ['all', loose, namePlace, fixedName, ['!', nameCovers], ['!', otherLineLetter]]), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
+    layer('letter', 'symbol', { filter: kind('letter', ['all', loose, namePlace, fixedName, ['!', nameCovers], ['!', otherLineLetter]]),
       layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * LETTER_TEXT, disc * LETTER_TEXT], 'text-allow-overlap': true, 'text-offset': [0, LETTER_LIFT] },
       paint: { 'text-color': unless(onRail, letterInk, byColor('ink', ['get', 'ink'], FADE.line)) } });
     // On the whole district a name's letters are held to the name in pixels (`px`, `em`: the
