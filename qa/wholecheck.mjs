@@ -244,6 +244,10 @@ for (const [where, hash] of corners) {
   const held = sheet0.features.filter((f) => f.properties.kind === 'letter' && f.properties.held && !f.properties.alt).length;
   const chips = await page.evaluate(() => window.sheetsMap.queryRenderedFeatures({ layers: ['letter-chip-0'] }).filter((f) => !f.properties.alt).length);
   report(held > 0 && chips === held, 'every letter held under a name is drawn', `${chips} of ${held}`);
+  // A far end named where its line goes off the screen carries its arrow (the airport).
+  const pointers = sheet0.features.filter((f) => f.properties.kind === 'pointer' && !f.properties.alt).length;
+  const arrows = await page.evaluate(() => window.sheetsMap.queryRenderedFeatures({ layers: ['pointer-0'] }).filter((f) => !f.properties.alt).length);
+  report(arrows === pointers, 'every arrow a far end\'s name points with is drawn', `${arrows} of ${pointers}`);
   report(!page.errors.length, 'turn: no errors', page.errors.slice(0, 3).join(' | '));
   await page.context().close();
 }

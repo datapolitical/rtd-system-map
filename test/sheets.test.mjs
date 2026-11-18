@@ -1578,10 +1578,20 @@ test('the whole district is framed on the frequent network, and a line running o
   const named = (n) => drawn.features.find((f) => f.properties.shape === 'name' && f.properties.name === n && !f.properties.alt);
   const east = named('East End');
   const at = toPx(east.geometry.coordinates, whole.zoom);
-  assert.match(east.properties.text, / ›$/, 'its name points the way the line goes on');
-  assert.ok(Math.abs(at[0] - (o[0] + 250)) < 1 && Math.abs(at[1] - o[1]) < 4, 'set on its line where it leaves the frame, not at its end');
+  assert.equal(east.properties.text, 'East End', 'on one row');
+  const reach = SIZES.namePointer.reach;
+  assert.ok(Math.abs(at[0] - (o[0] + 250 + reach)) < 1 && Math.abs(at[1] - o[1]) < 4, 'set on its line where it goes off a phone, just past the frame, not at its end');
+  // Its arrow is held to it, on the frame's side of the name, turned toward the end itself.
+  const arrow = drawn.features.find((f) => f.properties.kind === 'pointer' && f.properties.nid === east.properties.nid);
+  assert.ok(arrow, 'it carries an arrow');
+  assert.deepEqual(arrow.geometry.coordinates, east.geometry.coordinates);
+  const [bx0, , bx1] = east.properties.bx.split(',').map(Number);
+  assert.ok(arrow.properties.px[0] > bx0 + (bx1 - bx0) / 2 && arrow.properties.px[0] <= bx1, 'at the name\'s end toward the edge');
+  const tip = [at[0] + arrow.properties.px[0], at[1] + arrow.properties.px[1]];
+  const toward = (Math.atan2(o[1] - tip[1], o[0] + 600 - tip[0]) * 180) / Math.PI;
+  assert.ok(Math.abs(arrow.properties.turn - toward) <= 1, `turned to the end: ${arrow.properties.turn}° vs ${toward.toFixed(1)}°`);
   const [, , e] = sheetExtent(drawn, whole);
   assert.ok(e < ll(600, 0)[0] && e >= ll(249, 0)[0], 'the frame stops at the frequent network, short of the end');
-  assert.doesNotMatch(named('South End').properties.text, /[‹›]/, 'an end inside the frame is named at its end');
-  assert.ok(!drawSheet({ routes, stations, streets, terminals: null }, SHEETS.find((s) => s.opens)).features.some((f) => /[‹›]/.test(f.properties.text ?? '')), 'only the whole district points');
+  assert.ok(!drawn.features.some((f) => f.properties.kind === 'pointer' && f.properties.name === 'South End'), 'an end inside the frame is named at its end, with no arrow');
+  assert.ok(!drawSheet({ routes, stations, streets, terminals: null }, SHEETS.find((s) => s.opens)).features.some((f) => f.properties.kind === 'pointer'), 'only the whole district points');
 });

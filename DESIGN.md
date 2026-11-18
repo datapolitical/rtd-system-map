@@ -2090,10 +2090,13 @@ tables:
   hourly bus streets are left out: a few reach far past the rest (Nederland),
   and framing them left the network small. The A line runs on past the
   frame's east side to the airport, off the screen on a phone: its far
-  end's name is set on the line where it leaves the frame, with an arrow
-  the way the line goes on ("Denver Airport ›", `namePointer`; the font has
-  no →), not at the end itself. On a desktop, where the end is on screen,
-  the name still points along the line to it. The +
+  end's name is set on one row by the line where it goes off a phone's
+  screen (`namePointer.reach`, 14 px past the frame's side, inside the
+  32 px the page keeps there), on the frame's side of it, with an arrow
+  after it turned toward the end itself ("Denver Airport →"). The font has
+  no arrows, so the page draws it (`pointer-arrow`, main.js), held to the
+  name in pixels like its letters and inked like it. On a desktop, where
+  the end is on screen, the arrow points across to it. The +
   button goes back to where the reader was, unless they moved the map on
   sheet 0. A link that names a view on sheet 0 keeps its own centre. Its
   address is written at the zoom the sheet is drawn at (`#8.75/…`), so a
@@ -5179,6 +5182,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   you can see that it's Denver airport off to the side". Framed on the rail,
   a 402 px phone rested at 8.94 too but centred on the airport; the new
   frame rests a 402 px phone at 8.94 on his view.
+- 2026-11-18: The airport's name moved up to where the A line goes off a
+  phone's screen, on one row, with a drawn arrow turned toward the airport
+  in place of "›". Reason: Chris, on the first version: "the Denver airport
+  label is in the wrong place on that map. It's way too low, and the arrow
+  isn't pointing to the right place"; "Maybe it literally says Denver
+  airport with an arrow". It had been set where the line crosses the
+  frame's side, below the bend where the line turns north to the airport.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in

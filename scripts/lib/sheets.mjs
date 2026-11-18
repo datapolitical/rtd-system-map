@@ -162,8 +162,10 @@ export const SIZES = {
   nameLetter: { 0: 5.2, 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 },
   // A letter's size on its disc, as a share of the disc's radius, and how far below the middle it sits (ems): style.js, letter.
   letterText: 1.42,
-  // The arrow a far end's name carries when it is set where its line leaves the whole district's frame: [west, east].
-  namePointer: ['\u2039', '\u203A'],
+  // A far end's name set where its line goes off a phone's screen on the whole district: that far
+  // past the frame's side (inside the 32 px the page keeps there, main.js), and its arrow's length
+  // and the gap between it and the name. The font has no arrows: the page draws it (pointer-arrow).
+  namePointer: { reach: 14, arrow: 12, gap: 3 },
   letterLift: 0.06,
   // Bus streets: a stretch shorter than this takes the class of the stretches
   // it joins, and a loop or stub smaller than this is not drawn.
@@ -1084,15 +1086,21 @@ export function names(marks, lines, discs, sheet, streets = []) {
     const minor = !must && !SIZES.nameAll[sheet.id];
     const size = minor ? SIZES.nameMinor : SIZES.name[sheet.id];
     let c = mid;
-    // A far end past the frame's side (the airport, out beyond the frequent network) is named where
-    // its line crosses that side, with an arrow the way the line goes on: on a phone the end itself
-    // is off the screen (Chris, 2026-11-18: "so that you can see that it's Denver airport off to the side").
+    // A far end past the frame's side (the airport, out beyond the frequent network) is named on
+    // its line where it goes off a phone's screen, `namePointer.reach` past that side, with an
+    // arrow pointing at the end itself: on a phone the end is off the screen (Chris, 2026-11-18:
+    // "so that you can see that it's Denver airport off to the side"; "it literally says Denver
+    // airport with an arrow").
     let pointer = 0;
     if (keepIn && farOnly && (c[0] > keepIn[2] || c[0] < keepIn[0])) {
       const side = c[0] > keepIn[2] ? 1 : -1;
-      const at = crossingX(lines.filter((l) => farLines(m).has(l.route)).flatMap((l) => l.paths), side > 0 ? keepIn[2] : keepIn[0], c);
+      const paths = lines.filter((l) => farLines(m).has(l.route)).flatMap((l) => l.paths);
+      const edgeX = side > 0 ? keepIn[2] : keepIn[0];
+      const at = crossingX(paths, edgeX + side * SIZES.namePointer.reach, c) ?? crossingX(paths, edgeX, c);
       if (at) [c, pointer] = [at, side];
     }
+    // The arrow's room beside the name, toward the side it points off.
+    const arrowRoom = pointer ? SIZES.namePointer.arrow + SIZES.namePointer.gap : 0;
     const half = pointer ? [0, 0] : [(bar.ends[1][0] - bar.ends[0][0]) / 2, (bar.ends[1][1] - bar.ends[0][1]) / 2];
     // Where every line at the bar ends and the station before stands closer than the name is
     // tall, a name beside the bar would stand beside that station too: it goes beyond the end
@@ -1107,10 +1115,12 @@ export function names(marks, lines, discs, sheet, streets = []) {
       const wide = Math.max(...rows.map((t) => textWidth(t, minor ? 'Overpass Medium' : 'Overpass SemiBold', size)));
       const tall = rows.length * size * 1.12;
       // The row of letters sits under the name, and the name's room includes it.
-      const [w, h] = [Math.max(wide, row.length * (2 * r + 2)), tall + (row.length ? 2 * r + 5 : 0)];
+      const [w, h] = [Math.max(wide, row.length * (2 * r + 2)) + arrowRoom, tall + (row.length ? 2 * r + 5 : 0)];
       let best = null;
       for (const reach of [1, 1.4, 1.8, 2.8]) {
         for (const [dx, dy, anchor, cost] of sides) {
+          // A pointing name stands on the frame's side of its line, its arrow at the end toward the edge.
+          if (pointer && dx * pointer >= 0) continue;
           const n = Math.hypot(dx, dy);
           const off = (rail / 2 + 5 + Math.abs((half[0] * dx + half[1] * dy) / n)) * reach;
           const at = [c[0] + (dx / n) * off, c[1] + (dy / n) * off];
@@ -1131,7 +1141,10 @@ export function names(marks, lines, discs, sheet, streets = []) {
           const crowded = last && dist(c, before) < tall && !beyond;
           const extraScore = extra ? extra(box) : 0;
           const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0) + extraScore + spill(box) * SIZES.nameSpill + graded * SIZES.nameStray;
-          const candidate = { text, score, hits, box, anchor, tall, extraScore, offset: [(at[0] - c[0]) / size, (ty - c[1]) / size] };
+          // The text stands clear of the arrow, which sits level with its first row.
+          const tx = at[0] - pointer * arrowRoom;
+          const arrow = pointer ? [at[0] - pointer * (SIZES.namePointer.arrow / 2), y0 + (size * 1.12) / 2] : null;
+          const candidate = { text, score, hits, box, anchor, tall, extraScore, arrow, offset: [(tx - c[0]) / size, (ty - c[1]) / size] };
           if (!best || score < best.score) best = candidate;
         }
       }
@@ -1140,8 +1153,10 @@ export function names(marks, lines, discs, sheet, streets = []) {
     // A name is written out where it has room; where it would sit on lines or stand off from
     // its mark, the shortened name is used if that sits better.
     // Between stations too close for two rows, it is set in one.
-    const pointed = (t) => (pointer > 0 ? `${t} ${SIZES.namePointer[1]}` : pointer < 0 ? `${SIZES.namePointer[0]} ${t}` : t);
-    const texts = [wrapped(m.name), wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')].map(pointed);
+    // A pointing name reads on one row, beside its arrow.
+    const texts = pointer
+      ? [m.name, shortened(m.name), wrapped(m.name), wrapped(shortened(m.name))]
+      : [wrapped(m.name), wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')];
     const choose = (extra = null, self = null) => {
       let best = placed(texts[0], extra, self);
       for (const text of [...new Set(texts)].slice(1)) {
@@ -1157,11 +1172,14 @@ export function names(marks, lines, discs, sheet, streets = []) {
     if (!must && (best.hits || (minor && best.score >= SIZES.nameCrowd))) continue;
     const finish = (b) => {
       const justify = b.anchor.includes('left') ? 'left' : b.anchor.includes('right') ? 'right' : 'center';
-      const [x0, , x1] = b.box;
+      // The letters stand under the text, not the arrow.
+      const [x0, x1] = [b.box[0] + (pointer < 0 ? arrowRoom : 0), b.box[2] - (pointer > 0 ? arrowRoom : 0)];
       const span = row.length * (2 * r + 2) - 2;
       const left = justify === 'left' ? x0 : justify === 'right' ? x1 - span : (x0 + x1 - span) / 2;
       const letters = row.map((l, i) => ({ route: l.route, color: l.color, ink: inkOn(l.color), at: [left + r + i * (2 * r + 2), b.box[1] + b.tall + 3 + r] }));
-      const result = { text: b.text, box: b.box, anchor: b.anchor, offset: b.offset, justify, letters, hits: b.hits };
+      // The arrow turns to the end itself, clockwise from east in degrees, as MapLibre turns an icon.
+      const arrow = b.arrow && { at: b.arrow, turn: Math.round((Math.atan2(mid[1] - b.arrow[1], mid[0] - b.arrow[0]) * 180) / Math.PI) };
+      const result = { text: b.text, box: b.box, anchor: b.anchor, offset: b.offset, justify, letters, arrow, hits: b.hits };
       return result;
     };
     const { hits, ...chosen } = finish(best);
@@ -3802,6 +3820,8 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
         return { held: true, px: d.map(fixed), em: [d[0] / size, d[1] / size + SIZES.letterLift].map((v) => Math.round(v * 1000) / 1000) };
       };
       for (const b of place.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, nid, ...tag, ...(sheet.whole ? held(b) : {}) }, { type: 'Point', coordinates: back(sheet.whole ? n.at : b.at) }));
+      // A pointing name's arrow, held to it in pixels like its letters (style.js: pointer).
+      if (place.arrow) features.push(feature({ kind: 'pointer', name: m.name, nid, ...tag, held: true, px: [place.arrow.at[0] - n.at[0], place.arrow.at[1] - n.at[1]].map(fixed), turn: place.arrow.turn }, { type: 'Point', coordinates: back(n.at) }));
     }
   }
   // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.

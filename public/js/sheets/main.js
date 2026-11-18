@@ -799,7 +799,29 @@ function discImage(id) {
   }
   return { width: side, height: side, data };
 }
+// The arrow a far end's name points with (style.js, pointer): a shaft and an open head, pointing
+// east, as a distance field the page inks and haloes. 12 px long, drawn at twice that.
+function arrowImage(id) {
+  if (id !== 'pointer-arrow') return null;
+  const [len, head, half, pad] = [24, 9, 1.8, 6];
+  const [w, h] = [len + 2 * pad, 2 * head + 2 * pad];
+  const [x0, x1, y] = [pad, pad + len, h / 2];
+  const segs = [[[x0, y], [x1, y]], [[x1, y], [x1 - head, y - head]], [[x1, y], [x1 - head, y + head]]];
+  const toSeg = (px, py, [[ax, ay], [bx, by]]) => {
+    const [dx, dy] = [bx - ax, by - ay];
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(ax + t * dx - px, ay + t * dy - py);
+  };
+  const data = new Uint8ClampedArray(w * h * 4);
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const d = Math.min(...segs.map((sg) => toSeg(i + 0.5, j + 0.5, sg))) - half;
+    data.set([255, 255, 255, Math.max(0, Math.min(255, 192 - d * 16))], (j * w + i) * 4);
+  }
+  return { width: w, height: h, data };
+}
 map.setMissingStyleImageResolver((id) => {
+  const arrow = !map.hasImage(id) && arrowImage(id);
+  if (arrow) return map.addImage(id, arrow, { pixelRatio: 2, sdf: true });
   const disc = !map.hasImage(id) && discImage(id);
   if (disc) return map.addImage(id, disc, { pixelRatio: 2, sdf: true });
   const mark = !map.hasImage(id) && markImage(id);

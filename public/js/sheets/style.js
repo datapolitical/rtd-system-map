@@ -495,6 +495,12 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
       layout: { 'icon-image': `letter-disc-${small}`, 'icon-offset': ['get', 'px'], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
         'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': small * LETTER_TEXT, 'text-offset': ['get', 'em'], 'text-allow-overlap': true, 'text-ignore-placement': true },
       paint: { 'icon-color': railLine, 'icon-halo-color': c.ground, 'icon-halo-width': 1.5, 'text-color': unless(onRail, letterInk, byColor('ink', ['get', 'ink'], FADE.line)) } });
+    // A far end named where its line goes off a phone's screen carries an arrow at the end itself
+    // (`pointer`: the build), held to the name in pixels and turned toward it; the font has no
+    // arrows, so the page draws it (main.js, pointer-arrow), inked as the name is.
+    if (sheet.whole) layer('pointer', 'symbol', { filter: kind('pointer', ['all', namePlace, fixedName]),
+      layout: { 'icon-image': 'pointer-arrow', 'icon-offset': ['get', 'px'], 'icon-rotate': ['get', 'turn'], 'icon-rotation-alignment': 'viewport', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
+      paint: { 'icon-color': textInk(c.name, ['any', atStation, ['!=', BUS, '']]), 'icon-halo-color': c.ground, 'icon-halo-width': 1.5 } });
     // Lettering keeps off the lines: unseen marks along rail and the busiest streets hold their
     // ground. MapLibre places the last layer first: rail's marks, then the route numbers (which
     // sit on their own streets but never on rail), then the streets' marks, then everything above.
