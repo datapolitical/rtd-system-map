@@ -27,7 +27,7 @@ export async function writeSheets(dir) {
   const colors = new Set();
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
-    if (sheet.id === 1) { hub = drawn.hub; opening = drawn; }
+    if (sheet.opens) { hub = drawn.hub; opening = drawn; }
     for (const f of drawn.features) if (f.properties.shape === 'name') named.add(f.properties.name);
     for (const f of drawn.features) if (f.properties.kind === 'rail') colors.add(f.properties.color);
     await writeFile(path.join(dir, `sheet-${sheet.id}.geojson`), JSON.stringify(drawn));

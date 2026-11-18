@@ -10,9 +10,11 @@
 import { textWidth } from '../glyphs.mjs';
 import { routeLine } from './routeline.mjs';
 
-/** The sheets: the zoom each is drawn for and which set of bus streets it uses. */
+/** The sheets: the zoom each is drawn for and which set of bus streets it uses. Sheet 0 is the
+ * whole district on one screen (#152); the page opens on sheet 1. */
 export const SHEETS = [
-  { id: 1, zoom: 10, streets: 'far' },
+  { id: 0, zoom: 8, streets: 'far' },
+  { id: 1, zoom: 10, streets: 'far', opens: true },
   { id: 2, zoom: 12, streets: 'far' },
   { id: 3, zoom: 14, streets: 'near' },
   { id: 4, zoom: 16, streets: 'near' },
@@ -24,17 +26,17 @@ export const SIZES = {
   // corner; a dead end shorter than a stub goes; a second street closer than `apart` to the main
   // path goes; gaps up to `bridge` px are closed; farther gaps up to `pickFar` px close along RTD's line; and the whole is smoothed over `pickSmooth` px.
   pickSnap: 2,
-  pickStub: { 1: 12, 2: 14, 3: 14, 4: 16 },
-  pickApart: { 1: 8, 2: 8, 3: 8, 4: 8 },
-  pickBridge: { 1: 10, 2: 12, 3: 16, 4: 24 },
+  pickStub: { 0: 10, 1: 12, 2: 14, 3: 14, 4: 16 },
+  pickApart: { 0: 8, 1: 8, 2: 8, 3: 8, 4: 8 },
+  pickBridge: { 0: 8, 1: 10, 2: 12, 3: 16, 4: 24 },
   // Farther gaps, where the sheet draws no street the route takes, close along RTD's own line.
-  pickFar: { 1: 60, 2: 120, 3: 240, 4: 480 },
-  pickSmooth: { 1: 5, 2: 4, 3: 3, 4: 2.5 },
+  pickFar: { 0: 30, 1: 60, 2: 120, 3: 240, 4: 480 },
+  pickSmooth: { 0: 5, 1: 5, 2: 4, 3: 3, 4: 2.5 },
   // Width of a rail line, and the gap between two lines that share track.
-  rail: { 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 },
-  gap: { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 },
+  rail: { 0: 3, 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 },
+  gap: { 0: 1.2, 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 },
   // A line's path is rounded over this far, so it reads as drawn by hand.
-  round: { 1: 2.5, 2: 3, 3: 3, 4: 3 },
+  round: { 0: 2.5, 1: 2.5, 2: 3, 3: 3, 4: 3 },
   // Where a line changes its place beside others, it slides across over about this far each side.
   ease: 26,
   // Lines whose paths in the data run this close (in metres) are on one track, drawn beside one rounded track.
@@ -49,13 +51,13 @@ export const SIZES = {
   walk: 600,
   // A letter sits at least this far from a station mark and from another letter,
   // and repeats along its line about this often.
-  letterClear: { 1: 15, 2: 16, 3: 19, 4: 22 },
-  letterEvery: { 1: 190, 2: 260, 3: 340, 4: 420 },
+  letterClear: { 0: 14, 1: 15, 2: 16, 3: 19, 4: 22 },
+  letterEvery: { 0: 170, 1: 190, 2: 260, 3: 340, 4: 420 },
   // Another line within this many pitches means the line isn't running alone.
   alone: 1.6,
   // Station names: lettering size, and whether the sheet names every station or only the hub and line ends.
-  name: { 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 },
-  nameAll: { 1: false, 2: true, 3: true, 4: true },
+  name: { 0: 11, 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 },
+  nameAll: { 0: false, 1: false, 2: true, 3: true, 4: true },
   nameMinor: 10,
   // A name whose best spot still sits on this much line is left for a closer sheet.
   nameCrowd: 26,
@@ -65,7 +67,7 @@ export const SIZES = {
   // A station's other bar this far from its first is named too, so each end of a long station says what it is.
   nameAgain: 120,
   // Where two or more lines end at a bar, its name carries their letters in a row: each disc this big, this far apart.
-  nameLetter: { 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 },
+  nameLetter: { 0: 5.2, 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 },
   // Bus streets: a stretch shorter than this takes the class of the stretches
   // it joins, and a loop or stub smaller than this is not drawn.
   busBlip: 14,
@@ -93,12 +95,12 @@ export const SIZES = {
   // A street that carries straight on and strays no farther than this from a straight line is drawn straight.
   busStraight: 2.5,
   // Where a street turns at a corner the turn is rounded over about this far, as a pen would take it.
-  busTurn: { 1: 3, 2: 4, 3: 6, 4: 9 },
+  busTurn: { 0: 2.5, 1: 3, 2: 4, 3: 6, 4: 9 },
   // Bus streets closer together than this can't be told apart: they are drawn as one.
-  busMerge: { 1: 4, 2: 7, 3: 7, 4: 24 },
+  busMerge: { 0: 4, 1: 4, 2: 7, 3: 7, 4: 24 },
   // Along one street, the blocks that carry its label are at least this far apart.
-  busLabelEvery: { 1: 150, 2: 170, 3: 240, 4: 320 },
-  busLabelSize: { 1: 8.5, 2: 8.5, 3: 10, 4: 11.5 },
+  busLabelEvery: { 0: 150, 1: 150, 2: 170, 3: 240, 4: 320 },
+  busLabelSize: { 0: 8.5, 1: 8.5, 2: 8.5, 3: 10, 4: 11.5 },
   // Clear air at each end of a labelled block: the figures' halo and a little more, so they stop short of the cross streets.
   busLabelAir: 4,
   // A list too long for its stretch in one row is stacked in two, this far apart (in ems).
@@ -113,11 +115,11 @@ export const SIZES = {
   // From this sheet bus streets are named, from their stops (drawSheet, runStreet).
   streetSheet: 3,
   // How far past each end of a labelled run its street's stops still say which street it is (about 600 m).
-  streetAhead: { 1: 0, 2: 0, 3: 80, 4: 320 },
+  streetAhead: { 0: 0, 1: 0, 2: 0, 3: 80, 4: 320 },
   // No two names of one street closer than this (px): about one a screen.
   // On sheet 4 a street is a few blocks a screen, so its name comes a little more often than the
   // phone's width (393 px): a street across the screen is named on it.
-  streetEvery: { 1: 0, 2: 0, 3: 520, 4: 360 },
+  streetEvery: { 0: 0, 1: 0, 2: 0, 3: 520, 4: 360 },
   // A stop's ring, out to its edge (public/js/sheets/style.js, STOP_RING).
   stopRing: 4.75,
   // The page keeps lettering this far off a ring's middle (public/js/sheets/style.js, STOP_ROOM and its padding).
@@ -132,7 +134,7 @@ export const SIZES = {
   // the source's maxzoom is a zoom under the sheet's, at 512 px a tile). A name across a tile's edge is not set.
   sourceTile: 1024,
   // A line letter's disc, out to its edge (public/js/sheets/style.js, the letter layer's radius and stroke).
-  letterDisc: { 1: 8.9, 2: 9.7, 3: 10.9, 4: 12.1 },
+  letterDisc: { 0: 8.5, 1: 8.9, 2: 9.7, 3: 10.9, 4: 12.1 },
   // RTD's stop groups (stopGroups): from this sheet a small table says which routes stop at which
   // lettered stop. Its type in px (title, rows, a badge's letter) with letter spacing in ems, its
   // badge, padding, the gap after a badge, the rows' pitch and its corner. Capitals and figures in
@@ -3129,7 +3131,7 @@ export const expressRoutes = (routes) => inCategory(routes, EXPRESS_CATEGORY);
 export const AIRPORT_CATEGORY = 'SKYRIDE';
 export const airportRoutes = (routes) => inCategory(routes, AIRPORT_CATEGORY);
 export const isExpress = (routes, express) => String(routes ?? '').split(/[ ,]+/).some((r) => express.has(r));
-export const busWide = (cls, sheet) => { const w = SIZES.rail[sheet.id]; return [sheet.id === 1 ? 1 : w / 1.6 ** 2, w / 1.4, BUSIEST[cls] && sheet.id <= 3 ? w * 1.3 : w][BUS_STEP[cls] ?? 0]; };
+export const busWide = (cls, sheet) => { const w = SIZES.rail[sheet.id]; return [sheet.id <= 1 ? 1 : w / 1.6 ** 2, w / 1.4, BUSIEST[cls] && sheet.id <= 3 ? w * 1.3 : w][BUS_STEP[cls] ?? 0]; };
 
 /** A sheet's pixels around a place, each set where something is drawn (lines, dots, boxes, rooms), grown by a margin. */
 export class Raster {

@@ -1,7 +1,7 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
-import { SHEETS, sheetData, sheetStyle, PALETTES, GROUP, expressInk, airportInk } from './style.js';
+import { SHEETS, OPENING, sheetData, sheetStyle, PALETTES, GROUP, expressInk, airportInk } from './style.js';
 import { pickFrom, pickCard, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
@@ -28,13 +28,13 @@ window.sheetsDrawing = drawing;
 const [[west, south], [east, north]] = meta.bounds.core;
 
 // Only the sheet the page opens on loads first: the others are most of the page's weight and
-// none of them shows until the reader zooms (DESIGN.md, "Quality floor"). The page opens at
-// the widest sheet unless its address names another (address.js: `#zoom/lat/lon/mode/route`).
+// none of them shows until the reader zooms (DESIGN.md, "Quality floor"). The page opens on
+// sheet 1, one step in from the whole district, unless its address names another (address.js: `#zoom/lat/lon/mode/route`).
 // An address that names no view, or a centre off the map, opens the page as a plain visit does.
 const [[minLon, minLat], [maxLon, maxLat]] = meta.bounds.routes;
 const onMap = (c) => c && c[0] >= minLon - 0.3 && c[0] <= maxLon + 0.3 && c[1] >= minLat - 0.3 && c[1] <= maxLat + 0.3;
 const asked = ((v) => (v && v.center && !onMap(v.center) ? null : v))(readView(location.hash));
-const start = nearest(asked?.zoom ?? zooms[0]);
+const start = nearest(asked?.zoom ?? zooms[OPENING]);
 const wanted = new Set([SHEETS[start].id]);
 // The page opens on the hub, a little above the middle so the lines south of it show.
 const home = hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2];
@@ -486,7 +486,7 @@ listButton?.addEventListener('click', showList);
 
 // A plain visit keeps its plain address until the view changes: it is the opening view, and the
 // loading picture is fetched early only for an address without one (index.html).
-const opening = writeView({ zoom: zooms[0], center: home });
+const opening = writeView({ zoom: zooms[OPENING], center: home });
 function remember() {
   const hash = writeView({ zoom: zooms[sheet], center: map.getCenter().toArray(), pick: picked });
   if (hash === location.hash || (!location.hash && hash === opening)) return;

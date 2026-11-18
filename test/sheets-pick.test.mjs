@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluate } from '../public/js/evaluate.js';
-import { sheetStyle, PALETTES, STATE, mix } from '../public/js/sheets/style.js';
+import { SHEETS, sheetStyle, PALETTES, STATE, mix } from '../public/js/sheets/style.js';
 import { pickFrom, pickCard, routeList } from '../public/js/sheets/pick.js';
 import fs from 'node:fs';
 import { createExpression } from '@maplibre/maplibre-gl-style-spec';
@@ -28,7 +28,7 @@ test('a picked route holds on every sheet: its pieces are drawn on top, the rest
     const style = sheetStyle(theme, [], ['#57C1E9', '#E31837']);
     assert.deepEqual(style.state, STATE);
     const c = PALETTES[theme];
-    for (const n of [1, 2, 3, 4]) {
+    for (const n of SHEETS.map((s) => s.id)) {
       const pick = layer(style, `pick-bus-${n}`);
       assert.ok(pick, `sheet ${n} has the picked route's layer`);
       const on15 = { kind: 'bus', routes: '1, 15, 15L', cls: 'c10' };
@@ -109,7 +109,7 @@ test('a station name keeps off a picked route: moved where it can be, under a ti
   // Chris: "The Union Station label sits on top of route 28".
   for (const theme of ['light', 'dark']) {
     const style = sheetStyle(theme, [], ['#57C1E9']);
-    for (const n of [1, 2, 3, 4]) {
+    for (const n of SHEETS.map((s) => s.id)) {
       const name = layer(style, `name-${n}`);
       const shows = (props, bus) => evaluate(name.filter, { props: { kind: 'station', shape: 'name', ...props }, state: { ...none, bus } });
       // The first place gives way to its second only for the routes it names, "28" not "28X".

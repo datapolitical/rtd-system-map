@@ -4,16 +4,20 @@
 // file is only ink.
 import { contrast, darkenTo, liftTo, lightness, toOklch, fromOklch } from '../color.js';
 
+// Sheet 0 is the whole district on one screen (#152), one step wider than the sheet the page opens on.
 export const SHEETS = [
-  { id: 1, zoom: 10 },
+  { id: 0, zoom: 8 },
+  { id: 1, zoom: 10, opens: true },
   { id: 2, zoom: 12 },
   { id: 3, zoom: 14 },
   { id: 4, zoom: 16 },
 ];
+/** The index in SHEETS of the sheet a plain visit opens on. */
+export const OPENING = SHEETS.findIndex((s) => s.opens);
 
 // Must match SIZES in scripts/lib/sheets.mjs: the build places lines side by side at these widths.
-const RAIL = { 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 };
-const GAP = { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
+const RAIL = { 0: 3, 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 };
+const GAP = { 0: 1.2, 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
 
 // The build's six headway classes are drawn as three steps: a bus every 10 minutes or better,
 // every 15, and every 30 or less often. More steps than three don't read as steps (DESIGN.md, "Four sheets").
@@ -31,8 +35,8 @@ export const MID_UNDER_TOP = 1.4;
 // an eighth of the bus ink), so they do not make a mat. Sheet 4 keeps them at rail's width, under
 // a stop's ring. Rail still reads first by its colour.
 export const BUSIEST = ['c5', 'c3'];
-export const BUSIEST_OVER_RAIL = { 1: 1.3, 2: 1.3, 3: 1.3, 4: 1 };
-const QUIET = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n, n === '1' ? 1 : w / 1.6 ** 2]));
+export const BUSIEST_OVER_RAIL = { 0: 1.3, 1: 1.3, 2: 1.3, 3: 1.3, 4: 1 };
+const QUIET = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n, n <= 1 ? 1 : w / 1.6 ** 2]));
 // The frequent steps (a bus every 15 minutes or better) are a tinted band with a spine down the
 // middle: the band is the street's width in a pale wash of the bus blue, the spine this share of
 // it in the step's own ink. The quiet step is a plain line in its ink.
@@ -105,7 +109,7 @@ export const RAIL_OVER_BUS = 1.15;
 // orange turns brown and lime olive, so the line keeps RTD's colour and gets a casing instead.
 export const LIGHT_SHADE_MOST = 0.12;
 // A cased line's casing, each side, per sheet: it sits in the gap between lines that share track.
-const CASING = { 1: 0.6, 2: 0.7, 3: 0.8, 4: 1 };
+const CASING = { 0: 0.5, 1: 0.6, 2: 0.7, 3: 0.8, 4: 1 };
 
 /** The same, in the express's rose, and in the airport buses' indigo. */
 export const expressInk = (theme, n) => busInk(theme, n, [], (EXPRESS_HUE * Math.PI) / 180);
@@ -117,7 +121,7 @@ const PLAIN = { chroma: 1, quiet: 1, lift: 0 };
 /** Each bus class's ink on one sheet (a frequent step's spine): the opening sheet draws its quiet step as a faint hairline. */
 export const busInk = (theme, n, colors = [], h = busHue(colors), { chroma, quiet, lift } = PLAIN) => {
   const t = PALETTES[theme].busTone;
-  return steps(...[n === 1 ? t.hairline : t.quiet, t.mid, t.top].map(([L, C], j) => fromOklch(L + lift, C * chroma * (j === 0 ? quiet : 1), h)));
+  return steps(...[n <= 1 ? t.hairline : t.quiet, t.mid, t.top].map(([L, C], j) => fromOklch(L + lift, C * chroma * (j === 0 ? quiet : 1), h)));
 };
 /** The frequent steps' band, laid over the ground: `{ c15, c10, c5, c3 }`. */
 export const busWash = (theme, colors = [], h = busHue(colors), { chroma } = PLAIN) => {
@@ -144,7 +148,7 @@ function inkOn(color) {
 
 // Route number size per sheet, and how far off its street's middle a number is set, in ems:
 // the street's half width, a pixel and a half of air, and half the figures' height.
-export const NUMBER_SIZE = { 1: 0, 2: 8.5, 3: 10, 4: 11.5 };
+export const NUMBER_SIZE = { 0: 0, 1: 0, 2: 8.5, 3: 10, 4: 11.5 };
 export const numberOffset = (n, width) => -((width / 2 + 1.5) / NUMBER_SIZE[n] + 0.36);
 
 // A stop's ring: radius and stroke on sheet 4, and the type size of the unseen mark that keeps
@@ -169,11 +173,11 @@ export const GROUP = { title: 9, titleSpacing: 0.12, titleInk: 0.7, row: 10.5, r
 const GROUP_FONT = { title: ['Overpass Bold'], row: ['Overpass SemiBold'] };
 
 // Station name size per sheet (SIZES.name in the build).
-const NAME_SIZE = { 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 };
+const NAME_SIZE = { 0: 11, 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 };
 
 // A city at or under this rank in the tiles (Denver, Boulder, Aurora) is set a size up and a little brighter.
 export const PLACE_MAJOR_RANK = 8;
-const PLACE_SIZE = { 1: 10.5, 2: 10.5, 3: 10, 4: 10.5 };
+const PLACE_SIZE = { 0: 10.5, 1: 10.5, 2: 10.5, 3: 10, 4: 10.5 };
 
 // A street's name in the short form a map sets it in: "West Colfax Avenue" is "W Colfax Ave".
 const STREET_PREFIX = { 'North ': 'N ', 'South ': 'S ', 'East ': 'E ', 'West ': 'W ' };
@@ -282,11 +286,11 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     const w = RAIL[n];
 
     // The ground's own lines: freeways only on the first sheet, more as the sheets get closer.
-    const roads = n === 1 ? ['motorway'] : n === 2 ? ['motorway', 'trunk', 'primary'] : ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service'];
+    const roads = n <= 1 ? ['motorway'] : n === 2 ? ['motorway', 'trunk', 'primary'] : ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service'];
     layers.push({ id: `roads-${n}`, type: 'line', source: 'ground', 'source-layer': 'transportation', ...band,
       filter: ['all', ['in', ['get', 'class'], ['literal', roads]], ['!=', ['get', 'brunnel'], 'tunnel']], layout: ROUND,
       paint: { 'line-color': ['match', ['get', 'class'], 'motorway', n <= 2 ? c.freeway : c.road, ['trunk', 'primary'], c.road, c.street],
-        'line-width': ['match', ['get', 'class'], 'motorway', [2.2, 3, 5, 12][i], ['trunk', 'primary'], [0, 1.2, 4, 10][i], [0, 0, 2.4, 7][i]] } });
+        'line-width': ['match', ['get', 'class'], 'motorway', { 0: 1.6, 1: 2.2, 2: 3, 3: 5, 4: 12 }[n], ['trunk', 'primary'], { 0: 0, 1: 0, 2: 1.2, 3: 4, 4: 10 }[n], { 0: 0, 1: 0, 2: 0, 3: 2.4, 4: 7 }[n]] } });
     if (n === 4) layers.push({ id: 'buildings-4', type: 'fill', source: 'ground', 'source-layer': 'building', ...band, paint: { 'fill-color': c.building } });
 
 
@@ -329,7 +333,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     // A bus station's hall: a quiet room edged like a quiet street, which the streets of its buses
     // end on. It is drawn over them, so a street ends flat on the wall, not in a round blob across it.
     layer('hall', 'fill', { filter: kind('hall'), paint: { 'fill-color': c.hall } });
-    layer('hall-edge', 'line', { filter: kind('hall'), layout: ROUND, paint: { 'line-color': ['case', PICKED, fadeTo(c.hallEdge, FADE.text), c.hallEdge], 'line-width': [0, 1, 1.2, 1.6][i] } });
+    layer('hall-edge', 'line', { filter: kind('hall'), layout: ROUND, paint: { 'line-color': ['case', PICKED, fadeTo(c.hallEdge, FADE.text), c.hallEdge], 'line-width': { 0: 0, 1: 0, 2: 1, 3: 1.2, 4: 1.6 }[n] } });
 
     // Bus stops: each one a ring, on the closest sheet.
     if (n >= 4) layers.push({ id: `stop-${n}`, type: 'circle', source: `sheet-${n}`, filter: ['all', ['==', ['get', 'kind'], 'stop'], ['!', ['has', 'letter']]], ...band,
@@ -395,7 +399,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
     // airport buses' small plane, pointing along the line. Above keep-off-bus so they are placed first and
     // the labels below keep clear of them; they keep clear of each other.
     const markOpacity = unless(onBus(), 1, 1 - FADE.line);
-    const along = { 'symbol-placement': 'line', 'symbol-spacing': [160, 200, 260, 320][i], 'symbol-sort-key': -1000, 'icon-padding': 6 };
+    const along = { 'symbol-placement': 'line', 'symbol-spacing': { 0: 150, 1: 160, 2: 200, 3: 260, 4: 320 }[n], 'symbol-sort-key': -1000, 'icon-padding': 6 };
     layer('express-shield', 'symbol', { filter: kind('bus', onExpress),
       layout: { ...along, 'icon-image': `express-shield-${theme}`, 'icon-rotation-alignment': 'viewport',
         'text-field': ['get', 'shield'], 'text-font': FONT.bold, 'text-size': 7, 'text-letter-spacing': -0.02, 'text-rotation-alignment': 'viewport', 'text-padding': 6 },
@@ -416,7 +420,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
       // Set just beside the street, not on it: on it, the line shows between the figures and a
       // comma reads as a dash. The offset is the street's half width and a little air, in ems.
       // Where the build found room, the street's name leads its list, in the names' quieter grey and weight.
-      layout: { 'symbol-placement': 'line', 'symbol-spacing': [0, 200, 260, 320][i],
+      layout: { 'symbol-placement': 'line', 'symbol-spacing': { 0: 0, 1: 0, 2: 200, 3: 260, 4: 320 }[n],
         'text-field': ['case', ['has', 'street'], ['format', ['get', 'street'], { 'text-color': c.busStreetName, 'text-font': ['literal', FONT.regular] }, '\u2003', {}, ['get', 'label'], {}], ['get', 'label']],
         'text-font': FONT.semibold, 'text-size': NUMBER_SIZE[n], 'text-max-angle': 25, 'text-padding': 4,
         // The build says which side has room (`side` -1: below the figures, where a street runs close above).
@@ -463,9 +467,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null) {
         'text-anchor': ['get', 'anchor'], 'text-offset': ['get', 'offset'], 'text-justify': ['get', 'justify'], 'text-allow-overlap': true, 'text-padding': 3 },
       paint: { 'text-color': textInk(c.name, ['any', atStation, ['!=', BUS, '']]), 'text-halo-color': c.ground, 'text-halo-width': ['case', nameCovers, 1.2, 2] } });
     // Line letters, placed by the build where each line runs alone: a disc in the line's colour.
-    const disc = [7.4, 8.2, 9.4, 10.6][i];
+    const disc = { 0: 7, 1: 7.4, 2: 8.2, 3: 9.4, 4: 10.6 }[n];
     // Beside a station's name the letters are smaller (scripts/lib/sheets.mjs, SIZES.nameLetter).
-    const small = [5.6, 6, 6.6, 7.4][i];
+    const small = { 0: 5.2, 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 }[n];
     layer('letter-disc', 'circle', { filter: kind('letter', ['all', namePlace, fixedName, ['!', nameCovers]]), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
     layer('letter', 'symbol', { filter: kind('letter', ['all', namePlace, fixedName, ['!', nameCovers]]),
       layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * 1.42, disc * 1.42], 'text-allow-overlap': true, 'text-offset': [0, 0.06] },

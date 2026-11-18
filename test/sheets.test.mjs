@@ -6,7 +6,7 @@ import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, st
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
 const all = (features) => ({ type: 'FeatureCollection', features });
-const sheet = SHEETS[1];
+const sheet = SHEETS.find((s) => s.id === 2);
 // A place on the sheet, `x` and `y` pixels from a corner of it.
 const origin = toPx([-105, 39.75], sheet.zoom);
 const at = (x, y) => toLonLat([origin[0] + x, origin[1] + y], sheet.zoom);
@@ -225,7 +225,7 @@ test('a turnaround too small to read as a ring is drawn as the point its streets
 });
 
 // The same, on the third sheet, where a short walk is many pixels.
-const near = SHEETS[2];
+const near = SHEETS.find((s) => s.id === 3);
 const origin3 = toPx([-105, 39.75], near.zoom);
 const at3 = (x, y) => toLonLat([origin3[0] + x, origin3[1] + y], near.zoom);
 const hall = (id, corners) => ({ type: 'Feature', properties: { id, name: `Hall ${id}` }, geometry: { type: 'Polygon', coordinates: [[...corners, corners[0]]] } });
@@ -282,7 +282,7 @@ test('two ways round a strip too thin to see into are drawn as one street with t
 });
 
 test('a route that only crosses a thin strip is not drawn round it', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o = toPx([-105, 39.75], s1.zoom);
   const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s1.zoom);
   const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
@@ -420,8 +420,8 @@ test('a street folded into a near one gives it its routes only where the two run
 
 test('two near streets tied by short links are drawn as one, and a small square block between through streets is kept', () => {
   const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
-  // A ladder on the widest sheet: two streets five pixels apart, a link between them every sixty.
-  const wide = SHEETS[0];
+  // A ladder on the opening sheet: two streets five pixels apart, a link between them every sixty.
+  const wide = SHEETS.find((s) => s.opens);
   const o = toPx([-105, 39.75], wide.zoom);
   const to = (x, y) => toLonLat([o[0] + x, o[1] + y], wide.zoom);
   const ladder = busStreets(all([
@@ -755,7 +755,7 @@ test('the page inks each line from the colours the build found: pale ones cased 
   const colors = ['#C4D600', '#552683'];
   const light = sheetStyle('light', [], colors).layers;
   const casing = light.filter((l) => l.id.startsWith('rail-casing'));
-  assert.equal(casing.length, 4, 'every sheet cases its pale lines');
+  assert.equal(casing.length, SHEETS.length, 'every sheet cases its pale lines');
   assert.deepEqual(casing[0].filter.at(-1), ['in', ['get', 'color'], ['literal', ['#C4D600']]], 'only the pale one');
   assert.ok(light.findIndex((l) => l.id === 'rail-casing-2') < light.findIndex((l) => l.id === 'rail-2'), 'under the line');
   const dark = sheetStyle('dark', [], colors).layers;
@@ -785,7 +785,7 @@ test('bus widths: the frequent step as wide as rail, the busiest few a size up o
     for (const cls of Object.keys(w)) assert.ok(Math.abs(busWide(cls, sheet) - w[cls]) < 0.011, `sheet ${sheet.id}: the build places ${cls} at the page's width`);
     assert.ok(Math.abs(m - rail / MID_UNDER_TOP) < 0.01 && m > q, `sheet ${sheet.id}: the middle step sits between`);
     assert.ok(q >= 1, `sheet ${sheet.id}: no line under a pixel`);
-    if (sheet.id === 1) assert.ok(q <= 1.05, 'the opening sheet\'s quiet step is a hairline');
+    if (sheet.id <= 1) assert.ok(q <= 1.05, `sheet ${sheet.id}: the quiet step is a hairline on the two widest sheets`);
     else assert.ok(Math.abs(q - rail / 1.6 ** 2) < 0.01, `sheet ${sheet.id}: the quiet step is rail over 1.6 twice`);
   }
   for (const theme of ['dark', 'light']) {
@@ -873,7 +873,7 @@ test("a stop the build counted as a bus station's, or one only trains call at, i
 
 test("a line's tail track past its last station is no part of it: the line ends at that station's bar", () => {
   // On the closest sheet a walk is hundreds of pixels; the track runs 120 px past the last station.
-  const s4 = SHEETS[3];
+  const s4 = SHEETS.find((s) => s.id === 4);
   const o4 = toPx([-105, 39.75], s4.zoom);
   const at4 = (x, y) => toLonLat([o4[0] + x, o4[1] + y], s4.zoom);
   const rail = line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at4(-900, 0), at4(520, 0)]);
@@ -915,7 +915,7 @@ test('lines that end at one bar coming in from either side meet back to back at 
   const { sheetStyle } = await import('../public/js/sheets/style.js');
   for (const theme of ['light', 'dark']) {
     const ids = sheetStyle(theme).layers.map((l) => l.id);
-    for (const n of [1, 2, 3, 4]) assert.ok(ids.indexOf(`station-divider-${n}`) > ids.indexOf(`station-${n}`), `sheet ${n}: the divider lies on the bar`);
+    for (const { id: n } of SHEETS) assert.ok(ids.indexOf(`station-divider-${n}`) > ids.indexOf(`station-${n}`), `sheet ${n}: the divider lies on the bar`);
   }
 });
 
@@ -1015,7 +1015,7 @@ test('lines that end over a hall end at its wall; a corner beside a wall sits on
 });
 
 test('a stop whose ring would sit half under a rail line is not ringed', () => {
-  const s = SHEETS[3];
+  const s = SHEETS.find((s) => s.id === 4);
   const o = toPx([-105, 39.75], s.zoom);
   const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s.zoom);
   const data = { routes: all([line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [ll(0, 0), ll(400, 0)])]), stations: all([]), streets: all([]), terminals: null,
@@ -1034,7 +1034,7 @@ test('a street with many routes is labelled with all of them, or not at all: nev
 });
 
 test("a stop's ring sits on the street its buses are drawn on, and the two sides of a street are one ring", () => {
-  const s4 = SHEETS[3];
+  const s4 = SHEETS.find((s) => s.id === 4);
   const o = toPx([-105, 39.75], s4.zoom);
   const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
   const stop = (id, routes, x, y, heading) => point({ id, name: `Stop ${id}`, lines: routes, heading }, ll(x, y));
@@ -1067,7 +1067,7 @@ test("a turnaround's bow is drawn tighter where it would run against rail, and a
   const held = reach(arced(loop, (p) => Math.abs(125 - p[0]), 30));
   assert.ok(free > 100 && held <= 96 && held > 50, `drawn in from ${free} to ${held}`);
   // The track runs 60 px past the last station. The line bends over a long lead-in, not in the last few pixels.
-  const s4 = SHEETS[3];
+  const s4 = SHEETS.find((s) => s.id === 4);
   const o = toPx([-105, 39.75], s4.zoom);
   const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
   const track = (route, color) => line({ mode: 'rail', route, color, slot: 0 }, [ll(-900, 0), ll(520, 0), ll(580, 0)]);
@@ -1148,7 +1148,8 @@ test('a weight gathered at a corner is not handed on down a route, and not taken
 test('a scroll or a pinch goes to the next sheet the way it was heading, and never back the way it came', async () => {
   const { settle } = await import('../public/js/sheets/settle.js');
   const zooms = SHEETS.map((s) => s.zoom);
-  const [a, b, c, d] = zooms;
+  const [a, b, c] = zooms;
+  const last = zooms.length - 1;
   assert.equal(settle(zooms, 0, a, a + 0.15), 1, 'one notch of a wheel is enough');
   assert.equal(settle(zooms, 1, b, b - 0.15), 0, 'and one notch back');
   assert.equal(settle(zooms, 0, a, a + 0.05), 0, 'a slip changes nothing');
@@ -1159,7 +1160,7 @@ test('a scroll or a pinch goes to the next sheet the way it was heading, and nev
   assert.equal(settle(zooms, 0, a, b + 0.3), 1, 'a little past a sheet rests on it');
   assert.equal(settle(zooms, 0, a, b + 0.8), 2, 'well past, it goes on to the next');
   assert.equal(settle(zooms, 0, a, a - 0.4), 0);
-  assert.equal(settle(zooms, 3, d, d + 0.4), 3);
+  assert.equal(settle(zooms, last, zooms[last], zooms[last] + 0.4), last);
 });
 
 test('a list too long for one row is stacked in two beside a straight street, turned the way the street runs', async () => {
@@ -1185,7 +1186,7 @@ test('a list too long for one row is stacked in two beside a straight street, tu
 
 test('a line does not end at a station while another of its stations lies beyond, however near the end of the track', () => {
   // The widest sheet: the last two stations are 12 px apart, nearer than three pitches.
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const two = (route, color) => line({ mode: 'rail', route, color, slot: 0 }, [at1(-300, 0), at1(40, 0)]);
@@ -1201,7 +1202,7 @@ test('a line does not end at a station while another of its stations lies beyond
 
 test('the curve into a last station never reaches back past the station before: that bar stays on its line', () => {
   // The widest sheet. The track doglegs through City 30 px before it ends at Gate.
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const rail = line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(-300, 0), at1(0, 0), at1(10, 30), at1(40, 30)]);
@@ -1216,7 +1217,7 @@ test('the curve into a last station never reaches back past the station before: 
 });
 
 test('a last station whose neighbour is closer than its name is tall is named beyond the end of the line', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const named = (cityAt) => {
@@ -1234,7 +1235,7 @@ test('a last station whose neighbour is closer than its name is tall is named be
 });
 
 test('a bend smaller than a line is wide is drawn straight; a real turn keeps its place; the pack moves as one', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const pitch = SIZES.rail[s1.id] + SIZES.gap[s1.id];
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
@@ -1264,7 +1265,7 @@ test('a bend smaller than a line is wide is drawn straight; a real turn keeps it
 });
 
 test('a name that cannot sit right beside its bar stands off only as far as it must', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const lines = railLines(all([line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(0, -300), at1(0, 300)])]), s1);
@@ -1279,7 +1280,7 @@ test('a name that cannot sit right beside its bar stands off only as far as it m
 
 test('a name set on a route\'s street has a second place off that route, for when it is picked (#117)', () => {
   // Chris: "The Union Station label sits on top of route 28".
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const lines = railLines(all([line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(0, -300), at1(0, 300)])]), s1);
@@ -1297,7 +1298,7 @@ test('a name set on a route\'s street has a second place off that route, for whe
 });
 
 test('where a line at the side of a pack ends, the lines beside it carry straight on; where one in the middle ends, the others close up', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const pitch = SIZES.rail[s1.id] + SIZES.gap[s1.id];
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
@@ -1457,7 +1458,7 @@ test('on sheet 3 every lettered stop shows its letter in a square on its street,
   const tap = squares.find((f) => f.properties.letter === 'Y');
   assert.equal(tap.properties.routes, '3, 4', 'a tap gives its routes');
   // The fourth sheet draws its stops, with their own letters, and no squares; no sheet draws a bracket.
-  const s4 = lettered3({ across: [150] }, SHEETS[3]);
+  const s4 = lettered3({ across: [150] }, SHEETS.find((s) => s.id === 4));
   assert.equal(kinds3(s4, 'group-stop').length, 0);
   assert.equal(kinds3(s4, 'group-bracket').length + kinds3(features, 'group-bracket').length, 0);
 });
