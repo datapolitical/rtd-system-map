@@ -1,7 +1,7 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
-import { SHEETS, sheetData, sheetStyle, PALETTES, GROUP, expressInk, airportInk } from './style.js';
+import { SHEETS, OPENING, edge, sheetData, sheetStyle, PALETTES, GROUP, expressInk, airportInk } from './style.js';
 import { pickFrom, pickCard, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
@@ -17,10 +17,11 @@ const scheme = matchMedia('(prefers-color-scheme: dark)');
 const root = document.documentElement;
 let manualTheme = root.dataset.themeManual === 'true';
 const theme = () => root.dataset.theme ?? (scheme.matches ? 'dark' : 'light');
+// The zoom each sheet is drawn for: what an address says, whatever the screen.
 const zooms = SHEETS.map((s) => s.zoom);
 
 // Both at once: neither needs the other (index.html has already asked for them).
-const [meta, { hub, stations, colors, drawing } = {}] = await Promise.all([
+const [meta, { hub, stations, colors, drawing, district, frame: wholeFrame } = {}] = await Promise.all([
   fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json()),
   fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({})),
 ]);
@@ -28,26 +29,70 @@ window.sheetsDrawing = drawing;
 const [[west, south], [east, north]] = meta.bounds.core;
 
 // Only the sheet the page opens on loads first: the others are most of the page's weight and
-// none of them shows until the reader zooms (DESIGN.md, "Quality floor"). The page opens at
-// the widest sheet unless its address names another (address.js: `#zoom/lat/lon/mode/route`).
+// none of them shows until the reader zooms (DESIGN.md, "Quality floor"). The page opens on
+// sheet 1, one step in from the whole district, unless its address names another (address.js: `#zoom/lat/lon/mode/route`).
 // An address that names no view, or a centre off the map, opens the page as a plain visit does.
 const [[minLon, minLat], [maxLon, maxLat]] = meta.bounds.routes;
 const onMap = (c) => c && c[0] >= minLon - 0.3 && c[0] <= maxLon + 0.3 && c[1] >= minLat - 0.3 && c[1] <= maxLat + 0.3;
 const asked = ((v) => (v && v.center && !onMap(v.center) ? null : v))(readView(location.hash));
-const start = nearest(asked?.zoom ?? zooms[0]);
+// The zoom each sheet rests at. Each rests at the zoom it is drawn for, but the whole district
+// (#152): it is drawn for a phone's width, and a wider screen comes as close as holds the rail
+// network (the build's `frame`) in the map above the sheet buttons, 16 px clear of each side, up
+// to just short of where the next sheet's band begins (style.js, edge). Chris, 2026-11-18: the
+// district at one zoom was too far out on a phone, and a desktop's screen is wider than it is tall.
+const rests = [...zooms];
+const SIDE = 32;
+function fitWhole() {
+  const i = SHEETS.findIndex((s) => s.whole);
+  if (i < 0 || !wholeFrame) return;
+  const [w, s, e, n] = wholeFrame;
+  const y = (lat) => 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
+  const box = document.getElementById('map');
+  // 32 px each side: the frame's sides are where frequent lines end, in a town whose name needs the room (Boulder).
+  const across = box.clientWidth - 2 * SIDE;
+  const down = box.clientHeight - stepsHeight() - 32;
+  const fits = Math.min(Math.log2(across / (512 * ((e - w) / 360))), Math.log2(down / (512 * (y(s) - y(n)))));
+  const top = i < SHEETS.length - 1 ? edge(i) - 0.05 : zooms[i];
+  rests[i] = Number.isFinite(fits) ? Math.max(zooms[i], Math.min(top, fits)) : zooms[i];
+}
+// How much of the map the sheet buttons sit over at its foot: the whole district keeps clear of them.
+function stepsHeight() {
+  const box = document.getElementById('map').getBoundingClientRect();
+  const steps = document.querySelector('#steps')?.getBoundingClientRect();
+  return steps ? Math.max(0, box.bottom - steps.top) : 0;
+}
+fitWhole();
+const start = nearest(asked?.zoom ?? zooms[OPENING]);
 const wanted = new Set([SHEETS[start].id]);
 // The page opens on the hub, a little above the middle so the lines south of it show.
 const home = hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2];
 let openingSteps = !asked;
 
+// How far the reader can pan: the routes and a margin (`bounded`, which the loading picture's
+// placing assumes: index.html, data-bounds). On the whole district (#152) they reach half a
+// screen further each way, so any part of the network can be brought to the middle and the
+// screen always fits at zoom 8: MapLibre raises the zoom of a screen larger than its bounds.
+const bounded = [[minLon - 0.3, minLat - 0.3], [maxLon + 0.3, maxLat + 0.3]];
+function roomy() {
+  const x = (lon) => (lon + 180) / 360;
+  const y = (lat) => 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
+  const lon = (u) => u * 360 - 180;
+  const lat = (v) => (360 / Math.PI) * Math.atan(Math.exp((0.5 - v) * 2 * Math.PI)) - 90;
+  const box = document.getElementById('map');
+  const world = 512 * 2 ** zooms[0];
+  const [halfX, halfY] = [box.clientWidth / world / 2, box.clientHeight / world / 2];
+  const [[w, s], [e, n]] = bounded;
+  return [[lon(x(w) - halfX), lat(y(s) + halfY)], [lon(x(e) + halfX), lat(y(n) - halfY)]];
+}
+
 const map = new maplibregl.Map({
   container: 'map',
-  style: sheetStyle(theme(), stations, colors, wanted),
+  style: sheetStyle(theme(), stations, colors, wanted, district),
   center: asked?.center ?? home,
-  zoom: zooms[start],
+  zoom: rests[start],
   minZoom: zooms[0] - 0.6,
   maxZoom: zooms.at(-1) + 0.6,
-  maxBounds: [[minLon - 0.3, minLat - 0.3], [maxLon + 0.3, maxLat + 0.3]],
+  maxBounds: SHEETS[start].whole ? roomy() : bounded,
   dragRotate: false,
   pitchWithRotate: false,
   touchPitch: false,
@@ -75,7 +120,7 @@ function changeTheme(next) {
   document.querySelector('meta[name="theme-color"]').content = PALETTES[next].ground;
   themeButtonState();
   reveal();
-  map.setStyle(sheetStyle(next, stations, colors, wanted));
+  map.setStyle(sheetStyle(next, stations, colors, wanted, district));
   map.once('styledata', () => setPick(picked));
 }
 themeButtonState();
@@ -145,10 +190,10 @@ function warm() {
   // band it is in shows, drawn from that zoom's tiles. All of them, nearest the map's first.
   const here = map.getZoom();
   const levels = [];
-  for (let t = zooms[0]; t <= zooms.at(-1); t++) levels.push(t);
+  for (let t = Math.floor(zooms[0]); t <= zooms.at(-1); t++) levels.push(t);
   levels.sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
   for (const t of levels) {
-    const s = SHEETS.findLast((sh, i) => !i || sh.zoom - 1 <= t);
+    const s = SHEETS.findLast((sh, i) => !i || edge(i - 1) <= t);
     for (const id of ['ground', ...(ready.has(s.id) ? [`sheet-${s.id}`] : [])]) {
       const tm = managers[id];
       const source = tm?.getSource();
@@ -194,7 +239,7 @@ map.on('idle', warm);
 
 let sheet = nearest(map.getZoom());
 function nearest(zoom) {
-  return zooms.reduce((best, z, i) => (Math.abs(z - zoom) < Math.abs(zooms[best] - zoom) ? i : best), 0);
+  return rests.reduce((best, z, i) => (Math.abs(z - zoom) < Math.abs(rests[best] - zoom) ? i : best), 0);
 }
 // A screen reader hears what changed (#14): a sheet, a card, a pick. Cleared first, so the same
 // words said twice are said again.
@@ -206,14 +251,49 @@ function say(text) {
   clearTimeout(quiet);
   quiet = setTimeout(() => { voice.textContent = text; }, 60);
 }
-function show(index, around) {
+// The middle of what the whole-district sheet draws (the build's `frame`), in the map's own
+// (Mercator) terms, so the network sits in the middle of the screen however far north it reaches.
+const frameCentre = wholeFrame && (() => {
+  const [w, s, e, n] = wholeFrame;
+  const y = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  const mid = (y(s) + y(n)) / 2;
+  return [(w + e) / 2, (2 * Math.atan(Math.exp(mid)) - Math.PI / 2) * (180 / Math.PI)];
+})();
+// How far above the screen's middle the frame's middle sits at `zoom`: none where the frame
+// clears the sheet buttons by 16 px centred on the whole screen, else just enough to clear them,
+// and at most half their height (centred in the screen above them), where it fits nowhere.
+function lift(zoom) {
+  const [, s, , n] = wholeFrame;
+  const y = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
+  const tall = (y(n) - y(s)) * 512 * 2 ** zoom;
+  const high = map.getContainer().clientHeight;
+  const under = stepsHeight();
+  return Math.min(under / 2, Math.max(0, high / 2 + tall / 2 - (high - under - 16)));
+}
+// Where the reader was before stepping out to the whole district: the button back in returns
+// there, unless the reader has moved the map on the whole district since.
+let cameFrom = null;
+// Whether the whole district is as stepping out framed it: a turned phone frames it again.
+let framed = false;
+// `keep`: a link names this view's centre, so stepping to the whole district keeps it.
+function show(index, around, keep = false) {
   const was = sheet;
   sheet = Math.max(0, Math.min(zooms.length - 1, index));
   const dots = document.querySelector('#sheets');
   dots.setAttribute('aria-label', sheetName(sheet, zooms.length));
   if (sheet !== was) say(sheetName(sheet, zooms.length));
   want(sheet);
-  map.easeTo({ zoom: zooms[sheet], around, duration: 380 }, { settling: true });
+  // Stepping out to the whole district shows all of it, wherever the reader was (#152).
+  const whole = SHEETS[sheet].whole && frameCentre && sheet !== was && !keep;
+  const back = !whole && cameFrom && SHEETS[was]?.whole && sheet === was + 1 && !around ? cameFrom : null;
+  if (whole) cameFrom = map.getCenter().toArray();
+  else if (!SHEETS[sheet].whole) cameFrom = null;
+  if (whole) framed = true;
+  else if (!SHEETS[sheet].whole || keep) framed = false;
+  // The whole district's room is given before the move there, and taken back after the move off it.
+  if (SHEETS[sheet].whole) map.setMaxBounds(roomy());
+  else if (SHEETS[was]?.whole) map.once('moveend', () => { if (!SHEETS[sheet].whole) map.setMaxBounds(bounded); });
+  map.easeTo({ zoom: rests[sheet], ...(whole ? { center: frameCentre, offset: [0, -lift(rests[sheet])] } : back ? { center: back } : { around }), duration: 380 }, { settling: true });
   for (const [i, dot] of [...document.querySelectorAll('#sheets i')].entries()) dot.classList.toggle('on', i === sheet);
   document.querySelector('#out').disabled = sheet === 0;
   document.querySelector('#in').disabled = sheet === zooms.length - 1;
@@ -236,7 +316,7 @@ map.on('zoomstart', (e) => {
 map.on('zoom', () => { last = map.getZoom(); });
 map.on('zoomend', (e) => {
   if (e.settling || began === null) return;
-  const to = settle(zooms, sheet, began, map.getZoom(), { least: input.touch ? 0.25 : 0.1 });
+  const to = settle(rests, sheet, began, map.getZoom(), { least: input.touch ? 0.25 : 0.1 });
   began = null;
   // A scroll zooms about the pointer, and so does the rest of the way.
   const box = map.getContainer().getBoundingClientRect();
@@ -255,9 +335,10 @@ map.on('zoomstart', (e) => {
   began = null;
   requestAnimationFrame(() => show(sheet + 1, around));
 });
-document.querySelector('#in').addEventListener('click', () => show(sheet + 1, openingSteps && hub ? hub : undefined));
+document.querySelector('#in').addEventListener('click', () => show(sheet + 1, !cameFrom && openingSteps && hub ? hub : undefined));
 document.querySelector('#out').addEventListener('click', () => show(sheet - 1));
 map.on('movestart', (e) => { if (e.originalEvent) openingSteps = false; });
+map.on('dragstart', () => { if (SHEETS[sheet].whole) cameFrom = null; framed = false; });
 show(sheet);
 
 // --- What is this? Tap a line, a station or a stop --------------------------------
@@ -486,13 +567,23 @@ listButton?.addEventListener('click', showList);
 
 // A plain visit keeps its plain address until the view changes: it is the opening view, and the
 // loading picture is fetched early only for an address without one (index.html).
-const opening = writeView({ zoom: zooms[0], center: home });
+const opening = writeView({ zoom: zooms[OPENING], center: home });
 function remember() {
   const hash = writeView({ zoom: zooms[sheet], center: map.getCenter().toArray(), pick: picked });
   if (hash === location.hash || (!location.hash && hash === opening)) return;
   history.replaceState(history.state, '', hash);
 }
 map.on('moveend', remember);
+// A turned phone or a resized window on the whole district needs room for its new screen.
+// It may also rest at a different zoom there (rests, above).
+map.on('resize', () => {
+  const was = rests[sheet];
+  fitWhole();
+  if (!SHEETS[sheet].whole) return;
+  map.setMaxBounds(roomy());
+  if (framed) map.easeTo({ zoom: rests[sheet], center: frameCentre, offset: [0, -lift(rests[sheet])], duration: 0 }, { settling: true });
+  else if (Math.abs(rests[sheet] - was) > 0.01) map.easeTo({ zoom: rests[sheet], duration: 0 }, { settling: true });
+});
 // An address edited in place, or a link to this page followed from itself.
 addEventListener('hashchange', (event) => {
   // A resize can rewrite the address before this queued event is handled. Read the
@@ -502,7 +593,7 @@ addEventListener('hashchange', (event) => {
   openingSteps = false;
   selectedAt = null;
   if (v.center) map.jumpTo({ center: v.center });
-  show(nearest(v.zoom));
+  show(nearest(v.zoom), undefined, Boolean(v.center));
   applyAddressPick(v.pick);
 });
 // A picked route in the address opens its card too, as a tap on it would: closing the card
@@ -520,8 +611,8 @@ function frame(r) {
   const over = card.hidden ? box.bottom : card.getBoundingClientRect().top;
   const pad = { top: 16, left: 16, right: 16, bottom: Math.max(16, box.bottom - over + 12) };
   const fit = map.cameraForBounds([[w, s], [e, n]], { padding: pad });
-  if (!fit || fit.zoom < zooms[sheet] - 0.05) return;
-  map.jumpTo({ center: [(w + e) / 2, (s + n) / 2], zoom: zooms[sheet] }, { settling: true });
+  if (!fit || fit.zoom < rests[sheet] - 0.05) return;
+  map.jumpTo({ center: [(w + e) / 2, (s + n) / 2], zoom: rests[sheet] }, { settling: true });
   map.panBy([0, (pad.bottom - pad.top) / 2], { duration: 0 }, { settling: true });
 }
 function openCard(p, { framed = false } = {}) {
@@ -595,7 +686,7 @@ function groundTiles() {
     const c = map.style.tileManagers.ground.getTileByID(key)?.tileID?.canonical;
     if (c) add(c.z, c.x, c.y);
   }
-  for (let t = zooms[0]; t <= zooms.at(-1); t++) for (const [, z, x, y] of cover(source, t)) add(z, x, y);
+  for (let t = Math.floor(zooms[0]); t <= zooms.at(-1); t++) for (const [, z, x, y] of cover(source, t)) add(z, x, y);
   return [...urls];
 }
 if ('serviceWorker' in navigator) {
@@ -692,7 +783,47 @@ function markImage(id) {
   }
   return { width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data };
 }
+// A line letter's disc on the whole district (style.js, letter-chip): a signed distance field, so
+// the map inks it with the line's colour and rings it with ground as it does the circles. Its
+// edge is at 192 of 255, and a pixel on screen is 32 steps of it (MapLibre's SDF_PX).
+function discImage(id) {
+  const m = /^letter-disc-([\d.]+)$/.exec(id);
+  if (!m) return null;
+  const r = Number(m[1]) * 2;
+  const side = Math.ceil(2 * r + 12);
+  const data = new Uint8ClampedArray(side * side * 4);
+  for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
+    const d = Math.hypot(x + 0.5 - side / 2, y + 0.5 - side / 2);
+    const i = (y * side + x) * 4;
+    data.set([255, 255, 255, Math.max(0, Math.min(255, 192 + (r - d) * 16))], i);
+  }
+  return { width: side, height: side, data };
+}
+// The arrow a far end's name points with (style.js, pointer): a shaft and an open head, pointing
+// east, as a distance field the page inks and haloes. 12 px long, drawn at twice that.
+function arrowImage(id) {
+  if (id !== 'pointer-arrow') return null;
+  const [len, head, half, pad] = [24, 9, 1.8, 6];
+  const [w, h] = [len + 2 * pad, 2 * head + 2 * pad];
+  const [x0, x1, y] = [pad, pad + len, h / 2];
+  const segs = [[[x0, y], [x1, y]], [[x1, y], [x1 - head, y - head]], [[x1, y], [x1 - head, y + head]]];
+  const toSeg = (px, py, [[ax, ay], [bx, by]]) => {
+    const [dx, dy] = [bx - ax, by - ay];
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(ax + t * dx - px, ay + t * dy - py);
+  };
+  const data = new Uint8ClampedArray(w * h * 4);
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const d = Math.min(...segs.map((sg) => toSeg(i + 0.5, j + 0.5, sg))) - half;
+    data.set([255, 255, 255, Math.max(0, Math.min(255, 192 - d * 16))], (j * w + i) * 4);
+  }
+  return { width: w, height: h, data };
+}
 map.setMissingStyleImageResolver((id) => {
+  const arrow = !map.hasImage(id) && arrowImage(id);
+  if (arrow) return map.addImage(id, arrow, { pixelRatio: 2, sdf: true });
+  const disc = !map.hasImage(id) && discImage(id);
+  if (disc) return map.addImage(id, disc, { pixelRatio: 2, sdf: true });
   const mark = !map.hasImage(id) && markImage(id);
   if (mark) return map.addImage(id, mark, { pixelRatio: ratio });
   const image = !map.hasImage(id) && groupImage(id);

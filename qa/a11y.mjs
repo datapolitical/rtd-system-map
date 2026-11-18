@@ -6,6 +6,7 @@ import { chromium } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { SHEETS, OPENING } from '../public/js/sheets/style.js';
 
 const BASE = process.argv[2] ?? 'http://localhost:8788/';
 const OUT = process.argv[3] ?? 'qa/.scratch/a11y';
@@ -47,13 +48,15 @@ for (const theme of ['light', 'dark']) {
   await writeFile(path.join(OUT, `${theme}-rest.yaml`), tree);
   check(theme, 'map canvas has a label', /region "Map of RTD bus and rail service/.test(tree) || /Map of RTD bus and rail service/.test(tree));
   check(theme, 'sheet buttons named', /button "Wider sheet"/.test(tree) && /button "Closer sheet"/.test(tree));
-  check(theme, 'which sheet is showing', /img "Sheet 1 of 4"/.test(tree));
+  // The page opens one step in from the whole district (#152): its sheet, of all of them.
+  const of = (i) => `Sheet ${i + 1} of ${SHEETS.length}`;
+  check(theme, 'which sheet is showing', tree.includes(`img "${of(OPENING)}"`));
   await axe('at rest');
 
   // Steps.
   await page.locator('#in').click();
-  check(theme, 'a step is said', (await said()) === 'Sheet 2 of 4', await page.locator('#say').textContent());
-  check(theme, 'dots say the sheet', (await page.locator('#sheets').getAttribute('aria-label')) === 'Sheet 2 of 4');
+  check(theme, 'a step is said', (await said()) === of(OPENING + 1), await page.locator('#say').textContent());
+  check(theme, 'dots say the sheet', (await page.locator('#sheets').getAttribute('aria-label')) === of(OPENING + 1));
   await settled();
 
   // A card: tap the first bus line found near the middle.

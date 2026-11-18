@@ -10,13 +10,97 @@
 import { textWidth } from '../glyphs.mjs';
 import { routeLine } from './routeline.mjs';
 
-/** The sheets: the zoom each is drawn for and which set of bus streets it uses. */
+/** The sheets: the zoom each is drawn for and which set of bus streets it uses. Sheet 0 is the
+ * whole district on one screen (#152); the page opens on sheet 1. */
 export const SHEETS = [
-  { id: 1, zoom: 10, streets: 'far' },
+  { id: 0, zoom: 8.75, streets: 'far', whole: true },
+  { id: 1, zoom: 10, streets: 'far', opens: true },
   { id: 2, zoom: 12, streets: 'far' },
   { id: 3, zoom: 14, streets: 'near' },
   { id: 4, zoom: 16, streets: 'near' },
 ];
+
+/**
+ * RTD's district, light enough to hand the page (#152). The build's boundary is RTD's mask
+ * (DESIGN.md, "Data sources"): a large rectangle with the district cut out of it, and the
+ * places inside the cut-outs that are not in the district as polygons of their own. The
+ * district is the cut-outs, each with those places as its holes; a boundary with no mask is
+ * taken as the district itself. Every ring is simplified to about `metres`, and pieces and holes
+ * smaller than `minKm2` are dropped. The whole-district sheet names only the towns inside it
+ * (public/js/sheets/style.js, place).
+ */
+export function districtShape(boundary, metres = 250, minKm2 = 1) {
+  const polygons = (boundary?.features ?? []).flatMap((f) => (f.geometry?.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry?.type === 'MultiPolygon' ? f.geometry.coordinates : []));
+  if (!polygons.length) return null;
+  const k = Math.cos((polygons[0][0][0][1] * Math.PI) / 180);
+  const xy = ([x, y]) => [x * k * 111.32, y * 110.54]; // km
+  const area = (ring) => Math.abs(ring.reduce((sum, p, i) => { const [a, b] = [xy(p), xy(ring[(i + 1) % ring.length])]; return sum + a[0] * b[1] - b[0] * a[1]; }, 0)) / 2;
+  const inside = ([x, y], ring) => {
+    let at = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [[xi, yi], [xj, yj]] = [ring[i], ring[j]];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) at = !at;
+    }
+    return at;
+  };
+  const simplify = (ring) => {
+    const pts = ring.map(xy);
+    const keep = new Uint8Array(ring.length);
+    keep[0] = keep[ring.length - 1] = 1;
+    const stack = [[0, ring.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      let [worst, at] = [-1, 0];
+      for (let i = a + 1; i < b; i++) {
+        const { d } = toSegment(pts[i], pts[a], pts[b]);
+        if (d > worst) [worst, at] = [d, i];
+      }
+      if (worst * 1000 > metres) { keep[at] = 1; stack.push([a, at], [at, b]); }
+    }
+    const out = ring.filter((_, i) => keep[i]).map(([x, y]) => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5]);
+    return out.length >= 4 ? out : null;
+  };
+  // The mask: the polygon with holes whose outer ring holds every other polygon.
+  const mask = polygons.find((rings) => rings.length > 1 && polygons.every((o) => o === rings || inside(o[0][0], rings[0])));
+  const pieces = mask
+    ? mask.slice(1).map((hole) => [hole, ...polygons.filter((o) => o !== mask && inside(o[0][0], hole)).map((o) => o[0])])
+    : polygons;
+  const kept = pieces.filter((rings) => area(rings[0]) >= minKm2)
+    .map((rings) => rings.filter((ring, i) => !i || area(ring) >= minKm2).map(simplify).filter(Boolean))
+    .filter((rings) => rings.length);
+  return kept.length ? { type: 'MultiPolygon', coordinates: kept } : null;
+}
+
+/**
+ * What stepping out to the whole-district sheet frames, as [west, south, east, north]: the
+ * frequent network (bus streets every 15 minutes or better) side to side, and the rail lines,
+ * stations, letters and station names (`bx`, px from the station) within that span top to bottom
+ * (wholeFrame). The map centres on this and comes as close as fits each screen (#152,
+ * public/js/sheets/main.js). The rail lines that run on past its sides, to the airport, are
+ * named where they leave it (Chris, 2026-11-18). A sheet with no frequent bus frames its rail.
+ */
+export const RAIL_KINDS = new Set(['rail', 'station', 'letter']);
+export function sheetExtent(drawn, sheet) {
+  const px = (c) => toPx(c, sheet.zoom);
+  const points = (c, out = []) => { if (typeof c[0] === 'number') out.push(px(c)); else c.forEach((k) => points(k, out)); return out; };
+  const streets = drawn.features.filter((f) => f.properties.kind === 'bus' && f.geometry).map((f) => ({ cls: f.properties.cls, path: points(f.geometry.coordinates) }));
+  const rail = [];
+  for (const f of drawn.features) {
+    if (!f.geometry || !RAIL_KINDS.has(f.properties.kind) || f.properties.alt || f.properties.edge) continue;
+    rail.push(points(f.geometry.coordinates));
+    if (f.properties.shape === 'name' && f.properties.bx) {
+      const [bx0, by0, bx1, by1] = String(f.properties.bx).split(',').map(Number);
+      const at = px(f.geometry.coordinates);
+      rail.push([[at[0] + bx0, at[1] + by0], [at[0] + bx1, at[1] + by1]]);
+    }
+  }
+  const box = wholeFrame(streets, rail);
+  if (!box) return null;
+  const [w, n] = toLonLat([box[0], box[1]], sheet.zoom);
+  const [e, s] = toLonLat([box[2], box[3]], sheet.zoom);
+  const r = (v) => Math.round(v * 1e5) / 1e5;
+  return [r(w), r(s), r(e), r(n)];
+}
 
 /** Sizes in pixels, by sheet id. The page draws with these; so does the build. */
 export const SIZES = {
@@ -24,17 +108,17 @@ export const SIZES = {
   // corner; a dead end shorter than a stub goes; a second street closer than `apart` to the main
   // path goes; gaps up to `bridge` px are closed; farther gaps up to `pickFar` px close along RTD's line; and the whole is smoothed over `pickSmooth` px.
   pickSnap: 2,
-  pickStub: { 1: 12, 2: 14, 3: 14, 4: 16 },
-  pickApart: { 1: 8, 2: 8, 3: 8, 4: 8 },
-  pickBridge: { 1: 10, 2: 12, 3: 16, 4: 24 },
+  pickStub: { 0: 10, 1: 12, 2: 14, 3: 14, 4: 16 },
+  pickApart: { 0: 8, 1: 8, 2: 8, 3: 8, 4: 8 },
+  pickBridge: { 0: 8, 1: 10, 2: 12, 3: 16, 4: 24 },
   // Farther gaps, where the sheet draws no street the route takes, close along RTD's own line.
-  pickFar: { 1: 60, 2: 120, 3: 240, 4: 480 },
-  pickSmooth: { 1: 5, 2: 4, 3: 3, 4: 2.5 },
+  pickFar: { 0: 30, 1: 60, 2: 120, 3: 240, 4: 480 },
+  pickSmooth: { 0: 5, 1: 5, 2: 4, 3: 3, 4: 2.5 },
   // Width of a rail line, and the gap between two lines that share track.
-  rail: { 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 },
-  gap: { 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 },
+  rail: { 0: 3, 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 },
+  gap: { 0: 1.2, 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 },
   // A line's path is rounded over this far, so it reads as drawn by hand.
-  round: { 1: 2.5, 2: 3, 3: 3, 4: 3 },
+  round: { 0: 2.5, 1: 2.5, 2: 3, 3: 3, 4: 3 },
   // Where a line changes its place beside others, it slides across over about this far each side.
   ease: 26,
   // Lines whose paths in the data run this close (in metres) are on one track, drawn beside one rounded track.
@@ -49,13 +133,23 @@ export const SIZES = {
   walk: 600,
   // A letter sits at least this far from a station mark and from another letter,
   // and repeats along its line about this often.
-  letterClear: { 1: 15, 2: 16, 3: 19, 4: 22 },
-  letterEvery: { 1: 190, 2: 260, 3: 340, 4: 420 },
+  letterClear: { 0: 14, 1: 15, 2: 16, 3: 19, 4: 22 },
+  letterEvery: { 0: 170, 1: 190, 2: 260, 3: 340, 4: 420 },
   // Another line within this many pitches means the line isn't running alone.
   alone: 1.6,
   // Station names: lettering size, and whether the sheet names every station or only the hub and line ends.
-  name: { 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 },
-  nameAll: { 1: false, 2: true, 3: true, 4: true },
+  name: { 0: 11, 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 },
+  nameAll: { 0: false, 1: false, 2: true, 3: true, 4: true },
+  // The whole district (#152) names only the hub and each line's far end: of the stations a line
+  // ends at, the one farthest from the hub. A far end nearer the hub than `nameHubClear` px is
+  // left to the hub's name, and a name's row of letters holds only the lines whose far end it is.
+  nameFar: { 0: true, 1: false, 2: false, 3: false, 4: false },
+  nameHubClear: 60,
+  // On the whole district, what each px a name stands nearer another station than its own costs (names).
+  nameStray: 30,
+  // On the whole-district sheet a name costs this much for each pixel it reaches past the network's
+  // own lines, so the names turn inward and the whole sheet fits a phone's width (#152).
+  nameSpill: 40,
   nameMinor: 10,
   // A name whose best spot still sits on this much line is left for a closer sheet.
   nameCrowd: 26,
@@ -65,7 +159,14 @@ export const SIZES = {
   // A station's other bar this far from its first is named too, so each end of a long station says what it is.
   nameAgain: 120,
   // Where two or more lines end at a bar, its name carries their letters in a row: each disc this big, this far apart.
-  nameLetter: { 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 },
+  nameLetter: { 0: 5.2, 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 },
+  // A letter's size on its disc, as a share of the disc's radius, and how far below the middle it sits (ems): style.js, letter.
+  letterText: 1.42,
+  // A far end's name set where its line goes off a phone's screen on the whole district: that far
+  // past the frame's side (inside the 32 px the page keeps there, main.js), and its arrow's length
+  // and the gap between it and the name. The font has no arrows: the page draws it (pointer-arrow).
+  namePointer: { reach: 14, arrow: 12, gap: 3 },
+  letterLift: 0.06,
   // Bus streets: a stretch shorter than this takes the class of the stretches
   // it joins, and a loop or stub smaller than this is not drawn.
   busBlip: 14,
@@ -93,12 +194,12 @@ export const SIZES = {
   // A street that carries straight on and strays no farther than this from a straight line is drawn straight.
   busStraight: 2.5,
   // Where a street turns at a corner the turn is rounded over about this far, as a pen would take it.
-  busTurn: { 1: 3, 2: 4, 3: 6, 4: 9 },
+  busTurn: { 0: 2.5, 1: 3, 2: 4, 3: 6, 4: 9 },
   // Bus streets closer together than this can't be told apart: they are drawn as one.
-  busMerge: { 1: 4, 2: 7, 3: 7, 4: 24 },
+  busMerge: { 0: 4, 1: 4, 2: 7, 3: 7, 4: 24 },
   // Along one street, the blocks that carry its label are at least this far apart.
-  busLabelEvery: { 1: 150, 2: 170, 3: 240, 4: 320 },
-  busLabelSize: { 1: 8.5, 2: 8.5, 3: 10, 4: 11.5 },
+  busLabelEvery: { 0: 150, 1: 150, 2: 170, 3: 240, 4: 320 },
+  busLabelSize: { 0: 8.5, 1: 8.5, 2: 8.5, 3: 10, 4: 11.5 },
   // Clear air at each end of a labelled block: the figures' halo and a little more, so they stop short of the cross streets.
   busLabelAir: 4,
   // A list too long for its stretch in one row is stacked in two, this far apart (in ems).
@@ -113,11 +214,11 @@ export const SIZES = {
   // From this sheet bus streets are named, from their stops (drawSheet, runStreet).
   streetSheet: 3,
   // How far past each end of a labelled run its street's stops still say which street it is (about 600 m).
-  streetAhead: { 1: 0, 2: 0, 3: 80, 4: 320 },
+  streetAhead: { 0: 0, 1: 0, 2: 0, 3: 80, 4: 320 },
   // No two names of one street closer than this (px): about one a screen.
   // On sheet 4 a street is a few blocks a screen, so its name comes a little more often than the
   // phone's width (393 px): a street across the screen is named on it.
-  streetEvery: { 1: 0, 2: 0, 3: 520, 4: 360 },
+  streetEvery: { 0: 0, 1: 0, 2: 0, 3: 520, 4: 360 },
   // A stop's ring, out to its edge (public/js/sheets/style.js, STOP_RING).
   stopRing: 4.75,
   // The page keeps lettering this far off a ring's middle (public/js/sheets/style.js, STOP_ROOM and its padding).
@@ -132,7 +233,7 @@ export const SIZES = {
   // the source's maxzoom is a zoom under the sheet's, at 512 px a tile). A name across a tile's edge is not set.
   sourceTile: 1024,
   // A line letter's disc, out to its edge (public/js/sheets/style.js, the letter layer's radius and stroke).
-  letterDisc: { 1: 8.9, 2: 9.7, 3: 10.9, 4: 12.1 },
+  letterDisc: { 0: 8.5, 1: 8.9, 2: 9.7, 3: 10.9, 4: 12.1 },
   // RTD's stop groups (stopGroups): from this sheet a small table says which routes stop at which
   // lettered stop. Its type in px (title, rows, a badge's letter) with letter spacing in ems, its
   // badge, padding, the gap after a badge, the rows' pitch and its corner. Capitals and figures in
@@ -858,11 +959,62 @@ export function letters(lines, marks, sheet) {
  * above or below it) while it is neither with its own: the eye reads a name with the bar it
  * lines up with. A bar is a list of points, three to each of its strokes: end, middle, end.
  */
+/** How much nearer a name's box stands to another station than to its own, in px (0 when nearer its own). */
+export function strayBy(box, mine, others) {
+  const gap = (pts) => Math.min(...pts.map((p) => Math.hypot(Math.max(box[0] - p[0], 0, p[0] - box[2]), Math.max(box[1] - p[1], 0, p[1] - box[3]))));
+  const own = gap(mine);
+  return Math.max(0, ...others.map((pts) => own - gap(pts)));
+}
+
 export function strayed(box, mine, others) {
   const gap = (pts) => Math.min(...pts.map((p) => Math.hypot(Math.max(box[0] - p[0], 0, p[0] - box[2]), Math.max(box[1] - p[1], 0, p[1] - box[3]))));
   const lined = (pts) => pts.some((p, i) => i % 3 === 1 && ((p[1] >= box[1] && p[1] <= box[3]) || (p[0] >= box[0] && p[0] <= box[2])));
   const own = gap(mine);
   return others.some((pts) => gap(pts) < own || (!lined(mine) && lined(pts) && gap(pts) < 2 * own));
+}
+
+/**
+ * Each line's far end, the mark it ends at farthest from the hub: route -> { m, d } (d in px).
+ * A far end nearer the hub than SIZES.nameHubClear is not named on its own (`named`).
+ */
+/**
+ * The whole-district sheet's frame, in px: the frequent network (bus streets every 15 minutes or
+ * better) side to side, and every rail line and station within that span top to bottom, with the
+ * frequent network's own top and bottom. `streets` are `{ cls, path }`; `rail` is paths.
+ */
+export function wholeFrame(streets, rail) {
+  let box = [Infinity, Infinity, -Infinity, -Infinity];
+  const add = ([x, y]) => { box = [Math.min(box[0], x), Math.min(box[1], y), Math.max(box[2], x), Math.max(box[3], y)]; };
+  for (const st of streets) if (CLASS_ORDER.indexOf(st.cls) >= CLASS_ORDER.indexOf('c15')) st.path.forEach(add);
+  if (!Number.isFinite(box[0])) for (const path of rail) path.forEach(add);
+  const [x0, x1] = [box[0], box[2]];
+  for (const path of rail) for (const p of path) if (p[0] >= x0 && p[0] <= x1) add(p);
+  return Number.isFinite(box[0]) ? box : null;
+}
+
+/** Where `paths` cross x = `x`: the crossing nearest `near`, or null. */
+export function crossingX(paths, x, near) {
+  let best = null;
+  for (const path of paths) for (let i = 1; i < path.length; i++) {
+    const [p, q] = [path[i - 1], path[i]];
+    if ((p[0] - x) * (q[0] - x) > 0 || p[0] === q[0]) continue;
+    const t = (x - p[0]) / (q[0] - p[0]);
+    const at = [x, p[1] + t * (q[1] - p[1])];
+    if (!best || dist(at, near) < dist(best, near)) best = at;
+  }
+  return best;
+}
+
+export function farEnds(marks) {
+  const hubMark = marks.find((m) => m.hub);
+  const farOf = new Map();
+  if (!hubMark) return farOf;
+  const hubAt = lerp(hubMark.ends[0], hubMark.ends[1], 0.5);
+  for (const m of marks) for (const b of m.bars ?? []) for (const l of b.ending) {
+    const d = dist(lerp(b.ends[0], b.ends[1], 0.5), hubAt);
+    if (!farOf.has(l.route) || d > farOf.get(l.route).d) farOf.set(l.route, { m, d, named: m.hub || d >= SIZES.nameHubClear });
+  }
+  return farOf;
 }
 
 /**
@@ -909,37 +1061,66 @@ export function names(marks, lines, discs, sheet, streets = []) {
   // names that station to the eye, which is worse than no name.
   const bars = marks.map((m) => ({ m, pts: [m.ends, ...m.more].flatMap((bar) => [bar[0], lerp(bar[0], bar[1], 0.5), bar[1]]) }));
   const r = SIZES.nameLetter[sheet.id];
+  // Each line's far end (SIZES.nameFar): line -> the mark it ends at farthest from the hub.
+  const farOnly = SIZES.nameFar[sheet.id];
+  const farOf = farOnly ? farEnds(marks) : new Map();
+  // What the whole-district sheet is framed on (sheetExtent): the frequent network side to side, and
+  // the rail lines within it top to bottom. A name keeps inside it, so it turns in, not off the screen.
+  const lineFrame = lines.flatMap((l) => l.paths);
+  const keepIn = sheet.whole ? wholeFrame(streets.map((st) => ({ cls: st.cls, path: st.path })), [...lineFrame, ...marks.flatMap((m) => [m.ends, ...m.more])]) : null;
+  const spill = (box) => (keepIn ? Math.max(0, keepIn[0] - box[0]) + Math.max(0, box[2] - keepIn[2]) + Math.max(0, keepIn[1] - box[1]) + Math.max(0, box[3] - keepIn[3]) : 0);
+  const farLines = (m) => new Set([...farOf].filter(([, x]) => x.m === m && x.named).map(([route]) => route));
   for (const m of [...marks].sort((a, b) => rank(a) - rank(b) || a.id - b.id)) for (const [bi, bar] of (m.bars ?? [{ ends: m.ends, ending: [] }]).entries()) {
     const mid = lerp(bar.ends[0], bar.ends[1], 0.5);
     const again = (b) => dist(lerp(b.ends[0], b.ends[1], 0.5), lerp(m.ends[0], m.ends[1], 0.5)) >= SIZES.nameAgain;
     if (bi && !again(bar)) continue;
-    const must = m.hub || m.end;
+    const must = m.hub || (farOnly ? farLines(m).size > 0 : m.end);
+    if (farOnly && !must) continue;
     // The letters of the lines that end here together, which no letter on the line can sit near.
     // A bar too near the first for a name of its own has its letters on the first's.
-    const ending = bi ? bar.ending : (m.bars ?? [bar]).filter((b, i) => !i || !again(b)).flatMap((b) => b.ending);
-    const row = ending.length >= 2 ? ending : [];
+    const ending = (bi ? bar.ending : (m.bars ?? [bar]).filter((b, i) => !i || !again(b)).flatMap((b) => b.ending))
+      .filter((l) => !farOnly || farLines(m).has(l.route));
+    // On the whole district every far end carries its lines' letters: no letter fits on the lines there.
+    const row = ending.length >= 2 || (farOnly && ending.length) ? ending : [];
     // Where not every name fits, the hub and line ends are lettered larger than the rest.
     const minor = !must && !SIZES.nameAll[sheet.id];
     const size = minor ? SIZES.nameMinor : SIZES.name[sheet.id];
-    const c = mid;
-    const half = [(bar.ends[1][0] - bar.ends[0][0]) / 2, (bar.ends[1][1] - bar.ends[0][1]) / 2];
+    let c = mid;
+    // A far end past the frame's side (the airport, out beyond the frequent network) is named on
+    // its line where it goes off a phone's screen, `namePointer.reach` past that side, with an
+    // arrow pointing at the end itself: on a phone the end is off the screen (Chris, 2026-11-18:
+    // "so that you can see that it's Denver airport off to the side"; "it literally says Denver
+    // airport with an arrow").
+    let pointer = 0;
+    if (keepIn && farOnly && (c[0] > keepIn[2] || c[0] < keepIn[0])) {
+      const side = c[0] > keepIn[2] ? 1 : -1;
+      const paths = lines.filter((l) => farLines(m).has(l.route)).flatMap((l) => l.paths);
+      const edgeX = side > 0 ? keepIn[2] : keepIn[0];
+      const at = crossingX(paths, edgeX + side * SIZES.namePointer.reach, c) ?? crossingX(paths, edgeX, c);
+      if (at) [c, pointer] = [at, side];
+    }
+    // The arrow's room beside the name, toward the side it points off.
+    const arrowRoom = pointer ? SIZES.namePointer.arrow + SIZES.namePointer.gap : 0;
+    const half = pointer ? [0, 0] : [(bar.ends[1][0] - bar.ends[0][0]) / 2, (bar.ends[1][1] - bar.ends[0][1]) / 2];
     // Where every line at the bar ends and the station before stands closer than the name is
     // tall, a name beside the bar would stand beside that station too: it goes beyond the end
     // of the line instead, the way the line was heading.
     const mine = String(m.lines ?? '').split(' ');
     const before = bars.filter((o) => o.m !== m && String(o.m.lines ?? '').split(' ').some((l) => mine.includes(l))).map((o) => o.pts[1])
       .reduce((near, p) => (!near || dist(p, c) < dist(near, c) ? p : near), null);
-    const last = bar.ending.length > 0 && bar.ending.length === m.count && before;
+    const last = !pointer && bar.ending.length > 0 && bar.ending.length === m.count && before;
     // `extra` adds a cost to a box (a picked route under it, below); `self` is the name being moved.
     const placed = (text, extra = null, self = null) => {
       const rows = text.split('\n');
       const wide = Math.max(...rows.map((t) => textWidth(t, minor ? 'Overpass Medium' : 'Overpass SemiBold', size)));
       const tall = rows.length * size * 1.12;
       // The row of letters sits under the name, and the name's room includes it.
-      const [w, h] = [Math.max(wide, row.length * (2 * r + 2)), tall + (row.length ? 2 * r + 5 : 0)];
+      const [w, h] = [Math.max(wide, row.length * (2 * r + 2)) + arrowRoom, tall + (row.length ? 2 * r + 5 : 0)];
       let best = null;
       for (const reach of [1, 1.4, 1.8, 2.8]) {
         for (const [dx, dy, anchor, cost] of sides) {
+          // A pointing name stands on the frame's side of its line, its arrow at the end toward the edge.
+          if (pointer && dx * pointer >= 0) continue;
           const n = Math.hypot(dx, dy);
           const off = (rail / 2 + 5 + Math.abs((half[0] * dx + half[1] * dy) / n)) * reach;
           const at = [c[0] + (dx / n) * off, c[1] + (dy / n) * off];
@@ -950,13 +1131,20 @@ export function names(marks, lines, discs, sheet, streets = []) {
           // The name keeps its own anchor: where the row makes the box taller, the text sits at its top.
           const ty = dy > 0 ? at[1] : dy < 0 ? y0 + tall : y0 + tall / 2;
           const lettering = [x0, y0, x0 + w, y0 + tall];
-          const strays = strayed(lettering, bars.find((o) => o.m === m).pts, bars.filter((o) => o.m !== m).map((o) => o.pts));
-          const hits = set.filter((o) => o !== self && touch(box, o.box)).length + (strays ? 1 : 0);
+          // A name set on its line away from its station points the way; it is no station's name there.
+          const strays = !pointer && strayed(lettering, bars.find((o) => o.m === m).pts, bars.filter((o) => o.m !== m).map((o) => o.pts));
+          // On the whole district the hub stands among close stations on every side, so every place
+          // strays: there the cost grows with how much nearer the other station is than its own.
+          const graded = sheet.whole && strays ? strayBy(lettering, bars.find((o) => o.m === m).pts, bars.filter((o) => o.m !== m).map((o) => o.pts)) : 0;
+          const hits = set.filter((o) => o !== self && touch(box, o.box)).length + (strays && !sheet.whole ? 1 : 0);
           const beyond = last && ((c[0] - before[0]) * dx + (c[1] - before[1]) * dy) / n / dist(c, before) > 0.9;
           const crowded = last && dist(c, before) < tall && !beyond;
           const extraScore = extra ? extra(box) : 0;
-          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0) + extraScore;
-          const candidate = { text, score, hits, box, anchor, tall, extraScore, offset: [(at[0] - c[0]) / size, (ty - c[1]) / size] };
+          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0) + extraScore + spill(box) * SIZES.nameSpill + graded * SIZES.nameStray;
+          // The text stands clear of the arrow, which sits level with its first row.
+          const tx = at[0] - pointer * arrowRoom;
+          const arrow = pointer ? [at[0] - pointer * (SIZES.namePointer.arrow / 2), y0 + (size * 1.12) / 2] : null;
+          const candidate = { text, score, hits, box, anchor, tall, extraScore, arrow, offset: [(tx - c[0]) / size, (ty - c[1]) / size] };
           if (!best || score < best.score) best = candidate;
         }
       }
@@ -965,7 +1153,10 @@ export function names(marks, lines, discs, sheet, streets = []) {
     // A name is written out where it has room; where it would sit on lines or stand off from
     // its mark, the shortened name is used if that sits better.
     // Between stations too close for two rows, it is set in one.
-    const texts = [wrapped(m.name), wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')];
+    // A pointing name reads on one row, beside its arrow.
+    const texts = pointer
+      ? [m.name, shortened(m.name), wrapped(m.name), wrapped(shortened(m.name))]
+      : [wrapped(m.name), wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')];
     const choose = (extra = null, self = null) => {
       let best = placed(texts[0], extra, self);
       for (const text of [...new Set(texts)].slice(1)) {
@@ -981,11 +1172,14 @@ export function names(marks, lines, discs, sheet, streets = []) {
     if (!must && (best.hits || (minor && best.score >= SIZES.nameCrowd))) continue;
     const finish = (b) => {
       const justify = b.anchor.includes('left') ? 'left' : b.anchor.includes('right') ? 'right' : 'center';
-      const [x0, , x1] = b.box;
+      // The letters stand under the text, not the arrow.
+      const [x0, x1] = [b.box[0] + (pointer < 0 ? arrowRoom : 0), b.box[2] - (pointer > 0 ? arrowRoom : 0)];
       const span = row.length * (2 * r + 2) - 2;
       const left = justify === 'left' ? x0 : justify === 'right' ? x1 - span : (x0 + x1 - span) / 2;
       const letters = row.map((l, i) => ({ route: l.route, color: l.color, ink: inkOn(l.color), at: [left + r + i * (2 * r + 2), b.box[1] + b.tall + 3 + r] }));
-      const result = { text: b.text, box: b.box, anchor: b.anchor, offset: b.offset, justify, letters, hits: b.hits };
+      // The arrow turns to the end itself, clockwise from east in degrees, as MapLibre turns an icon.
+      const arrow = b.arrow && { at: b.arrow, turn: Math.round((Math.atan2(mid[1] - b.arrow[1], mid[0] - b.arrow[0]) * 180) / Math.PI) };
+      const result = { text: b.text, box: b.box, anchor: b.anchor, offset: b.offset, justify, letters, arrow, hits: b.hits };
       return result;
     };
     const { hits, ...chosen } = finish(best);
@@ -3129,7 +3323,7 @@ export const expressRoutes = (routes) => inCategory(routes, EXPRESS_CATEGORY);
 export const AIRPORT_CATEGORY = 'SKYRIDE';
 export const airportRoutes = (routes) => inCategory(routes, AIRPORT_CATEGORY);
 export const isExpress = (routes, express) => String(routes ?? '').split(/[ ,]+/).some((r) => express.has(r));
-export const busWide = (cls, sheet) => { const w = SIZES.rail[sheet.id]; return [sheet.id === 1 ? 1 : w / 1.6 ** 2, w / 1.4, BUSIEST[cls] && sheet.id <= 3 ? w * 1.3 : w][BUS_STEP[cls] ?? 0]; };
+export const busWide = (cls, sheet) => { const w = SIZES.rail[sheet.id]; return [sheet.id <= 1 ? 1 : w / 1.6 ** 2, w / 1.4, BUSIEST[cls] && sheet.id <= 3 ? w * 1.3 : w][BUS_STEP[cls] ?? 0]; };
 
 /** A sheet's pixels around a place, each set where something is drawn (lines, dots, boxes, rooms), grown by a margin. */
 export class Raster {
@@ -3298,7 +3492,9 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const endStops = (stops?.features ?? []).map((f) => ({ at: toPx(f.geometry.coordinates, sheet.zoom), routes: String(f.properties.lines ?? f.properties.routes ?? '').split(/[ ,]+/).filter(Boolean) }));
   const { streets: bus, ends } = termini(busStreets(streets, sheet, walls, marks, lines), endStops, 1 / metresPerPixel(lat0, sheet.zoom),
     marks.flatMap((m) => [m.ends, ...(m.more ?? [])]), walls);
-  const discs = letters(lines, marks, sheet);
+  // On the whole district a line's letter is under its far end's name, not on the line (names).
+  const lettered = SIZES.nameFar[sheet.id] ? new Set([...farEnds(marks)].filter(([, x]) => x.named).map(([route]) => route)) : new Set();
+  const discs = letters(lines, marks, sheet).filter((d) => !lettered.has(d.route));
   const express = expressRoutes(routes);
   const airport = airportRoutes(routes);
   const back = (p) => toLonLat(p, sheet.zoom);
@@ -3614,7 +3810,18 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
       const bx = [Math.min(...reach.map((b) => b[0])) - n.at[0], Math.min(...reach.map((b) => b[1])) - n.at[1], Math.max(...reach.map((b) => b[2])) - n.at[0], Math.max(...reach.map((b) => b[3])) - n.at[1]].map(fixed).join(',');
       features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: place.text, anchor: place.anchor, offset: place.offset, justify: place.justify, nid, bx, ...tag },
         { type: 'Point', coordinates: back(n.at) }));
-      for (const b of place.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, nid, ...tag }, { type: 'Point', coordinates: back(b.at) }));
+      // On the whole district a name's letters are held to it in pixels, at its station: the page
+      // rests that sheet closer than it is drawn on a wider screen (#152, main.js), and a letter
+      // placed on the ground would drift off its name there. `px` places the disc, `em` its letter
+      // (in the letter's own size), and `held` marks it (style.js: letter-chip).
+      const held = (b) => {
+        const d = [b.at[0] - n.at[0], b.at[1] - n.at[1]];
+        const size = SIZES.nameLetter[sheet.id] * SIZES.letterText;
+        return { held: true, px: d.map(fixed), em: [d[0] / size, d[1] / size + SIZES.letterLift].map((v) => Math.round(v * 1000) / 1000) };
+      };
+      for (const b of place.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, nid, ...tag, ...(sheet.whole ? held(b) : {}) }, { type: 'Point', coordinates: back(sheet.whole ? n.at : b.at) }));
+      // A pointing name's arrow, held to it in pixels like its letters (style.js: pointer).
+      if (place.arrow) features.push(feature({ kind: 'pointer', name: m.name, nid, ...tag, held: true, px: [place.arrow.at[0] - n.at[0], place.arrow.at[1] - n.at[1]].map(fixed), turn: place.arrow.turn }, { type: 'Point', coordinates: back(n.at) }));
     }
   }
   // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.

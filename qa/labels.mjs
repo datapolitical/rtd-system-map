@@ -5,6 +5,7 @@
 import { chromium } from '@playwright/test';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { SHEETS } from '../public/js/sheets/style.js';
 
 const base = process.argv[2] ?? 'http://localhost:8788/';
 const out = process.argv[3] ?? 'qa/.scratch/labels';
@@ -12,7 +13,7 @@ await mkdir(out, { recursive: true });
 const browser = await chromium.launch();
 const results = [];
 const themes = process.env.THEME ? [process.env.THEME] : ['light', 'dark'];
-const zooms = process.env.ZOOM ? [+process.env.ZOOM] : [10, 12, 14, 16];
+const zooms = process.env.ZOOM ? [+process.env.ZOOM] : SHEETS.map((x) => x.zoom);
 async function pixels(buffer) {
   const image = await loadImage(buffer), canvas = createCanvas(image.width, image.height);
   canvas.getContext('2d').drawImage(image, 0, 0);
@@ -33,7 +34,7 @@ try {
         for (const layer of map.getStyle().layers) {
           if (!['symbol', 'background'].includes(layer.type)) map.setLayoutProperty(layer.id, 'visibility', 'none');
         }
-      }, { zoom, center: zoom === 10 ? opening : hub });
+      }, { zoom, center: zoom <= 10 ? opening : hub });
       await page.waitForFunction(() => window.sheetsMap.loaded() && !window.sheetsMap.isMoving(), null, { timeout: 60000 });
       await page.waitForTimeout(400);
       const before = await page.screenshot({ path: `${out}/${theme}-${zoom}-before.png` });

@@ -5,6 +5,7 @@ import { chromium } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { SHEETS } from '../public/js/sheets/style.js';
 const base = process.argv[2] ?? 'http://localhost:8788/';
 const out = process.argv[3] ?? 'qa/.scratch/theme';
 await mkdir(out, { recursive: true });
@@ -50,7 +51,7 @@ try {
     await page.waitForFunction((route) => window.sheetsPick?.route === route && !document.querySelector('#card').hidden, rail.route);
     await ready();
     const button = page.getByRole('button', { name: 'Dark mode', exact: true });
-    for (const zoom of [10, 12, 14, 16]) {
+    for (const zoom of SHEETS.map((x) => x.zoom)) {
       await page.evaluate((zoom) => window.sheetsMap.jumpTo({ zoom }), zoom); await ready();
       const before = await page.evaluate(() => ({ center: window.sheetsMap.getCenter().toArray(), zoom: window.sheetsMap.getZoom(), pick: window.sheetsPick, state: window.sheetsMap.getGlobalState(), card: document.querySelector('#card').textContent }));
       for (const expected of [other, system]) {

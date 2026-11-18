@@ -1,12 +1,12 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent, wholeFrame, crossingX } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
 const all = (features) => ({ type: 'FeatureCollection', features });
-const sheet = SHEETS[1];
+const sheet = SHEETS.find((s) => s.id === 2);
 // A place on the sheet, `x` and `y` pixels from a corner of it.
 const origin = toPx([-105, 39.75], sheet.zoom);
 const at = (x, y) => toLonLat([origin[0] + x, origin[1] + y], sheet.zoom);
@@ -225,7 +225,7 @@ test('a turnaround too small to read as a ring is drawn as the point its streets
 });
 
 // The same, on the third sheet, where a short walk is many pixels.
-const near = SHEETS[2];
+const near = SHEETS.find((s) => s.id === 3);
 const origin3 = toPx([-105, 39.75], near.zoom);
 const at3 = (x, y) => toLonLat([origin3[0] + x, origin3[1] + y], near.zoom);
 const hall = (id, corners) => ({ type: 'Feature', properties: { id, name: `Hall ${id}` }, geometry: { type: 'Polygon', coordinates: [[...corners, corners[0]]] } });
@@ -282,7 +282,7 @@ test('two ways round a strip too thin to see into are drawn as one street with t
 });
 
 test('a route that only crosses a thin strip is not drawn round it', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o = toPx([-105, 39.75], s1.zoom);
   const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s1.zoom);
   const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
@@ -420,8 +420,8 @@ test('a street folded into a near one gives it its routes only where the two run
 
 test('two near streets tied by short links are drawn as one, and a small square block between through streets is kept', () => {
   const street = (cls, routes, coords) => line({ mode: 'bus', cls, routes, n: 1, hw: 15, zoom: 'far' }, coords);
-  // A ladder on the widest sheet: two streets five pixels apart, a link between them every sixty.
-  const wide = SHEETS[0];
+  // A ladder on the opening sheet: two streets five pixels apart, a link between them every sixty.
+  const wide = SHEETS.find((s) => s.opens);
   const o = toPx([-105, 39.75], wide.zoom);
   const to = (x, y) => toLonLat([o[0] + x, o[1] + y], wide.zoom);
   const ladder = busStreets(all([
@@ -755,7 +755,7 @@ test('the page inks each line from the colours the build found: pale ones cased 
   const colors = ['#C4D600', '#552683'];
   const light = sheetStyle('light', [], colors).layers;
   const casing = light.filter((l) => l.id.startsWith('rail-casing'));
-  assert.equal(casing.length, 4, 'every sheet cases its pale lines');
+  assert.equal(casing.length, SHEETS.length, 'every sheet cases its pale lines');
   assert.deepEqual(casing[0].filter.at(-1), ['in', ['get', 'color'], ['literal', ['#C4D600']]], 'only the pale one');
   assert.ok(light.findIndex((l) => l.id === 'rail-casing-2') < light.findIndex((l) => l.id === 'rail-2'), 'under the line');
   const dark = sheetStyle('dark', [], colors).layers;
@@ -785,7 +785,7 @@ test('bus widths: the frequent step as wide as rail, the busiest few a size up o
     for (const cls of Object.keys(w)) assert.ok(Math.abs(busWide(cls, sheet) - w[cls]) < 0.011, `sheet ${sheet.id}: the build places ${cls} at the page's width`);
     assert.ok(Math.abs(m - rail / MID_UNDER_TOP) < 0.01 && m > q, `sheet ${sheet.id}: the middle step sits between`);
     assert.ok(q >= 1, `sheet ${sheet.id}: no line under a pixel`);
-    if (sheet.id === 1) assert.ok(q <= 1.05, 'the opening sheet\'s quiet step is a hairline');
+    if (sheet.id <= 1) assert.ok(q <= 1.05, `sheet ${sheet.id}: the quiet step is a hairline on the two widest sheets`);
     else assert.ok(Math.abs(q - rail / 1.6 ** 2) < 0.01, `sheet ${sheet.id}: the quiet step is rail over 1.6 twice`);
   }
   for (const theme of ['dark', 'light']) {
@@ -873,7 +873,7 @@ test("a stop the build counted as a bus station's, or one only trains call at, i
 
 test("a line's tail track past its last station is no part of it: the line ends at that station's bar", () => {
   // On the closest sheet a walk is hundreds of pixels; the track runs 120 px past the last station.
-  const s4 = SHEETS[3];
+  const s4 = SHEETS.find((s) => s.id === 4);
   const o4 = toPx([-105, 39.75], s4.zoom);
   const at4 = (x, y) => toLonLat([o4[0] + x, o4[1] + y], s4.zoom);
   const rail = line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [at4(-900, 0), at4(520, 0)]);
@@ -915,7 +915,7 @@ test('lines that end at one bar coming in from either side meet back to back at 
   const { sheetStyle } = await import('../public/js/sheets/style.js');
   for (const theme of ['light', 'dark']) {
     const ids = sheetStyle(theme).layers.map((l) => l.id);
-    for (const n of [1, 2, 3, 4]) assert.ok(ids.indexOf(`station-divider-${n}`) > ids.indexOf(`station-${n}`), `sheet ${n}: the divider lies on the bar`);
+    for (const { id: n } of SHEETS) assert.ok(ids.indexOf(`station-divider-${n}`) > ids.indexOf(`station-${n}`), `sheet ${n}: the divider lies on the bar`);
   }
 });
 
@@ -1015,7 +1015,7 @@ test('lines that end over a hall end at its wall; a corner beside a wall sits on
 });
 
 test('a stop whose ring would sit half under a rail line is not ringed', () => {
-  const s = SHEETS[3];
+  const s = SHEETS.find((s) => s.id === 4);
   const o = toPx([-105, 39.75], s.zoom);
   const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s.zoom);
   const data = { routes: all([line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [ll(0, 0), ll(400, 0)])]), stations: all([]), streets: all([]), terminals: null,
@@ -1034,7 +1034,7 @@ test('a street with many routes is labelled with all of them, or not at all: nev
 });
 
 test("a stop's ring sits on the street its buses are drawn on, and the two sides of a street are one ring", () => {
-  const s4 = SHEETS[3];
+  const s4 = SHEETS.find((s) => s.id === 4);
   const o = toPx([-105, 39.75], s4.zoom);
   const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
   const stop = (id, routes, x, y, heading) => point({ id, name: `Stop ${id}`, lines: routes, heading }, ll(x, y));
@@ -1067,7 +1067,7 @@ test("a turnaround's bow is drawn tighter where it would run against rail, and a
   const held = reach(arced(loop, (p) => Math.abs(125 - p[0]), 30));
   assert.ok(free > 100 && held <= 96 && held > 50, `drawn in from ${free} to ${held}`);
   // The track runs 60 px past the last station. The line bends over a long lead-in, not in the last few pixels.
-  const s4 = SHEETS[3];
+  const s4 = SHEETS.find((s) => s.id === 4);
   const o = toPx([-105, 39.75], s4.zoom);
   const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
   const track = (route, color) => line({ mode: 'rail', route, color, slot: 0 }, [ll(-900, 0), ll(520, 0), ll(580, 0)]);
@@ -1148,7 +1148,8 @@ test('a weight gathered at a corner is not handed on down a route, and not taken
 test('a scroll or a pinch goes to the next sheet the way it was heading, and never back the way it came', async () => {
   const { settle } = await import('../public/js/sheets/settle.js');
   const zooms = SHEETS.map((s) => s.zoom);
-  const [a, b, c, d] = zooms;
+  const [a, b, c] = zooms;
+  const last = zooms.length - 1;
   assert.equal(settle(zooms, 0, a, a + 0.15), 1, 'one notch of a wheel is enough');
   assert.equal(settle(zooms, 1, b, b - 0.15), 0, 'and one notch back');
   assert.equal(settle(zooms, 0, a, a + 0.05), 0, 'a slip changes nothing');
@@ -1159,7 +1160,7 @@ test('a scroll or a pinch goes to the next sheet the way it was heading, and nev
   assert.equal(settle(zooms, 0, a, b + 0.3), 1, 'a little past a sheet rests on it');
   assert.equal(settle(zooms, 0, a, b + 0.8), 2, 'well past, it goes on to the next');
   assert.equal(settle(zooms, 0, a, a - 0.4), 0);
-  assert.equal(settle(zooms, 3, d, d + 0.4), 3);
+  assert.equal(settle(zooms, last, zooms[last], zooms[last] + 0.4), last);
 });
 
 test('a list too long for one row is stacked in two beside a straight street, turned the way the street runs', async () => {
@@ -1185,7 +1186,7 @@ test('a list too long for one row is stacked in two beside a straight street, tu
 
 test('a line does not end at a station while another of its stations lies beyond, however near the end of the track', () => {
   // The widest sheet: the last two stations are 12 px apart, nearer than three pitches.
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const two = (route, color) => line({ mode: 'rail', route, color, slot: 0 }, [at1(-300, 0), at1(40, 0)]);
@@ -1201,7 +1202,7 @@ test('a line does not end at a station while another of its stations lies beyond
 
 test('the curve into a last station never reaches back past the station before: that bar stays on its line', () => {
   // The widest sheet. The track doglegs through City 30 px before it ends at Gate.
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const rail = line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(-300, 0), at1(0, 0), at1(10, 30), at1(40, 30)]);
@@ -1216,7 +1217,7 @@ test('the curve into a last station never reaches back past the station before: 
 });
 
 test('a last station whose neighbour is closer than its name is tall is named beyond the end of the line', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const named = (cityAt) => {
@@ -1234,7 +1235,7 @@ test('a last station whose neighbour is closer than its name is tall is named be
 });
 
 test('a bend smaller than a line is wide is drawn straight; a real turn keeps its place; the pack moves as one', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const pitch = SIZES.rail[s1.id] + SIZES.gap[s1.id];
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
@@ -1264,7 +1265,7 @@ test('a bend smaller than a line is wide is drawn straight; a real turn keeps it
 });
 
 test('a name that cannot sit right beside its bar stands off only as far as it must', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const lines = railLines(all([line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(0, -300), at1(0, 300)])]), s1);
@@ -1279,7 +1280,7 @@ test('a name that cannot sit right beside its bar stands off only as far as it m
 
 test('a name set on a route\'s street has a second place off that route, for when it is picked (#117)', () => {
   // Chris: "The Union Station label sits on top of route 28".
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
   const lines = railLines(all([line({ mode: 'rail', route: 'E', color: '#552683', slot: 0 }, [at1(0, -300), at1(0, 300)])]), s1);
@@ -1297,7 +1298,7 @@ test('a name set on a route\'s street has a second place off that route, for whe
 });
 
 test('where a line at the side of a pack ends, the lines beside it carry straight on; where one in the middle ends, the others close up', () => {
-  const s1 = SHEETS[0];
+  const s1 = SHEETS.find((s) => s.opens);
   const pitch = SIZES.rail[s1.id] + SIZES.gap[s1.id];
   const o1 = toPx([-105, 39.75], s1.zoom);
   const at1 = (x, y) => toLonLat([o1[0] + x, o1[1] + y], s1.zoom);
@@ -1457,7 +1458,140 @@ test('on sheet 3 every lettered stop shows its letter in a square on its street,
   const tap = squares.find((f) => f.properties.letter === 'Y');
   assert.equal(tap.properties.routes, '3, 4', 'a tap gives its routes');
   // The fourth sheet draws its stops, with their own letters, and no squares; no sheet draws a bracket.
-  const s4 = lettered3({ across: [150] }, SHEETS[3]);
+  const s4 = lettered3({ across: [150] }, SHEETS.find((s) => s.id === 4));
   assert.equal(kinds3(s4, 'group-stop').length, 0);
   assert.equal(kinds3(s4, 'group-bracket').length + kinds3(features, 'group-bracket').length, 0);
+});
+
+test('the whole district names only the hub and each line\'s far end, inward, with the far ends\' letters (#152)', () => {
+  const whole = SHEETS.find((s) => s.whole);
+  const ink = (route) => ({ route, color: '#57C1E9' });
+  const mark = (id, name, [x, y], ending, extra = {}) => ({ id, name, lines: ending.join(' '), count: Math.max(1, ending.length), ends: [[x, y - 5], [x, y + 5]], more: [], span: 10, fat: false,
+    end: ending.length > 0, bars: [{ ends: [[x, y - 5], [x, y + 5]], ending: ending.map(ink) }], ...extra });
+  // A runs from the hub east to the airport, B north-west, E and R south; R starts at Mid, L stops just past the hub.
+  const marks = [
+    mark(1, 'Hub', [500, 500], ['A', 'B', 'E', 'L'], { hub: true }),
+    mark(2, 'Airport', [900, 500], ['A']),
+    mark(3, 'West', [300, 300], ['B']),
+    mark(4, 'South', [700, 800], ['E', 'R']),
+    mark(5, 'Mid', [700, 500], ['R']),
+    mark(6, 'Near', [512, 500], ['L']),
+  ];
+  const lines = [[[500, 500], [900, 500]], [[500, 500], [300, 300]], [[500, 500], [700, 800]], [[700, 500], [700, 800]], [[500, 500], [512, 500]]].map((p) => ({ paths: [p] }));
+  const set = names(marks, lines, [], whole);
+  assert.deepEqual(set.map((n) => n.mark.name).sort(), ['Airport', 'Hub', 'South', 'West'], 'Mid is only R\'s near end; Near is within the hub\'s reach');
+  assert.equal(set.find((n) => n.mark.name === 'South').letters.map((l) => l.route).join(''), 'ER');
+  assert.equal(set.find((n) => n.mark.name === 'Hub').letters.length, 0, 'no line\'s far end is the hub');
+  assert.equal(set.find((n) => n.mark.name === 'West').letters.map((l) => l.route).join(''), 'B', 'one line\'s far end carries its letter too');
+  const airport = set.find((n) => n.mark.name === 'Airport');
+  assert.ok(airport.box[2] <= 901, `the airport's name turns in from the network's east end (${airport.box})`);
+  // The sheet the page opens on names every line end, as before.
+  const opening = SHEETS.find((s) => s.opens);
+  assert.ok(names(marks, lines, [], opening).some((n) => n.mark.name === 'Mid'));
+});
+
+test('RTD\'s boundary mask becomes the district: its cut-outs, the places in them not in the district as holes (#152)', () => {
+  const square = (w, s, e, n) => [[w, s], [e, s], [e, n], [w, n], [w, s]];
+  const mask = { type: 'FeatureCollection', features: [
+    { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: [
+      [square(-110, 35, -100, 42), square(-105.2, 39.5, -104.8, 39.9), square(-104, 39, -103.999, 39.001)],
+      [square(-105.0, 39.7, -104.95, 39.75)],
+    ] } },
+  ] };
+  const d = districtShape(mask);
+  assert.equal(d.type, 'MultiPolygon');
+  assert.equal(d.coordinates.length, 1, 'the speck smaller than a square kilometre is dropped');
+  assert.equal(d.coordinates[0].length, 2, 'the district with its one hole');
+  assert.deepEqual(d.coordinates[0][0].map(([x]) => x).sort((a, b) => a - b).at(0), -105.2);
+  const plain = districtShape({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [square(-105.2, 39.5, -104.8, 39.9)] } }] });
+  assert.equal(plain.coordinates[0][0].length, 5, 'a boundary that is no mask is the district itself');
+  assert.equal(districtShape(null), null);
+});
+
+test('the frame of the whole district holds its rail and its names\' boxes, not the bus streets past them (#152)', () => {
+  const whole = SHEETS.find((s) => s.whole);
+  const o = toPx([-105, 39.75], whole.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], whole.zoom);
+  // Chris, 2026-11-18: framing the whole network, out to Nederland's bus, left it too small on a phone.
+  const drawn = all([line({ kind: 'rail' }, [ll(0, 0), ll(100, 0)]), point({ kind: 'station', shape: 'name', bx: '6,-6,80,6' }, ll(100, 0)), point({ kind: 'station', shape: 'name', alt: '|1|', bx: '6,-6,500,6' }, ll(100, 0)),
+    line({ kind: 'bus', routes: 'NB' }, [ll(0, 0), ll(-400, -90)]), line({ kind: 'route-line', routes: 'NB' }, [ll(0, 0), ll(-400, -90)])]);
+  const [w, s, e, n] = sheetExtent(drawn, whole);
+  const [west, north] = toPx([w, n], whole.zoom);
+  const [east, south] = toPx([e, s], whole.zoom);
+  assert.ok(Math.abs(west - o[0]) < 0.5 && Math.abs(east - (o[0] + 180)) < 0.5, `east to the name's end, not its second place's (${east - o[0]})`);
+  assert.ok(Math.abs(north - (o[1] - 6)) < 0.5 && Math.abs(south - (o[1] + 6)) < 0.5);
+});
+
+test('on the whole district a name\'s letters are held to it in pixels, at its station (#152)', () => {
+  // The page rests that sheet closer than it is drawn on a wide screen: letters set on the ground
+  // drifted off their names there (Ward Road's G, RidgeGate's E and R, on a desktop).
+  const whole = SHEETS.find((s) => s.whole);
+  const o = toPx([-105, 39.75], whole.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], whole.zoom);
+  const routes = all([
+    line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [ll(0, 0), ll(300, 0)]),
+    line({ mode: 'rail', route: 'B', color: '#C4D600', slot: 0 }, [ll(0, 0), ll(0, 300)]),
+  ]);
+  const stations = all([
+    point({ id: 1, name: 'Union Station', served: true, hub: true, lines: 'A B' }, ll(0, 0)),
+    point({ id: 2, name: 'East End', served: true, lines: 'A', end: true }, ll(300, 0)),
+    point({ id: 3, name: 'South End', served: true, lines: 'B', end: true }, ll(0, 300)),
+  ]);
+  const drawn = drawSheet({ routes, stations, streets: all([]) }, whole).features;
+  const held = drawn.filter((f) => f.properties.kind === 'letter' && f.properties.held);
+  assert.ok(held.length > 0, 'the far ends carry their letters');
+  for (const f of held) {
+    const name = drawn.find((n) => n.properties.shape === 'name' && n.properties.nid === f.properties.nid);
+    assert.deepEqual(f.geometry.coordinates, name.geometry.coordinates, 'at its name\'s station');
+    assert.ok(f.properties.px.every(Number.isFinite) && f.properties.em.every(Number.isFinite));
+    // Its letter is the disc's offset in the letter's own size, a little below the disc's middle.
+    const size = SIZES.nameLetter[whole.id] * SIZES.letterText;
+    assert.ok(Math.abs(f.properties.em[0] - f.properties.px[0] / size) < 0.01 && Math.abs(f.properties.em[1] - f.properties.px[1] / size - SIZES.letterLift) < 0.01);
+  }
+  const closer = drawSheet({ routes, stations, streets: all([]) }, SHEETS.find((s) => s.opens)).features;
+  assert.ok(!closer.some((f) => f.properties.held), 'the other sheets rest at the zoom they are drawn at: their letters stay on the ground');
+});
+
+test('the whole district is framed on the frequent network, and a line running on past it is named where it leaves (#152)', () => {
+  // Chris, 2026-11-18: his view of the whole district on a phone, "but with a fix to the label, so
+  // that you can see that it's Denver airport off to the side".
+  const frame = wholeFrame([{ cls: 'c15', path: [[0, 0], [200, 0]] }, { cls: 'c30', path: [[-500, 0], [0, 0]] }], [[[0, -50], [0, 300]], [[0, 0], [600, 0], [600, -400]]]);
+  assert.deepEqual(frame, [0, -50, 200, 300], 'the frequent streets side to side, the rail within them top to bottom; hourly streets and rail past the sides left out');
+  assert.deepEqual(wholeFrame([], [[[0, 0], [10, 20]]]), [0, 0, 10, 20], 'no frequent bus: the rail');
+  assert.deepEqual(crossingX([[[0, 0], [100, 50], [100, 300]], [[0, 0], [100, -40]]], 50, [100, 60]), [50, 25], 'the crossing nearest the end');
+  assert.equal(crossingX([[[0, 0], [40, 0]]], 50, [0, 0]), null);
+
+  const whole = SHEETS.find((s) => s.whole);
+  const o = toPx([-105, 39.75], whole.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], whole.zoom);
+  const routes = all([
+    line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [ll(0, 0), ll(600, 0)]),
+    line({ mode: 'rail', route: 'B', color: '#C4D600', slot: 0 }, [ll(0, 0), ll(0, 300)]),
+  ]);
+  const stations = all([
+    point({ id: 1, name: 'Union Station', served: true, hub: true, lines: 'A B' }, ll(0, 0)),
+    point({ id: 2, name: 'East End', served: true, lines: 'A', end: true }, ll(600, 0)),
+    point({ id: 3, name: 'South End', served: true, lines: 'B', end: true }, ll(0, 300)),
+  ]);
+  const streets = all([line({ mode: 'bus', cls: 'c15', routes: '1', n: 1, hw: 15, zoom: 'far' }, [ll(-100, 100), ll(250, 100)])]);
+  const drawn = drawSheet({ routes, stations, streets, terminals: null }, whole);
+  const named = (n) => drawn.features.find((f) => f.properties.shape === 'name' && f.properties.name === n && !f.properties.alt);
+  const east = named('East End');
+  const at = toPx(east.geometry.coordinates, whole.zoom);
+  assert.equal(east.properties.text, 'East End', 'on one row');
+  const reach = SIZES.namePointer.reach;
+  assert.ok(Math.abs(at[0] - (o[0] + 250 + reach)) < 1 && Math.abs(at[1] - o[1]) < 4, 'set on its line where it goes off a phone, just past the frame, not at its end');
+  // Its arrow is held to it, on the frame's side of the name, turned toward the end itself.
+  const arrow = drawn.features.find((f) => f.properties.kind === 'pointer' && f.properties.nid === east.properties.nid);
+  assert.ok(arrow, 'it carries an arrow');
+  assert.deepEqual(arrow.geometry.coordinates, east.geometry.coordinates);
+  const [bx0, , bx1] = east.properties.bx.split(',').map(Number);
+  assert.ok(arrow.properties.px[0] > bx0 + (bx1 - bx0) / 2 && arrow.properties.px[0] <= bx1, 'at the name\'s end toward the edge');
+  const tip = [at[0] + arrow.properties.px[0], at[1] + arrow.properties.px[1]];
+  const toward = (Math.atan2(o[1] - tip[1], o[0] + 600 - tip[0]) * 180) / Math.PI;
+  assert.ok(Math.abs(arrow.properties.turn - toward) <= 1, `turned to the end: ${arrow.properties.turn}° vs ${toward.toFixed(1)}°`);
+  const [, , e] = sheetExtent(drawn, whole);
+  assert.ok(e < ll(600, 0)[0] && e >= ll(249, 0)[0], 'the frame stops at the frequent network, short of the end');
+  assert.ok(!drawn.features.some((f) => f.properties.kind === 'pointer' && f.properties.name === 'South End'), 'an end inside the frame is named at its end, with no arrow');
+  assert.ok(!drawSheet({ routes, stations, streets, terminals: null }, SHEETS.find((s) => s.opens)).features.some((f) => f.properties.kind === 'pointer'), 'only the whole district points');
 });
