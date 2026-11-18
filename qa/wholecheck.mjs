@@ -96,6 +96,21 @@ const rest = (page) => page.evaluate(([[w, s, e, n], low, high]) => {
   return Math.max(low, Math.min(high - 0.05, fit));
 }, [sheets.frame, drawnAt, top]);
 const whole = async (page, v) => Math.abs(v.zoom - await rest(page)) < 0.02 && v.zoom >= drawnAt - 0.01 && v.zoom < top;
+// Whether the frame is centred: its sides equally far from the screen's, and its top and bottom
+// too, unless that would bring it within 16 px of the sheet buttons; then it is lifted just clear
+// of them, and where it is too tall even for that, centred in the screen above them.
+const centring = (page) => page.evaluate((frame) => {
+  const map = window.sheetsMap;
+  const box = map.getContainer().getBoundingClientRect();
+  const stepsTop = document.querySelector('#steps').getBoundingClientRect().top - box.top;
+  const [w, s, e, n] = frame;
+  const a = map.project([w, n]);
+  const b = map.project([e, s]);
+  const m = { left: a.x, right: box.width - b.x, top: a.y, bottom: box.height - b.y, clear: stepsTop - b.y };
+  const across = Math.abs(m.left - m.right) <= 2;
+  const down = (Math.abs(m.top - m.bottom) <= 2 && m.clear >= 15) || (Math.abs(m.clear - 16) <= 2 && m.top > m.bottom) || (Math.abs(m.top - m.clear) <= 2 && m.clear < 16);
+  return { ok: across && down, text: Object.entries(m).map(([k, v]) => `${k} ${v.toFixed(1)}`).join(', ') };
+}, sheets.frame);
 const spillText = (s) => Object.entries(s).filter(([, v]) => v > 0.5).map(([k, v]) => `${k} ${v.toFixed(0)} px`).join(', ') || 'inside';
 const near = (a, b, tol = 1e-4) => Math.abs(a[0] - b[0]) < tol && Math.abs(a[1] - b[1]) < tol;
 const rendered = (page, layer) => page.evaluate((layer) => {
@@ -111,7 +126,9 @@ const phones = [
   { name: 'iphone-17-pro', viewport: { width: 402, height: 874 } },
   { name: 'iphone-pro-max', viewport: { width: 440, height: 956 } },
   { name: 'landscape', viewport: { width: 874, height: 402 } },
+  { name: 'tablet', viewport: { width: 820, height: 1180 } },
   { name: 'desktop', viewport: { width: 1280, height: 800 }, desktop: true },
+  { name: 'desktop-wide', viewport: { width: 1440, height: 900 }, desktop: true },
 ];
 
 // --- Each screen, both themes: step out, look, step back -------------------------------
@@ -135,6 +152,8 @@ for (const d of phones) {
     const even = (Math.abs(s.left - s.right) <= 2 && s.top <= 0.5 && s.bottom <= 0.5) || (Math.abs(s.top - s.bottom) <= 2 && s.left <= 0.5 && s.right <= 0.5);
     // A screen narrower than the network (360-393 px) or shorter (a phone on its side) may spill evenly.
     report(fits || ((d.viewport.width < 400 || d.viewport.height < 450) && even), `${tag}: the whole network is on screen`, spillText(s));
+    const c = await centring(page);
+    report(c.ok, `${tag}: and centred`, c.text);
     const names = [...new Set((await rendered(page, 'name-0')).filter((f) => !f.alt).map((f) => f.name))].sort();
     const missing = builtNames.filter((n) => !names.includes(n));
     report(!missing.length, `${tag}: every name the build set is drawn`, missing.length ? `missing ${missing.join(', ')}` : names.join(', '));
@@ -219,6 +238,8 @@ for (const [where, hash] of corners) {
   const turned = await view(page);
   const s = await spill(page);
   report(await whole(page, turned) && Math.abs(turned.zoom - upright.zoom) > 0.01, 'a phone turned on its side rests the whole district again for the new screen', `z${upright.zoom.toFixed(3)} to z${turned.zoom.toFixed(3)}, ${spillText(s)}`);
+  const c = await centring(page);
+  report(c.ok, 'and centres it again', c.text);
   // The letters under the names are held to them, every one the build set drawn.
   const held = sheet0.features.filter((f) => f.properties.kind === 'letter' && f.properties.held && !f.properties.alt).length;
   const chips = await page.evaluate(() => window.sheetsMap.queryRenderedFeatures({ layers: ['letter-chip-0'] }).filter((f) => !f.properties.alt).length);

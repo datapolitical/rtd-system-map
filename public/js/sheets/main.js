@@ -53,7 +53,7 @@ function fitWhole() {
   const top = i < SHEETS.length - 1 ? edge(i) - 0.05 : zooms[i];
   rests[i] = Number.isFinite(fits) ? Math.max(zooms[i], Math.min(top, fits)) : zooms[i];
 }
-// How much of the map the sheet buttons sit over at its foot: the whole district centres in the rest.
+// How much of the map the sheet buttons sit over at its foot: the whole district keeps clear of them.
 function stepsHeight() {
   const box = document.getElementById('map').getBoundingClientRect();
   const steps = document.querySelector('#steps')?.getBoundingClientRect();
@@ -257,9 +257,22 @@ const frameCentre = wholeFrame && (() => {
   const mid = (y(s) + y(n)) / 2;
   return [(w + e) / 2, (2 * Math.atan(Math.exp(mid)) - Math.PI / 2) * (180 / Math.PI)];
 })();
+// How far above the screen's middle the frame's middle sits at `zoom`: none where the frame
+// clears the sheet buttons by 16 px centred on the whole screen, else just enough to clear them,
+// and at most half their height (centred in the screen above them), where it fits nowhere.
+function lift(zoom) {
+  const [, s, , n] = wholeFrame;
+  const y = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
+  const tall = (y(n) - y(s)) * 512 * 2 ** zoom;
+  const high = map.getContainer().clientHeight;
+  const under = stepsHeight();
+  return Math.min(under / 2, Math.max(0, high / 2 + tall / 2 - (high - under - 16)));
+}
 // Where the reader was before stepping out to the whole district: the button back in returns
 // there, unless the reader has moved the map on the whole district since.
 let cameFrom = null;
+// Whether the whole district is as stepping out framed it: a turned phone frames it again.
+let framed = false;
 // `keep`: a link names this view's centre, so stepping to the whole district keeps it.
 function show(index, around, keep = false) {
   const was = sheet;
@@ -273,10 +286,12 @@ function show(index, around, keep = false) {
   const back = !whole && cameFrom && SHEETS[was]?.whole && sheet === was + 1 && !around ? cameFrom : null;
   if (whole) cameFrom = map.getCenter().toArray();
   else if (!SHEETS[sheet].whole) cameFrom = null;
+  if (whole) framed = true;
+  else if (!SHEETS[sheet].whole || keep) framed = false;
   // The whole district's room is given before the move there, and taken back after the move off it.
   if (SHEETS[sheet].whole) map.setMaxBounds(roomy());
   else if (SHEETS[was]?.whole) map.once('moveend', () => { if (!SHEETS[sheet].whole) map.setMaxBounds(bounded); });
-  map.easeTo({ zoom: rests[sheet], ...(whole ? { center: frameCentre, offset: [0, -stepsHeight() / 2] } : back ? { center: back } : { around }), duration: 380 }, { settling: true });
+  map.easeTo({ zoom: rests[sheet], ...(whole ? { center: frameCentre, offset: [0, -lift(rests[sheet])] } : back ? { center: back } : { around }), duration: 380 }, { settling: true });
   for (const [i, dot] of [...document.querySelectorAll('#sheets i')].entries()) dot.classList.toggle('on', i === sheet);
   document.querySelector('#out').disabled = sheet === 0;
   document.querySelector('#in').disabled = sheet === zooms.length - 1;
@@ -321,7 +336,7 @@ map.on('zoomstart', (e) => {
 document.querySelector('#in').addEventListener('click', () => show(sheet + 1, !cameFrom && openingSteps && hub ? hub : undefined));
 document.querySelector('#out').addEventListener('click', () => show(sheet - 1));
 map.on('movestart', (e) => { if (e.originalEvent) openingSteps = false; });
-map.on('dragstart', () => { if (SHEETS[sheet].whole) cameFrom = null; });
+map.on('dragstart', () => { if (SHEETS[sheet].whole) cameFrom = null; framed = false; });
 show(sheet);
 
 // --- What is this? Tap a line, a station or a stop --------------------------------
@@ -564,7 +579,8 @@ map.on('resize', () => {
   fitWhole();
   if (!SHEETS[sheet].whole) return;
   map.setMaxBounds(roomy());
-  if (Math.abs(rests[sheet] - was) > 0.01) map.easeTo({ zoom: rests[sheet], duration: 0 }, { settling: true });
+  if (framed) map.easeTo({ zoom: rests[sheet], center: frameCentre, offset: [0, -lift(rests[sheet])], duration: 0 }, { settling: true });
+  else if (Math.abs(rests[sheet] - was) > 0.01) map.easeTo({ zoom: rests[sheet], duration: 0 }, { settling: true });
 });
 // An address edited in place, or a link to this page followed from itself.
 addEventListener('hashchange', (event) => {

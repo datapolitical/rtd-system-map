@@ -2089,9 +2089,12 @@ tables:
   button goes back to where the reader was, unless they moved the map on
   sheet 0. A link that names a view on sheet 0 keeps its own centre. Its
   address is written at the zoom the sheet is drawn at (`#8.75/…`), so a
-  link opens the same sheet on any screen. The network is centred in the
-  screen above the sheet buttons; a phone on its side, too short for the
-  network at zoom 8.75, crops it evenly top and bottom.
+  link opens the same sheet on any screen. The network is centred on the
+  whole screen, side to side and top to bottom, and lifted only as far as
+  keeps it 16 px clear of the sheet buttons; a phone on its side, too short
+  for the network at zoom 8.75, centres it in the screen above them and
+  crops it evenly top and bottom. A turned phone or a resized window frames
+  it again, unless the reader has moved the map.
 - Only on sheet 0 can the reader pan half a screen past the routes' margin:
   a phone held upright is taller than that margin at this zoom, and MapLibre
   raises the zoom of a screen larger than its bounds. Back on the other
@@ -2127,7 +2130,7 @@ tables:
 
 `qa/wholecheck.mjs <base>` checks it in a browser: framed on screens from
 360 px wide to a desktop, resting where MapLibre's own fit of the frame puts
-it (and again when a phone is turned), every name and held letter the build
+it (and again when a phone is turned), centred to 2 px, every name and held letter the build
 set drawn, towns only from the
 district, + back to where the reader was, stepping out from the network's
 far corners, links and their addresses, a wheel and a pinch, a tap and a
@@ -5154,6 +5157,9 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   phone Chris found zoom 8 "a little too zoomed out", and asked what the
   view looks like at its best size on a phone and on a desktop. Of one zoom
   for every screen, or a zoom that fits each screen, he chose the second.
+  He then asked that it be properly centred: it had been centred in the
+  screen above the sheet buttons, which sit only in a corner on a desktop,
+  so the network stood high; it is centred on the whole screen now.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in
