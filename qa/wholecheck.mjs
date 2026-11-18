@@ -16,6 +16,7 @@
 // node qa/wholecheck.mjs <base> [outDir]   (captures, both themes, go to outDir; default qa/.scratch/whole)
 import { chromium } from '@playwright/test';
 import fs from 'node:fs';
+import { stubAnalytics } from './lib/analytics.mjs';
 
 const base = process.argv[2];
 const out = process.argv[3] ?? 'qa/.scratch/whole';
@@ -44,6 +45,8 @@ const inDistrict = (p) => sheets.district.coordinates.some(([outer, ...holes]) =
 async function open(viewport, theme, hash = '', extra = {}) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 2, colorScheme: theme, ...extra });
   const page = await context.newPage();
+  // Cloudflare's analytics beacon on a preview host logs errors that are not the map's (#107).
+  await stubAnalytics(page);
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(e.message.split('\n')[0]));
   page.on('console', (m) => { if (m.type() === 'error') page.errors.push(m.text().split('\n')[0]); });
