@@ -3,7 +3,7 @@
 //
 //   framed     stepping out shows the whole network: the sheet's frame (sheets.json) inside the
 //              screen above the controls, on phones from 360 px wide up and on a desktop
-//   rests      the whole district rests where the frame fits the screen 16 px clear (MapLibre's
+//   rests      the whole district rests where the frame fits the screen 32 px clear at the sides and 16 above and below (MapLibre's
 //              own fit), no farther out than it is drawn and short of the next sheet's band
 //   names      every station name the build set on sheet 0 is drawn (none dropped by MapLibre)
 //   towns      every town named lies inside RTD's district (sheets.json `district`)
@@ -85,14 +85,14 @@ const spill = (page) => page.evaluate((frame) => {
   return { left: Math.max(0, -a.x), top: Math.max(0, -a.y), right: Math.max(0, b.x - box.width), bottom: Math.max(0, b.y - (steps.top - box.top)) };
 }, sheets.frame);
 // Where the whole district should rest on this screen: MapLibre's fit of the frame above the
-// sheet buttons, 16 px clear, held between the zoom it is drawn at and just short of sheet 1's band.
+// sheet buttons, 32 px clear at the sides and 16 above and below, held between the zoom it is drawn at and just short of sheet 1's band.
 const WHOLE = SHEETS.findIndex((x) => x.whole);
 const [drawnAt, top] = [SHEETS[WHOLE].zoom, edge(WHOLE)];
 const rest = (page) => page.evaluate(([[w, s, e, n], low, high]) => {
   const map = window.sheetsMap;
   const box = map.getContainer().getBoundingClientRect();
   const under = Math.max(0, box.bottom - document.querySelector('#steps').getBoundingClientRect().top);
-  const fit = map.cameraForBounds([[w, s], [e, n]], { padding: { top: 16, left: 16, right: 16, bottom: 16 + under } }).zoom;
+  const fit = map.cameraForBounds([[w, s], [e, n]], { padding: { top: 16, left: 32, right: 32, bottom: 16 + under } }).zoom;
   return Math.max(low, Math.min(high - 0.05, fit));
 }, [sheets.frame, drawnAt, top]);
 const whole = async (page, v) => Math.abs(v.zoom - await rest(page)) < 0.02 && v.zoom >= drawnAt - 0.01 && v.zoom < top;
@@ -108,7 +108,7 @@ const centring = (page) => page.evaluate((frame) => {
   const b = map.project([e, s]);
   const m = { left: a.x, right: box.width - b.x, top: a.y, bottom: box.height - b.y, clear: stepsTop - b.y };
   const across = Math.abs(m.left - m.right) <= 2;
-  const down = (Math.abs(m.top - m.bottom) <= 2 && m.clear >= 15) || (Math.abs(m.clear - 16) <= 2 && m.top > m.bottom) || (Math.abs(m.top - m.clear) <= 2 && m.clear < 16);
+  const down = (Math.abs(m.top - m.bottom) <= 2 && m.clear >= 15) || (Math.abs(m.clear - 16) <= 2 && m.top < m.bottom) || (Math.abs(m.top - m.clear) <= 2 && m.clear < 16);
   return { ok: across && down, text: Object.entries(m).map(([k, v]) => `${k} ${v.toFixed(1)}`).join(', ') };
 }, sheets.frame);
 const spillText = (s) => Object.entries(s).filter(([, v]) => v > 0.5).map(([k, v]) => `${k} ${v.toFixed(0)} px`).join(', ') || 'inside';

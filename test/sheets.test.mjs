@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent, wholeFrame, crossingX } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -1550,4 +1550,38 @@ test('on the whole district a name\'s letters are held to it in pixels, at its s
   }
   const closer = drawSheet({ routes, stations, streets: all([]) }, SHEETS.find((s) => s.opens)).features;
   assert.ok(!closer.some((f) => f.properties.held), 'the other sheets rest at the zoom they are drawn at: their letters stay on the ground');
+});
+
+test('the whole district is framed on the frequent network, and a line running on past it is named where it leaves (#152)', () => {
+  // Chris, 2026-11-18: his view of the whole district on a phone, "but with a fix to the label, so
+  // that you can see that it's Denver airport off to the side".
+  const frame = wholeFrame([{ cls: 'c15', path: [[0, 0], [200, 0]] }, { cls: 'c30', path: [[-500, 0], [0, 0]] }], [[[0, -50], [0, 300]], [[0, 0], [600, 0], [600, -400]]]);
+  assert.deepEqual(frame, [0, -50, 200, 300], 'the frequent streets side to side, the rail within them top to bottom; hourly streets and rail past the sides left out');
+  assert.deepEqual(wholeFrame([], [[[0, 0], [10, 20]]]), [0, 0, 10, 20], 'no frequent bus: the rail');
+  assert.deepEqual(crossingX([[[0, 0], [100, 50], [100, 300]], [[0, 0], [100, -40]]], 50, [100, 60]), [50, 25], 'the crossing nearest the end');
+  assert.equal(crossingX([[[0, 0], [40, 0]]], 50, [0, 0]), null);
+
+  const whole = SHEETS.find((s) => s.whole);
+  const o = toPx([-105, 39.75], whole.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], whole.zoom);
+  const routes = all([
+    line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [ll(0, 0), ll(600, 0)]),
+    line({ mode: 'rail', route: 'B', color: '#C4D600', slot: 0 }, [ll(0, 0), ll(0, 300)]),
+  ]);
+  const stations = all([
+    point({ id: 1, name: 'Union Station', served: true, hub: true, lines: 'A B' }, ll(0, 0)),
+    point({ id: 2, name: 'East End', served: true, lines: 'A', end: true }, ll(600, 0)),
+    point({ id: 3, name: 'South End', served: true, lines: 'B', end: true }, ll(0, 300)),
+  ]);
+  const streets = all([line({ mode: 'bus', cls: 'c15', routes: '1', n: 1, hw: 15, zoom: 'far' }, [ll(-100, 100), ll(250, 100)])]);
+  const drawn = drawSheet({ routes, stations, streets, terminals: null }, whole);
+  const named = (n) => drawn.features.find((f) => f.properties.shape === 'name' && f.properties.name === n && !f.properties.alt);
+  const east = named('East End');
+  const at = toPx(east.geometry.coordinates, whole.zoom);
+  assert.match(east.properties.text, / ›$/, 'its name points the way the line goes on');
+  assert.ok(Math.abs(at[0] - (o[0] + 250)) < 1 && Math.abs(at[1] - o[1]) < 4, 'set on its line where it leaves the frame, not at its end');
+  const [, , e] = sheetExtent(drawn, whole);
+  assert.ok(e < ll(600, 0)[0] && e >= ll(249, 0)[0], 'the frame stops at the frequent network, short of the end');
+  assert.doesNotMatch(named('South End').properties.text, /[‹›]/, 'an end inside the frame is named at its end');
+  assert.ok(!drawSheet({ routes, stations, streets, terminals: null }, SHEETS.find((s) => s.opens)).features.some((f) => /[‹›]/.test(f.properties.text ?? '')), 'only the whole district points');
 });

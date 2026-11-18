@@ -41,13 +41,15 @@ const asked = ((v) => (v && v.center && !onMap(v.center) ? null : v))(readView(l
 // to just short of where the next sheet's band begins (style.js, edge). Chris, 2026-11-18: the
 // district at one zoom was too far out on a phone, and a desktop's screen is wider than it is tall.
 const rests = [...zooms];
+const SIDE = 32;
 function fitWhole() {
   const i = SHEETS.findIndex((s) => s.whole);
   if (i < 0 || !wholeFrame) return;
   const [w, s, e, n] = wholeFrame;
   const y = (lat) => 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
   const box = document.getElementById('map');
-  const across = box.clientWidth - 32;
+  // 32 px each side: the frame's sides are where frequent lines end, in a town whose name needs the room (Boulder).
+  const across = box.clientWidth - 2 * SIDE;
   const down = box.clientHeight - stepsHeight() - 32;
   const fits = Math.min(Math.log2(across / (512 * ((e - w) / 360))), Math.log2(down / (512 * (y(s) - y(n)))));
   const top = i < SHEETS.length - 1 ? edge(i) - 0.05 : zooms[i];

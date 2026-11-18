@@ -2072,8 +2072,9 @@ rail network with its names (0.53° of longitude across) fills a phone's
 width from 360 px. It is the one sheet that does not always rest at the zoom
 it is drawn at: a phone is narrower than the network is tall, and a desktop
 is wider, so one zoom left the network small on one or the other. It rests
-as close as fits the rail network in the screen above the sheet buttons,
-16 px clear of each side, never farther out than 8.75 and never past the
+as close as fits its frame (below) in the screen above the sheet buttons,
+32 px clear at the sides, where frequent lines end in a town whose name
+needs the room (Boulder), and 16 px above and below, never farther out than 8.75 and never past the
 point where sheet 1's band begins (`edge`, halfway between the two sheets'
 zooms, less 0.05). A 402 px phone rests at about 8.94; a desktop or a tablet
 stops at about 9.33 with room round the network. A turned phone or a
@@ -2081,11 +2082,18 @@ resized window rests again for its new screen. It is the same procedure as
 the other sheets, with these differences, all set in `SIZES` and the page's
 tables:
 
-- Stepping out to it by button, pinch or scroll frames the rail network,
-  wherever the reader was: the map centres on the rail lines, stations,
-  letters and names (the build writes them as `frame` in `sheets.json`).
-  The bus streets are left out of the frame: a few reach far past the rail
-  (Nederland, Parker), and framing them left the network small. The +
+- Stepping out to it by button, pinch or scroll frames the network,
+  wherever the reader was: side to side, the frequent bus network (streets
+  every 15 minutes or better), from Boulder to Parker; top to bottom, that
+  network and the rail lines, stations, letters and names within it
+  (`wholeFrame`; the build writes it as `frame` in `sheets.json`). The
+  hourly bus streets are left out: a few reach far past the rest (Nederland),
+  and framing them left the network small. The A line runs on past the
+  frame's east side to the airport, off the screen on a phone: its far
+  end's name is set on the line where it leaves the frame, with an arrow
+  the way the line goes on ("Denver Airport ›", `namePointer`; the font has
+  no →), not at the end itself. On a desktop, where the end is on screen,
+  the name still points along the line to it. The +
   button goes back to where the reader was, unless they moved the map on
   sheet 0. A link that names a view on sheet 0 keeps its own centre. Its
   address is written at the zoom the sheet is drawn at (`#8.75/…`), so a
@@ -2116,7 +2124,8 @@ tables:
   Golden's name sits under its station on two rows, not 170 px west of it. Every place round
   the hub is nearer some other station than the hub at this scale, so a
   name's cost there grows with how much nearer (`nameStray` a pixel), and
-  the hub's name stands where it reads as the hub's.
+  the hub's name stands where it reads as the hub's. A name set where its
+  line leaves the frame pays no such cost: it names no station there.
 - It names only the towns inside RTD's district, so Greeley and Loveland
   are not lettered over a map that doesn't reach them. The district is RTD's
   boundary layer turned from its mask into the cut-outs, with the places
@@ -2129,7 +2138,8 @@ tables:
   freeways.
 
 `qa/wholecheck.mjs <base>` checks it in a browser: framed on screens from
-360 px wide to a desktop, resting where MapLibre's own fit of the frame puts
+360 px wide to a desktop, resting where MapLibre's own fit of the frame
+(32 px at the sides, 16 above and below) puts
 it (and again when a phone is turned), centred to 2 px, every name and held letter the build
 set drawn, towns only from the
 district, + back to where the reader was, stepping out from the network's
@@ -5160,6 +5170,15 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   He then asked that it be properly centred: it had been centred in the
   screen above the sheet buttons, which sit only in a corner on a desktop,
   so the network stood high; it is centred on the whole screen now.
+- 2026-11-18: Sheet 0 framed on the frequent bus network side to side and
+  the rail within it top to bottom, 32 px clear at the sides; the airport's
+  name set where the A line leaves the frame, pointing to it. Reason: Chris
+  sent his own phone view, panned and pinched to about zoom 8.94 with
+  Boulder to Parker across and the A line running off the east side, and
+  said: "I think it needs to be this, but with a fix to the label, so that
+  you can see that it's Denver airport off to the side". Framed on the rail,
+  a 402 px phone rested at 8.94 too but centred on the airport; the new
+  frame rests a 402 px phone at 8.94 on his view.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in
