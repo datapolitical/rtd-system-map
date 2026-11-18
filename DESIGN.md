@@ -2059,31 +2059,48 @@ holds these rules.
 
 | Sheet | Zoom | What it adds |
 |---|---|---|
-| 0 | 8 | The whole district on one screen: every rail line and bus street, the hub and each line's far end named, the towns in RTD's district. |
+| 0 | 8.75 | The whole district on one screen: every rail line and bus street, the hub and each line's far end named, the towns in RTD's district. |
 | 1 | 10 | The network: rail lines whole, every bus street by how often a bus comes, the hub and line ends named. Tap a line for its routes. |
 | 2 | 12 | Every station named, route numbers along bus streets. |
 | 3 | 14 | One-way pairs on their own streets, names of the main streets. |
 | 4 | 16 | Every stop, buildings, platforms apart from each other. |
 
 **The whole district** (#152). Sheet 0 is one step out from sheet 1, where
-the page still opens: the whole network on a phone, from Longmont to Castle
-Rock and from the mountains to the airport. Zoom 8 is the next step of the
-sheets' two-level ladder, and the network is 0.91° of longitude across, which
-fits a phone from 360 px wide. It is the same procedure as the other sheets,
-with these differences, all set in `SIZES` and the page's tables:
+the page still opens: the whole rail network on one screen, with the bus
+streets, towns and freeways round it. It is drawn at zoom 8.75, where the
+rail network with its names (0.53° of longitude across) fills a phone's
+width from 360 px. It is the one sheet that does not always rest at the zoom
+it is drawn at: a phone is narrower than the network is tall, and a desktop
+is wider, so one zoom left the network small on one or the other. It rests
+as close as fits the rail network in the screen above the sheet buttons,
+16 px clear of each side, never farther out than 8.75 and never past the
+point where sheet 1's band begins (`edge`, halfway between the two sheets'
+zooms, less 0.05). A 402 px phone rests at about 8.94; a desktop or a tablet
+stops at about 9.33 with room round the network. A turned phone or a
+resized window rests again for its new screen. It is the same procedure as
+the other sheets, with these differences, all set in `SIZES` and the page's
+tables:
 
-- Stepping out to it by button, pinch or scroll frames the whole network,
-  wherever the reader was: the map centres on what the sheet draws, names
-  included (the build writes it as `frame` in `sheets.json`). The + button
-  goes back to where the reader was, unless they moved the map on sheet 0. A
-  link that names a view on sheet 0 keeps its own centre. The network is
-  centred in the screen above the sheet buttons; a phone on its side, too
-  short for the network at zoom 8, crops it evenly top and bottom.
+- Stepping out to it by button, pinch or scroll frames the rail network,
+  wherever the reader was: the map centres on the rail lines, stations,
+  letters and names (the build writes them as `frame` in `sheets.json`).
+  The bus streets are left out of the frame: a few reach far past the rail
+  (Nederland, Parker), and framing them left the network small. The +
+  button goes back to where the reader was, unless they moved the map on
+  sheet 0. A link that names a view on sheet 0 keeps its own centre. Its
+  address is written at the zoom the sheet is drawn at (`#8.75/…`), so a
+  link opens the same sheet on any screen. The network is centred in the
+  screen above the sheet buttons; a phone on its side, too short for the
+  network at zoom 8.75, crops it evenly top and bottom.
 - Only on sheet 0 can the reader pan half a screen past the routes' margin:
-  a phone held upright is taller than that margin at zoom 8, and MapLibre
+  a phone held upright is taller than that margin at this zoom, and MapLibre
   raises the zoom of a screen larger than its bounds. Back on the other
   sheets the bounds are the routes' margin again, the ones the loading
   picture is placed by.
+- The letters under a name are held to the name in pixels, at its station
+  (`held`, `px`, `em`), and drawn as a disc image the page inks with the
+  line's colour (`letter-chip`). A letter set on the ground, as on the other
+  sheets, drifts off its name once the sheet rests closer than it is drawn.
 - It names the hub and each line's far end only: of the stations a line ends
   at, the one farthest from the hub (`nameFar`). A far end within
   `nameHubClear` (60 px) of the hub is left unnamed: the B and G lines end
@@ -2091,8 +2108,9 @@ with these differences, all set in `SIZES` and the page's tables:
   step in names them. Every far end's name carries its lines' letters in a
   row, since no letter fits on the lines at this scale; a line's letter is
   set on the line only where its far end goes unnamed. A name costs
-  `nameSpill` for each pixel it reaches past the network's own lines, so
-  names turn inward and the sheet fits the phone's width. Every place round
+  `nameSpill` for each pixel it reaches past the rail network's lines and
+  stations, so names turn inward and the network fits the phone's width:
+  Golden's name sits under its station on two rows, not 170 px west of it. Every place round
   the hub is nearer some other station than the hub at this scale, so a
   name's cost there grows with how much nearer (`nameStray` a pixel), and
   the hub's name stands where it reads as the hub's.
@@ -2108,11 +2126,13 @@ with these differences, all set in `SIZES` and the page's tables:
   freeways.
 
 `qa/wholecheck.mjs <base>` checks it in a browser: framed on screens from
-360 px wide to a desktop, every name the build set drawn, towns only from the
+360 px wide to a desktop, resting where MapLibre's own fit of the frame puts
+it (and again when a phone is turned), every name and held letter the build
+set drawn, towns only from the
 district, + back to where the reader was, stepping out from the network's
 far corners, links and their addresses, a wheel and a pinch, a tap and a
 pick, the bounds put back on sheet 1, and the labels a screen reader hears.
-At zoom 8 a pixel is about 235 m, and `npm run check:accuracy` finds bus
+At zoom 8.75 a pixel is about 140 m, and `npm run check:accuracy` finds bus
 routes there a few pixels off their street, where streets closer than
 `busMerge` are drawn as one; the other sheets are unchanged.
 
@@ -5128,6 +5148,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   names off at the screen's edge, set the hub's name on Westminster's, and
   lettered Greeley and Windsor; on 2026-11-18 he chose framing and left the
   naming and the towns to Claude.
+- 2026-11-18: Sheet 0 drawn at zoom 8.75 and framed on the rail network,
+  resting as close as fits it on each screen, up to just short of sheet 1's
+  band; a name's letters are held to it in pixels there. Reason: on his
+  phone Chris found zoom 8 "a little too zoomed out", and asked what the
+  view looks like at its best size on a phone and on a desktop. Of one zoom
+  for every screen, or a zoom that fits each screen, he chose the second.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in

@@ -3,6 +3,8 @@
 //
 //   framed     stepping out shows the whole network: the sheet's frame (sheets.json) inside the
 //              screen above the controls, on phones from 360 px wide up and on a desktop
+//   rests      the whole district rests where the frame fits the screen 16 px clear (MapLibre's
+//              own fit), no farther out than it is drawn and short of the next sheet's band
 //   names      every station name the build set on sheet 0 is drawn (none dropped by MapLibre)
 //   towns      every town named lies inside RTD's district (sheets.json `district`)
 //   back       the + button returns to where the reader was before stepping out
@@ -17,6 +19,7 @@
 import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import { stubAnalytics } from './lib/analytics.mjs';
+import { SHEETS, edge } from '../public/js/sheets/style.js';
 
 const base = process.argv[2];
 const out = process.argv[3] ?? 'qa/.scratch/whole';
@@ -81,6 +84,18 @@ const spill = (page) => page.evaluate((frame) => {
   const b = map.project([e, s]);
   return { left: Math.max(0, -a.x), top: Math.max(0, -a.y), right: Math.max(0, b.x - box.width), bottom: Math.max(0, b.y - (steps.top - box.top)) };
 }, sheets.frame);
+// Where the whole district should rest on this screen: MapLibre's fit of the frame above the
+// sheet buttons, 16 px clear, held between the zoom it is drawn at and just short of sheet 1's band.
+const WHOLE = SHEETS.findIndex((x) => x.whole);
+const [drawnAt, top] = [SHEETS[WHOLE].zoom, edge(WHOLE)];
+const rest = (page) => page.evaluate(([[w, s, e, n], low, high]) => {
+  const map = window.sheetsMap;
+  const box = map.getContainer().getBoundingClientRect();
+  const under = Math.max(0, box.bottom - document.querySelector('#steps').getBoundingClientRect().top);
+  const fit = map.cameraForBounds([[w, s], [e, n]], { padding: { top: 16, left: 16, right: 16, bottom: 16 + under } }).zoom;
+  return Math.max(low, Math.min(high - 0.05, fit));
+}, [sheets.frame, drawnAt, top]);
+const whole = async (page, v) => Math.abs(v.zoom - await rest(page)) < 0.02 && v.zoom >= drawnAt - 0.01 && v.zoom < top;
 const spillText = (s) => Object.entries(s).filter(([, v]) => v > 0.5).map(([k, v]) => `${k} ${v.toFixed(0)} px`).join(', ') || 'inside';
 const near = (a, b, tol = 1e-4) => Math.abs(a[0] - b[0]) < tol && Math.abs(a[1] - b[1]) < tol;
 const rendered = (page, layer) => page.evaluate((layer) => {
@@ -111,7 +126,8 @@ for (const d of phones) {
     await page.click('#out');
     await settled(page);
     const v = await view(page);
-    report(Math.abs(v.zoom - 8) < 0.01 && v.label === 'Sheet 1 of 5' && v.out && !v.in, `${tag}: minus reaches the whole district`, `${v.label}, z${v.zoom.toFixed(2)}, minus ${v.out ? 'off' : 'on'}`);
+    report(v.label === 'Sheet 1 of 5' && v.out && !v.in, `${tag}: minus reaches the whole district`, `${v.label}, minus ${v.out ? 'off' : 'on'}`);
+    report(await whole(page, v), `${tag}: it rests where the network fits the screen`, `z${v.zoom.toFixed(3)}, fit z${(await rest(page)).toFixed(3)}`);
     report(v.said === 'Sheet 1 of 5', `${tag}: a screen reader hears the step`, JSON.stringify(v.said));
     const s = await spill(page);
     // On a screen narrower than the network the frame is centred: equal spill each side is the best there is.
@@ -170,25 +186,44 @@ for (const [where, hash] of corners) {
 {
   const page = await open({ width: 402, height: 874 }, 'dark', '#8/39.9000/-105.2000', { isMobile: true, hasTouch: true });
   const v = await view(page);
-  report(Math.abs(v.zoom - 8) < 0.01 && near(v.center, [-105.2, 39.9], 1e-3) && v.label === 'Sheet 1 of 5', 'a link to sheet 0 opens there and keeps its centre', `${v.label} z${v.zoom} ${v.center.map((x) => x.toFixed(4))}`);
+  report(await whole(page, v) && near(v.center, [-105.2, 39.9], 1e-3) && v.label === 'Sheet 1 of 5', 'a link to sheet 0 (written at zoom 8 before #152 moved it) opens there and keeps its centre', `${v.label} z${v.zoom} ${v.center.map((x) => x.toFixed(4))}`);
   await page.goto(`${base}/?theme=dark`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.sheetsReady, null, { timeout: 60000 });
   await settled(page);
   await page.click('#out');
   await settled(page);
   const stepped = await view(page);
-  report(/^#8\//.test(stepped.hash), 'stepping out writes the whole district into the address', stepped.hash);
+  report(stepped.hash.startsWith(`#${drawnAt}/`), 'stepping out writes the whole district into the address, at the zoom it is drawn at', stepped.hash);
   await page.goto(`${base}/?theme=dark${stepped.hash}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.sheetsReady, null, { timeout: 60000 });
   await settled(page);
   const again = await view(page);
-  report(near(again.center, stepped.center, 1e-3) && Math.abs(again.zoom - 8) < 0.01, 'that address opens the same view', `${again.hash}`);
+  report(near(again.center, stepped.center, 1e-3) && Math.abs(again.zoom - stepped.zoom) < 0.01, 'that address opens the same view', `${again.hash}`);
   // An address edited in place to the whole district keeps the centre it names.
   await page.evaluate(() => { location.hash = '#8/39.6000/-104.9000'; });
   await settled(page);
   const edited = await view(page);
   report(near(edited.center, [-104.9, 39.6], 1e-3), 'an address changed in place keeps the centre it names', edited.center.map((x) => x.toFixed(4)).join(','));
   report(!page.errors.length, 'link: no errors', page.errors.slice(0, 3).join(' | '));
+  await page.context().close();
+}
+
+// --- A phone turned on its side while on the whole district: it rests again for the new screen ---
+{
+  const page = await open({ width: 402, height: 874 }, 'light', '', { isMobile: true, hasTouch: true });
+  await page.click('#out');
+  await settled(page);
+  const upright = await view(page);
+  await page.setViewportSize({ width: 874, height: 402 });
+  await settled(page);
+  const turned = await view(page);
+  const s = await spill(page);
+  report(await whole(page, turned) && Math.abs(turned.zoom - upright.zoom) > 0.01, 'a phone turned on its side rests the whole district again for the new screen', `z${upright.zoom.toFixed(3)} to z${turned.zoom.toFixed(3)}, ${spillText(s)}`);
+  // The letters under the names are held to them, every one the build set drawn.
+  const held = sheet0.features.filter((f) => f.properties.kind === 'letter' && f.properties.held && !f.properties.alt).length;
+  const chips = await page.evaluate(() => window.sheetsMap.queryRenderedFeatures({ layers: ['letter-chip-0'] }).filter((f) => !f.properties.alt).length);
+  report(held > 0 && chips === held, 'every letter held under a name is drawn', `${chips} of ${held}`);
+  report(!page.errors.length, 'turn: no errors', page.errors.slice(0, 3).join(' | '));
   await page.context().close();
 }
 
@@ -202,7 +237,7 @@ for (const [where, hash] of corners) {
   }
   const v = await view(page);
   const s = await spill(page);
-  report(Math.abs(v.zoom - 8) < 0.01 && Object.values(s).every((x) => x <= 0.5), 'two wheel scrolls out from sheet 2 reach sheet 0, framed', `z${v.zoom.toFixed(2)}, ${spillText(s)}`);
+  report(await whole(page, v) && Object.values(s).every((x) => x <= 0.5), 'two wheel scrolls out from sheet 2 reach sheet 0, framed', `z${v.zoom.toFixed(2)}, ${spillText(s)}`);
   report(!page.errors.length, 'wheel: no errors', page.errors.slice(0, 3).join(' | '));
   await page.context().close();
 }
@@ -213,7 +248,7 @@ for (const [where, hash] of corners) {
   await settled(page);
   const v = await view(page);
   const s = await spill(page);
-  report(Math.abs(v.zoom - 8) < 0.01 && Object.values(s).every((x) => x <= 0.5), 'a pinch out from the opening sheet reaches sheet 0, framed', `z${v.zoom.toFixed(2)}, ${spillText(s)}`);
+  report(await whole(page, v) && Object.values(s).every((x) => x <= 0.5), 'a pinch out from the opening sheet reaches sheet 0, framed', `z${v.zoom.toFixed(2)}, ${spillText(s)}`);
   report(!page.errors.length, 'pinch: no errors', page.errors.slice(0, 3).join(' | '));
   await page.context().close();
 }
@@ -267,7 +302,7 @@ for (const theme of ['light', 'dark']) {
   await page.keyboard.press('Enter');
   await settled(page);
   const v = await view(page);
-  report(Math.abs(v.zoom - 8) < 0.01, 'Enter on the minus button steps out', `z${v.zoom.toFixed(2)}`);
+  report(await whole(page, v), 'Enter on the minus button steps out', `z${v.zoom.toFixed(2)}`);
   const labels = await page.evaluate(() => ['#out', '#in', '#sheets'].map((s) => document.querySelector(s).getAttribute('aria-label')));
   report(labels.join('|') === 'Wider sheet|Closer sheet|Sheet 1 of 5', 'the buttons and dots say what they are', labels.join(' | '));
   await page.context().close();

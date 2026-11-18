@@ -1508,14 +1508,46 @@ test('RTD\'s boundary mask becomes the district: its cut-outs, the places in the
   assert.equal(districtShape(null), null);
 });
 
-test('the frame of the whole district holds its lines and its names\' boxes (#152)', () => {
+test('the frame of the whole district holds its rail and its names\' boxes, not the bus streets past them (#152)', () => {
   const whole = SHEETS.find((s) => s.whole);
   const o = toPx([-105, 39.75], whole.zoom);
   const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], whole.zoom);
-  const drawn = all([line({ kind: 'rail' }, [ll(0, 0), ll(100, 0)]), point({ kind: 'station', shape: 'name', bx: '6,-6,80,6' }, ll(100, 0)), point({ kind: 'station', shape: 'name', alt: '|1|', bx: '6,-6,500,6' }, ll(100, 0))]);
+  // Chris, 2026-11-18: framing the whole network, out to Nederland's bus, left it too small on a phone.
+  const drawn = all([line({ kind: 'rail' }, [ll(0, 0), ll(100, 0)]), point({ kind: 'station', shape: 'name', bx: '6,-6,80,6' }, ll(100, 0)), point({ kind: 'station', shape: 'name', alt: '|1|', bx: '6,-6,500,6' }, ll(100, 0)),
+    line({ kind: 'bus', routes: 'NB' }, [ll(0, 0), ll(-400, -90)]), line({ kind: 'route-line', routes: 'NB' }, [ll(0, 0), ll(-400, -90)])]);
   const [w, s, e, n] = sheetExtent(drawn, whole);
   const [west, north] = toPx([w, n], whole.zoom);
   const [east, south] = toPx([e, s], whole.zoom);
   assert.ok(Math.abs(west - o[0]) < 0.5 && Math.abs(east - (o[0] + 180)) < 0.5, `east to the name's end, not its second place's (${east - o[0]})`);
   assert.ok(Math.abs(north - (o[1] - 6)) < 0.5 && Math.abs(south - (o[1] + 6)) < 0.5);
+});
+
+test('on the whole district a name\'s letters are held to it in pixels, at its station (#152)', () => {
+  // The page rests that sheet closer than it is drawn on a wide screen: letters set on the ground
+  // drifted off their names there (Ward Road's G, RidgeGate's E and R, on a desktop).
+  const whole = SHEETS.find((s) => s.whole);
+  const o = toPx([-105, 39.75], whole.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], whole.zoom);
+  const routes = all([
+    line({ mode: 'rail', route: 'A', color: '#57C1E9', slot: 0 }, [ll(0, 0), ll(300, 0)]),
+    line({ mode: 'rail', route: 'B', color: '#C4D600', slot: 0 }, [ll(0, 0), ll(0, 300)]),
+  ]);
+  const stations = all([
+    point({ id: 1, name: 'Union Station', served: true, hub: true, lines: 'A B' }, ll(0, 0)),
+    point({ id: 2, name: 'East End', served: true, lines: 'A', end: true }, ll(300, 0)),
+    point({ id: 3, name: 'South End', served: true, lines: 'B', end: true }, ll(0, 300)),
+  ]);
+  const drawn = drawSheet({ routes, stations, streets: all([]) }, whole).features;
+  const held = drawn.filter((f) => f.properties.kind === 'letter' && f.properties.held);
+  assert.ok(held.length > 0, 'the far ends carry their letters');
+  for (const f of held) {
+    const name = drawn.find((n) => n.properties.shape === 'name' && n.properties.nid === f.properties.nid);
+    assert.deepEqual(f.geometry.coordinates, name.geometry.coordinates, 'at its name\'s station');
+    assert.ok(f.properties.px.every(Number.isFinite) && f.properties.em.every(Number.isFinite));
+    // Its letter is the disc's offset in the letter's own size, a little below the disc's middle.
+    const size = SIZES.nameLetter[whole.id] * SIZES.letterText;
+    assert.ok(Math.abs(f.properties.em[0] - f.properties.px[0] / size) < 0.01 && Math.abs(f.properties.em[1] - f.properties.px[1] / size - SIZES.letterLift) < 0.01);
+  }
+  const closer = drawSheet({ routes, stations, streets: all([]) }, SHEETS.find((s) => s.opens)).features;
+  assert.ok(!closer.some((f) => f.properties.held), 'the other sheets rest at the zoom they are drawn at: their letters stay on the ground');
 });

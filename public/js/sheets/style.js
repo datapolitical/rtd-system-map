@@ -6,19 +6,25 @@ import { contrast, darkenTo, liftTo, lightness, toOklch, fromOklch } from '../co
 
 // Sheet 0 is the whole district on one screen (#152), one step wider than the sheet the page opens
 // on: stepping out to it frames the whole network (main.js), and it names only the towns in RTD's district.
+// It is drawn at 8.75, the zoom a phone's width holds the rail network at; a wider screen rests on it
+// a little closer, as close as fits the network, up to just short of the next sheet's band (main.js, rests).
 export const SHEETS = [
-  { id: 0, zoom: 8, whole: true },
+  { id: 0, zoom: 8.75, whole: true },
   { id: 1, zoom: 10, opens: true },
   { id: 2, zoom: 12 },
   { id: 3, zoom: 14 },
   { id: 4, zoom: 16 },
 ];
+/** Where sheet `i`'s band meets the next one's: halfway between their zooms. */
+export const edge = (i) => (SHEETS[i].zoom + SHEETS[i + 1].zoom) / 2;
 /** The index in SHEETS of the sheet a plain visit opens on. */
 export const OPENING = SHEETS.findIndex((s) => s.opens);
 
 // Must match SIZES in scripts/lib/sheets.mjs: the build places lines side by side at these widths.
 const RAIL = { 0: 3, 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 };
 const GAP = { 0: 1.2, 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
+// SIZES.letterText and SIZES.letterLift: a line letter's size on its disc, and its drop below the middle.
+const [LETTER_TEXT, LETTER_LIFT] = [1.42, 0.06];
 
 // The build's six headway classes are drawn as three steps: a bus every 10 minutes or better,
 // every 15, and every 30 or less often. More steps than three don't read as steps (DESIGN.md, "Four sheets").
@@ -282,7 +288,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     const n = sheet.id;
     const source = `sheet-${n}`;
     // A sheet shows from halfway to the sheet before it to halfway to the next.
-    const band = { minzoom: i ? sheet.zoom - 1 : 0, maxzoom: i < SHEETS.length - 1 ? sheet.zoom + 1 : 24 };
+    const band = { minzoom: i ? edge(i - 1) : 0, maxzoom: i < SHEETS.length - 1 ? edge(i) : 24 };
     const layer = (id, type, rest) => layers.push({ id: `${id}-${n}`, type, source, ...band, ...rest });
     const w = RAIL[n];
 
@@ -474,10 +480,21 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     const disc = { 0: 7, 1: 7.4, 2: 8.2, 3: 9.4, 4: 10.6 }[n];
     // Beside a station's name the letters are smaller (scripts/lib/sheets.mjs, SIZES.nameLetter).
     const small = { 0: 5.2, 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 }[n];
-    layer('letter-disc', 'circle', { filter: kind('letter', ['all', namePlace, fixedName, ['!', nameCovers]]), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
-    layer('letter', 'symbol', { filter: kind('letter', ['all', namePlace, fixedName, ['!', nameCovers]]),
-      layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * 1.42, disc * 1.42], 'text-allow-overlap': true, 'text-offset': [0, 0.06] },
+    // Its letter is LETTER_TEXT times the disc's radius, a little below the middle (LETTER_LIFT ems).
+    const held = ['==', ['coalesce', ['get', 'held'], false], true];
+    const loose = ['!', held];
+    layer('letter-disc', 'circle', { filter: kind('letter', ['all', loose, namePlace, fixedName, ['!', nameCovers]]), paint: { 'circle-radius': ['case', ['to-boolean', ['get', 'small']], small, disc], 'circle-color': railLine, 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
+    layer('letter', 'symbol', { filter: kind('letter', ['all', loose, namePlace, fixedName, ['!', nameCovers]]),
+      layout: { 'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': ['case', ['to-boolean', ['get', 'small']], small * LETTER_TEXT, disc * LETTER_TEXT], 'text-allow-overlap': true, 'text-offset': [0, LETTER_LIFT] },
       paint: { 'text-color': unless(onRail, letterInk, byColor('ink', ['get', 'ink'], FADE.line)) } });
+    // On the whole district a name's letters are held to the name in pixels (`px`, `em`: the
+    // build), so they stay under it at whatever zoom the sheet rests at on this screen (#152,
+    // main.js). The disc is an image the page draws (main.js, letter-disc-R), inked like the
+    // circle above, its edge of ground as the circle's stroke.
+    if (sheet.whole) layer('letter-chip', 'symbol', { filter: kind('letter', ['all', held, namePlace, fixedName, ['!', nameCovers]]),
+      layout: { 'icon-image': `letter-disc-${small}`, 'icon-offset': ['get', 'px'], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+        'text-field': ['get', 'route'], 'text-font': FONT.bold, 'text-size': small * LETTER_TEXT, 'text-offset': ['get', 'em'], 'text-allow-overlap': true, 'text-ignore-placement': true },
+      paint: { 'icon-color': railLine, 'icon-halo-color': c.ground, 'icon-halo-width': 1.5, 'text-color': unless(onRail, letterInk, byColor('ink', ['get', 'ink'], FADE.line)) } });
     // Lettering keeps off the lines: unseen marks along rail and the busiest streets hold their
     // ground. MapLibre places the last layer first: rail's marks, then the route numbers (which
     // sit on their own streets but never on rail), then the streets' marks, then everything above.
@@ -531,7 +548,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
       ground: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
       ...Object.fromEntries(SHEETS.map((s) => [`sheet-${s.id}`, { type: 'geojson', data: !wanted || wanted.has(s.id) ? sheetData(s.id) : NOTHING, tolerance: 0.1,
         // Big tiles with a wide margin, so a label's stretch of street is whole in the tile that places it.
-        maxzoom: s.zoom - 1, buffer: 256 }])),
+        maxzoom: Math.floor(s.zoom) - 1, buffer: 256 }])),
     },
     layers,
   };

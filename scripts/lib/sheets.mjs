@@ -13,7 +13,7 @@ import { routeLine } from './routeline.mjs';
 /** The sheets: the zoom each is drawn for and which set of bus streets it uses. Sheet 0 is the
  * whole district on one screen (#152); the page opens on sheet 1. */
 export const SHEETS = [
-  { id: 0, zoom: 8, streets: 'far', whole: true },
+  { id: 0, zoom: 8.75, streets: 'far', whole: true },
   { id: 1, zoom: 10, streets: 'far', opens: true },
   { id: 2, zoom: 12, streets: 'far' },
   { id: 3, zoom: 14, streets: 'near' },
@@ -72,16 +72,20 @@ export function districtShape(boundary, metres = 250, minKm2 = 1) {
 }
 
 /**
- * Everything a sheet draws, as [west, south, east, north]: every line and point, and each station
- * name's box with its row of letters (`bx`, px from its station at the sheet's zoom). Stepping out
- * to the whole-district sheet centres the map on this (#152, public/js/sheets/main.js).
+ * The rail network as a sheet draws it, as [west, south, east, north]: the lines, the stations,
+ * the line letters, and each station name's box with its row of letters (`bx`, px from its
+ * station at the sheet's zoom). Stepping out to the whole-district sheet centres the map on this
+ * and, on a screen wider than a phone's, comes as close as fits it (#152, public/js/sheets/main.js).
+ * The bus streets are left out: a few reach far past the rail (Nederland, Parker), and framing
+ * them would leave the network small on every screen (Chris, 2026-11-18).
  */
+export const RAIL_KINDS = new Set(['rail', 'station', 'letter']);
 export function sheetExtent(drawn, sheet) {
   let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
   const add = ([x, y]) => { [x0, y0, x1, y1] = [Math.min(x0, x), Math.min(y0, y), Math.max(x1, x), Math.max(y1, y)]; };
   const walk = (c) => (typeof c[0] === 'number' ? add(toPx(c, sheet.zoom)) : c.forEach(walk));
   for (const f of drawn.features) {
-    if (!f.geometry) continue;
+    if (!f.geometry || !RAIL_KINDS.has(f.properties.kind) || f.properties.alt || f.properties.edge) continue;
     walk(f.geometry.coordinates);
     if (f.properties.shape === 'name' && !f.properties.alt && f.properties.bx) {
       const [bx0, by0, bx1, by1] = String(f.properties.bx).split(',').map(Number);
@@ -155,6 +159,9 @@ export const SIZES = {
   nameAgain: 120,
   // Where two or more lines end at a bar, its name carries their letters in a row: each disc this big, this far apart.
   nameLetter: { 0: 5.2, 1: 5.6, 2: 6, 3: 6.6, 4: 7.4 },
+  // A letter's size on its disc, as a share of the disc's radius, and how far below the middle it sits (ems): style.js, letter.
+  letterText: 1.42,
+  letterLift: 0.06,
   // Bus streets: a stretch shorter than this takes the class of the stretches
   // it joins, and a loop or stub smaller than this is not drawn.
   busBlip: 14,
@@ -1024,11 +1031,12 @@ export function names(marks, lines, discs, sheet, streets = []) {
   // Each line's far end (SIZES.nameFar): line -> the mark it ends at farthest from the hub.
   const farOnly = SIZES.nameFar[sheet.id];
   const farOf = farOnly ? farEnds(marks) : new Map();
-  // The network's own extent on the whole-district sheet: rail and bus lines, end to end.
+  // The rail network's own extent on the whole-district sheet, its lines and stations end to end:
+  // the screen is framed on it (sheetExtent), so a far end's name turns in, not off the screen.
   let keepIn = null;
   if (sheet.whole) {
     keepIn = [Infinity, Infinity, -Infinity, -Infinity];
-    for (const path of [...lines.flatMap((l) => l.paths), ...streets.map((st) => st.path)]) for (const [x, y] of path) keepIn = [Math.min(keepIn[0], x), Math.min(keepIn[1], y), Math.max(keepIn[2], x), Math.max(keepIn[3], y)];
+    for (const path of [...lines.flatMap((l) => l.paths), ...marks.flatMap((m) => [m.ends, ...m.more])]) for (const [x, y] of path) keepIn = [Math.min(keepIn[0], x), Math.min(keepIn[1], y), Math.max(keepIn[2], x), Math.max(keepIn[3], y)];
   }
   const spill = (box) => (keepIn ? Math.max(0, keepIn[0] - box[0]) + Math.max(0, box[2] - keepIn[2]) + Math.max(0, keepIn[1] - box[1]) + Math.max(0, box[3] - keepIn[3]) : 0);
   const farLines = (m) => new Set([...farOf].filter(([, x]) => x.m === m && x.named).map(([route]) => route));
@@ -3745,7 +3753,16 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
       const bx = [Math.min(...reach.map((b) => b[0])) - n.at[0], Math.min(...reach.map((b) => b[1])) - n.at[1], Math.max(...reach.map((b) => b[2])) - n.at[0], Math.max(...reach.map((b) => b[3])) - n.at[1]].map(fixed).join(',');
       features.push(feature({ kind: 'station', shape: 'name', id: m.id, name: m.name, hub: m.hub, end: m.end, lines: m.lines, minor: n.minor, text: place.text, anchor: place.anchor, offset: place.offset, justify: place.justify, nid, bx, ...tag },
         { type: 'Point', coordinates: back(n.at) }));
-      for (const b of place.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, nid, ...tag }, { type: 'Point', coordinates: back(b.at) }));
+      // On the whole district a name's letters are held to it in pixels, at its station: the page
+      // rests that sheet closer than it is drawn on a wider screen (#152, main.js), and a letter
+      // placed on the ground would drift off its name there. `px` places the disc, `em` its letter
+      // (in the letter's own size), and `held` marks it (style.js: letter-chip).
+      const held = (b) => {
+        const d = [b.at[0] - n.at[0], b.at[1] - n.at[1]];
+        const size = SIZES.nameLetter[sheet.id] * SIZES.letterText;
+        return { held: true, px: d.map(fixed), em: [d[0] / size, d[1] / size + SIZES.letterLift].map((v) => Math.round(v * 1000) / 1000) };
+      };
+      for (const b of place.letters) features.push(feature({ kind: 'letter', small: true, route: b.route, color: b.color, ink: b.ink, nid, ...tag, ...(sheet.whole ? held(b) : {}) }, { type: 'Point', coordinates: back(sheet.whole ? n.at : b.at) }));
     }
   }
   // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.
