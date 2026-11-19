@@ -3690,17 +3690,25 @@ version is closed (#14: view URLs, screen reader, offline). The page address
 is its share link; a custom domain is not a launch requirement. V1 to
 V3 above are the names of the design stages that led there, not releases.
 What comes after launch is in four milestones, in this order (decided
-2026-11-13):
+2026-11-13; v2 and v2.x redrawn 2026-11-18):
 
 1. **v1.1: Sheets polish.** Faults on the sheets and in the bus data they
    draw from.
 2. **v2: One zoomable map.** The sheets' drawing at every zoom, one map
-   that zooms smoothly, with the classic map's features carried over
-   (#129). The classic map is paused until the sheets launch; its open
-   issues carry the `classic` label.
-3. **v2.x: Other times and Live.** Saturday, Sunday and evening in the
-   Key, Live tiers, alerts, departures and vehicles, on the zoomable map.
+   that zooms smoothly. The milestone holds only the steps to it, in
+   order; the plan is #129. The classic map is paused until the sheets
+   launch; its open issues carry the `classic` label.
+3. **v2.x: Classic features, other times and Live.** On the zoomable map:
+   the classic map's features carried over (edge letters, relief, route
+   panel, route tracing, Live), then Saturday, Sunday and evening in the
+   Key, Live tiers, alerts, departures and vehicles.
 4. **Later.** Ideas with no date.
+
+A fifth milestone, **Parked: recheck on the zoomable map**, is not a
+release and not planned work. It holds faults and leftovers written against
+the classic map's drawing, which the zoomable map replaces. Each is
+rechecked on the zoomable map before v2 is signed off (#161): one that
+still shows becomes a new issue, the rest close.
 
 Every open issue is labelled `sheets`, `classic` or `both` (the shared data
 pipeline or the site as a whole).
@@ -5203,6 +5211,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   picked, on the sheets and the classic map (#153). Reason: a faded E disc on
   the shared track sat on the picked T line, so it didn't read as one
   unbroken line.
+- 2026-11-18: The roadmap after launch redrawn around the zoomable map. v2
+  ends when the map zooms smoothly, and its milestone holds only the steps
+  to that, in order (#129, #154 to #161). The classic map's features move
+  to v2.x, now "Classic features, other times and Live". Faults written
+  against the classic map's drawing move to a new milestone, "Parked:
+  recheck on the zoomable map", and are rechecked before v2 is signed off.
+  Reason: Chris asked for the issues to be sorted into the roadmap to v2
+  and the rest. The v2 milestone mixed the path to the zoomable map with
+  faults in a drawing it replaces, and the smooth zoom can ship before the
+  classic features come over.
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in
