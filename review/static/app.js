@@ -6,6 +6,9 @@
   const drafts = new Map(); // keep half-typed comments across refreshes
   const flips = new Map();  // keep before/after choices across refreshes
   const keepOpen = new Set(); // reviews answered in this page view stay on top until reload
+  const openSecs = new Set(); // review sections open now, kept open across refreshes
+  const seenSecs = new Set(); // sections already drawn once, so a lone section opens by itself only the first time
+  let lastData = "";          // the last item list drawn; a refresh that changes nothing redraws nothing
   let csrf = "";
   let urls = [];
 
@@ -334,7 +337,11 @@
     }
     if (it.images.length) {
       const g = el("div", "gallery");
-      for (const name of it.images) g.append(thumb(reviewImg(r.id, name), name));
+      for (const name of it.images) {
+        const t = thumb(reviewImg(r.id, name), name);
+        t.href = `${reviewImg(r.id, name)}?full=1`; // opened on its own: the full-size original
+        g.append(t);
+      }
       card.append(g);
     }
     if (flip || it.links.length) {
@@ -358,6 +365,7 @@
 
   function reviewBlock(r) {
     const sec = el("section", "block review-block");
+    sec.id = r.id; // linkable: /#<review id>
     const head = el("div", "section-heading");
     head.append(el("h2", "", r.title), badge(r.status));
     const eyebrow = { open: "Waiting for you", commented: "You answered", closed: "Closed" }[r.status] || "Review";
@@ -381,18 +389,54 @@
         const b = e.target.closest("button");
         if (!b) return;
         for (const x of s.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
+        // Sections not opened yet pick the choice up when they're built.
+        for (const x of r.sections) for (const it of x.items) if (it.before && it.after) flips.set(`${r.id}/${it.id}`, b.dataset.s);
         for (const card of sec.querySelectorAll(".item.with-pic")) if (card.querySelector(".pic")) setFlip(card, b.dataset.s);
       });
       all.append(el("span", "small", "All pictures:"), s);
       sec.append(all);
     }
-    for (const s of r.sections) {
-      if (s.heading) sec.append(el("h3", "", s.heading));
-      if (s.note) sec.append(el("p", "small", s.note));
-      const grid = el("div", s.items.some((i) => (i.before && i.after) || i.images.length) ? "item-grid" : "item-list");
-      for (const it of s.items) grid.append(itemCard(r, it));
-      sec.append(grid);
-    }
+    // Each section is a fold, and its pictures exist only while it is open, one at a time
+    // per review: a phone can't hold dozens of map pictures at once.
+    const folds = [];
+    const lone = r.sections.length === 1;
+    r.sections.forEach((s, i) => {
+      const key = `${r.id}#${i}`;
+      const fold = el("details", "rsec");
+      const sum = el("summary");
+      sum.append(el("span", "rsec-title", s.heading || (lone ? "Pictures" : `Part ${i + 1}`)));
+      const n = s.items.length;
+      const asks = s.items.filter((it) => it.ask).length;
+      const pics = s.items.reduce((k, it) => k + (it.before && it.after ? 1 : 0) + it.images.length, 0);
+      const bits = pics ? ["Tap to see the pictures"] : n > 1 ? [`${n} items`] : [];
+      if (asks && r.status !== "closed") bits.push(`${asks} need${asks === 1 ? "s" : ""} your answer`);
+      if (bits.length) sum.append(el("span", "summary-note", bits.join(" · ")));
+      fold.append(sum);
+      const body = el("div", "rsec-body");
+      fold.append(body);
+      const build = () => {
+        if (s.note) body.append(el("p", "small", s.note));
+        const grid = el("div", s.items.some((x) => (x.before && x.after) || x.images.length) ? "item-grid" : "item-list");
+        for (const it of s.items) grid.append(itemCard(r, it));
+        body.append(grid);
+      };
+      fold.addEventListener("toggle", () => {
+        if (fold.open) {
+          openSecs.add(key);
+          if (!body.childElementCount) build();
+          for (const f of folds) if (f !== fold && f.open) f.open = false;
+        } else {
+          openSecs.delete(key);
+          if (!fold.contains(document.activeElement)) body.replaceChildren();
+        }
+      });
+      // A review waiting on Chris shows its first section the first time it's drawn.
+      const startOpen = openSecs.has(key) || (i === 0 && !seenSecs.has(key) && r.status === "open");
+      seenSecs.add(key);
+      if (startOpen) { fold.open = true; openSecs.add(key); build(); }
+      folds.push(fold);
+      sec.append(fold);
+    });
     if (r.links.length) { const p = el("p", "small more"); p.append("More: ", linkRow(r.links)); sec.append(p); }
     if (r.close_note) sec.append(el("p", "closed-note", `Closed ${r.closed_at}: ${r.close_note}`));
     const whole = el("div", "whole");
@@ -481,7 +525,25 @@
     tabChosen = true;
     showTab(b.dataset.tab);
   });
-  window.addEventListener("hashchange", () => { tabChosen = true; showTab(location.hash.slice(1), false); });
+  // A link like /#r-20261115-145936-641891 opens the Review tab at that review,
+  // unfolding "You've answered" or "Closed" if it sits there.
+  const isReviewHash = () => /^#r-\d{8}-\d{6}-[0-9a-f]{6}$/.test(location.hash);
+  let jumped = "";
+  function jumpToReview() {
+    if (!isReviewHash() || jumped === location.hash) return;
+    const block = document.getElementById(location.hash.slice(1));
+    if (!block) return;
+    jumped = location.hash;
+    tabChosen = true;
+    showTab("review", false);
+    const fold = block.closest("details");
+    if (fold) fold.open = true;
+    block.scrollIntoView({ block: "start" });
+  }
+  window.addEventListener("hashchange", () => {
+    if (isReviewHash()) { jumped = ""; jumpToReview(); return; }
+    tabChosen = true; showTab(location.hash.slice(1), false);
+  });
   if (TABS.includes(location.hash.slice(1))) { tabChosen = true; showTab(location.hash.slice(1), false); }
 
   // ---------- Chris's screenshots ----------
@@ -538,6 +600,9 @@
     try {
       const data = await api("/shots/api/items");
       showError("");
+      const json = JSON.stringify(data);
+      if (json === lastData) return;
+      lastData = json;
       const top = (r) => r.status === "open" || (r.status === "commented" && keepOpen.has(r.id));
       const open = data.reviews.filter(top);
       const answered = data.reviews.filter((r) => r.status === "commented" && !top(r));
@@ -563,6 +628,7 @@
       $("n-issues").textContent = openIssues.length ? String(openIssues.length) : "";
       $("issues-synced").textContent = data.issues_synced
         ? `Issues are taken from GitHub when they name a place on the map; pictures are refreshed every 6 hours. Last checked ${data.issues_synced}.` : "";
+      jumpToReview();
       if (!tabChosen) { showTab("review", false); tabChosen = true; }
     } catch (e) {
       showError(e.message);
