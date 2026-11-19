@@ -1,13 +1,14 @@
 """Review page: a two-way channel between Chris and the Claude sessions working on the RTD map.
 
 Chris uploads screenshots, comments and picks; sessions post review requests. This
-service serves the page (static/index.html at /) and its API (/shots/api/*) on
-127.0.0.1, behind `tailscale serve`. Gates: a loopback peer, Chris's
-Tailscale-User-Login, same-origin + CSRF on writes, upload checks and a rate limit.
-Two Linux-only gates from the original deployment are optional and off by default: a
-proxy token added by a reverse proxy (RTD_REVIEW_PROXY_TOKEN) and a check that the
-connection came from root (RTD_REVIEW_ROOT_INGRESS=1, systemd socket table).
-Settings: README.md, "Service".
+service serves the page (static/index.html at / and /shots/) and its API
+(/shots/api/*) on 127.0.0.1, behind `tailscale serve` or behind a reverse proxy that
+forwards /shots/*. Gates: a loopback peer, Chris's Tailscale-User-Login, same-origin +
+CSRF on writes, upload checks and a rate limit. Three more are optional and off by
+default: a token the reverse proxy adds (RTD_REVIEW_PROXY_TOKEN), the proxy's own port
+(RTD_REVIEW_PROXY_PORT, so the checks apply to whoever connected to the proxy), and,
+on Linux with systemd, a check that the connection came from root, which is what
+Tailscale's is (RTD_REVIEW_ROOT_INGRESS=1). Settings: README.md, "Service".
 """
 from collections import deque
 import hmac
@@ -18,7 +19,7 @@ import threading
 import time
 from pathlib import Path
 
-from flask import Flask, abort, g, jsonify, redirect, request, send_file, session
+from flask import Flask, abort, g, jsonify, request, send_file, session
 from werkzeug.exceptions import HTTPException
 
 import shots
@@ -26,8 +27,35 @@ import shots
 MAX_FILES = 12
 MAX_BODY = 120 * 1024 * 1024
 VIEW_MAX = 1600  # longest side, in pixels, of the JPEG copies the page shows
-PAGE = "/"
+SIPS = "/usr/bin/sips"  # macOS, used when Pillow is not installed
 STATIC = Path(__file__).resolve().parent / "static"
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+
+def shrink(src: Path, out: Path) -> bool:
+    """Write a JPEG copy of an image, longest side at most VIEW_MAX. False when it can't be made."""
+    if Image:
+        with Image.open(src) as im:
+            if im.mode in ("RGBA", "LA", "P"):
+                # See-through pixels go on white, as the page shows them in light mode.
+                rgba = im.convert("RGBA")
+                flat = Image.new("RGB", rgba.size, "white")
+                flat.paste(rgba, mask=rgba.getchannel("A"))
+            else:
+                flat = im.convert("RGB")
+            flat.thumbnail((VIEW_MAX, VIEW_MAX))
+            flat.save(out, "JPEG", quality=85)
+        return True
+    if os.path.exists(SIPS):
+        done = subprocess.run([SIPS, "-s", "format", "jpeg", "-s", "formatOptions", "85",
+                               "-Z", str(VIEW_MAX), str(src), "--out", str(out)],
+                              capture_output=True, timeout=30)
+        return not done.returncode and out.is_file()
+    return False
 
 
 def create_app(config=None):
@@ -36,6 +64,7 @@ def create_app(config=None):
         HOME=str(shots.HOME),
         ALLOWED_LOGIN=os.environ.get("RTD_REVIEW_LOGIN", ""),
         PROXY_TOKEN=os.environ.get("RTD_REVIEW_PROXY_TOKEN", ""),  # optional
+        PROXY_PORT=int(os.environ.get("RTD_REVIEW_PROXY_PORT") or 0),  # optional
         SECRET=os.environ.get("RTD_REVIEW_SESSION_SECRET", ""),
         PUBLIC_ORIGIN=os.environ.get("RTD_REVIEW_ORIGIN", "").rstrip("/"),
         MAX_CONTENT_LENGTH=MAX_BODY,
@@ -46,7 +75,7 @@ def create_app(config=None):
         SESSION_COOKIE_SAMESITE="Strict",
         PERMANENT_SESSION_LIFETIME=12 * 3600,
     )
-    # Optional extra check on the peer's port (the Linux root-connection gate).
+    # Optional extra check on the port of whoever connected (the Linux root-connection gate).
     app.config["TRUSTED_INGRESS"] = lambda _port: True
     if config:
         app.config.update(config)
@@ -55,6 +84,9 @@ def create_app(config=None):
             or (app.config["PROXY_TOKEN"] and len(app.config["PROXY_TOKEN"]) < 32)):
         raise RuntimeError("Set RTD_REVIEW_LOGIN, RTD_REVIEW_ORIGIN (https://...) and a "
                            "RTD_REVIEW_SESSION_SECRET of 32+ characters (README.md, \"Service\").")
+    if app.config["PROXY_PORT"] and not app.config["PROXY_TOKEN"]:
+        # Without the token anyone on this machine could pose as the proxy.
+        raise RuntimeError("RTD_REVIEW_PROXY_PORT needs RTD_REVIEW_PROXY_TOKEN (README.md, \"Service\").")
     app.secret_key = app.config["SECRET"]
     home = Path(app.config["HOME"])
     recent = deque()
@@ -62,12 +94,19 @@ def create_app(config=None):
 
     @app.before_request
     def authenticate():
-        if (request.remote_addr != "127.0.0.1"
-                or not app.config["TRUSTED_INGRESS"](
-                    str(request.environ.get("REMOTE_PORT", "")))):
+        if request.remote_addr != "127.0.0.1":
             abort(403)
         if app.config["PROXY_TOKEN"] and not hmac.compare_digest(
                 request.headers.get("X-Map-Shots-Proxy", ""), app.config["PROXY_TOKEN"]):
+            abort(403)
+        if app.config["PROXY_PORT"]:
+            # Behind a reverse proxy: it passes on who connected to it.
+            if request.headers.get("X-Map-Shots-Client-Host") != "127.0.0.1":
+                abort(403)
+            peer_port = request.headers.get("X-Map-Shots-Client-Port", "")
+        else:
+            peer_port = str(request.environ.get("REMOTE_PORT", ""))
+        if not app.config["TRUSTED_INGRESS"](peer_port):
             abort(403)
         login = request.headers.get("Tailscale-User-Login", "")
         if not hmac.compare_digest(login, app.config["ALLOWED_LOGIN"]):
@@ -126,13 +165,11 @@ def create_app(config=None):
         app.logger.error("Map shots request failed (%s)", type(error).__name__)
         return jsonify(error="That could not be saved. Try again."), 500
 
+    # At / behind `tailscale serve`; at /shots/ behind a reverse proxy that forwards only /shots/*.
     @app.get("/")
+    @app.get("/shots/")
     def page():
         return send_file(STATIC / "index.html", mimetype="text/html", conditional=False, etag=False)
-
-    @app.get("/shots/")
-    def index():
-        return redirect(PAGE, 302)
 
     @app.get("/shots/api/session")
     def new_session():
@@ -221,23 +258,24 @@ def create_app(config=None):
         return image_response(path)
 
     def view_copy(src: Path) -> Path | None:
-        """A phone-sized JPEG of a review PNG (longest side at most VIEW_MAX), made once with
-        macOS sips and kept under <home>/cache/view. None when it can't be made."""
+        """A phone-sized JPEG of a review PNG (longest side at most VIEW_MAX), made once
+        (shrink) and kept under <home>/cache/view. None when it can't be made."""
         out = home / "cache" / "view" / src.parent.name / (src.stem + ".jpg")
+        tmp = out.with_name(f".{out.stem}-{secrets.token_hex(3)}.jpg")
         try:
             if out.is_file() and out.stat().st_mtime >= src.stat().st_mtime:
                 return out
             out.parent.mkdir(parents=True, exist_ok=True)
-            tmp = out.with_name(f".{out.stem}-{secrets.token_hex(3)}.jpg")
-            done = subprocess.run(["/usr/bin/sips", "-s", "format", "jpeg", "-s", "formatOptions", "85",
-                                   "-Z", str(VIEW_MAX), str(src), "--out", str(tmp)],
-                                  capture_output=True, timeout=30)
-            if done.returncode or not tmp.is_file():
+            if not shrink(src, tmp):
                 tmp.unlink(missing_ok=True)
                 return None
             tmp.replace(out)
             return out
-        except (OSError, subprocess.SubprocessError):
+        except Exception:  # an unreadable picture goes out as it is
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
             return None
 
     @app.get("/shots/api/image/review/<rid>/<name>")
@@ -248,7 +286,7 @@ def create_app(config=None):
         if not shots.is_image(path):
             abort(404)
         # The page asks for ?full=1 only when Chris opens a picture on its own.
-        if path.suffix.lower() == ".png" and request.args.get("full") != "1" and os.path.exists("/usr/bin/sips"):
+        if path.suffix.lower() == ".png" and request.args.get("full") != "1":
             view = view_copy(path)
             # Flat map crops can come out bigger as JPEG; then the PNG goes as it is.
             if view and view.stat().st_size < path.stat().st_size:
@@ -271,7 +309,9 @@ def main():
     if os.environ.get("RTD_REVIEW_ROOT_INGRESS") == "1":  # Linux + systemd only
         from ingress import socket_owner, systemd_tcp_table_fd
         table_fd = systemd_tcp_table_fd()
-        config["TRUSTED_INGRESS"] = lambda peer: socket_owner(peer, port, table_fd) == 0
+        # The connection Tailscale makes: to the reverse proxy when there is one, else to this service.
+        listener = int(os.environ.get("RTD_REVIEW_PROXY_PORT") or 0) or port
+        config["TRUSTED_INGRESS"] = lambda peer: socket_owner(peer, listener, table_fd) == 0
     app = create_app(config)
     serve(app, host="127.0.0.1", port=port, threads=4,
           max_request_body_size=MAX_BODY, max_request_header_size=16384,

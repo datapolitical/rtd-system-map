@@ -1,0 +1,13 @@
+# Fills the review page's Issues tab (../issues_sync.py). Started by rtd-review-issues.timer.
+[Unit]
+Description=RTD map review page: fill the Issues tab from GitHub and picture the live map
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/projects/rtd-system-map-review/review
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/srv/projects/rtd-system-map-review/review/.venv/bin/python /srv/projects/rtd-system-map-review/review/issues_sync.py
+Nice=10
+TimeoutStartSec=600
+MemoryMax=1500M

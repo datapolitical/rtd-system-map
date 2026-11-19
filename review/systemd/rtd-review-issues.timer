@@ -1,0 +1,13 @@
+#   systemctl --user link /srv/projects/rtd-system-map-review/review/systemd/rtd-review-issues.service
+#   systemctl --user link /srv/projects/rtd-system-map-review/review/systemd/rtd-review-issues.timer
+#   systemctl --user enable --now rtd-review-issues.timer
+[Unit]
+Description=Fill the RTD map review page's Issues tab every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

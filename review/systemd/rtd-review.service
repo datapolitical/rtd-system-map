@@ -1,0 +1,32 @@
+# The review page (../README.md, "Service"). A systemd user unit, written for a checkout
+# pinned to main at /srv/projects/rtd-system-map-review with its data beside it.
+#   systemctl --user link /srv/projects/rtd-system-map-review/review/systemd/rtd-review.service
+#   systemctl --user enable --now rtd-review.service
+[Unit]
+Description=RTD map review page
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/projects/rtd-system-map-review/review
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/srv/projects/rtd-system-map-review/review/.venv/bin/python /srv/projects/rtd-system-map-review/review/app.py
+Restart=on-failure
+RestartSec=3
+UMask=0007
+# For RTD_REVIEW_ROOT_INGRESS=1: the kernel's socket table, opened by systemd outside the
+# service's user namespace, so socket owners keep their real user ids (ingress.py).
+OpenFile=/proc/net/tcp:map-shots-tcp:read-only
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/srv/projects/rtd-system-map-review-data
+RestrictSUIDSGID=true
+LockPersonality=true
+LimitCORE=0
+MemoryMax=768M
+TasksMax=24
+
+[Install]
+WantedBy=default.target
