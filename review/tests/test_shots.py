@@ -7,6 +7,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE))
@@ -121,7 +122,7 @@ class ReviewTests(unittest.TestCase):
 
 
 def write_issue_state(home: Path) -> str:
-    """An Issues tab entry as issues_sync.py on the mini writes it."""
+    """An Issues tab entry as issues_sync.py writes it."""
     name = "97-0123abcd-light-1762900000.jpg"
     (home / "issues" / "img" / name).write_bytes(JPG)
     shots.write_json_atomic(home / "issues" / "state.json", {"synced": time.time(), "issues": {"97": {
@@ -209,6 +210,99 @@ class ChoiceTests(unittest.TestCase):
         self.assertTrue((self.home / "comments" / "done" / (second["id"] + ".json")).is_file())
 
 
+def fake_issue(n=97, state="OPEN", closed=None, labels=("bus",), body=None, title="Bus lines under rail", comments=True):
+    return {"number": n, "title": title, "url": f"https://github.com/x/y/issues/{n}", "state": state,
+            "closedAt": closed, "updatedAt": "2026-11-12T02:42:45Z",
+            "labels": [{"name": l} for l in labels],
+            "body": body if body is not None else "Alameda: buses on the rail. [Open](https://rtd-system-map.pages.dev/#17/39.7080/-104.9925)\n\nAlso `#16/39.7551/-105.0030` and https://rtd-system-map.pages.dev/#17/39.7080/-104.9925 again.",
+            "comments": [{"body": "Seen at [Englewood](https://rtd-system-map.pages.dev/#16/39.6559/-104.9993)"}] if comments else []}
+
+
+def fake_capturer(views):
+    for v in views:
+        Path(v["out"]).write_bytes(JPG)
+    return {v["out"]: True for v in views}
+
+
+class SyncTests(unittest.TestCase):
+    """issues_sync.py: which issues get on the Issues tab, and their pictures."""
+
+    def setUp(self):
+        import issues_sync
+        self.sync = issues_sync
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = make_home(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_sync(self, issues, now):
+        return self.sync.sync(self.home, fetched=issues, capturer=fake_capturer, now=now)
+
+    def test_locations_parsed_deduped_and_labelled(self):
+        state = self.run_sync([fake_issue()], 1_800_000_000)
+        locs = state["issues"]["97"]["locations"]
+        self.assertEqual([l["key"] for l in locs], ["17/39.7080/-104.9925", "16/39.7551/-105.0030", "16/39.6559/-104.9993"])
+        self.assertEqual([l["label"] for l in locs], ["zoom 17", "zoom 16", "Englewood"])
+        self.assertTrue(all("current" in l and l["first"] == l["current"] for l in locs))
+
+    def test_skips_planning_issues_and_issues_without_places(self):
+        state = self.run_sync([fake_issue(42, labels=("enhancement",)), fake_issue(5, body="no place here", comments=False)], 1_800_000_000)
+        self.assertEqual(state["issues"], {})
+
+    def test_dark_title_captures_dark(self):
+        state = self.run_sync([fake_issue(34, title="Dark mode: hourly buses look like roads")], 1_800_000_000)
+        self.assertEqual({l["theme"] for l in state["issues"]["34"]["locations"]}, {"dark"})
+
+    def test_recapture_keeps_first_and_fix_adds_after(self):
+        t0 = 1_800_000_000
+        self.run_sync([fake_issue()], t0)
+        s1 = self.run_sync([fake_issue()], t0 + 60)          # too soon: no new capture
+        first = s1["issues"]["97"]["locations"][0]["first"]["img"]
+        self.assertEqual(s1["issues"]["97"]["locations"][0]["current"]["img"], first)
+        s2 = self.run_sync([fake_issue()], t0 + 7 * 3600)     # stale: new current, first kept
+        loc = s2["issues"]["97"]["locations"][0]
+        self.assertEqual(loc["first"]["img"], first)
+        self.assertNotEqual(loc["current"]["img"], first)
+        closed = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t0 + 8 * 3600))
+        s3 = self.run_sync([fake_issue(state="CLOSED", closed=closed)], t0 + 9 * 3600)
+        loc = s3["issues"]["97"]["locations"][0]
+        self.assertIn("after", loc)
+        self.assertTrue((self.home / "issues" / "img" / loc["after"]["img"]).is_file())
+        listed = shots.list_issues(self.home)["issues"][0]
+        self.assertTrue(listed["fixed"])
+        self.assertEqual(listed["locations"][0]["first"]["img"], first)
+        s4 = self.run_sync([fake_issue(state="CLOSED", closed=closed)], t0 + 8 * 3600 + 8 * 86400)
+        self.assertEqual(s4["issues"], {})                     # dropped a week after the fix
+
+    def test_closed_before_first_seen_is_ignored(self):
+        closed = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(1_800_000_000))
+        self.assertEqual(self.run_sync([fake_issue(state="CLOSED", closed=closed)], 1_800_000_100)["issues"], {})
+
+    def test_failed_capture_leaves_no_picture(self):
+        state = self.sync.sync(self.home, fetched=[fake_issue()], capturer=lambda views: {}, now=1_800_000_000)
+        self.assertTrue(all("current" not in l for l in state["issues"]["97"]["locations"]))
+
+    def test_synced_issue_shows_on_the_page_data(self):
+        self.run_sync([fake_issue()], time.time())
+        it = shots.list_issues(self.home)["issues"][0]
+        self.assertEqual((it["number"], it["fixed"], len(it["locations"])), (97, False, 3))
+        self.assertTrue(shots.ISSUE_IMG_RE.match(it["locations"][0]["current"]["img"]))
+        self.assertEqual(it["locations"][0]["url"], "https://rtd-system-map.pages.dev/#17/39.7080/-104.9925")
+
+    def test_gh_uses_the_job_sign_in_when_one_is_set(self):
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen.update(kw["env"])
+            return mock.Mock(returncode=0, stdout="[]")
+        with mock.patch.dict(os.environ, {"RTD_REVIEW_GH_CONFIG_DIR": "/run/x/gh", "GH_TOKEN": "t"}), \
+                mock.patch.object(self.sync.subprocess, "run", fake_run):
+            self.sync.gh("issue", "list")
+        self.assertEqual(seen.get("GH_CONFIG_DIR"), "/run/x/gh")
+        self.assertNotIn("GH_TOKEN", seen)
+
+
 class IssueTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -290,14 +384,64 @@ class AppTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             create_app({"HOME": str(self.home), "ALLOWED_LOGIN": LOGIN, "SECRET": "s" * 40, "PUBLIC_ORIGIN": ""})
 
-    def test_serves_page_and_redirects_old_path(self):
-        r = self.client.get("/", headers=self.headers())
-        self.assertEqual((r.status_code, r.mimetype), (200, "text/html"))
-        self.assertIn(b"/shots/assets/app.js", r.data)
-        self.assertIn("script-src 'self'", r.headers["Content-Security-Policy"])
-        r = self.client.get("/shots/", headers=self.headers())
-        self.assertEqual((r.status_code, r.headers["Location"]), (302, "/"))
+    def test_behind_a_reverse_proxy(self):
+        """With the proxy's port set, the checks apply to whoever connected to the proxy."""
+        from app import create_app
+        base = {"HOME": str(self.home), "ALLOWED_LOGIN": LOGIN, "SECRET": "s" * 40, "PUBLIC_ORIGIN": ORIGIN}
+        app = create_app({**base, "PROXY_TOKEN": TOKEN, "PROXY_PORT": 8082,
+                          "TRUSTED_INGRESS": lambda port: port == "5555"})
+        c = app.test_client()
+        peer = {"REMOTE_ADDR": "127.0.0.1", "REMOTE_PORT": "9999"}  # the proxy's own connection
+        h = self.headers(**{"X-Map-Shots-Proxy": TOKEN, "X-Map-Shots-Client-Host": "127.0.0.1",
+                            "X-Map-Shots-Client-Port": "5555"})
+        get = lambda headers, env=peer: c.get("/shots/", headers=headers, environ_base=env).status_code  # noqa: E731
+        self.assertEqual(get(h), 200)
+        self.assertEqual(get({**h, "X-Map-Shots-Client-Port": "9999"}), 403)
+        self.assertEqual(get({**h, "X-Map-Shots-Client-Host": "100.64.0.9"}), 403)
+        self.assertEqual(get({k: v for k, v in h.items() if k != "X-Map-Shots-Client-Port"}), 403)
+        self.assertEqual(get({**h, "X-Map-Shots-Proxy": "x" * 40}), 403)
+        # A local process that reaches the service directly, on the trusted port, without the token.
+        self.assertEqual(get(self.headers(**{"X-Map-Shots-Client-Host": "127.0.0.1", "X-Map-Shots-Client-Port": "5555"}),
+                             {**peer, "REMOTE_PORT": "5555"}), 403)
+        with self.assertRaises(RuntimeError):
+            create_app({**base, "PROXY_TOKEN": "", "PROXY_PORT": 8082})
+
+    def test_serves_page_at_both_paths(self):
+        for path in ("/", "/shots/"):
+            r = self.client.get(path, headers=self.headers())
+            self.assertEqual((r.status_code, r.mimetype), (200, "text/html"), path)
+            self.assertIn(b"/shots/assets/app.js", r.data)
+            self.assertIn("script-src 'self'", r.headers["Content-Security-Policy"])
         self.assertEqual(self.client.get("/shots/assets/app.js", headers=self.headers()).status_code, 200)
+
+    def test_page_address(self):
+        with mock.patch.dict(os.environ, {"RTD_REVIEW_ORIGIN": ORIGIN + "/"}):
+            os.environ.pop("RTD_REVIEW_PATH", None)
+            self.assertEqual(shots.page_url(), ORIGIN + "/")
+            os.environ["RTD_REVIEW_PATH"] = "/shots/"
+            self.assertEqual(shots.page_url(), ORIGIN + "/shots/")
+
+    def test_big_png_goes_out_phone_sized(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from app import VIEW_MAX
+        src = Path(self.tmp.name) / "src"
+        (src / "img").mkdir(parents=True)
+        manifest = make_manifest(src)
+        # Noise, so the JPEG copy is smaller than the PNG; see-through, so it has to be flattened.
+        Image.frombytes("RGBA", (2400, 1200), os.urandom(2400 * 1200 * 4)).save(src / "img" / "c.png")
+        rid = shots.create_review(self.home, manifest)
+        url = f"/shots/api/image/review/{rid}/c.png"
+        r = self.client.get(url, headers=self.headers())
+        self.assertEqual((r.status_code, r.mimetype), (200, "image/jpeg"))
+        with Image.open(io.BytesIO(r.data)) as im:
+            self.assertEqual(max(im.size), VIEW_MAX)
+        self.assertTrue((self.home / "cache" / "view" / rid / "c.jpg").is_file())
+        full = self.client.get(url + "?full=1", headers=self.headers())
+        self.assertEqual((full.status_code, full.mimetype), (200, "image/png"))
+        self.assertEqual(full.data, (src / "img" / "c.png").read_bytes())
 
     def test_upload_saves_image_and_note_and_serves_it(self):
         r = self.post([(PNG, "IMG_1.PNG"), (PNG, "IMG_2.PNG")], note="Red line jog")

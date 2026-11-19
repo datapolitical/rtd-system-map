@@ -141,5 +141,5 @@ working in an `rtd-system-map*` checkout at its next tool call. When it does,
 read any images named, tell Chris what you will do, and mark each item handled
 with `shotctl done ID --note "..."` (the note is his reply). Ask through the
 review page whenever you need his eyes or a decision. The service runs on
-127.0.0.1:8796 behind `tailscale serve`; its data and settings stay out of
-git.
+mini as a systemd user unit (`review/systemd/`), from a checkout pinned to
+main; its data and settings stay out of git.

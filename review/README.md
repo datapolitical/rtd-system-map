@@ -9,8 +9,8 @@ the service's settings, below; `shotctl publish` prints it).
   question, then before/after pictures (tap to flip), plain items and links.
   Every item has its own comment box, and the review as a whole has one.
 - **Issues:** open GitHub issues that name a place on the live map, with a
-  picture of each place. On this Mac the tab is empty for now: the sync that
-  fills it (`issues_sync.py` on the old mini deployment) is not ported.
+  picture of each place as its link opens it now. `issues_sync.py` fills the
+  tab on a timer (below).
 - **Screenshots:** Chris uploads screenshots with an optional note, sees each
   one's status (new, seen, done), Claude's reply, and can reply back.
 
@@ -20,7 +20,7 @@ session at its next tool call through a Claude Code hook (`hook.py`).
 ## For agents
 
 ```bash
-CTL="review/.venv/bin/python review/shotctl.py"   # use the absolute path the hook prints
+CTL="review/.venv/bin/python review/shotctl.py"   # or the absolute path the hook prints
 $CTL list                                  # what is waiting, open reviews, their choices and picks
 $CTL done NAME_OR_COMMENT_ID --note "..."  # handled; the note is shown to Chris as your reply
 $CTL publish path/to/manifest.json         # post a review request
@@ -64,7 +64,9 @@ different short labels):
 ```
 
 Publishing copies the images into the data folder, so the source folder can go
-away.
+away. `shotctl` and the hook need only Python's standard library, and they
+find the data folder through the account's settings file (below), so any
+checkout's copy works.
 
 A pick is saved like a comment with a `choice` field (and his note, if any, as
 its text). If he changes his mind, the new pick replaces an earlier one no
@@ -83,6 +85,12 @@ picks come as "Chris picked: Blue — his note". It prints nothing when there is
 nothing new and never fails a tool call. An idle session hears about things
 only when Chris next sends it a message.
 
+The hook goes in the Claude Code settings of each account that runs map
+sessions, as a `PostToolUse` hook (matcher `*`) and a `UserPromptSubmit` hook
+with the command `/usr/bin/python3 -I /path/to/review/hook.py`. Point it at a
+checkout that stays on main, not at a working branch. Two accounts on one
+machine share one data folder: each has its own settings file naming it.
+
 To see what it would announce now without claiming anything:
 
 ```bash
@@ -93,15 +101,45 @@ echo '{"session_id": "x", "cwd": "'"$PWD"'"}' | review/.venv/bin/python review/h
 
 ```bash
 cd review
-python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python app.py          # 127.0.0.1:$RTD_REVIEW_PORT (default 8796)
-tailscale serve --bg --https=10001 http://127.0.0.1:8796
 ```
 
-On Chris's Mac it runs as the launch agent `com.chris.rtd-review` (log in
-`~/Library/Logs/rtd-review.log`; restart with `launchctl kickstart -k
-gui/$(id -u)/com.chris.rtd-review`).
+It reaches the tailnet one of two ways:
+
+- **Straight from Tailscale:** `tailscale serve --bg --https=10001
+  http://127.0.0.1:8796`. The page is at `/`.
+- **Behind a reverse proxy** that already answers on the tailnet name. The
+  proxy forwards `/shots/*` unchanged and adds a token and who connected to
+  it; the page is at `/shots/`. Set `RTD_REVIEW_PATH=/shots/`,
+  `RTD_REVIEW_PROXY_TOKEN` and `RTD_REVIEW_PROXY_PORT`. In Caddy:
+
+  ```
+  handle /shots/* {
+      reverse_proxy 127.0.0.1:8902 {
+          header_up X-Map-Shots-Proxy "{$MAP_SHOTS_PROXY_TOKEN}"
+          header_up X-Map-Shots-Client-Host {remote_host}
+          header_up X-Map-Shots-Client-Port {remote_port}
+      }
+  }
+  ```
+
+It runs on mini, the second way, as the systemd user unit
+`systemd/rtd-review.service`, from a checkout pinned to main and used for
+nothing else (`git worktree add --detach ../rtd-system-map-review
+origin/main`), with its data in `rtd-system-map-review-data` beside it. The
+unit files are written for that layout. To update it, check out the newer
+origin/main there, run `pip install -r requirements.txt` if that file
+changed, and restart the unit.
+
+`systemd/rtd-review-issues.timer` runs `issues_sync.py` every 30 minutes. It
+reads the issues with `gh` and pictures each place with
+`capture/capture.mjs` (Playwright; run `npm ci` in `capture/` once).
+`issues_sync.py --dry-run` lists what it would picture.
+
+On macOS it runs the first way, kept up by a launch agent. Until 2026-11-18
+it ran that way on Chris's Mac.
 
 Settings come from the environment, then from a private file outside the repo,
 `~/.config/rtd-review/service.env` (`RTD_REVIEW_ENV_FILE`; must be mode 0600):
@@ -110,19 +148,26 @@ Settings come from the environment, then from a private file outside the repo,
 |---|---|
 | `RTD_REVIEW_LOGIN` | the only `Tailscale-User-Login` let in (required) |
 | `RTD_REVIEW_ORIGIN` | the page's https origin, for same-origin checks and links (required) |
+| `RTD_REVIEW_PATH` | the page's path on that origin: `/` (default), or `/shots/` behind a reverse proxy |
 | `RTD_REVIEW_SESSION_SECRET` | 32+ random characters, signs the CSRF session (required) |
 | `RTD_REVIEW_HOME` | data folder (default `review/data`, ignored by git) |
 | `RTD_REVIEW_PORT` | port on 127.0.0.1 (default 8796) |
 | `RTD_REVIEW_CWD_PREFIX` | which sessions the hook speaks in (see above) |
-| `RTD_REVIEW_PROXY_TOKEN` | optional: require this token from a reverse proxy in `X-Map-Shots-Proxy` |
-| `RTD_REVIEW_ROOT_INGRESS=1` | optional, Linux with systemd only: accept only connections from root (`ingress.py`) |
+| `RTD_REVIEW_PROXY_TOKEN` | optional: require this token from a reverse proxy in `X-Map-Shots-Proxy` (32+ characters) |
+| `RTD_REVIEW_PROXY_PORT` | optional: the reverse proxy's own port; the service then checks who connected to the proxy (`X-Map-Shots-Client-Host`, `X-Map-Shots-Client-Port`). Needs the token |
+| `RTD_REVIEW_ROOT_INGRESS=1` | optional, Linux with systemd only: accept only connections owned by root, which Tailscale's are (`ingress.py`; the unit passes in the kernel's socket table) |
+| `RTD_REVIEW_GH_CONFIG_DIR` | optional: a `gh` config folder for `issues_sync.py` to use instead of the account's own sign-in |
 
-Gates: the peer must be 127.0.0.1 (only `tailscale serve` reaches it), the
-`Tailscale-User-Login` header must be the allowed login, and writes need the
-same origin plus the CSRF token, at most 40 a minute. Uploads must be
-PNG/JPEG/WebP/HEIC/GIF by magic bytes, at most 25 MB each and 12 at a time.
-Any local process can reach 127.0.0.1 and set the header itself; the Linux
-root-connection check that closed that gap does not exist on macOS.
+Only the service needs the login, the secret and the token. An account that
+only runs sessions needs `RTD_REVIEW_HOME`, `RTD_REVIEW_ORIGIN` and
+`RTD_REVIEW_PATH` in its file.
+
+Gates: the peer must be 127.0.0.1, the `Tailscale-User-Login` header must be
+the allowed login, and writes need the same origin plus the CSRF token, at
+most 40 a minute. Uploads must be PNG/JPEG/WebP/HEIC/GIF by magic bytes, at
+most 25 MB each and 12 at a time. Any local process can reach 127.0.0.1 and
+set the login header itself. `RTD_REVIEW_ROOT_INGRESS=1` closes that on
+Linux; nothing does on macOS.
 
 Data layout under `RTD_REVIEW_HOME`:
 
@@ -131,4 +176,5 @@ Data layout under `RTD_REVIEW_HOME`:
 | `inbox/` | Chris's screenshots + `NAME.json` notes; `done/` once handled; `.claims/` |
 | `comments/` | his comments and picks, one JSON each; `done/` once handled (gains `reply`) |
 | `reviews/ID/` | review requests: `meta.json` + copied images |
-| `issues/` | Issues tab: `state.json` + `img/` |
+| `issues/` | Issues tab: `state.json` + `img/` (written by `issues_sync.py`) |
+| `cache/view/` | phone-sized JPEG copies of review PNGs, made when first asked for (Pillow, or macOS `sips` without it) |

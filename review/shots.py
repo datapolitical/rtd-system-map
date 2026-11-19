@@ -45,9 +45,13 @@ HOME = Path(os.environ.get("RTD_REVIEW_HOME") or Path(__file__).resolve().parent
 
 
 def page_url() -> str:
-    """The page's public address, e.g. https://HOST.TAILNET.ts.net:10001/ (RTD_REVIEW_ORIGIN)."""
+    """The page's public address: RTD_REVIEW_ORIGIN plus RTD_REVIEW_PATH (default /),
+    e.g. https://HOST.TAILNET.ts.net:10001/ or https://HOST.TAILNET.ts.net/shots/."""
     origin = os.environ.get("RTD_REVIEW_ORIGIN", "")
-    return origin.rstrip("/") + "/" if origin else "the review page (RTD_REVIEW_ORIGIN is not set)"
+    if not origin:
+        return "the review page (RTD_REVIEW_ORIGIN is not set)"
+    path = os.environ.get("RTD_REVIEW_PATH", "").strip("/")
+    return origin.rstrip("/") + "/" + (path + "/" if path else "")
 TZ = ZoneInfo("America/Denver")
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif", ".gif"}
 MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",

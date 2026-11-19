@@ -1,0 +1,6 @@
+{
+ "name": "rtd-review-capture",
+ "private": true,
+ "type": "module",
+ "dependencies": {"playwright": "1.55.1"}
+}
