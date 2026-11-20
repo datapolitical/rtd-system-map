@@ -1,0 +1,182 @@
+// Isolated #154 experiment. Reads a validated public/data build; never runs in npm run build.
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { SHEETS, SIZES, railLines, railTracks, stationMarks, letters, names, halls, busStreets,
+  nearest, resample, toPx, toLonLat } from './lib/sheets.mjs';
+import { labelChanges, REFERENCE_ZOOM } from '../public/js/zoom/model.js';
+
+export const zoomStops = (table) => SHEETS.map((s) => [s.zoom, table[s.id]]);
+
+// The production size tables stay untouched after each synchronous experiment. This adapter
+// is intentionally local to the trial; #155 replaces sheet lookups in the production build.
+export function withZoom(zoom, run) {
+  const id = 2 + (zoom - 12) / 2;
+  const saved = [];
+  for (const table of Object.values(SIZES)) {
+    if (!table || typeof table !== 'object' || !Object.hasOwn(table, 2) || !Object.hasOwn(table, 3)) continue;
+    saved.push([table, Object.hasOwn(table, id), table[id]]);
+    const a = table[2], b = table[3];
+    table[id] = typeof a === 'number' && typeof b === 'number' ? a + (b - a) * (zoom - 12) / 2 : zoom < 14 ? a : b;
+  }
+  try { return run({ id, zoom, streets: zoom >= 13 ? 'near' : 'far' }); }
+  finally { for (const [table, existed, value] of saved) { if (existed) table[id] = value; else delete table[id]; } }
+}
+
+const feature = (properties, type, coordinates, extra = {}) => ({ type: 'Feature', properties, geometry: { type, coordinates }, ...extra });
+const collection = (features) => ({ type: 'FeatureCollection', features });
+const mid = ([a, b]) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+const keep = (n) => ({ key: n.placement?.historyKey ?? `${n.mark.id}:0`, name: n.mark.name,
+  anchor: n.anchor, text: n.text, offset: n.offset, reason: n.placement?.reason ?? 'independent placement' });
+
+export function drawRail(data, sheet, history = null) {
+  const lines = railLines(data.routes, sheet);
+  const walls = halls(data.terminals, sheet);
+  const marks = stationMarks(data.stations, lines, sheet, walls);
+  const discs = letters(lines, marks, sheet);
+  const streets = busStreets(data.streets, sheet, walls, marks, lines);
+  const lettering = names(marks, lines, discs, sheet, streets, history, { alternates: false });
+  return { lines, marks, discs, streets, lettering };
+}
+
+export function drawnFeatures(drawing, sheet) {
+  const back = (p) => toLonLat(p, sheet.zoom);
+  return collection([
+    ...drawing.lines.flatMap((l) => l.paths.map((p) => feature({ kind: 'rail', route: l.route, color: l.color }, 'LineString', p.map(back)))),
+    ...drawing.marks.flatMap((m) => [m.ends, ...m.more].map((p, bi) => feature({ kind: 'station', id: m.id, name: m.name, lines: m.lines,
+      hub: m.hub, single: Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1]) < 0.5, fat: !bi && m.fat, bar: bi }, 'LineString',
+      (Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1]) < 0.5 ? [p[0], [p[0][0] + 0.5, p[0][1]]] : p).map(back)))),
+    ...drawing.discs.map((d, i) => feature({ kind: 'letter', route: d.route, color: d.color, ink: d.ink, key: `${d.route}:${i}` }, 'Point', back(d.at))),
+  ]);
+}
+
+// Invert the existing drawing's slot displacement, including its terminal lead-ins. Each
+// constant-slot piece is offset by MapLibre. Quantising slots to 1/32 limits a join's
+// nominal lateral step to less than a quarter pixel at the widest pitch in this trial.
+export function offsetDrawing(data, drawing, sheet) {
+  const raw = railTracks(data.routes, sheet);
+  const pitch = raw.pitch;
+  const byRoute = new Map(raw.joined.map((l, i) => [l.route, raw.tracks[i]]));
+  const reference = [];
+  const features = [];
+  for (const line of drawing.lines) for (const [pi, drawn] of line.paths.entries()) {
+    const runs = byRoute.get(line.route);
+    const track = runs.reduce((a, b) => nearest(a.track, drawn[0]).d <= nearest(b.track, drawn[0]).d ? a : b);
+    let slots = track.pts.map((p) => p[2]);
+    for (let pass = 0; pass < 2; pass++) {
+      const was = slots;
+      slots = was.map((_, i) => { const k = Math.min(SIZES.ease, i, was.length - i - 1);
+        let total = 0; for (let j = i - k; j <= i + k; j++) total += was[j]; return total / (2 * k + 1); });
+    }
+    const sampled = resample(drawn, 2);
+    const points = sampled.map((p, i) => {
+      const hit = nearest(track.track, p);
+      const slot = Math.round(slots[Math.min(slots.length - 1, Math.round(hit.along))] * 32) / 32;
+      const a = sampled[Math.max(0, i - 2)], b = sampled[Math.min(sampled.length - 1, i + 2)];
+      const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const normal = [-(b[1] - a[1]) / d, (b[0] - a[0]) / d];
+      return { at: p, slot, normal, center: [p[0] - normal[0] * slot * pitch, p[1] - normal[1] * slot * pitch] };
+    });
+    reference.push({ route: line.route, points });
+    let start = 0;
+    for (let i = 1; i < points.length; i++) {
+      if (i < points.length - 1 && points[i].slot === points[start].slot) continue;
+      const part = points.slice(start, i + 1);
+      if (part.length >= 2) features.push(feature({ kind: 'rail', route: line.route, color: line.color, slot: points[start].slot,
+        key: `${line.route}:${pi}:${start}` }, 'LineString', part.map((p) => toLonLat([
+          p.at[0] - p.normal[0] * points[start].slot * pitch,
+          p.at[1] - p.normal[1] * points[start].slot * pitch,
+        ], sheet.zoom))));
+      start = i;
+    }
+  }
+  // Features that must follow the same rail slots: station bars, line letters and label anchors.
+  const attach = (p, routes = null) => {
+    const candidates = reference.filter((r) => !routes || routes.includes(r.route));
+    let best = null;
+    for (const r of candidates) for (const q of r.points) {
+      const d = Math.hypot(q.at[0] - p[0], q.at[1] - p[1]);
+      if (!best || d < best.d) best = { d, q };
+    }
+    if (!best) return [...p, 0, 0];
+    const q = best.q;
+    const along = (p[0] - q.at[0]) * q.normal[1] - (p[1] - q.at[1]) * q.normal[0];
+    const center = [q.center[0] + along * q.normal[1], q.center[1] - along * q.normal[0]];
+    return [...center, p[0] - center[0], p[1] - center[1]];
+  };
+  const extras = drawnFeatures(drawing, sheet).features.filter((f) => f.properties.kind !== 'rail').map((f) => {
+    const routes = String(f.properties.lines ?? f.properties.route).split(' ');
+    return { ...f, attachment: f.geometry.type === 'Point' ? attach(toPx(f.geometry.coordinates, sheet.zoom), routes)
+      : f.geometry.coordinates.map((c) => attach(toPx(c, sheet.zoom), routes)) };
+  });
+  return { rails: collection(features), attached: collection(extras), attach };
+}
+
+async function main() {
+  const dir = path.resolve(process.argv[2] ?? 'public/data');
+  const out = path.join(dir, 'zoom-prototype');
+  await mkdir(out, { recursive: true });
+  const sourceNames = ['routes', 'stations', 'streets', 'terminals', 'stops'];
+  const sources = {};
+  const data = {};
+  for (const name of sourceNames) {
+    const raw = await readFile(path.join(dir, `${name}.geojson`));
+    data[name] = JSON.parse(raw);
+    if (data[name].type !== 'FeatureCollection') throw new Error(`${name} is not a FeatureCollection`);
+    sources[name] = createHash('sha256').update(raw).digest('hex');
+  }
+  const sizes = Object.fromEntries(['rail', 'gap', 'name', 'nameLetter', 'letterDisc'].map((k) => [k, zoomStops(SIZES[k])]));
+  const base = withZoom(REFERENCE_ZOOM, (sheet) => {
+    const drawing = drawRail(data, sheet);
+    return { drawing, ...offsetDrawing(data, drawing, sheet) };
+  });
+  const history = new Map();
+  const frames = [];
+  const comparisons = [];
+  let before = null;
+  for (let zoom = 12; zoom <= 14; zoom += 0.25) {
+    const started = performance.now();
+    const frame = withZoom(zoom, (sheet) => {
+      const drawing = drawRail(data, sheet);
+      const independent = drawing.lettering.map(keep);
+      const lettering = names(drawing.marks, drawing.lines, drawing.discs, sheet, drawing.streets, history, { alternates: false });
+      const stable = lettering.map(keep);
+      const labelFeatures = [];
+      for (const n of lettering) {
+        const key = n.placement.historyKey;
+        const bi = Number(key.split(':').at(-1));
+        const mark = base.drawing.marks.find((m) => m.id === n.mark.id);
+        const anchor = mark ? mid([mark.ends, ...mark.more][bi] ?? mark.ends) : toPx(toLonLat(n.at, zoom), REFERENCE_ZOOM);
+        const attachment = base.attach(anchor, String(n.mark.lines).split(' '));
+        const properties = { kind: 'name', id: n.mark.id, key, name: n.mark.name, lines: n.mark.lines, text: n.text,
+          anchor: n.anchor, offset: n.offset, justify: n.justify, reason: n.placement.reason };
+        labelFeatures.push(feature(properties, 'Point', toLonLat(n.at, zoom), { attachment }));
+        for (const d of n.letters) labelFeatures.push(feature({ kind: 'letter', small: true, route: d.route, color: d.color, ink: d.ink,
+          key: `${key}:${d.route}` }, 'Point', toLonLat(d.at, zoom), { attachment,
+          labelOffset: [d.at[0] - n.at[0], d.at[1] - n.at[1]], labelZoom: zoom }));
+        history.set(key, n.placement);
+      }
+      return { zoom, drawn: drawnFeatures(drawing, sheet), labels: collection(labelFeatures), independent, stable };
+    });
+    if (before) comparisons.push({ from: before.zoom, to: zoom, independent: labelChanges(before.independent, frame.independent), stable: labelChanges(before.stable, frame.stable) });
+    before = frame;
+    frames.push(frame);
+    console.log(`zoom ${zoom}: ${frame.stable.length} names; ${(performance.now() - started).toFixed(0)} ms`);
+  }
+  const report = { referenceZoom: REFERENCE_ZOOM, sources, comparisons,
+    totals: { independent: comparisons.reduce((n, c) => n + c.independent.changed, 0), stable: comparisons.reduce((n, c) => n + c.stable.changed, 0),
+      disappeared: comparisons.reduce((n, c) => n + c.stable.disappeared.length, 0) },
+    railPieces: base.rails.features.length,
+    limitation: 'Offset trial reconstructs centre lines from the finished reference drawing; a canonical shared-track representation and performance sign-off remain follow-up work.' };
+  const bundle = { sizes, referenceZoom: REFERENCE_ZOOM, rails: base.rails, attached: base.attached,
+    frames: frames.map(({ zoom, drawn, labels }) => ({ zoom, drawn, labels })), report };
+  const raw = JSON.stringify(bundle);
+  report.bytes = { raw: Buffer.byteLength(raw), gzip: gzipSync(raw).length };
+  await writeFile(path.join(out, 'trial.json'), JSON.stringify(bundle));
+  await writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  console.log(JSON.stringify({ totals: report.totals, bytes: report.bytes, railPieces: report.railPieces }));
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) await main();

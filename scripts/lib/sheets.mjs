@@ -426,6 +426,16 @@ export function chained(pieces, reach = 1.5, turned = (p) => [...p].reverse()) {
  * the slot changes the line slides across over `ease` pixels, not in a step.
  */
 export function railLines(routes, sheet) {
+  const { joined, tracks, pitch } = railTracks(routes, sheet);
+  return joined.map(({ route, color }, k) => ({
+    route,
+    color,
+    paths: tracks[k].map((t) => simplify(rounded(slotted(t, pitch, SIZES.ease), SIZES.round[sheet.id]))),
+  }));
+}
+
+/** The shared, rounded track before its lines move sideways. Used by the isolated #154 trial. */
+export function railTracks(routes, sheet) {
   const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
   const lines = new Map();
   for (const f of routes.features) {
@@ -445,11 +455,7 @@ export function railLines(routes, sheet) {
   carriedOn(joined, sheet, pitch);
   const tracks = joined.map(({ runs }) => runs.map((run) => tracked(run, pitch)));
   shareTracks(tracks, sheet, pitch);
-  return joined.map(({ route, color }, k) => ({
-    route,
-    color,
-    paths: tracks[k].map((t) => simplify(rounded(slotted(t, pitch, SIZES.ease), SIZES.round[sheet.id]))),
-  }));
+  return { joined, tracks, pitch };
 }
 
 /**
@@ -1024,7 +1030,7 @@ export function farEnds(marks) {
  * nowhere clear to go is left for a closer sheet, unless it is the hub or a
  * line's end. Returns `{ mark, text, anchor, offset, justify }`, offset in ems.
  */
-export function names(marks, lines, discs, sheet, streets = []) {
+export function names(marks, lines, discs, sheet, streets = [], history = null, { alternates = true } = {}) {
   const rail = SIZES.rail[sheet.id];
   const cell = 3;
   // What a name must not sit on, and how much each costs: rail and marks most, then busy
@@ -1071,6 +1077,9 @@ export function names(marks, lines, discs, sheet, streets = []) {
   const spill = (box) => (keepIn ? Math.max(0, keepIn[0] - box[0]) + Math.max(0, box[2] - keepIn[2]) + Math.max(0, keepIn[1] - box[1]) + Math.max(0, box[3] - keepIn[3]) : 0);
   const farLines = (m) => new Set([...farOf].filter(([, x]) => x.m === m && x.named).map(([route]) => route));
   for (const m of [...marks].sort((a, b) => rank(a) - rank(b) || a.id - b.id)) for (const [bi, bar] of (m.bars ?? [{ ends: m.ends, ending: [] }]).entries()) {
+    const historyKey = `${m.id}:${bi}`;
+    const previous = history?.get(historyKey);
+    const previousBlocks = new Set();
     const mid = lerp(bar.ends[0], bar.ends[1], 0.5);
     const again = (b) => dist(lerp(b.ends[0], b.ends[1], 0.5), lerp(m.ends[0], m.ends[1], 0.5)) >= SIZES.nameAgain;
     if (bi && !again(bar)) continue;
@@ -1140,12 +1149,26 @@ export function names(marks, lines, discs, sheet, streets = []) {
           const beyond = last && ((c[0] - before[0]) * dx + (c[1] - before[1]) * dy) / n / dist(c, before) > 0.9;
           const crowded = last && dist(c, before) < tall && !beyond;
           const extraScore = extra ? extra(box) : 0;
-          const score = hits * 1000 + inked(box) + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0) + extraScore + spill(box) * SIZES.nameSpill + graded * SIZES.nameStray;
+          const inkCost = inked(box);
+          const score = hits * 1000 + inkCost + cost + (reach - 1) * 2 + (crowded ? SIZES.nameBeside : 0) + extraScore + spill(box) * SIZES.nameSpill + graded * SIZES.nameStray;
           // The text stands clear of the arrow, which sits level with its first row.
           const tx = at[0] - pointer * arrowRoom;
           const arrow = pointer ? [at[0] - pointer * (SIZES.namePointer.arrow / 2), y0 + (size * 1.12) / 2] : null;
           const candidate = { text, score, hits, box, anchor, tall, extraScore, arrow, offset: [(tx - c[0]) / size, (ty - c[1]) / size] };
-          if (!best || score < best.score) best = candidate;
+          if (history) {
+            candidate.placement = { anchor, text, reach, inkCost, historyKey };
+            candidate.held = !extra && previous && previous.anchor === anchor && previous.text === text
+              && !hits && !crowded && !strays && inkCost <= Math.max(8, previous.inkCost);
+            candidate.moved = previous ? Math.abs(reach - previous.reach) : 0;
+            if (!extra && previous?.anchor === anchor && previous.text === text && previous.reach === reach) {
+              if (hits) previousBlocks.add('overlaps another name or belongs nearer another station');
+              if (strays) previousBlocks.add('belongs nearer another station');
+              if (crowded) previousBlocks.add('too close to the preceding station');
+              if (inkCost > Math.max(8, previous.inkCost)) previousBlocks.add(`line obstruction ${inkCost} exceeds ${Math.max(8, previous.inkCost)}`);
+            }
+          }
+          if (!best || (candidate.held && !best.held) || (candidate.held && best.held && candidate.moved < best.moved)
+            || (Boolean(candidate.held) === Boolean(best.held) && (!candidate.held || candidate.moved === best.moved) && score < best.score)) best = candidate;
         }
       }
       return best;
@@ -1158,6 +1181,10 @@ export function names(marks, lines, discs, sheet, streets = []) {
       ? [m.name, shortened(m.name), wrapped(m.name), wrapped(shortened(m.name))]
       : [wrapped(m.name), wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')];
     const choose = (extra = null, self = null) => {
+      if (previous && !extra && texts.includes(previous.text)) {
+        const held = placed(previous.text, extra, self);
+        if (held.held) return held;
+      }
       let best = placed(texts[0], extra, self);
       for (const text of [...new Set(texts)].slice(1)) {
         if (best.score < SIZES.nameShorten) break;
@@ -1184,9 +1211,15 @@ export function names(marks, lines, discs, sheet, streets = []) {
     };
     const { hits, ...chosen } = finish(best);
     const entry = { mark: m, at: c, minor, ...chosen, alts: [], left: [] };
+    if (history) {
+      entry.placement = { ...best.placement, retained: Boolean(best.held), reason: previous ? (best.held
+        ? (best.moved ? 'kept side; adjusted distance from the station' : 'kept')
+        : [...previousBlocks].join('; ') || 'previous wording is no longer available') : 'new label' };
+    }
     Object.defineProperty(entry, 'retry', { value: (extra) => finish(choose(extra, entry)) });
     set.push(entry);
   }
+  if (!alternates) return set;
   // A picked route reads whole on every sheet: a name set on a route's street has a second
   // place, off that route, which the page shows while that route is picked (style.js, name).
   // It keeps off rail and the other names as the first does, and is kept only where it clears

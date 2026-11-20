@@ -2540,6 +2540,17 @@ How it is built:
   zooms around its own, so drawing between two sheets is a later step that
   changes the page, not the build.
 
+### Continuous zoom trial (#154)
+
+The isolated `/zoom/` experiment on `zoom-prototype-154` compares continuous
+rail spacing and half-zoom drawings between zooms 12 and 14, with names
+preferring their preceding positions. It leaves the front page and the
+normal build unchanged. Its renderer, measurements and architectural limits
+are documented in `docs/zoom-prototype.md`; it is a decision aid for #154,
+not the selected design for v2. The prototype's reconstructed centre lines
+and per-zoom symbol updates still need a canonical track design and a phone
+performance review. Chris's review and choice remain required by #154.
+
 ## Interface
 
 **Clean, at the quality of the best product design,** in this site's own
@@ -5221,6 +5232,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   and the rest. The v2 milestone mixed the path to the zoomable map with
   faults in a drawing it replaces, and the smooth zoom can ship before the
   classic features come over.
+- 2026-11-20: An isolated zoom-12-to-14 comparison for #154 lives at `/zoom/`
+  on `zoom-prototype-154`. It measures station-name consistency and compares
+  reconstructed centre-line offsets with half-zoom rail drawings. This is
+  an experiment; the sheet entry point, build and selected v2 architecture
+  are unchanged. See `docs/zoom-prototype.md` for the limits and measurements.
+
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in

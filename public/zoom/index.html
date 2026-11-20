@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f5f3ef">
+  <title>Zoom preview · RTD system map</title>
+  <link rel="stylesheet" href="../vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="../css/zoom.css">
+</head>
+<body>
+  <main id="map" aria-label="RTD map zoom preview"></main>
+  <header class="panel top">
+    <div><strong>Zoom preview</strong><span id="status" role="status">Loading map…</span></div>
+    <button id="theme" type="button" aria-label="Switch to dark theme" disabled>◐</button>
+  </header>
+  <section class="panel controls" aria-label="Compare zoom approaches">
+    <div class="modes" role="group" aria-label="Rail drawing">
+      <button type="button" data-mode="offset" aria-pressed="true">Smooth spacing</button>
+      <button type="button" data-mode="drawn" aria-pressed="false">Half-step drawings</button>
+    </div>
+    <div class="zoom-row">
+      <button id="out" type="button" aria-label="Zoom out" disabled>−</button>
+      <label for="zoom" class="sr-only">Zoom from 12 to 14</label>
+      <input id="zoom" type="range" min="12" max="14" step="0.01" value="12" disabled>
+      <button id="in" type="button" aria-label="Zoom in" disabled>+</button>
+      <button id="sweep" type="button" disabled>Play zoom</button>
+    </div>
+    <details><summary>About this preview</summary><p>Pinch, scroll or drag the slider between zooms 12 and 14. Tap a line to keep it highlighted. Compare rail corners, junctions, station bars and names while zooming in and out.</p><p>Bus streets change detail at zoom 13. Smooth spacing tests offsets on the finished drawing; half-step drawings are a comparison without correction between samples. This is an experiment, with Live and full route panels to follow.</p><p><a href="../">Open the current sheets</a> · <a href="https://github.com/datapolitical/rtd-system-map/issues/154">Work plan</a></p></details>
+  </section>
+  <aside id="card" class="panel card" aria-label="Selected route" hidden><span id="selection"></span><button id="clear" type="button" aria-label="Clear selection">×</button></aside>
+  <div id="error" role="alert" hidden></div>
+  <script type="module" src="../js/zoom/main.js"></script>
+</body>
+</html>
