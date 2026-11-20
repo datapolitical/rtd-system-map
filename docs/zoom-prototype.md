@@ -32,9 +32,9 @@ Nine drawings, sampled every quarter zoom from 12 through 14:
 - Independent name placement: **138** side changes over eight transitions.
 - Placement preferring the preceding side: **39** side changes, a **72%**
   reduction, with **zero** names disappearing. Every drawing has 67 names.
-- The rail offset comparison contains 392 constant-slot pieces.
+- The rail offset comparison contains 393 constant-slot pieces.
 - The trial bundle, containing all nine rail/label drawings and the offset
-  comparison, is approximately **307 KB gzipped**. This is an experiment's
+  comparison, is approximately **398 KB gzipped**. This is an experiment's
   combined bundle, not the intended production loading strategy.
 
 The exact pair-by-pair counts and reasons are generated at
@@ -47,7 +47,7 @@ screenshots, motion timing and errors in
 `qa/.scratch/zoom-prototype/browser/report.json`. Its software-rendered
 Chromium timings do not establish performance on a physical phone.
 
-Verified on 2026-11-20: **107** unit and regression checks passed, followed
+The initial version, before the spacing correction, passed **107** unit and regression checks, followed
 by **66** browser checks across both themes and both comparisons. Separate
 shared-street picker checks passed in both themes through the private
 server's published subpath: route choice, a 0.01 zoom change, switching
@@ -70,13 +70,16 @@ style. See `qa/recall/prototype-layer-order.json` and find
 
 ## Architectural limits to decide before v2
 
-The smooth comparison reconstructs centre lines from the **finished
-reference drawing at zoom 13**, using the existing shared-track slots. That
-preserves its terminal lead-ins while testing renderer offsets and joins.
-It does **not** yet replace the build with one canonical centre line per
-shared-track segment. Stations and letters use small GeoJSON sources updated
-during zoom; this needs physical-phone performance measurement before it
-can be chosen as a production approach.
+The smooth comparison now aligns the original shared tracks onto **one
+rounded spine at reference zoom 13**, before applying screen-pixel offsets.
+The initial reconstruction from finished, independently offset drawings was
+incorrect: those drawings retained different curves and the pack tightened
+away from its station. Matching is based on the input geometry and heading,
+not route names or a list of corridors. Beyond a shared run, its displacement
+eases back to the branch's own curve. Terminal curves end square at the
+platform bars. Stations and letters use small GeoJSON sources updated during
+zoom; this still needs physical-phone performance measurement before it can
+be chosen as a production approach.
 
 The half-step comparison intentionally has no correction between its
 drawings. Its spacing can therefore drift and change at the half steps.
@@ -92,6 +95,30 @@ The size-table adapter is synchronous and restores every value after each
 draw, including after an exception. It exists only in the experimental
 build command. Step #155 should replace it with ordinary zoom-dependent
 sizes before production use.
+
+## Shared-spine spacing correction
+
+Chris reported the A/B/G/N approach tightening away from Union Station.
+The original bad rendered geometry is pinned at `ce882eb` in
+`qa/recall/prototype-spacing.json` and find `154-prototype-tapered-pack`.
+At zoom 14, B–N centre spacing reached 2.68 px with 5.6 px strokes, so those
+strokes overlapped. Target centre spacing is 7.6 px.
+
+With the shared spine, adjacent G–B, B–N and N–A centre spacings at zoom 14
+are 7.58–7.62 px along the reported approach. The new check passes all 33
+pair/zoom combinations over 11 zooms from 12 to 14, within 0.25 px of the
+target. It catches the frozen bad geometry before checking the fix. A
+terminal check also verifies 198 rail-end/zoom combinations, within 1 px
+of their station bars, and catches planted overshoot. These are geometry
+checks; light/dark Chromium captures are reviewed separately.
+
+The correction passes **112** affected unit and regression tests and **14**
+focused Chromium render/control checks in light and dark themes. The final
+captures were inspected for even spacing and terminal joins. Its
+measurements and captures are under `qa/.scratch/zoom-spacing/`. The earlier
+software-rendering timings above belong to the initial trial and are not
+a performance sign-off for the corrected geometry.
+
 
 ## Reproduce
 
@@ -109,6 +136,8 @@ Open `http://127.0.0.1:8804/zoom/`. In another terminal in that checkout:
 
 ```sh
 npm run check:zoom -- http://127.0.0.1:8804
+npm run check:zoom-spacing
+node qa/zoom-spacing-browser.mjs http://127.0.0.1:8804
 node scripts/package-zoom-preview.mjs qa/.scratch/zoom-prototype/site
 ```
 

@@ -2547,8 +2547,10 @@ rail spacing and half-zoom drawings between zooms 12 and 14, with names
 preferring their preceding positions. It leaves the front page and the
 normal build unchanged. Its renderer, measurements and architectural limits
 are documented in `docs/zoom-prototype.md`; it is a decision aid for #154,
-not the selected design for v2. The prototype's reconstructed centre lines
-and per-zoom symbol updates still need a canonical track design and a phone
+not the selected design for v2. Following Chris's report that the approach
+to Union Station tightened away from its platforms, the trial now uses one
+shared rounded spine before applying pixel offsets. Terminal curves are
+fitted to their station bars. Per-zoom symbol updates still need a phone
 performance review. Chris's review and choice remain required by #154.
 
 ## Interface
@@ -5237,6 +5239,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   reconstructed centre-line offsets with half-zoom rail drawings. This is
   an experiment; the sheet entry point, build and selected v2 architecture
   are unchanged. See `docs/zoom-prototype.md` for the limits and measurements.
+
+- 2026-11-20: Chris found the prototype's A/B/G/N approach narrowing away
+  from Union Station. Reconstructing tracks from finished drawings left
+  unequal centre lines. The isolated trial now shares one rounded spine
+  before applying screen-pixel offsets, and fits terminal curves to their
+  bars. The reported geometry is pinned on ce882eb; new checks measure
+  adjacent spacing along the approach at fractional zooms and rail ends
+  against station bars. The production drawing and v2 sign-off are separate.
 
 ## Sources
 

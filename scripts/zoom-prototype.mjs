@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { SHEETS, SIZES, railLines, railTracks, stationMarks, letters, names, halls, busStreets,
-  nearest, resample, toPx, toLonLat } from './lib/sheets.mjs';
+  nearest, resample, offset, toPx, toLonLat } from './lib/sheets.mjs';
+import { canonicalTracks, slotPieces, fitTerminalSpines } from './lib/zoom-rail.mjs';
 import { labelChanges, REFERENCE_ZOOM } from '../public/js/zoom/model.js';
 
 export const zoomStops = (table) => SHEETS.map((s) => [s.zoom, table[s.id]]);
@@ -52,46 +53,52 @@ export function drawnFeatures(drawing, sheet) {
   ]);
 }
 
-// Invert the existing drawing's slot displacement, including its terminal lead-ins. Each
-// constant-slot piece is offset by MapLibre. Quantising slots to 1/32 limits a join's
-// nominal lateral step to less than a quarter pixel at the widest pitch in this trial.
+// One shared rounded spine before offsets, rather than trying to remove the
+// offsets from separately finished lines. This prevents residual geographic
+// displacements from tightening a pack as it leaves a station or as zoom changes.
 export function offsetDrawing(data, drawing, sheet) {
   const raw = railTracks(data.routes, sheet);
   const pitch = raw.pitch;
-  const byRoute = new Map(raw.joined.map((l, i) => [l.route, raw.tracks[i]]));
+  const tracks = canonicalTracks(raw, sheet);
+  const preliminary = new Map();
+  for (const track of tracks) {
+    const path = [];
+    for (const piece of slotPieces(track)) path.push(...offset(piece.points, piece.slot * pitch).slice(path.length ? 1 : 0));
+    if (!preliminary.has(track.route)) preliminary.set(track.route, { route: track.route, color: track.color, paths: [] });
+    preliminary.get(track.route).paths.push(path);
+  }
+  const preliminaryWalls = halls(data.terminals, sheet);
+  const preliminaryMarks = stationMarks(data.stations, [...preliminary.values()], sheet, preliminaryWalls);
+  fitTerminalSpines(tracks, [...preliminary.values()], preliminaryMarks, pitch);
+
   const reference = [];
   const features = [];
-  for (const line of drawing.lines) for (const [pi, drawn] of line.paths.entries()) {
-    const runs = byRoute.get(line.route);
-    const track = runs.reduce((a, b) => nearest(a.track, drawn[0]).d <= nearest(b.track, drawn[0]).d ? a : b);
-    let slots = track.pts.map((p) => p[2]);
-    for (let pass = 0; pass < 2; pass++) {
-      const was = slots;
-      slots = was.map((_, i) => { const k = Math.min(SIZES.ease, i, was.length - i - 1);
-        let total = 0; for (let j = i - k; j <= i + k; j++) total += was[j]; return total / (2 * k + 1); });
+  const lines = new Map();
+  for (const track of tracks) {
+    const points = [];
+    const path = [];
+    for (const piece of slotPieces(track)) {
+      const positioned = offset(piece.points, piece.slot * pitch);
+      features.push(feature({ kind: 'rail', route: track.route, color: track.color, slot: piece.slot,
+        key: `${track.route}:${track.run}:${piece.from}` }, 'LineString', piece.points.map((p) => toLonLat(p, sheet.zoom))));
+      for (let i = 0; i < positioned.length; i++) {
+        const center = piece.points[i], at = positioned[i];
+        const a = piece.points[Math.max(0, i - 1)], b = piece.points[Math.min(piece.points.length - 1, i + 1)];
+        const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        points.push({ at, slot: piece.slot, normal: [-(b[1] - a[1]) / d, (b[0] - a[0]) / d], center });
+      }
+      path.push(...positioned.slice(path.length ? 1 : 0));
     }
-    const sampled = resample(drawn, 2);
-    const points = sampled.map((p, i) => {
-      const hit = nearest(track.track, p);
-      const slot = Math.round(slots[Math.min(slots.length - 1, Math.round(hit.along))] * 32) / 32;
-      const a = sampled[Math.max(0, i - 2)], b = sampled[Math.min(sampled.length - 1, i + 2)];
-      const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-      const normal = [-(b[1] - a[1]) / d, (b[0] - a[0]) / d];
-      return { at: p, slot, normal, center: [p[0] - normal[0] * slot * pitch, p[1] - normal[1] * slot * pitch] };
-    });
-    reference.push({ route: line.route, points });
-    let start = 0;
-    for (let i = 1; i < points.length; i++) {
-      if (i < points.length - 1 && points[i].slot === points[start].slot) continue;
-      const part = points.slice(start, i + 1);
-      if (part.length >= 2) features.push(feature({ kind: 'rail', route: line.route, color: line.color, slot: points[start].slot,
-        key: `${line.route}:${pi}:${start}` }, 'LineString', part.map((p) => toLonLat([
-          p.at[0] - p.normal[0] * points[start].slot * pitch,
-          p.at[1] - p.normal[1] * points[start].slot * pitch,
-        ], sheet.zoom))));
-      start = i;
-    }
+    reference.push({ route: track.route, points });
+    if (!lines.has(track.route)) lines.set(track.route, { route: track.route, color: track.color, paths: [] });
+    lines.get(track.route).paths.push(path);
   }
+  // Derive the symbols from the same placed rail, so their attachment slots
+  // and the rails agree. The existing sheet drawings remain a separate comparison.
+  const walls = halls(data.terminals, sheet);
+  const marks = stationMarks(data.stations, [...lines.values()], sheet, walls);
+  const discs = letters([...lines.values()], marks, sheet);
+  drawing = { ...drawing, lines: [...lines.values()], marks, discs };
   // Features that must follow the same rail slots: station bars, line letters and label anchors.
   const attach = (p, routes = null) => {
     const candidates = reference.filter((r) => !routes || routes.includes(r.route));
@@ -111,7 +118,7 @@ export function offsetDrawing(data, drawing, sheet) {
     return { ...f, attachment: f.geometry.type === 'Point' ? attach(toPx(f.geometry.coordinates, sheet.zoom), routes)
       : f.geometry.coordinates.map((c) => attach(toPx(c, sheet.zoom), routes)) };
   });
-  return { rails: collection(features), attached: collection(extras), attach };
+  return { rails: collection(features), attached: collection(extras), attach, drawing };
 }
 
 async function main() {
@@ -169,7 +176,7 @@ async function main() {
     totals: { independent: comparisons.reduce((n, c) => n + c.independent.changed, 0), stable: comparisons.reduce((n, c) => n + c.stable.changed, 0),
       disappeared: comparisons.reduce((n, c) => n + c.stable.disappeared.length, 0) },
     railPieces: base.rails.features.length,
-    limitation: 'Offset trial reconstructs centre lines from the finished reference drawing; a canonical shared-track representation and performance sign-off remain follow-up work.' };
+    limitation: 'Shared spines are canonical at the reference zoom; per-zoom symbol source updates and label continuity still need physical-phone review.' };
   const bundle = { sizes, referenceZoom: REFERENCE_ZOOM, rails: base.rails, attached: base.attached,
     frames: frames.map(({ zoom, drawn, labels }) => ({ zoom, drawn, labels })), report };
   const raw = JSON.stringify(bundle);

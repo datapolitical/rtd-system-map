@@ -1903,7 +1903,7 @@
       "id": "117-names-clipped",
       "issue": 117,
       "place": "Names at the screen's edges and under the card, sheet 1",
-      "said": "Thornton Crossroads / 104th, Oak, Federal Ctr, Fl… cut at the edges; Alameda, Littleton / Downtown under the card and credit",
+      "said": "Thornton Crossroads / 104th, Oak, Federal Ctr, Fl\u2026 cut at the edges; Alameda, Littleton / Downtown under the card and credit",
       "kind": "name-clipped",
       "caught_by": [
         "name-clipped"
@@ -2084,6 +2084,39 @@
       "pinned_by": "Codex, isolated /zoom/ experiment, 2026-11-20",
       "confidence": "clear",
       "note": "Prototype only. The failing layer order is frozen in prototype-layer-order.json and checked by test/zoom-prototype.test.mjs. Complete local static snapshot: qa/.scratch/zoom-prototype/broken-order-site. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-tapered-pack",
+      "issue": 154,
+      "place": "Shared commuter-rail approach to Union Station",
+      "said": "The A, B, G and N lines get tighter as they move away from Union Station.",
+      "kind": "uneven-gap",
+      "caught_by": [
+        "prototype-pack-spacing"
+      ],
+      "seen_on": [
+        "ce882eb"
+      ],
+      "theme": "light",
+      "zoom": 14,
+      "points": [
+        [
+          -104.9968,
+          39.7567
+        ]
+      ],
+      "radius_px": 100,
+      "capture": {
+        "view": "14/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris, reviewing the prototype images, 2026-11-20",
+      "pinned_by": "Codex, measured against the rendered rail geometry, 2026-11-20",
+      "confidence": "clear",
+      "note": "B\u2013N centre spacing reaches 2.68 px while strokes are 5.6 px and target pitch is 7.6 px. Frozen local-pixel geometry: prototype-spacing.json. Full static snapshot: qa/.scratch/zoom-spacing/before-site. The shared-spine correction passes 33 pair/zoom checks over 11 zooms; zoom-14 spacings are 7.58\u20137.62 px. Physical phone review is pending."
     }
   ]
 }
