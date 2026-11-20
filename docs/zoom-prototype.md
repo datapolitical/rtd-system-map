@@ -47,6 +47,27 @@ screenshots, motion timing and errors in
 `qa/.scratch/zoom-prototype/browser/report.json`. Its software-rendered
 Chromium timings do not establish performance on a physical phone.
 
+Verified on 2026-11-20: **107** unit and regression checks passed, followed
+by **66** browser checks across both themes and both comparisons. Separate
+shared-street picker checks passed in both themes through the private
+server's published subpath: route choice, a 0.01 zoom change, switching
+comparison and theme, reloading the selected-route URL, and Escape. Their
+report is `qa/.scratch/zoom-prototype/browser/published-ui.json`.
+The normal rail and name drawings at zooms 12 and 14 were also compared
+against the original main-branch module on the deployed data and were
+identical; hashes are in `qa/.scratch/zoom-prototype/production-equivalence.json`.
+
+The software-rendered sweep's median frame interval was 150–217 ms; its
+95th-percentile JavaScript geometry-update time was 1.7–3.8 ms. The slow
+rendered animation is recorded, not counted as a performance pass. A real
+phone review is needed before choosing this renderer for production.
+
+A first preview let the closer bus drawing paint over rail. Its broken
+layer order was pinned at commit `0263589` before being fixed; the new
+regression check catches that frozen ordering and passes the corrected
+style. See `qa/recall/prototype-layer-order.json` and find
+`154-prototype-bus-over-rail` in `qa/recall/finds.json`.
+
 ## Architectural limits to decide before v2
 
 The smooth comparison reconstructs centre lines from the **finished

@@ -9,10 +9,11 @@ const out = path.resolve(process.argv[2] ?? 'qa/.scratch/zoom-prototype/site');
 if (out === root || out === path.join(root, 'public')) throw new Error('Choose a separate preview directory.');
 await mkdir(out, { recursive: true });
 const files = ['public/zoom/index.html', 'public/css/zoom.css',
+  'public/js/zoom/main.js', 'public/js/zoom/style.js', 'public/js/zoom/model.js', 'public/js/zoom/images.js',
   'public/js/sheets/style.js', 'public/js/sheets/address.js', 'public/js/color.js',
   'public/data/sheets.json', 'public/data/sheet-2.geojson', 'public/data/sheet-3.geojson',
   'public/data/zoom-prototype/trial.json', 'public/data/zoom-prototype/report.json'];
-const copies = [['public/js/zoom', 'js/zoom'], ['public/vendor', 'vendor']];
+const copies = [['public/vendor', 'vendor']];
 const hashes = {};
 for (const file of files) {
   const target = path.join(out, file.replace(/^public\//, ''));

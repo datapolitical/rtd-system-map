@@ -1903,7 +1903,7 @@
       "id": "117-names-clipped",
       "issue": 117,
       "place": "Names at the screen's edges and under the card, sheet 1",
-      "said": "Thornton Crossroads / 104th, Oak, Federal Ctr, Fl\u2026 cut at the edges; Alameda, Littleton / Downtown under the card and credit",
+      "said": "Thornton Crossroads / 104th, Oak, Federal Ctr, Fl… cut at the edges; Alameda, Littleton / Downtown under the card and credit",
       "kind": "name-clipped",
       "caught_by": [
         "name-clipped"
@@ -2045,6 +2045,45 @@
       "found_by": "Chris, on the launch-cleanup preview, 2026-11-17",
       "pinned_by": "Codex, comparing the loading picture with the live map at a1bd3fd, 2026-11-17",
       "confidence": "clear"
+    },
+    {
+      "id": "154-prototype-bus-over-rail",
+      "issue": 154,
+      "place": "Zoom preview, rail approaches to the hub",
+      "said": "The closer bus drawing paints pale rims across the trial rail lines at zoom 14, leaving visible cuts.",
+      "kind": "bus-over-rail",
+      "caught_by": [
+        "prototype-layer-order"
+      ],
+      "seen_on": [
+        "0263589"
+      ],
+      "theme": "light",
+      "zoom": 14,
+      "points": [
+        [
+          -104.99682182006836,
+          39.76050139387517
+        ]
+      ],
+      "radius_px": 80,
+      "capture": {
+        "view": "14/39.7542/-105.0018",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            317,
+            246
+          ]
+        ]
+      },
+      "found_by": "Codex, inspecting Chromium captures, 2026-11-20",
+      "pinned_by": "Codex, isolated /zoom/ experiment, 2026-11-20",
+      "confidence": "clear",
+      "note": "Prototype only. The failing layer order is frozen in prototype-layer-order.json and checked by test/zoom-prototype.test.mjs. Complete local static snapshot: qa/.scratch/zoom-prototype/broken-order-site. Classic recall fixtures do not run the /zoom/ page."
     }
   ]
 }

@@ -71,9 +71,11 @@ export function previewStyle(theme, metadata, bundle, mode) {
         'text-offset': [0, 0.06], 'text-allow-overlap': true, 'text-ignore-placement': true },
       paint: { 'text-color': ['get', 'ink'] } });
   }
-  const before = original.layers.findIndex((l) => l.id.startsWith('pick-bus-rim'));
-  original.layers.splice(before < 0 ? original.layers.length : before, 0, ...rails);
-  original.layers.push(...attached, ...labels);
+  // Both detail drawings' base strokes precede rail. A selected bus is drawn
+  // over rail at either detail level, then stations and their lettering follow.
+  const pickedLayers = original.layers.filter((l) => /^pick-bus/.test(l.id));
+  original.layers = original.layers.filter((l) => !/^pick-bus/.test(l.id));
+  original.layers.push(...rails, ...pickedLayers, ...attached, ...labels);
   return { ...original, sources: { ...original.sources,
     'trial-rail': { type: 'geojson', data: mode === 'offset' ? bundle.rails : empty, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-attached': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },

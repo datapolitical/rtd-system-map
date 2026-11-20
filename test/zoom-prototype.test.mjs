@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { SIZES, names } from '../scripts/lib/sheets.mjs';
 import { withZoom, zoomStops } from '../scripts/zoom-prototype.mjs';
 import { previewStyle } from '../public/js/zoom/style.js';
 import { attachedPoint, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChanges } from '../public/js/zoom/model.js';
+import { railOrderErrors } from '../qa/lib/zoom-order.mjs';
 
 const sizes = Object.fromEntries(['rail', 'gap', 'name', 'nameLetter', 'letterDisc'].map((key) => [key, zoomStops(SIZES[key])]));
 test('zoom adapter preserves every original size and restores tables after a failure', () => {
@@ -63,5 +65,11 @@ test('both comparison styles validate in both themes, including all fractional-z
   const bundle = { sizes, rails: { type: 'FeatureCollection', features: [] } };
   for (const theme of ['light', 'dark']) for (const mode of ['offset', 'drawn']) {
     assert.deepEqual(validateStyleMin(previewStyle(theme, { stations: [], colors: [] }, bundle, mode)).map((e) => e.message), [], `${theme}/${mode}`);
+    assert.deepEqual(railOrderErrors(previewStyle(theme, { stations: [], colors: [] }, bundle, mode)), []);
   }
+});
+
+test('the rail-order check catches the actual broken preview, pinned before its fix', () => {
+  const bad = JSON.parse(readFileSync(new URL('../qa/recall/prototype-layer-order.json', import.meta.url), 'utf8'));
+  assert.ok(railOrderErrors(bad).some((e) => e.includes('bus-rim-3')));
 });

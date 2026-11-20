@@ -33,6 +33,7 @@ function setPick(pick) {
   map.setGlobalStateProperty('bus', picked?.mode === 'bus' ? picked.route : '');
   map.setGlobalStateProperty('rail', picked?.mode === 'rail' ? picked.route : '');
   $('card').hidden = !picked;
+  $('route-options').replaceChildren();
   $('selection').textContent = picked ? `${picked.mode === 'rail' ? 'Line' : 'Route'} ${picked.route} highlighted` : '';
   window.zoomPick = picked;
   saveView();
@@ -108,7 +109,21 @@ try {
     const rail = hits.find((f) => ['rail', 'letter'].includes(f.properties.kind) && f.properties.route);
     const bus = hits.find((f) => f.properties.kind === 'bus' && f.properties.routes);
     if (rail) setPick({ mode: 'rail', route: rail.properties.route });
-    else if (bus) setPick({ mode: 'bus', route: bus.properties.routes.split(/,\s*/)[0] });
+    else if (bus) {
+      const routes = bus.properties.routes.split(/,\s*/);
+      if (routes.length === 1) setPick({ mode: 'bus', route: routes[0] });
+      else {
+        setPick(null);
+        $('card').hidden = false;
+        $('selection').textContent = 'Choose a route on this street';
+        for (const route of routes) {
+          const button = document.createElement('button');
+          button.textContent = route;
+          button.onclick = () => setPick({ mode: 'bus', route });
+          $('route-options').append(button);
+        }
+      }
+    }
     else setPick(null);
   });
   $('clear').onclick = () => setPick(null);

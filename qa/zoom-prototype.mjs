@@ -4,6 +4,8 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { railOrderErrors } from './lib/zoom-order.mjs';
+import { checkBusControls } from './lib/zoom-ui.mjs';
 
 const base = (process.argv[2] ?? 'http://127.0.0.1:8804').replace(/\/$/, '');
 const out = path.resolve(process.argv[3] ?? 'qa/.scratch/zoom-prototype/browser');
@@ -42,6 +44,9 @@ try {
     for (const mode of ['offset', 'drawn']) {
       await page.locator(`[data-mode=${mode}]`).click();
       await settled();
+      await check(`${theme}/${mode}: base bus strokes cannot paint over rail`, async () => {
+        assert.deepEqual(railOrderErrors(await page.evaluate(() => ({ layers: window.zoomMap.getStyle().layers.map(({ id, type, source }) => ({ id, type, source })) }))), []);
+      });
       for (const view of views) {
         for (const zoom of [12, 12.99, 13.01, 14]) {
           await page.evaluate(({ center, zoom }) => window.zoomMap.jumpTo({ center, zoom }), { center: view.at.geometry.coordinates, zoom });
@@ -92,6 +97,7 @@ try {
       const after = await page.evaluate(() => ({ center: window.zoomMap.getCenter(), zoom: window.zoomMap.getZoom(), pick: window.zoomPick }));
       assert.deepEqual(after, before);
     });
+    await check(`${theme}: shared-street route controls and reload`, () => checkBusControls(page));
     await check(`${theme}: browser and map errors`, async () => {
       assert.deepEqual(pageErrors, []); assert.deepEqual(await page.evaluate(() => window.zoomErrors), []);
     });
@@ -99,9 +105,11 @@ try {
   }
 } finally {
   await browser.close();
-  let commit = 'unknown'; try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); } catch {}
+  let commit = 'unknown', dirty = true;
+  try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    dirty = Boolean(execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' }).trim()); } catch {}
   const build = JSON.parse(await readFile('public/data/zoom-prototype/report.json', 'utf8'));
-  await writeFile(path.join(out, 'report.json'), JSON.stringify({ commit, uncommittedPrototype: true, base, views: views.map((v) => ({ name: v.name, station: v.at.properties.name, coordinates: v.at.geometry.coordinates })),
+  await writeFile(path.join(out, 'report.json'), JSON.stringify({ commit, uncommittedPrototype: dirty, base, views: views.map((v) => ({ name: v.name, station: v.at.properties.name, coordinates: v.at.geometry.coordinates })),
     themes: ['light', 'dark'], screenshotsAt: [12, 12.99, 13.01, 14], build, results, failures,
     limitation: 'Chromium with software rendering at a phone viewport; this does not replace a physical phone review or establish a phone frame-rate budget.' }, null, 2) + '\n');
 }
