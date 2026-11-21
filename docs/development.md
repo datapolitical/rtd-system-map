@@ -23,6 +23,12 @@ updated `origin/main` into the smooth-zoom branch. Resolve shared-engine
 conflicts there and run both the normal tests and the trial's checks.
 Trial-specific changes stay on that branch until reviewed.
 
+The implementation agent owns routine visual and interaction review, follows
+the evidence requirements in [verification.md](verification.md), and fixes
+what it finds. User involvement is limited to prepared device-specific checks,
+unresolved product tradeoffs and final formal-release approval. Isolated
+engineering proceeds under parity and regression checks while those are pending.
+
 The trial changes `scripts/lib/sheets.mjs`, so these branches still share an
 integration boundary. Keep changes to shared drawing functions small, with
 regression evidence that the current sheets still draw the same way.

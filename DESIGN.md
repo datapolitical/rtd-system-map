@@ -3183,24 +3183,28 @@ if Chris accepts that trade, and the decision log says so. Every card is
 kept, dated, in `scorecards.md`, so each version is scored against the one
 before it.
 
-**Who scores.** Not whoever did the work. The orchestrator scores from the
-captures; for anything large (a new kind of mark, a roadmap step) a second
-reviewer who did not build it scores independently, and the two cards are
-shown side by side. Each score cites the capture that earns it. The measured
-checks (`npm run check`, the sweep) decide the gates where they exist and
-back the rows they can (Drawn on purpose, Association, Phone), and a failing
-check caps its row at 1. Chris's verdict on the screenshots overrides the
-card.
-The second reviewer is the project's `design-reviewer` agent
-(`.claude/agents/design-reviewer.md`): it takes its own captures from a
-running server, never sees the builder's report, judges against the
-hand-drawn Denver transit poster (kept outside the repo), and returns a card
-without editing anything.
+**Who scores.** The implementation agent owns routine visual QA and scores
+from inspected captures and measurements. It must reproduce and fix visible
+faults before declaring a candidate ready; a green script alone is not a
+visual pass. An independent reviewer is useful where available, but routine
+work never waits for the user to inspect every view or choose a technical
+algorithm. The project's `design-reviewer` prompt is available for a distinct
+review pass; a self-review is not described as independent.
+
+Measured checks decide the gates they actually cover; a failing check caps its
+row at 1. The gates, minimum scores and no-regression rule above remain in force.
+Every score cites its evidence and scope. Device emulation is not evidence of
+physical-phone speed or real VoiceOver speech. Ask the user only for a prepared device-only check,
+a product tradeoff that evidence and principles cannot resolve, or concise
+formal-release approval. See `docs/verification.md`. The user's verdict can
+override a card; asking for that verdict on every zoom band is not a required
+QA step (updated 2026-11-21).
 
 ## Validation
 
-Before a version is called done, these six tasks are tried on a phone and
-measured: whether each was completed, how long it took, and wrong answers.
+Before a version is called done, the agent tries the applicable tasks in a
+phone-size browser and measures completion, time and wrong answers. Physical
+device behavior is checked separately where the available tools cannot verify it.
 Not whether anyone likes the map (see "Preference is not performance" under
 "Why").
 
@@ -3217,11 +3221,13 @@ Not whether anyone likes the map (see "Preference is not performance" under
 Tasks 1, 5 and 6 need Live or the key's other times; tasks 2 to 4 should work
 from the opening view without either.
 
-**Who tries them.** No panel of people (Chris, 2026-11-10: validation is
-automated, apart from his own review, which he does when he chooses).
-Before that the plan was five people who don't know the system. The tasks
-are run by an automated task test, which is not built yet (#66). As
-proposed there:
+**Who tries them.** The implementation agent, using the available browser
+tools and direct data checks, with rendered inspection as well as assertions.
+The user reviews when a specific valuable decision or device-only observation
+is ready, rather than serving as a manual QA panel (updated 2026-11-21).
+
+The independent task-test proposal in #66 remains useful for checking answers
+without sharing the implementation's assumptions. Its design is:
 
 - Each task's place or route is picked from the data at run time, never
   written down.
@@ -3680,9 +3686,11 @@ work against the real structure before asking for evaluation.
 ### Launch and versions
 
 Decided 2026-11-13. The site is called launched at **v1.0**, when the
-"Launch (v1.0)" milestone closes: Chris has signed off the four sheets on
-his phone in both themes, the sheets can highlight one route, and the
-version is closed (#14: view URLs, screen reader, offline). The page address
+"Launch (v1.0)" milestone closes: the agent has verified the five sheets
+in both themes, route highlighting, view URLs, offline use and accessibility
+(#14), with specific physical-device gaps recorded and resolved where required,
+and Chris has given concise release approval. Routine QA belongs to the agent;
+release approval does not ask the user to repeat that test matrix. The page address
 is its share link; a custom domain is not a launch requirement. V1 to
 V3 above are the names of the design stages that led there, not releases.
 What comes after launch is in four milestones, in this order (decided
@@ -3693,7 +3701,9 @@ What comes after launch is in four milestones, in this order (decided
 2. **v2: One zoomable map.** The sheets' drawing at every zoom, one map
    that zooms smoothly. The milestone holds only the steps to it, in
    order; the plan is #129. Classic is preserved on
-   `classic-archive`; its historical issues carry the `classic` label.
+   `classic-archive`; its historical issues carry the `classic` label. Work on
+   the isolated smooth-zoom branch proceeds under regression and current-sheet
+   parity checks; blanket manual launch review is not an engineering gate.
 3. **v2.x: Classic features, other times and Live.** On the zoomable map:
    the classic map's features carried over (edge letters, relief, route
    panel, route tracing, Live), then Saturday, Sunday and evening in the
@@ -5225,6 +5235,17 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   experiment, and current/shared fixes flow from main into the trial. Standard
   browser and nightly health checks now exercise the sheets. Reason: Chris
   asked to make the version separation concrete while both active tracks continue.
+
+- 2026-11-21: Routine visual and interaction QA belongs to the implementation
+  agent. It inspects captures, fixes defects, proves regression checks on bad
+  examples and recommends technical choices from evidence. Replace blanket
+  user inspection of every sheet or zoom band with that verification. User
+  requests are limited to prepared device-only checks, unresolved product
+  tradeoffs and brief formal-release approval. Quality requirements and honest
+  reporting of real-device evidence gaps remain. Isolated engineering can
+  continue under parity checks while those requests are pending. Reason: Chris
+  asked the agent to take on fixing and evaluation rather than defaulting to
+  extensive manual review. The workflow is in `docs/verification.md`.
 
 ## Sources
 
