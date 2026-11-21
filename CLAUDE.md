@@ -28,8 +28,12 @@ we are" section from them (closed issues show as done).
   of the newest comment under the step.
 - Close work with `Fixes #N` in the commit message. It closes when the commit
   reaches main on GitHub. Close it by hand if the work lands another way.
-- When something waits on Chris (a phone check, a decision, the go-ahead to
-  publish), add the `needs Chris` label and say what is needed in a comment.
+- The implementation agent owns routine visual, interaction and regression QA
+  ([docs/verification.md](docs/verification.md), updated 2026-11-21). Inspect
+  actual captures, fix defects and verify them before involving Chris.
+  `needs Chris` is only for a specific product tradeoff, final release approval,
+  or a prepared physical-device check the available tools cannot perform.
+  State the exact question, evidence and why the agent cannot resolve it.
 - "Launch (v1.0)" holds what must be done before launch; the later
   milestones (DESIGN.md, the roadmap after launch) hold what can wait. Put
   new work in the one it belongs to, and ask Chris before adding to the
@@ -71,7 +75,11 @@ we are" section from them (closed issues show as done).
 
 ## Checks: what "done" and "verified" mean
 
-- A "Done when" line in an issue changes only when Chris says so. If one
+- A "Done when" line in an issue changes only when Chris says so. His
+  2026-11-21 instruction assigns routine evaluation to the agent; replace
+  blanket manual-review gates with evidence-backed agent verification,
+  preserving correctness, accessibility and performance requirements.
+  Device-specific gaps and formal release approval stay explicit. If one
   looks wrong, say why in a comment and add `needs Chris`; keep working to it
   until he answers.
 - "Verified" says what was run: the themes, the views or places, the zooms,

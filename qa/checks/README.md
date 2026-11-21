@@ -4,6 +4,11 @@
 with phone viewports in light and dark. Start `npm run dev` first and install
 Chromium with `npx playwright install chromium`.
 
+The agent also inspects actual captures and fixes visual defects; passing
+scripts do not transfer routine QA to the user. See
+[verification ownership](../../docs/verification.md) for evidence and the
+limited cases that warrant a user/device check.
+
 | Command | Scope |
 |---|---|
 | `npm run check` | Health at every sheet scale; route selection, theme switching, reload, Escape and retired Classic links |
