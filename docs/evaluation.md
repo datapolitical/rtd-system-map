@@ -50,6 +50,10 @@ particular pixel tolerances are project choices needing calibration. Retain
 good, bad and borderline examples and threshold rationale. Preference scores
 do not establish rider task success.
 
+Primary references: [WCAG contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html),
+[dynamic labeling continuity](https://cs.nyu.edu/visual/home/pub/infovis06.pdf),
+and [Roberts on schematic-map evaluation](https://repository.essex.ac.uk/11368/1/Roberts-Theoretical.pdf).
+
 Report known-fault and planted-fault detection separately, by kind, with
 denominators and default-versus-targeted scans. Keep undetected classes visible
 when a regression baseline passes. Measure false alarms with triaged controls;

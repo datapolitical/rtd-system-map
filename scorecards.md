@@ -11,6 +11,56 @@ The cards dated 2026-11-08 below predate this card (2026-11-10): they score
 Accurate and Legible 0 to 3 as rows and have no Coherence or Topographicity
 row. They are left as they were scored.
 
+## 2026-11-21: current-sheet and smooth-zoom evidence baseline
+
+**Verdict: incomplete; no overall pass.** This establishes current evidence
+and exposes gaps. It does not claim a rendering improvement or a release.
+Reviewer: Codex, self-review; no independent design review claimed.
+
+- Current sheet runtime: `f8299c0c6b1e6907c1387d2f337aa2e42ff6724d`.
+  QA edits were uncommitted at capture time and are identified as dirty in the
+  report; deployed runtime/build source was unchanged.
+- Trial: unchanged `329752293fdc756a10f5d68a1c17391f4e849684`, explicitly `/zoom/`,
+  offset and drawn modes. Both use the preserved input snapshot built
+  `2026-11-19T04:51:34.367Z`, not newly fetched production data.
+- Chromium software rendering, 390 × 844, light/dark, seed 21. Current:
+  five scales plus shared track, terminal and three sampled stations (20
+  captures). Trial: 12, 12.99, 13.01, 14 at the hub, shared track, terminal,
+  samples at 13.37, both modes/themes (36 captures). Actual cameras recorded.
+- Validation: **511 unit/regression tests and 8 browser checks pass**. The
+  new challenge/control tests include a real recorded, screenshot-confirmed
+  anchor flip. Browser checks cover health, selection/theme/reload/Escape and
+  Classic redirects. A stopped-server attempt is retained separately.
+
+| Gate or row | Current sheets | Smooth-zoom trial |
+|---|---|---|
+| Accurate | Unmeasured overall: identity/completeness checks passed their stated scope; 23 diagnostic leads need triage | Unmeasured: independent route/data truth not established by this run |
+| Legible | Unmeasured: complete rendered contrast/readability not established | Unmeasured: complete rendered contrast/readability not established |
+| Across zooms | Unmeasured: no complete transition review | **1, fails:** common rendered names change anchor; confirmed Union Station side/chip-order change between 12.99 and 14 |
+| Useful, Hierarchy, Association, Calm, Phone, Drawn on purpose, Coherence, Topographicity, Gorgeous | Unmeasured: captures inspected for specific findings, not a complete calibrated score | Unmeasured: captures inspected for specific findings, not a complete calibrated score |
+
+The whole-feature audit examined **34,992 features**, including all **6,853
+stops**. It flagged 22 stop-to-own-route proximity leads and no B letter
+feature anywhere on sheet 0. These are not automatically confirmed defects;
+classification and any fixes are tracked in [#168](https://github.com/datapolitical/rtd-system-map/issues/168).
+Stop proximity uses a diagnostic project tolerance, not a GTFS truth test.
+
+The trial metadata review caught **16 anchor-change observations across three
+stations**, repeated across modes/themes; not 16 unique defects. The inspected
+Union Station views show the name above-left at 12.99 and below at 14, with
+chip order changing. The recorded pair is in
+`test/fixtures/zoom-anchor-observations.json`; `qa/evaluation/review.mjs` catches it.
+This remains prototype work, not a request for the user to repeat routine QA.
+
+[Download the complete evidence](https://github.com/datapolitical/rtd-system-map/releases/download/checks-fixtures/evaluation-2026-11-21-f8299c0-3297522.zip)
+(10,600,715 bytes; SHA-256
+`d9bf918f4f9b75879f1c3710e91b561c8ec047f5d53899bd0ca0cd086b6c91d5`).
+It contains the 56 images, fingerprinted input/module bytes, evaluator sources,
+actual cameras, audits, transition findings, test results and failed attempts.
+External basemap tiles are not frozen. Physical-phone performance, blind rider
+task success, real-world detector precision and distinct design review remain
+explicit gaps. Historical Classic recall is reported separately.
+
 ## 2026-11-08: bus bundling, prototype round two, against main
 
 Question: where does each bus go downtown? Views: downtown over the hub at
