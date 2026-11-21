@@ -3,14 +3,19 @@
 A map of Denver's transit that opens on the whole network and shows how often
 each line comes, not just where it goes. It is for people finding out what
 transit they can use at a place, riders on the move, and anyone who needs a
-clear picture of where Denver has useful service. A button called Live turns
-the same map into right now: what is running, and where the trains and buses
-are. It is built for phones first.
+clear picture of where Denver has useful service. It is built for phones first.
+Live vehicles and the earlier map's other features are planned for the smooth-zoom replacement.
 
 **Open it: [rtd-system-map.pages.dev](https://rtd-system-map.pages.dev)**
 
-The front page is four sheets, each drawn for one scale. The earlier
-continuous map is the [Classic map](https://rtd-system-map.pages.dev/classic/).
+The front page is five sheets, each drawn for one scale. The earlier Classic
+application is preserved on the
+[`classic-archive` branch](https://github.com/datapolitical/rtd-system-map/tree/classic-archive).
+Old `/classic/` links redirect to the current map.
+
+Development has two active tracks: the current map on `main`, and the
+smooth-zoom trial on `zoom-prototype-154`. See
+[the development guide](docs/development.md) for the branches, folders and checks.
 
 **How it's built: [the design specification](DESIGN.md)**, also [in the
 wiki](https://github.com/datapolitical/rtd-system-map/wiki), one page per
@@ -36,11 +41,13 @@ npm run build      # downloads RTD's public data into public/data/
 npm run dev        # serves the site at http://127.0.0.1:8788
 npm run dev:live   # the Live relay, on 8789; the site finds it on its own
 npm test           # unit tests, plain Node, no browser
-npm run check      # headless browser checks (see qa/checks/README.md)
+npm run check      # current sheet map: health, interactions and old-link redirects
+npm run check:sheets # the longer sheet-map regression checks
 ```
 
-`npm run check` needs `npm run dev` running (and `npm run dev:live` for the
-Live check), and Playwright's Chromium (`npx playwright install chromium`).
+`npm run check` needs `npm run dev` running and Playwright's Chromium
+(`npx playwright install chromium`). The current map's checks need no Live relay.
+`CHECK_URL` selects a preview instead. See [the checks guide](qa/checks/README.md).
 
 ## Design
 
@@ -62,7 +69,9 @@ network is written into the code; the build derives it from RTD's data.
 - `functions/`: Pages Functions that connect the site to the relay.
 - `test/`: unit tests, run with `npm test`.
 - `qa/`: the QA brief and findings ([qa/BRIEF.md](qa/BRIEF.md)) and the
-  headless checks in `qa/checks/`.
+  current browser checks in `qa/checks/`. `qa/classic/` holds historical
+  checks and the renderer fixture used by frozen-build regressions;
+  it is outside the deployed `public/` directory.
 
 ## Data
 

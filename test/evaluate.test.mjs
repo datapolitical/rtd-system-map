@@ -6,7 +6,7 @@ import { STALE_S } from '../public/js/realtime.js';
 
 // shared.js reads the theme through palette.js, which asks the page.
 globalThis.matchMedia ??= () => ({ matches: false, addEventListener() {} });
-const { ZOOMS, byZoom, tierMatch, tierWidth, TIERS } = await import('../public/js/shared.js');
+const { ZOOMS, byZoom, tierMatch, tierWidth, TIERS } = await import('../qa/classic/js/shared.js');
 
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
 

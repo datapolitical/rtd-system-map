@@ -2,10 +2,10 @@
 // drawn, the words we use for frequency (DESIGN.md, "Voice"), and small
 // formatting helpers. Nothing here knows any route, station or id.
 
-import { textOn } from './color.js';
+import { textOn } from '../../../public/js/color.js';
 import { P, PALETTES } from './palette.js';
-import { ZOOMS } from './sizes.js';
-import { CLASS_RANK, STREET_CLASSES } from './frequency.js';
+import { ZOOMS } from '../../../public/js/sizes.js';
+import { CLASS_RANK, STREET_CLASSES } from '../../../public/js/frequency.js';
 
 // Phones, and any short screen (a phone on its side): framing, key closed,
 // panel as a bottom sheet. The same query is in app.css.
@@ -142,7 +142,7 @@ export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 // How often a route comes on a weekday midday (often.js, which the sheets' card reads too).
-export { freq } from './often.js';
+export { freq } from '../../../public/js/often.js';
 
 // The same for Saturday or Sunday: "Every 30 min", "A few trips", "No Sunday service".
 export function dayFreq(headway, trips, day) {

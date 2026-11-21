@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const BASE = process.argv[2] ?? 'http://localhost:8788/';
+const BASE = process.argv[2] ?? process.env.CHECK_URL ?? 'http://localhost:8788/';
 const OUT = process.argv[3] ?? 'qa/.scratch/sheets';
 await mkdir(OUT, { recursive: true });
 const results = [];

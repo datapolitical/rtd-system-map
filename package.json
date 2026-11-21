@@ -13,13 +13,17 @@
     "start": "npm run build && npm run dev",
     "test": "node --test",
     "check": "playwright test -c qa/playwright.config.mjs --grep-invert @deep",
-    "check:deep": "playwright test -c qa/playwright.config.mjs --grep @deep",
-    "check:baselines": "playwright test -c qa/playwright.config.mjs visual --update-snapshots=all",
+    "check:sheets": "node qa/sheets.mjs",
+    "check:health": "playwright test -c qa/playwright.config.mjs health",
+    "check:a11y": "node qa/a11y.mjs",
+    "check:classic": "playwright test -c qa/classic/playwright.config.mjs --grep-invert @deep",
+    "check:classic:deep": "playwright test -c qa/classic/playwright.config.mjs --grep @deep",
+    "check:classic:baselines": "playwright test -c qa/classic/playwright.config.mjs visual --update-snapshots=all",
     "check:report": "playwright show-report qa/report",
-    "check:map": "node qa/checks/report.mjs",
+    "check:classic:map": "node qa/checks/report.mjs",
     "check:recall": "node qa/recall/recall.mjs",
     "check:accuracy": "node qa/accuracy.mjs",
-    "sweep": "node qa/sweep/sweep.mjs"
+    "sweep:classic": "node qa/sweep/sweep.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.0",
