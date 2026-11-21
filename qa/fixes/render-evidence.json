@@ -1,0 +1,7 @@
+{
+  "source_commit": "486bd9477eabd29bee51b65a3cd3e44e0efa1de3",
+  "source_sha256": "b6ac7d8ae183f0d0453520ac003bfb209f3142067e612174ed37bd999f2cb6f3",
+  "check_count": 14,
+  "errors": [],
+  "scope": "Light/dark rendered offset view, same reported camera, other shared track and a terminus, plus selection during zoom."
+}
