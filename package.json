@@ -23,6 +23,7 @@
     "check:classic:map": "node qa/checks/report.mjs",
     "check:recall": "node qa/recall/recall.mjs",
     "check:accuracy": "node qa/accuracy.mjs",
+    "check:evidence": "node qa/evaluation/run.mjs",
     "sweep:classic": "node qa/sweep/sweep.mjs"
   },
   "devDependencies": {

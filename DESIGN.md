@@ -12,9 +12,10 @@ should look and behave. Read it before changing the map, the interface, or the
 data pipeline. When a decision changes, update this file and add a line to the
 decision log at the bottom.
 
-The site has two pages. The front page is the four sheets, with the whole district one step out from them ("Four sheets").
-The continuous map the rest of this document describes is the Classic map, at
-`/classic/`. The front page does not link to it: it is reached by its address.
+The deployed front page is the four sheets, with the whole district one step
+out from them ("Four sheets"). Old `/classic/` links redirect to that page.
+The smooth-zoom trial has its own branch and `/zoom/` entry point. Classic
+details elsewhere below describe the archive or planned features.
 
 ## Principles
 
@@ -3125,11 +3126,13 @@ principles by now"). The gates and rows are this document's own principles
 claim about a section above, not taste.
 
 **The views.** Judged from phone captures (390 x 844), light and dark,
-before and after, at the same fixed views every time: the metro at 10.5
-over downtown, the west side at 10.7, the south at 10.2, downtown at 12.5
-and 14.5 over the hub, and whatever the change is about (a corridor, a
-terminal). `qa/checks` takes them headless. A row is scored on the worst
-view, not the best.
+before and after. Current sheets use scales 8.75, 10, 12, 14 and 16, with the
+actual settled camera recorded. The smooth-zoom trial is evaluated explicitly
+at `/zoom/`, both modes, over 12–14 including fractional samples and both
+sides of drawing boundaries. Classic's older fractional views are historical
+only. Include data-derived hub/shared-track/terminal examples, reproducible
+unfamiliar samples and the affected place. Judge the worst view, not the best.
+See [evaluation scope and evidence](docs/evaluation.md).
 
 **The gates.** Two things are not scored. They pass or fail (Chris,
 2026-11-10: a score of "poster quality" means nothing for accuracy or
@@ -3162,8 +3165,9 @@ hand-drawn transit maps.
 
 **Why usefulness and looks are both on the card.** Roberts (2014) scores
 schematic maps on five criteria (simplicity, coherence, balance, harmony,
-topographicity) and found that how much people like a map has no
-correlation with how well they use it. So usefulness (the Useful row and the
+topographicity) and discusses evidence that preference and actual task
+performance can diverge. This does not establish a universal zero correlation.
+So usefulness (the Useful row and the
 Validation tasks) and looks are scored separately, and a version that is
 useful but ugly, or lovely but wrong, cannot pass on the strength of the
 other. Until 2026-11-10 the five were a second total out of 15 beside the
@@ -3193,7 +3197,13 @@ review pass; a self-review is not described as independent.
 
 Measured checks decide the gates they actually cover; a failing check caps its
 row at 1. The gates, minimum scores and no-regression rule above remain in force.
-Every score cites its evidence and scope. Device emulation is not evidence of
+Every score cites its evidence and scope. An unmeasured applicable gate or
+row prevents an overall pass. Broad geometry/labeling changes need a distinct
+review before unqualified visual acceptance; if unavailable, retain that gap
+and continue routine engineering. Each meaningful fix records rider impact
+and priority, a reproducible bad case, comparable after evidence, detector
+challenges/controls and limits, as specified in [evaluation.md](docs/evaluation.md).
+Device emulation is not evidence of
 physical-phone speed or real VoiceOver speech. Ask the user only for a prepared device-only check,
 a product tradeoff that evidence and principles cannot resolve, or concise
 formal-release approval. See `docs/verification.md`. The user's verdict can
@@ -5246,6 +5256,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   continue under parity checks while those requests are pending. Reason: Chris
   asked the agent to take on fixing and evaluation rather than defaulting to
   extensive manual review. The workflow is in `docs/verification.md`.
+
+- 2026-11-21: Make evaluation version-specific and evidence-backed. Current-sheet
+  whole-feature audits and fingerprinted captures are distinct from historical
+  Classic recall. Report detector blind spots, triage heuristic findings, and
+  keep unmeasured criteria explicit. Fixes require rider priority and comparable
+  before/after evidence; preserve score minimums and agent-owned routine QA.
+  See docs/evaluation.md and the dated scorecard.
 
 ## Sources
 

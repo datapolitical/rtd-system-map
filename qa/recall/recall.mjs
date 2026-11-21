@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { openModel, pageSources } from '../drawn/model.mjs';
 import { runChecks } from '../checks/run.mjs';
 import { KINDS, metres, plant } from './plant.mjs';
+import { coverageSummary, coverageMarkdown } from './summary.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -199,6 +200,12 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, 'recall.json'), JSON.stringify({ generated: new Date().toISOString(), seed: Number(seed), per: Number(per), results }, null, 2));
   fs.writeFileSync(path.join(outDir, 'recall.txt'), `${lines.join('\n')}\n`);
+  const coverage = coverageSummary(results);
+  const markdown = coverageMarkdown(coverage);
+  fs.writeFileSync(path.join(outDir, 'coverage.json'), `${JSON.stringify(coverage, null, 2)}\n`);
+  fs.writeFileSync(path.join(outDir, 'coverage.md'), markdown);
+  console.log(`\n${markdown}`);
+  if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown);
 
   // The ratchet: nothing baseline.json had caught may be missed now.
   const now = {};

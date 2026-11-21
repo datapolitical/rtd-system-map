@@ -1,5 +1,14 @@
 # Recall: how much of what is wrong the checks catch
 
+**Scope: historical Classic fixtures only.** A green run means no detection
+regression from `baseline.json`, including its known misses. It does not
+establish acceptance of the current sheets or smooth-zoom trial. Each run also
+writes `coverage.json` and `coverage.md` with known/planted totals, per-kind
+default/targeted detection and explicitly unmeasured precision. CI publishes
+that table in its job summary. Unexplained findings have not been classified
+as real faults or false alarms. Current evaluation is described in
+[docs/evaluation.md](../../docs/evaluation.md).
+
 A check that finds nothing has two explanations: the map is right, or the
 check is blind. The report (`npm run check:map`) cannot tell them apart. This
 folder can: it scores the same checks against faults we know are there.

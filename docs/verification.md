@@ -3,7 +3,9 @@
 Updated 2026-11-21. The implementation agent owns routine quality evaluation,
 including visual judgment. The map's correctness, readability, appearance and
 performance requirements remain in force. A passing script alone is not
-visual acceptance.
+visual acceptance. Follow [evaluation.md](evaluation.md) for version-specific
+coverage, rider priorities, detector calibration and evidence for each fix.
+Unmeasured applicable criteria prevent an overall pass.
 
 ## The agent's work
 
