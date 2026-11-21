@@ -48,6 +48,9 @@ npm run check:a11y
 `npm run check` runs Chromium in light and dark: health at every sheet scale,
 route selection, theme switching, reload, Escape and old Classic links.
 `check:sheets` is the longer existing sheet regression script.
+`npm run check:evidence` collects fingerprinted version-specific views and
+whole-feature diagnostics; [evaluation.md](evaluation.md) defines their scope
+and limitations. It does not award overall acceptance.
 Set `CHECK_URL` to a particular preview when testing that build. The nightly
 workflow runs only sheet health; the branch-preview workflow remains disabled
 until deliberately enabled. Neither reports smooth-zoom acceptance.

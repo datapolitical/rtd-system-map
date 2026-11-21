@@ -1,5 +1,10 @@
 # The rules the map is checked against
 
+**Historical coverage:** the invariant counts and detector audit below describe
+Classic on 2026-11-11. They are not the current sheet-map coverage inventory.
+Use [qa/evaluation](../evaluation/README.md) and
+[docs/evaluation.md](../../docs/evaluation.md) for the active versions.
+
 A check can only find a fault it has a rule for. Until 2026-11-11 the rules
 came from faults Chris reported, one at a time. That evening he found seven
 by eye that no rule described, and asked why the checker was waiting for him.

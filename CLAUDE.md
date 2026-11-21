@@ -75,6 +75,11 @@ we are" section from them (closed issues show as done).
 
 ## Checks: what "done" and "verified" mean
 
+- Follow [docs/evaluation.md](docs/evaluation.md): name the version, rider
+  consequence and priority; preserve before/after evidence and detector controls;
+  record unmeasured criteria. Historical Classic recall is not current-map
+  acceptance. `npm run check:evidence` collects scoped, fingerprinted evidence.
+
 - A "Done when" line in an issue changes only when Chris says so. His
   2026-11-21 instruction assigns routine evaluation to the agent; replace
   blanket manual-review gates with evidence-backed agent verification,

@@ -15,6 +15,7 @@ limited cases that warrant a user/device check.
 | `npm run check:health` | The sheet-map health check only; also run nightly |
 | `npm run check:sheets` | Longer existing sheet regression script, including label and card checks |
 | `npm run check:a11y` | Current sheets: axe, accessibility tree, announcements and focus |
+| `npm run check:evidence` | Version-specific, fingerprinted captures and whole-feature sheet audits; findings need triage; never a complete acceptance verdict |
 | `npm test` | Unit tests, including historical renderer regressions |
 | `npm run check:recall` | Detectors scored against frozen historical builds |
 
