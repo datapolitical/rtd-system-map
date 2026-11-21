@@ -14,7 +14,7 @@
 // are reported, not failed: the Auraria West and Empower Field capsules are
 // listed as still open there. Each screen with a finding gets a capture.
 import { test, expect, siteData, summary } from './fixtures.mjs';
-import { tiles } from '../lib/views.mjs';
+import { tiles } from '../../lib/views.mjs';
 
 const ZOOMS = [9.75, 10, 10.5, 11, 12, 13, 14];
 const STRICT_BELOW = 11;

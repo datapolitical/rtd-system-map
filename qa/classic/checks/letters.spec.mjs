@@ -10,7 +10,7 @@
 // open part of the screen with no letter there is a finding, a note if the
 // line spans under 130 px. Needs 20/20.
 import { test, expect, siteData, summary } from './fixtures.mjs';
-import { seededViews } from '../lib/views.mjs';
+import { seededViews } from '../../lib/views.mjs';
 
 const count = (fs) => fs.filter((f) => f.kind === 'letter-missing' || f.kind === 'note');
 

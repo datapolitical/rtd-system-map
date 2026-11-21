@@ -4,15 +4,15 @@
 // while Live is on. buildLegend fills the <details id="legend"> card and
 // returns it with `follow`, `redraw` and `setLive` for main.js to call.
 
-import { evaluate, drawsAt, settledFrom, strengthAt } from './evaluate.js';
-import { dotStates } from './age.js';
-import { STALE_S } from './realtime.js';
+import { evaluate, drawsAt, settledFrom, strengthAt } from '../../../public/js/evaluate.js';
+import { dotStates } from '../../../public/js/age.js';
+import { STALE_S } from '../../../public/js/realtime.js';
 import { STATE } from './highlight.js';
 import { loadData } from './select.js';
 import { vehicleLayers } from './live.js';
 import { P, PALETTES } from './palette.js';
 import { PHONE_QUERY, STREETS, TIERS, bullet, esc, ends, middayLabel } from './shared.js';
-import { ZOOMS } from './sizes.js';
+import { ZOOMS } from '../../../public/js/sizes.js';
 import { RATIO, addSymbol, canvas } from './symbols.js';
 import { transitLines, transitMarks } from './network.js';
 

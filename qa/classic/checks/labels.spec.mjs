@@ -22,7 +22,7 @@
 // 6 km of the busiest station are checked; the sweep covers the rest.
 // Captures are attached with each finding circled.
 import { test, expect, siteData, summary } from './fixtures.mjs';
-import { tiles } from '../lib/views.mjs';
+import { tiles } from '../../lib/views.mjs';
 
 const ZOOMS = [10, 11, 12, 13, 14];
 const DOWNTOWN_ONLY_ABOVE = 12;

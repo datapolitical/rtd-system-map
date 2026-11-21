@@ -1,3 +1,8 @@
+> Classic regression support: this guide describes the historical renderer.
+> The current map uses `npm run check`; see [the development guide](../../docs/development.md).
+> Runnable Classic is preserved on `classic-archive`. Renderer fixtures remain
+> under `qa/classic/` to keep the frozen-build regression checks useful.
+
 # The drawn model
 
 What the map draws, worked out in plain Node: every line, mark, terminal and

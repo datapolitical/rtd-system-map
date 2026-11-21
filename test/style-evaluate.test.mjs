@@ -16,16 +16,17 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { evaluate } from '../public/js/evaluate.js';
 import { RUNTIME_ONLY, ROOT, buildStyle } from '../qa/drawn/model.mjs';
+import { classicScript } from '../qa/classic/source.mjs';
 
 const META = path.join(ROOT, 'test', 'fixtures', 'meta.json');
-const JS = path.join(ROOT, 'public', 'js');
+const JS = path.dirname(classicScript(ROOT, 'legend.js'));
 
 // ---- The operators evaluate.js implements ---------------------------------
 
 // Every `case '<op>':` of the switch in evaluate(). Checked against the
 // function itself in the first test, so a rewrite that moves the operators
 // out of a switch fails loudly rather than finding none.
-const evaluateSource = fs.readFileSync(path.join(JS, 'evaluate.js'), 'utf8');
+const evaluateSource = fs.readFileSync(path.join(ROOT, 'public', 'js', 'evaluate.js'), 'utf8');
 const switchAt = evaluateSource.indexOf('switch (op)');
 const IMPLEMENTED = new Set(
   [...evaluateSource.slice(switchAt).matchAll(/case '((?:[^'\\]|\\.)+)':/g)].map((m) => m[1]),
@@ -264,11 +265,11 @@ test('the walker reports an operator evaluate.js lacks, and nothing for a valid 
   );
 });
 
-test('evaluate.js has no importer in public/js but legend.js, and legend.js looks up only layers listed here', () => {
+test('the archived renderer evaluates expressions only in legend.js, whose layers are listed here', () => {
   const importers = fs
     .readdirSync(JS, { recursive: true })
     .filter((f) => f.endsWith('.js') && path.basename(f) !== 'evaluate.js')
-    .filter((f) => /\bimport\b[^;]*?['"]\.{1,2}\/(?:[\w-]+\/)*evaluate\.js['"]/.test(fs.readFileSync(path.join(JS, f), 'utf8')));
+    .filter((f) => /\bimport\b[^;]*?['"][^'"]*\/evaluate\.js['"]/.test(fs.readFileSync(path.join(JS, f), 'utf8')));
   assert.deepEqual(
     importers,
     ['legend.js'],

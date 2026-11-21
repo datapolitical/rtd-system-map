@@ -5,10 +5,10 @@
 import { FONT } from './basemap.js';
 import { P } from './palette.js';
 import { byZoom } from './shared.js';
-import { band, pillText, zoomNote } from './age.js';
-import { POLL_MS, SCHEMA, STALE_S, routeOf, vehicle } from './realtime.js';
+import { band, pillText, zoomNote } from '../../../public/js/age.js';
+import { POLL_MS, SCHEMA, STALE_S, routeOf, vehicle } from '../../../public/js/realtime.js';
 import { loadData, loadDirectory, openRoute } from './select.js';
-import { offTrack, trackIndex } from './track.js';
+import { offTrack, trackIndex } from '../../../public/js/track.js';
 
 // The zoom ladder for vehicles (DESIGN.md, "By zoom level"): trains from the
 // city zoom, buses from the neighborhood zoom, their names closer in.

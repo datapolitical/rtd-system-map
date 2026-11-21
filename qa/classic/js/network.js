@@ -9,10 +9,10 @@
 // same definitions (legend.js).
 
 import { FONT, groupKeepOut, lineKeepOut } from './basemap.js';
-import { lightenTo, shade, textOn } from './color.js';
+import { lightenTo, shade, textOn } from '../../../public/js/color.js';
 import { DARK_RAIL_MIN, P, PALETTES } from './palette.js';
 import { CLASS_RANK, DETAIL_FROM, PART_TIME, byZoom, classMatch, classWidth, classWidthAt, classWidthTimes, tierMatch, tierWidth } from './shared.js';
-import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from './sizes.js';
+import { CAPSULE_FROM, CAPSULE_TO, FAR_STEP, HUB_FROM, NAMES_FROM, OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, STATION_SPACING, ZOOMS } from '../../../public/js/sizes.js';
 import { fade, hide, isRoute, inList, onRoute, selectionLines, selectionMarks } from './highlight.js';
 import { edgeLetterLayer } from './edgeletters.js';
 

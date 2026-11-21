@@ -8,7 +8,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { SHEETS, OPENING } from '../public/js/sheets/style.js';
 
-const BASE = process.argv[2] ?? 'http://localhost:8788/';
+const BASE = process.argv[2] ?? process.env.CHECK_URL ?? 'http://localhost:8788/';
 const OUT = process.argv[3] ?? 'qa/.scratch/a11y';
 await mkdir(OUT, { recursive: true });
 const results = [];

@@ -45,6 +45,15 @@ we are" section from them (closed issues show as done).
 
 ## How to work here
 
+- Read [docs/development.md](docs/development.md) for the branch boundaries.
+  `main` owns the current sheet map; `zoom-prototype-154` owns smooth-zoom
+  experiments; `classic-archive` preserves the earlier application. Do not
+  merge the archive back into main or restore Classic under `public/`.
+  Fix shared/current-map faults on main first, then bring main into the
+  smooth-zoom branch. Its preview and checks must explicitly exercise `/zoom/`.
+- `npm run check` checks the current sheet map. `check:classic*` requires an
+  explicitly selected archive server and never substitutes for a current-map check.
+
 - The bar is a map that is both useful and beautiful. Visual work isn't done
   until it is both. Put visual criteria in every builder brief and every
   review.

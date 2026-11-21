@@ -1,5 +1,12 @@
 # RTD system map: design specification
 
+> Current implementation: `main` deploys the five-sheet map. Smooth zoom is
+> developed separately on `zoom-prototype-154`. Classic is preserved on
+> `classic-archive`; its older interface details below are historical or planned
+> features, rather than a second deployed application. See
+> [the development guide](docs/development.md).
+
+
 This is the source of truth for what this site is, who it is for, and how it
 should look and behave. Read it before changing the map, the interface, or the
 data pipeline. When a decision changes, update this file and add a line to the
@@ -2044,18 +2051,20 @@ repositioning, shortening or hiding its labels to fit the screen. Names may
 be cropped by the viewport, as on a printed map. Zooming selects another
 built drawing; choosing a route may select its built name alternatives.
 
-The sheets are `public/index.html`. The map they took the front page from is
-the Classic map, `public/classic/index.html`; the sheets do not link to it.
-Each page finds its files wherever it is served from: the front
-page asks for them from the site's root, so it also works at any address
-Cloudflare answers with it (the site has no 404 page, so that is every address
-with no page of its own, the old `/sheets/` among them), and the classic
-map's scripts ask from where the scripts are. Both pages read the address the
-same way (`#zoom/lat/lon`), so a link made on the classic map when it was the
-front page opens the sheets at the same place. The checks in `qa/` read the
-classic map and find it with `qa/lib/where.mjs`: `/classic/` on a site that
-has a page there, the root on a build from before. `test/pages.test.mjs`
-holds these rules.
+The sheets are `public/index.html`, the only deployed application. Classic is
+preserved on `classic-archive` at commit
+`811135ffe4230f598082667c7fda20994d1bd97d`; its source page remains at
+`public/classic/index.html` on that branch. Main redirects `/classic/` and
+`/classic/*` to `/`, preserving view fragments. The current page asks for
+files from the site's root, including at addresses the host answers with it.
+
+`main` holds the current sheets. Smooth-zoom work stays on
+`zoom-prototype-154`, in its own worktree and `/zoom/` preview, until reviewed.
+Shared/current-map fixes land on main first and then merge into that branch.
+See `docs/development.md` for the workflow and separate verification commands.
+`npm run check` exercises the sheets. Historical browser checks and renderer
+fixtures live outside `public/`, under `qa/classic/`; the frozen-build recall
+suite still checks the original historical drawings.
 
 | Sheet | Zoom | What it adds |
 |---|---|---|
@@ -3387,44 +3396,31 @@ RTD GTFS ──────────────────────┼�
   dev:live` the relay beside it, which the site finds on its own.
 - Updates are automatic (see "Zero maintenance").
 
-The page is plain ES modules in `public/js/`, served as they are (no
-bundler), one concern to a file, so a change to one concern is a change to
-one file:
+The deployed page uses plain ES modules under `public/js/sheets/`:
 
-- `main.js`: startup only. Makes the map, its controls and framing ("Opening
-  state", "Layout"), the theme switch, and wires the other modules to it.
-- `network.js`: RTD's network as map layers: each line's colors in both
-  themes (`railStyle`), lines and areas (`transitLines`), stations, signs,
-  letters and names (`transitMarks`), their zooms, and the data sources.
-- `symbols.js`: every picture the map draws on a canvas, by image id
-  (stations, bullets, signs, vehicles, shields, icons), drawn on demand.
-- `legend.js`: the key ("The key"), drawn from the layers and `symbols.js`.
-- `sizes.js`: rail widths, station mark sizes and the zooms marks change at.
-  No DOM or MapLibre, so the build imports the same file
-  (`scripts/lib/stationmarks.mjs`) rather than a copy kept in step by hand;
-  it sits in `public/` because that is served with no copy step.
-- `basemap.js`: our basemap's layers on OpenFreeMap tiles ("Basemap").
-- `palette.js`, `color.js`: every color in both themes, and the rules that
-  keep RTD's colors legible ("Dark mode", "Rail line colors").
-- `shared.js`: bus tiers, frequency words and formatting both the map and
-  the panels use.
-- `highlight.js`: fading the rest of the network when a route is open.
-- `select.js`, `panel.js`: what a tap opens, the panels' words, and the
-  panel container ("One tap model").
-- `search.js`: the search box ("Search").
-- `edgeletters.js`: a line's letter where it enters the screen.
-- `evaluate.js`: style expressions worked out for one zoom, for the key.
-- `live.js`, `realtime.js`, `age.js`, `track.js`: Live: the button and
-  vehicles, the relay's protocol, the pill's words, and on-track checks.
-- `tabbable.js`: Tab order for Safari.
+- `main.js`: startup, sheet transitions, selection, theme, offline loading and framing.
+- `style.js`: sheet scales, palettes, map sources and layers.
+- `pick.js`, `say.js`: hit testing, route cards and screen-reader wording.
+- `address.js`, `view.js`, `settle.js`: share links, visible space and zoom settling.
+- `public/js/color.js` and `often.js`: shared colour and frequency helpers.
 
-Checks on the page live in `qa/checks/`: Playwright Test specs that open the
-site in headless Chromium (an iPhone 14 profile, light and dark) and measure
-what the map draws, one spec per "Done when" line of milestone 3 (`npm run
-check`, against a running `npm run dev`). `npm test` stays pure Node for the
-build's own modules. The specs are the record of what each step measured;
-the detectors that look for faults nobody has named yet (a line that breaks,
-marks that overlap, a letter missing) are the next thing to add there.
+`scripts/build-data.mjs` still builds the shared transit data, then
+`scripts/sheets.mjs` draws the sheets with `scripts/lib/sheets.mjs`.
+Shared size and frequency modules remain inputs to that data build. The Live
+relay and protocol are retained for the planned smooth-zoom features.
+
+The Classic application is archived on `classic-archive`, rather than shipped
+from `public/`. `qa/classic/js/` retains only the renderer dependencies needed
+by unit tests and frozen-build recall. `qa/drawn/` reads those fixtures or an
+old frozen build's original `public/js/` layout; it does not model the current
+sheets. Its historical browser checks require an explicit archive target.
+
+`qa/checks/` checks the deployed sheet map in light and dark: page health at
+each scale, route selection, theme changes, reload, Escape and old-link
+redirects. `qa/sheets.mjs` and `qa/a11y.mjs` retain the longer sheet and
+accessibility checks. `npm test` runs unit tests without a server. Nightly
+checks exercise sheet-map health; the branch workflow stays disabled until
+explicitly enabled.
 
 ## Unattended work
 
@@ -3696,8 +3692,8 @@ What comes after launch is in four milestones, in this order (decided
    draw from.
 2. **v2: One zoomable map.** The sheets' drawing at every zoom, one map
    that zooms smoothly. The milestone holds only the steps to it, in
-   order; the plan is #129. The classic map is paused until the sheets
-   launch; its open issues carry the `classic` label.
+   order; the plan is #129. Classic is preserved on
+   `classic-archive`; its historical issues carry the `classic` label.
 3. **v2.x: Classic features, other times and Live.** On the zoomable map:
    the classic map's features carried over (edge letters, relief, route
    panel, route tracing, Live), then Saturday, Sunday and evening in the
@@ -5221,6 +5217,15 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   and the rest. The v2 milestone mixed the path to the zoomable map with
   faults in a drawing it replaces, and the smooth zoom can ship before the
   classic features come over.
+- 2026-11-21: Separate the active map versions for handoff. Preserve Classic on
+  `classic-archive` at `811135f`, remove its page, startup and CSS from the deployed
+  site, and move its remaining renderer dependencies and browser checks into
+  `qa/classic/` for historical regressions. Old Classic links redirect to the
+  current map. `main` owns the sheets, `zoom-prototype-154` owns the smooth-zoom
+  experiment, and current/shared fixes flow from main into the trial. Standard
+  browser and nightly health checks now exercise the sheets. Reason: Chris
+  asked to make the version separation concrete while both active tracks continue.
+
 ## Sources
 
 - Guo, Z. (2011). Mind the map! The impact of transit maps on path choice in

@@ -7,7 +7,7 @@
 // use; sizes shared with the build are in sizes.js.
 
 import { P } from './palette.js';
-import { CHEVRON, HUB_EXTRA, RAIL_WIDTH, STATION_SPACING, TICK } from './sizes.js';
+import { CHEVRON, HUB_EXTRA, RAIL_WIDTH, STATION_SPACING, TICK } from '../../../public/js/sizes.js';
 
 // Never below 2, so symbols stay sharp when a screen is zoomed.
 export const RATIO = Math.max(2, Math.ceil(devicePixelRatio || 1));
