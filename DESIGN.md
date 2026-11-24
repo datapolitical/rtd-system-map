@@ -3069,9 +3069,10 @@ are deferred, not ruled out. See "Open questions".
     with a "Loading…" line over it, and fades to the map once the map has
     drawn that view (or at once, if a button is pressed first). The pictures
     (`public/poster/`, one per theme for a phone and for a wider screen, about
-    60 to 150 KB each) are taken from the live site by `scripts/poster.mjs`,
-    after each change to how the sheets look and daily
-    (`.github/workflows/poster.yml`). A fingerprint of the opening drawing
+    60 to 150 KB each) are taken by `scripts/poster.mjs` at the end of every
+    build, from the site just built (`scripts/poster-build.mjs`), so they go
+    live with the drawing they show. The hourly refresh Worker rebuilds the
+    site when the basemap has a new tile build. A fingerprint of the opening drawing
     and its rendering code is captured with the pictures, along with the
     basemap tile version. The picture stays
     hidden unless its fingerprint matches the current `sheets.json`; a stale
@@ -5294,6 +5295,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   aren't helpful. Those should just be a single stop at the intersection."
   The rule comes from RTD's stop names, so it applies wherever a route has a
   stop each way within 50 m at one crossing (686 rings fewer on sheet 4).
+- 2026-11-23: The loading pictures are taken in the build that deploys
+  them, not from the live site afterwards. Reason: after each change the
+  live page showed "Loading…" on plain ground until a GitHub job had taken
+  new pictures and Cloudflare had built again, and for up to a day after a
+  new basemap tile build. Chris: "Why don't we just rebuild it when we push
+  the change?" The refresh Worker now also rebuilds on a new tile build.
 - 2026-11-23: The pair rule above is for free routes only, the ones RTD names
   free (the FreeRide and the MetroRide). Reason: shown the same
   rule on route 65 at Monaco & Mansfield, Chris picked "FreeRide only".
