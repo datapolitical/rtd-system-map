@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "title": "RTD map fixes",
-  "updated_at": "2026-11-24T07:12:50.000Z",
+  "updated_at": "2026-11-24T00:00:00.000Z",
   "map_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4",
   "repository": "datapolitical/rtd-system-map",
   "tracking_note": "GitHub Issues remain the canonical work tracker. These linked findings supplement the imported open issues. New findings have not been written back to GitHub: the connected integration rejected issue writes with HTTP 403.",
@@ -468,7 +468,7 @@
       "id": "RTD-018",
       "title": "Bus route labels vanish instead of fading between 13 and 14",
       "kind": "defect",
-      "status": "open",
+      "status": "fixed-preview",
       "priority": "next",
       "scope": "Zoom trial · bus labels",
       "issues": [
@@ -481,7 +481,8 @@
         "bus13-handover-light",
         "bus13-handover-dark"
       ],
-      "verification": "Union Station view: drawn labels 18/13/7/5/4 at 13–14 by quarter zoom (were 4/3/2/0/0); unit tests cover the drawing per zoom, hold and handover; check:zoom and spacing browser checks pass; light and dark handover captures inspected."
+      "verification": "Union Station view: drawn labels 18/13/7/5/4 at 13–14 by quarter zoom (were 4/3/2/0/0); unit tests cover the drawing per zoom, hold and handover; check:zoom and spacing browser checks pass; light and dark handover captures inspected.",
+      "fixed_commit": "a2de8b625bfb3aec82b049a1d7612fe7b833a9e8"
     }
   ]
 }
