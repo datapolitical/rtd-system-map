@@ -86,7 +86,8 @@ drawings. Its spacing can therefore drift and change at the half steps.
 This is a comparison for evaluating the fallback, not a claim that the
 fallback is complete.
 
-Thirty-nine station-name side changes remain. The trial does not yet carry
+Station-name side changes were later cut from 39 to 20; see "Names that
+keep their place" below. The trial does not yet carry
 bus route-number lists or street-name placements across scales. The normal
 picked-bus name alternatives are also excluded from this station-name
 experiment; full picked-route label clearance remains follow-up work.
@@ -119,6 +120,50 @@ measurements and captures are under `qa/.scratch/zoom-spacing/`. The earlier
 software-rendering timings above belong to the initial trial and are not
 a performance sign-off for the corrected geometry.
 
+
+## Names that keep their place (2026-11-23)
+
+Three faults kept names jumping after the first trial:
+
+- Each drawing's names steered around that drawing's own line letters and
+  rail packs. The page shows neither: its letters are placed once at the
+  reference zoom and its rail is the reference centre line moved sideways by
+  slot times pitch. A name dodged letters that were not on screen, and jumped
+  when they moved. Names now keep off the rail and letters the page shows.
+- A held name was allowed a fixed 8 units of ink. Its own box grows with the
+  zoom, so it gathered more ink with nothing new under it, and lost its place.
+- That allowance was then taken from the name's own previous cost, so it
+  could compound from step to step.
+
+Now a held name is measured against the clearest place for it at the same
+zoom. It keeps its side and wording unless another name is on it, it stands
+nearer another station, it crowds the station before, it would sit on more
+than 6 cells of rail beyond that place (`HOLD_RAIL_SLACK`; a cell is 3 px,
+so this is the name's edge brushing a line's margin), or on clearly more bus
+streets (`HOLD_INK_SLACK`, 24, or half the clearest place's ink). The rule
+runs only when the build passes a history; the sheets' names are unchanged
+(sheets 0 to 3 compared with the old module; sheet 4 not rerun).
+
+Over eight quarter-zoom steps from 12 to 14:
+
+| | Fresh each drawing | First trial | Now |
+|---|---|---|---|
+| Side changes | 138 | 39 | 20 |
+| Wording changes on the same side | 10 | — | 0 |
+| Names lost | — | 0 | 0 |
+| Names crossing a rail line or letter, all drawings | 2 | — | 1 |
+
+The one crossing is Decatur-Federal at 12, where fresh placement crosses
+too. The detector has a planted rail and a planted letter that it must catch
+at every zoom, or the build stops. Held names sit on more bus streets than
+fresh ones (3,900 against 1,700 units of ink summed over the drawings); the
+captures show them over thin bus lines and still readable. Allowing more bus
+ink gets to 12 changes but nearly triples it, so it was not taken.
+
+Of the 20 left, 14 are bus-street ink, 4 are rail and 2 are names whose held wording no longer fits. Most come where the
+closer street set starts at 13 or where a pack widens near a hub. Colorado's
+name meets the "40, 46" route list at 14, because route lists are placed
+without the names; route lists and street names get the same rule in #156.
 
 ## Reproduce
 

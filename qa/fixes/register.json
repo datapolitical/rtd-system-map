@@ -203,13 +203,13 @@
         156,
         159
       ],
-      "observation": "History-based placement reduces station-name side changes from 138 to 39 across eight quarter-zoom transitions. All nine drawings retain 67 names, with no disappearing names.",
-      "next": "Review each remaining change and its recorded obstruction or association reason. Extend consistency to line letters, bus lists and street names under #156.",
+      "observation": "History-based placement first reduced station-name side changes from 138 to 39 across eight quarter-zoom transitions. Three causes were found and fixed on 2026-11-23: names steered around each drawing's own line letters and rail packs, which the page never shows; the hold allowance was a fixed 8 units of ink, so a name lost its place as its own box grew with the zoom; and the allowance compounded from step to step. Names now keep off the rail and letters the page shows, and a held name is compared with the clearest place at the same zoom: it moves only for another name, its station, more than 6 cells of rail, or clearly more bus-street ink. Result: 20 side changes, 0 rewordings, 0 names lost; 1 name crosses a rail line or letter in any drawing (Decatur-Federal at 12, the same as fresh placement).",
+      "next": "Accept or fix the 20 remaining moves (14 bus-street ink, 4 rail, 2 wording that no longer fits). Colorado's name meets the 40, 46 route list at 14, because route lists are placed without the names: carry route lists and street names with the same rule under #156.",
       "done_when": "Every remaining label movement has an accepted reason and no name vanishes while zooming in; report counts for all neighbouring drawings required by #156.",
       "evidence": [
         "trial-notes"
       ],
-      "verification": "Counts are from this trial, not the older build quoted in the GitHub issue. The station-name experiment does not cover all label types."
+      "verification": "scripts/zoom-prototype.mjs report: totals, ink, onRail (with a planted rail and planted letter control that must be caught). Light captures of the worst held names, the W line stations, Colorado, Sheridan and Union Station inspected at 12 to 14. Sheets 0 to 3 names identical to the old module; sheet 4 not rerun."
     },
     {
       "id": "RTD-008",

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { SHEETS, SIZES, railLines, railTracks, stationMarks, letters, names, halls, busStreets,
   nearest, resample, offset, toPx, toLonLat } from './lib/sheets.mjs';
 import { canonicalTracks, slotPieces, fitTerminalSpines } from './lib/zoom-rail.mjs';
-import { labelChanges, REFERENCE_ZOOM } from '../public/js/zoom/model.js';
+import { labelChanges, REFERENCE_ZOOM, pitchAt, sizeAt } from '../public/js/zoom/model.js';
 
 export const zoomStops = (table) => SHEETS.map((s) => [s.zoom, table[s.id]]);
 
@@ -30,7 +30,8 @@ const feature = (properties, type, coordinates, extra = {}) => ({ type: 'Feature
 const collection = (features) => ({ type: 'FeatureCollection', features });
 const mid = ([a, b]) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 const keep = (n) => ({ key: n.placement?.historyKey ?? `${n.mark.id}:0`, name: n.mark.name,
-  anchor: n.anchor, text: n.text, offset: n.offset, reason: n.placement?.reason ?? 'independent placement' });
+  anchor: n.anchor, text: n.text, offset: n.offset, reason: n.placement?.reason ?? 'independent placement',
+  inkCost: n.placement?.inkCost ?? null, railCost: n.placement?.railCost ?? null, box: n.box });
 
 export function drawRail(data, sheet, history = null) {
   const lines = railLines(data.routes, sheet);
@@ -146,8 +147,22 @@ async function main() {
   for (let zoom = 12; zoom <= 14; zoom += 0.25) {
     const started = performance.now();
     const frame = withZoom(zoom, (sheet) => {
-      const drawing = drawRail(data, sheet);
-      const independent = drawing.lettering.map(keep);
+      const drawn = drawRail(data, sheet);
+      // Names keep off the line letters the page shows, which are placed once at the reference
+      // zoom and follow the rail, not this drawing's own letters, which the page never shows.
+      const shownDiscs = base.drawing.discs.map((d) => ({ ...d, at: toPx(toLonLat(d.at, REFERENCE_ZOOM), zoom) }));
+      // And off the rail the page shows: the reference centre lines, moved sideways by slot
+      // times this zoom's pitch (style.js, line-offset), not this drawing's own packs.
+      const shownLines = new Map();
+      for (const f of base.rails.features) {
+        const { route, color, slot } = f.properties;
+        const centre = f.geometry.coordinates.map((c) => toPx(c, zoom));
+        if (!shownLines.has(route)) shownLines.set(route, { route, color, paths: [] });
+        shownLines.get(route).paths.push(slot ? offset(centre, slot * pitchAt(sizes, zoom)) : centre);
+      }
+      const drawing = { ...drawn, lines: [...shownLines.values()], discs: shownDiscs };
+      // Independent placement measured with its ink: a throwaway history-free pass that records costs.
+      const independent = names(drawing.marks, drawing.lines, drawing.discs, sheet, drawing.streets, new Map(), { alternates: false }).map(keep);
       const lettering = names(drawing.marks, drawing.lines, drawing.discs, sheet, drawing.streets, history, { alternates: false });
       const stable = lettering.map(keep);
       const labelFeatures = [];
@@ -165,16 +180,42 @@ async function main() {
           labelOffset: [d.at[0] - n.at[0], d.at[1] - n.at[1]], labelZoom: zoom }));
         history.set(key, n.placement);
       }
-      return { zoom, drawn: drawnFeatures(drawing, sheet), labels: collection(labelFeatures), independent, stable };
+      // Names whose lettering crosses a shown rail line or a line letter (not merely its margin).
+      const discR = sizeAt(sizes.letterDisc, zoom);
+      const railPts = drawing.lines.flatMap((l) => l.paths.flatMap((pth) => resample(pth, 1)));
+      const crossing = (list) => list.filter((x) => x.box && (railPts.some((p) => p[0] > x.box[0] + 1 && p[0] < x.box[2] - 1 && p[1] > x.box[1] + 1 && p[1] < x.box[3] - 1)
+        || shownDiscs.some((d) => Math.hypot(Math.max(x.box[0] - d.at[0], 0, d.at[0] - x.box[2]), Math.max(x.box[1] - d.at[1], 0, d.at[1] - x.box[3])) < discR))).map((x) => x.name);
+      // Control: a name planted on a rail line, and one planted on a letter, must be caught.
+      const [px, py] = railPts[Math.floor(railPts.length / 2)], [dx, dy] = shownDiscs[0].at;
+      const planted = crossing([{ name: 'planted rail', box: [px - 20, py - 6, px + 20, py + 6] }, { name: 'planted letter', box: [dx + 6, dy - 5, dx + 40, dy + 5] }]);
+      if (planted.length !== 2) throw new Error(`rail crossing detector missed a planted fault at ${zoom}: ${planted}`);
+      const onRail = { independent: crossing(independent), stable: crossing(stable) };
+      return { zoom, drawn: drawnFeatures(drawn, sheet), labels: collection(labelFeatures), independent, stable, onRail };
     });
-    if (before) comparisons.push({ from: before.zoom, to: zoom, independent: labelChanges(before.independent, frame.independent), stable: labelChanges(before.stable, frame.stable) });
+    // A name that keeps its side but changes its wording (shortened, or set on one row) jumps too.
+    const reworded = (a, b) => b.filter((n) => { const o = a.find((x) => x.key === n.key); return o && o.anchor === n.anchor && o.text !== n.text; }).map((n) => n.name);
+    if (before) comparisons.push({ from: before.zoom, to: zoom, independent: { ...labelChanges(before.independent, frame.independent), reworded: reworded(before.independent, frame.independent) },
+      stable: { ...labelChanges(before.stable, frame.stable), reworded: reworded(before.stable, frame.stable) } });
     before = frame;
     frames.push(frame);
     console.log(`zoom ${zoom}: ${frame.stable.length} names; ${(performance.now() - started).toFixed(0)} ms`);
   }
   const report = { referenceZoom: REFERENCE_ZOOM, sources, comparisons,
     totals: { independent: comparisons.reduce((n, c) => n + c.independent.changed, 0), stable: comparisons.reduce((n, c) => n + c.stable.changed, 0),
-      disappeared: comparisons.reduce((n, c) => n + c.stable.disappeared.length, 0) },
+      disappeared: comparisons.reduce((n, c) => n + c.stable.disappeared.length, 0),
+      rewordedIndependent: comparisons.reduce((n, c) => n + c.independent.reworded.length, 0), rewordedStable: comparisons.reduce((n, c) => n + c.stable.reworded.length, 0) },
+    // What holding costs: ink under the names, summed over every drawing, held against fresh placement.
+    ink: (() => {
+      const sum = (k, f) => frames.reduce((n, fr) => n + fr[k].reduce((m, x) => m + (x[f] ?? 0), 0), 0);
+      const worst = frames.flatMap((fr) => fr.stable.map((x) => ({ zoom: fr.zoom, name: x.name,
+        extra: (x.inkCost ?? 0) - (fr.independent.find((y) => y.key === x.key)?.inkCost ?? 0) }))).sort((a, b) => b.extra - a.extra).slice(0, 8);
+      return { independent: { ink: sum('independent', 'inkCost'), rail: sum('independent', 'railCost') },
+        stable: { ink: sum('stable', 'inkCost'), rail: sum('stable', 'railCost') }, worstHeld: worst,
+        railByName: Object.entries(frames.flatMap((fr) => fr.stable.map((x) => [x.name, (x.railCost ?? 0) - (fr.independent.find((y) => y.key === x.key)?.railCost ?? 0)]))
+          .reduce((o, [n, v]) => ({ ...o, [n]: (o[n] ?? 0) + v }), {})).filter(([, v]) => v).sort((a, b) => b[1] - a[1]).slice(0, 12) };
+    })(),
+    onRail: { independent: frames.reduce((n, f) => n + f.onRail.independent.length, 0), stable: frames.reduce((n, f) => n + f.onRail.stable.length, 0),
+      byZoom: frames.map((f) => ({ zoom: f.zoom, independent: f.onRail.independent, stable: f.onRail.stable })) },
     railPieces: base.rails.features.length,
     limitation: 'Shared spines are canonical at the reference zoom; per-zoom symbol source updates and label continuity still need physical-phone review.' };
   const bundle = { sizes, referenceZoom: REFERENCE_ZOOM, rails: base.rails, attached: base.attached,
