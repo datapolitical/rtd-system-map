@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "title": "RTD map fixes",
-  "updated_at": "2026-11-21T00:42:47.247Z",
-  "map_commit": "486bd9477eabd29bee51b65a3cd3e44e0efa1de3",
+  "updated_at": "2026-11-24T07:12:50.000Z",
+  "map_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4",
   "repository": "datapolitical/rtd-system-map",
   "tracking_note": "GitHub Issues remain the canonical work tracker. These linked findings supplement the imported open issues. New findings have not been written back to GitHub: the connected integration rejected issue writes with HTTP 403.",
   "priority_note": "Next and Later are a proposed order for the local findings; existing GitHub milestones and done-when criteria are preserved.",
@@ -60,8 +60,36 @@
       "id": "trial-notes",
       "label": "Trial implementation and validation notes",
       "path": "docs/zoom-prototype.md",
-      "commit": "486bd94",
+      "commit": "c233e0f",
       "type": "text"
+    },
+    {
+      "id": "c233-light-hub-13",
+      "label": "Union Station at zoom 13, light, after planned names",
+      "path": "qa/.scratch/fix-register-input/c233e0f/light-13.png",
+      "commit": "c233e0f",
+      "type": "image"
+    },
+    {
+      "id": "c233-light-hub-14",
+      "label": "Union Station at zoom 14, light, after planned names",
+      "path": "qa/.scratch/fix-register-input/c233e0f/light-14.png",
+      "commit": "c233e0f",
+      "type": "image"
+    },
+    {
+      "id": "c233-dark-hub-13",
+      "label": "Union Station at zoom 13, dark, after planned names",
+      "path": "qa/.scratch/fix-register-input/c233e0f/dark-13.png",
+      "commit": "c233e0f",
+      "type": "image"
+    },
+    {
+      "id": "c233-dark-hub-14",
+      "label": "Union Station at zoom 14, dark, after planned names",
+      "path": "qa/.scratch/fix-register-input/c233e0f/dark-14.png",
+      "commit": "c233e0f",
+      "type": "image"
     }
   ],
   "findings": [
@@ -93,68 +121,73 @@
       "id": "RTD-002",
       "title": "Rail letters are missing from the visible line segments",
       "kind": "defect",
-      "status": "needs-check",
-      "priority": "next",
+      "status": "open",
+      "priority": "later",
       "scope": "Zoom trial · Union Station · zoom 14",
       "issues": [
         154,
         156,
         159
       ],
-      "observation": "The Smooth spacing hub capture shows the B and E lines without their own on-track letter in the visible area. The half-step comparison has different letter coverage at the same camera. The station's small chip row still contains those letters.",
-      "next": "Compare the corrected renderer modes at the same camera and map insets. Check whether letters are off-screen, under controls or omitted, and pin the exact failure.",
+      "observation": "On the one remaining renderer, letters are placed outward from zoom 12 and stay put. At the Union Station camera, B, C, E and W carry letters at 13 and 14 in both themes. A, G and N leave that view without one: they share their pack for their whole length on screen, and the sheets' rule puts a letter only where a line reads on its own. Today's sheets behave the same.",
+      "next": "Hold a letter at the screen edge for a line that crosses the view without one (#31).",
       "done_when": "Every visible rail line remains identifiable at the comparison cameras and fractional zooms in both themes, with consistent letter visibility across renderer modes.",
       "evidence": [
-        "hub-14",
-        "drawn-hub-14"
+        "c233-light-hub-14",
+        "c233-dark-hub-13",
+        "trial-notes"
       ],
-      "verification": "Visible difference recorded; exact omission/placement cause and coverage rule still need reproduction on the corrected preview."
+      "verification": "Build c233e0f: light and dark captures at 12, 13 and 14 inspected at -105.0015, 39.7536, 402x655. 38 letters at 12, 129 at 14 (report.json letters)."
     },
     {
       "id": "RTD-003",
       "title": "Union Station name moves away from its station marks",
       "kind": "defect",
-      "status": "open",
+      "status": "fixed-preview",
       "priority": "next",
       "scope": "Zoom trial · Union Station · 12.99–14",
       "issues": [
         154,
         156
       ],
-      "observation": "At 12.99 the name and chip row sit above-left of the platform bars; at 14 they sit below-right. Their connection to the station is weak and the change is conspicuous.",
-      "next": "Choose and preserve an anchor tied to the station marks, then review the transition and obstruction reasons.",
+      "observation": "The name holds one side from 12 to 13.75 and moves once, at 14, where light rail runs through its old place (26 rail cells more than the clearest place). The move and its reason are in report.json.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
       "done_when": "The name and chips read as belonging to the station at every sampled zoom and move only when an identified obstruction requires it, in both themes.",
       "evidence": [
-        "hub-12-99",
-        "hub-14"
+        "c233-light-hub-13",
+        "c233-light-hub-14",
+        "c233-dark-hub-14"
       ],
-      "verification": "Rechecked in the corrected light-theme captures at 12.99 and 14. Full intermediate and dark-theme review is still needed."
+      "verification": "Build c233e0f: report.json comparisons and captures at 12, 13, 14 in both themes.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
     },
     {
       "id": "RTD-004",
       "title": "Union Station route chips change order between drawings",
       "kind": "defect",
-      "status": "open",
+      "status": "fixed-preview",
       "priority": "next",
       "scope": "Zoom trial · Union Station chip row",
       "issues": [
         154,
         156
       ],
-      "observation": "The chip row changes from A B G N E W C at 12.99 to A B G N C E W at 14.",
-      "next": "Derive a consistent order from the map's line-ordering rule and carry it across drawings.",
+      "observation": "A name keeps the chip order it had one zoom out. Union Station reads A B G N C E W at every zoom.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
       "done_when": "The same station's chip order stays consistent while zooming, unless its served routes change in the source data.",
       "evidence": [
-        "hub-12-99",
-        "hub-14"
+        "c233-light-hub-13",
+        "c233-light-hub-14",
+        "c233-dark-hub-13"
       ],
-      "verification": "Both orders are visible in the corrected light-theme captures."
+      "verification": "Build c233e0f: every chip row in all nine drawings has one order (2 names with chip rows, 0 with more than one order); captures in both themes.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
     },
     {
       "id": "RTD-005",
       "title": "Preview controls cover map labels and too much of the view",
       "kind": "defect",
-      "status": "open",
+      "status": "fixed-preview",
       "priority": "next",
       "scope": "Zoom trial · phone layout",
       "issues": [
@@ -162,14 +195,15 @@
         158,
         159
       ],
-      "observation": "The header and bottom comparison panel occupy a substantial part of the phone view. At 12.99 the C roundel is partly hidden behind the bottom panel.",
-      "next": "Reduce or collapse the trial controls and use the actual visible map area when framing and checking label coverage.",
+      "observation": "Controls are now a small top pill (zoom, notes, theme) and one bottom row (-, slider, +, play). The C letter that the old panel hid is clear at 13.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
       "done_when": "At the review cameras, controls leave a useful map view and no required letter or name is concealed by them; verify touch operation and both themes.",
       "evidence": [
-        "hub-12-99",
-        "hub-14"
+        "c233-dark-hub-13",
+        "c233-light-hub-14"
       ],
-      "verification": "Occluded C roundel and control footprint are visible in the corrected 12.99 capture."
+      "verification": "Build c233e0f: npm run check:zoom passed in light and dark (controls, theme change, selection, reload, errors); captures inspected.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
     },
     {
       "id": "RTD-006",
@@ -195,7 +229,7 @@
       "id": "RTD-007",
       "title": "Station names still change sides while zooming",
       "kind": "transition-work",
-      "status": "open",
+      "status": "fixed-preview",
       "priority": "next",
       "scope": "Zoom trial · station names · 12–14",
       "issues": [
@@ -203,32 +237,35 @@
         156,
         159
       ],
-      "observation": "History-based placement first reduced station-name side changes from 138 to 39 across eight quarter-zoom transitions. Three causes were found and fixed on 2026-11-23: names steered around each drawing's own line letters and rail packs, which the page never shows; the hold allowance was a fixed 8 units of ink, so a name lost its place as its own box grew with the zoom; and the allowance compounded from step to step. Names now keep off the rail and letters the page shows, and a held name is compared with the clearest place at the same zoom: it moves only for another name, its station, more than 6 cells of rail, or clearly more bus-street ink. Result: 20 side changes, 0 rewordings, 0 names lost; 1 name crosses a rail line or letter in any drawing (Decatur-Federal at 12, the same as fresh placement).",
-      "next": "Accept or fix the 20 remaining moves (14 bus-street ink, 4 rail, 2 wording that no longer fits). Colorado's name meets the 40, 46 route list at 14, because route lists are placed without the names: carry route lists and street names with the same rule under #156.",
+      "observation": "Names are placed offline (Been, Daiches and Yap 2006): a plan over all nine drawings picks each name's run of sides with the fewest changes among sides that can be held. Side changes 133 fresh -> 39 -> 20 -> 6, the plan's minimum; 0 rewordings, 0 chip-order changes, 0 names lost, 0 names crossing rail or letters. Five moves are for bus streets and one (Union Station at 14) for rail, each with its reason in report.json.",
+      "next": "Carry route lists and street names with the same rule under #156 (Colorado meets the 40, 46 list at 14).",
       "done_when": "Every remaining label movement has an accepted reason and no name vanishes while zooming in; report counts for all neighbouring drawings required by #156.",
       "evidence": [
-        "trial-notes"
+        "trial-notes",
+        "c233-light-hub-14"
       ],
-      "verification": "scripts/zoom-prototype.mjs report: totals, ink, onRail (with a planted rail and planted letter control that must be caught). Light captures of the worst held names, the W line stations, Colorado, Sheridan and Union Station inspected at 12 to 14. Sheets 0 to 3 names identical to the old module; sheet 4 not rerun."
+      "verification": "Build c233e0f: report.json totals, offPlan empty, onRail stable 0 with planted controls; sheets 0-3 names identical to the old module; 524 tests passed.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
     },
     {
       "id": "RTD-008",
       "title": "The renderer comparison changes labels and station marks too",
       "kind": "review-quality",
-      "status": "open",
+      "status": "fixed-preview",
       "priority": "next",
       "scope": "Zoom trial · comparison modes",
       "issues": [
         154
       ],
-      "observation": "Switching modes also changes letter positions/visibility and station-mark grouping, so the pictures do not isolate rail spacing.",
-      "next": "Align the camera, label inputs, station marks and visible map area across comparisons, or explicitly identify each remaining difference.",
+      "observation": "The half-step comparison is removed. Smooth spacing is recommended in docs/zoom-prototype.md with its evidence and limits; there is one model for rail, bars, letters and names.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
       "done_when": "The phone comparison supports a rail-spacing decision without unexplained label or station-mark changes between modes.",
       "evidence": [
-        "hub-14",
-        "drawn-hub-14"
+        "trial-notes",
+        "spacing-checks"
       ],
-      "verification": "The half-step image belongs to the earlier comparison snapshot; recheck against the corrected preview before judging the final comparison."
+      "verification": "Build c233e0f: check:zoom-spacing 33/33 pairs and 198/198 terminal ends; browser spacing check passed in both themes.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
     },
     {
       "id": "RTD-009",
@@ -398,20 +435,20 @@
       "id": "RTD-017",
       "title": "Half-step fallback has no between-drawing spacing correction",
       "kind": "transition-work",
-      "status": "open",
+      "status": "fixed-preview",
       "priority": "later",
       "scope": "Zoom trial · fallback comparison",
       "issues": [
         154
       ],
-      "observation": "The half-step comparison uses finished drawings at 12, 12.5, 13, 13.5 and 14 without correcting their spacing between steps, so packs can drift and jump at a handover.",
-      "next": "If the fallback remains under consideration, implement its documented small correction and repeat the corner/join/terminal comparison before choosing it.",
+      "observation": "The fallback was not pursued. Its limits (drift between drawings, a jump at each handover, different letters and marks per drawing) are recorded in the rail-spacing recommendation.",
+      "next": "None; recheck only if smooth spacing fails the phone check (RTD-011).",
       "done_when": "Either the fallback is completed and reviewed, or its limitations are explicitly recorded in the renderer choice under #154.",
       "evidence": [
-        "trial-notes",
-        "drawn-hub-14"
+        "trial-notes"
       ],
-      "verification": "This is a known unfinished comparison, not an accepted production renderer."
+      "verification": "Build c233e0f: recorded in docs/zoom-prototype.md, 'Rail spacing: recommendation'.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
     }
   ]
 }
