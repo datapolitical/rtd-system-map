@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent, wholeFrame, crossingX } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, freeRoutes, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent, wholeFrame, crossingX } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -1060,11 +1060,14 @@ test('a stop each way either side of a crossing is one ring at the crossing (Chr
     stop('a', '16th Street & Stout St', 'FreeRide', -0.4 * m, 'Northwest-bound'), stop('b', '16th Street & Stout St', 'FreeRide', 0.4 * m, 'Southeast-bound'),
     stop('c', '16th Street & Champa St', 'FreeRide', 300, 'Northwest-bound'), stop('d', '16th Street & Champa St', 'FreeRide', 300 + 1.2 * m, 'Southeast-bound'),
     stop('e', '16th Street & Curtis St', 'FreeRide', -300, 'Northwest-bound'), stop('f', '16th Street & Curtis St', '8', -300 + 0.5 * m, 'Southeast-bound'),
-  ], streets, s4);
+    stop('g', 'Monaco Pkwy & Mansfield Ave', '8', 200, 'Northbound'), stop('h', 'Monaco Pkwy & Mansfield Ave', '8', 200 + 0.4 * m, 'Southbound'),
+  ], streets, s4, undefined, new Set(['FreeRide']));
   const rel = (r) => Math.round(r.at[0] - o[0]);
-  assert.deepEqual(rings.map((r) => r.id), ['a', 'c', 'd', 'e', 'f'], 'the pair at Stout is one; farther apart, or other routes, stay two');
+  assert.deepEqual(rings.map((r) => r.id), ['a', 'c', 'd', 'e', 'f', 'g', 'h'], 'the pair at Stout is one; farther apart, other routes, or not free, stay two');
   assert.equal(rel(rings[0]), 0, 'between the two: at the crossing');
   assert.equal(rings[0].heading, '', 'both ways');
+  const named = (route, name) => ({ type: 'Feature', properties: { route, name, mode: 'bus' }, geometry: null });
+  assert.deepEqual([...freeRoutes({ features: [named('FreeRide', '16th Street FreeRide'), named('MetroRide', 'Free MetroRide'), named('0', 'Broadway'), named('FF', 'Flatiron Flyer')] })], ['FreeRide', 'MetroRide'], 'free by RTD\'s own name');
 });
 
 test('a loop round blocks keeps its own path: a sweep is drawn only where it stays within a street of it', () => {

@@ -3124,16 +3124,22 @@ export function inOrder(routes) {
  * not traced, so a stop at its true place can sit off its line, or between two. Each is moved
  * to the nearest point of the nearest street within `reach` that carries one of its routes.
  * Stops that land ring on ring (the two sides of one street) are one ring with the routes of all.
- * So is a pair either side of a crossing: two stops RTD names for the same crossing, on the same
- * street, with the same routes, within SIZES.stopPair metres (a stop each way, one before the
- * crossing and one after it) are one ring between them, at the crossing (Chris, 2026-11-20: "The
- * pair of free ride stops aren't helpful. Those should just be a single stop at the intersection").
+ * So is a pair either side of a crossing on a free route: two stops RTD names for the same
+ * crossing, on the same street, with the same routes, all of them in `paired`, within
+ * SIZES.stopPair metres (a stop each way, one before the crossing and one after it) are one ring
+ * between them, at the crossing (Chris, 2026-11-20: "The pair of free ride stops aren't helpful.
+ * Those should just be a single stop at the intersection"; 2026-11-23: FreeRide only, not every
+ * route). `paired` is the routes RTD names free (freeRoutes).
  */
+/** The bus routes RTD names free ("16th Street FreeRide", "Free MetroRide"). */
+export function freeRoutes(routes) {
+  return new Set(routes.features.filter((f) => f.properties.mode !== 'rail' && /\bfree/i.test(f.properties.name ?? '')).map((f) => f.properties.route));
+}
 export function stopCrossing(name) {
   const parts = String(name ?? '').replace(/\s*\[[^\]]*\]/g, '').split(' & ').map((s) => s.trim().replace(/^[NSEW] /, ''));
   return parts.length === 2 && parts.every(Boolean) ? parts.join(' & ') : null;
 }
-export function stopRings(stops, streets, sheet, reach = 2 * SIZES.busMerge[sheet.id]) {
+export function stopRings(stops, streets, sheet, reach = 2 * SIZES.busMerge[sheet.id], paired = new Set()) {
   const cell = 64;
   const grid = new Map();
   const key = (p) => `${Math.floor(p[0] / cell)},${Math.floor(p[1] / cell)}`;
@@ -3162,7 +3168,7 @@ export function stopRings(stops, streets, sheet, reach = 2 * SIZES.busMerge[shee
       }
     }
     const at = best ? best.at : p;
-    const crossing = stopCrossing(q.name);
+    const crossing = mine.length && mine.every((r) => paired.has(r)) ? stopCrossing(q.name) : null;
     const served = inOrder(mine).join(' ');
     // Metres to the sheet's pixels where the stop is.
     const pairPx = (SIZES.stopPair * world(sheet.zoom)) / (40075016.7 * Math.cos((f.geometry.coordinates[1] * Math.PI) / 180));
@@ -3646,7 +3652,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // The stops' rings, from the sheet that draws them. A ring half under a rail line can't be read
   // as a stop: one that close to a line is not drawn.
   const clear = SIZES.rail[sheet.id] / 2 + SIZES.stopRing;
-  const rings = sheet.id < SIZES.stopSheet ? [] : stopRings(busStops(stops, routes), bus, sheet)
+  const rings = sheet.id < SIZES.stopSheet ? [] : stopRings(busStops(stops, routes), bus, sheet, undefined, freeRoutes(routes))
     .filter((r) => !lines.some((l) => l.paths.some((path) => boxed(path, r.at, clear) && nearest(path, r.at).d < clear)));
   // A name or a list keeps off each stop's ring, where the page keeps lettering off it.
   const cell = 64;

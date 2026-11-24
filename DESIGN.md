@@ -2491,11 +2491,12 @@ How it is built:
   so a stop at its true place can sit beside its line or between two. Each
   ring is moved to the nearest point of the nearest street, within two
   merge-widths, that carries one of its routes; stops that land ring on ring
-  (the two sides of one street) are one ring with the routes of both. A
-  stop each way either side of a crossing (two stops RTD names for the same
+  (the two sides of one street) are one ring with the routes of both. On a
+  free route (one RTD names free: the FreeRide and the MetroRide), a stop
+  each way either side of a crossing (two stops RTD names for the same
   crossing, on the same street with the same routes, 50 m apart or less)
   is one ring between them, at the crossing: the FreeRide's pair at every
-  block, or a local route's stop before and after a side street.
+  block. Other routes keep both rings.
 - **A line's curve into its last bar starts from the station**, fourteen
   pitches back along the line, not from the end of any tail track.
 - **A hall is drawn over the streets that end on it**, so each ends flat on
@@ -5293,6 +5294,9 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   aren't helpful. Those should just be a single stop at the intersection."
   The rule comes from RTD's stop names, so it applies wherever a route has a
   stop each way within 50 m at one crossing (686 rings fewer on sheet 4).
+- 2026-11-23: The pair rule above is for free routes only, the ones RTD names
+  free (the FreeRide and the MetroRide). Reason: shown the same
+  rule on route 65 at Monaco & Mansfield, Chris picked "FreeRide only".
 
 ## Sources
 
