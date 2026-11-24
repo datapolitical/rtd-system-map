@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "postinstall": "node scripts/vendor.mjs",
-    "build": "node scripts/vendor.mjs && node scripts/build-data.mjs",
+    "build": "node scripts/vendor.mjs && node scripts/build-data.mjs && node scripts/poster-build.mjs",
     "sheets": "node scripts/sheets.mjs",
     "dev": "NODE_OPTIONS=--max-old-space-size=4096 wrangler pages dev public --port 8788",
     "dev:live": "wrangler dev --config live/wrangler.toml --port 8789",
