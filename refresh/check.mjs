@@ -50,3 +50,24 @@ export async function whatChanged(meta, { getJson, sha256, portal = 'https://www
 }
 
 const when = (ms) => (ms ? new Date(ms).toISOString().slice(0, 16).replace('T', ' ') : 'none');
+
+/**
+ * Has the basemap moved to a new tile build since the loading pictures were taken? `html` is
+ * the live front page, whose #poster records the tile source and tiles its pictures show and
+ * the drawing they front; `sheets` is the live sheets.json; `getJson` fetches the tile source's
+ * index. The page hides a picture whose tiles are not the current ones, so a new tile build
+ * calls for a rebuild, which takes new pictures. Only when the pictures matched the drawing
+ * they went live with: a build whose pictures failed would otherwise be rebuilt every hour.
+ */
+export async function groundChanged(html, sheets, { getJson }) {
+  const tag = String(html).match(/<div id="poster"[^>]*>/)?.[0] ?? '';
+  const attr = (name) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1]?.replaceAll('&quot;', '"').replaceAll('&lt;', '<').replaceAll('&amp;', '&');
+  const [drawing, source, tiles] = [attr('data-drawing'), attr('data-source'), attr('data-tiles')];
+  if (!drawing || !source || !tiles || drawing !== sheets?.drawing) return null;
+  try {
+    const now = JSON.stringify((await getJson(source)).tiles);
+    return now !== tiles ? `basemap: new tiles ${now} (pictures show ${tiles})` : null;
+  } catch {
+    return null;
+  }
+}
