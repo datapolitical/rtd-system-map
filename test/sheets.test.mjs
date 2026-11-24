@@ -1,7 +1,7 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent, wholeFrame, crossingX } from '../scripts/lib/sheets.mjs';
+import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, freeRoutes, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent, wholeFrame, crossingX } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
 const point = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'Point', coordinates } });
@@ -1049,6 +1049,27 @@ test("a stop's ring sits on the street its buses are drawn on, and the two sides
   assert.deepEqual(rel(rings[2]), [200, 5], 'a stop with no street of its own drawn near stays where it is');
 });
 
+test('a stop each way either side of a crossing is one ring at the crossing (Chris, 2026-11-20)', () => {
+  const s4 = SHEETS.find((s) => s.id === 4);
+  const o = toPx([-105, 39.75], s4.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
+  const m = SIZES.stopPair * 512 * 2 ** s4.zoom / (40075016.7 * Math.cos((39.75 * Math.PI) / 180)); // stopPair metres in px
+  const stop = (id, name, routes, x, heading) => point({ id, name, lines: routes, heading }, ll(x, 0));
+  const streets = [{ routes: 'FreeRide 8', cls: 'c15', path: [[o[0] - 400, o[1]], [o[0] + 400, o[1]]] }];
+  const rings = stopRings([
+    stop('a', '16th Street & Stout St', 'FreeRide', -0.4 * m, 'Northwest-bound'), stop('b', '16th Street & Stout St', 'FreeRide', 0.4 * m, 'Southeast-bound'),
+    stop('c', '16th Street & Champa St', 'FreeRide', 300, 'Northwest-bound'), stop('d', '16th Street & Champa St', 'FreeRide', 300 + 1.2 * m, 'Southeast-bound'),
+    stop('e', '16th Street & Curtis St', 'FreeRide', -300, 'Northwest-bound'), stop('f', '16th Street & Curtis St', '8', -300 + 0.5 * m, 'Southeast-bound'),
+    stop('g', 'Monaco Pkwy & Mansfield Ave', '8', 200, 'Northbound'), stop('h', 'Monaco Pkwy & Mansfield Ave', '8', 200 + 0.4 * m, 'Southbound'),
+  ], streets, s4, undefined, new Set(['FreeRide']));
+  const rel = (r) => Math.round(r.at[0] - o[0]);
+  assert.deepEqual(rings.map((r) => r.id), ['a', 'c', 'd', 'e', 'f', 'g', 'h'], 'the pair at Stout is one; farther apart, other routes, or not free, stay two');
+  assert.equal(rel(rings[0]), 0, 'between the two: at the crossing');
+  assert.equal(rings[0].heading, '', 'both ways');
+  const named = (route, name) => ({ type: 'Feature', properties: { route, name, mode: 'bus' }, geometry: null });
+  assert.deepEqual([...freeRoutes({ features: [named('FreeRide', '16th Street FreeRide'), named('MetroRide', 'Free MetroRide'), named('0', 'Broadway'), named('FF', 'Flatiron Flyer')] })], ['FreeRide', 'MetroRide'], 'free by RTD\'s own name');
+});
+
 test('a loop round blocks keeps its own path: a sweep is drawn only where it stays within a street of it', () => {
   // Out along y = 0, round a block 300 wide and 150 deep, back along y = -150 to a corner above the start.
   const loop = [[0, 0], [-300, 0], [-300, -150], [0, -150]];
@@ -1557,6 +1578,9 @@ test('the whole district is framed on the frequent network, and a line running o
   // that you can see that it's Denver airport off to the side".
   const frame = wholeFrame([{ cls: 'c15', path: [[0, 0], [200, 0]] }, { cls: 'c30', path: [[-500, 0], [0, 0]] }], [[[0, -50], [0, 300]], [[0, 0], [600, 0], [600, -400]]]);
   assert.deepEqual(frame, [0, -50, 200, 300], 'the frequent streets side to side, the rail within them top to bottom; hourly streets and rail past the sides left out');
+  // Chris, 2026-11-20: Longmont, served by hourly buses between the frequent network's sides, was cut off.
+  const north = wholeFrame([{ cls: 'c15', path: [[0, 0], [200, 0]] }, { cls: 'c60', path: [[100, 0], [100, -400]] }, { cls: 'c60', path: [[-300, 0], [-300, -900]] }], [[[0, -50], [0, 300]]]);
+  assert.deepEqual(north, [0, -400, 200, 300], 'an hourly street between the sides is in, top to bottom; one out past them is not');
   assert.deepEqual(wholeFrame([], [[[0, 0], [10, 20]]]), [0, 0, 10, 20], 'no frequent bus: the rail');
   assert.deepEqual(crossingX([[[0, 0], [100, 50], [100, 300]], [[0, 0], [100, -40]]], 50, [100, 60]), [50, 25], 'the crossing nearest the end');
   assert.equal(crossingX([[[0, 0], [40, 0]]], 50, [0, 0]), null);

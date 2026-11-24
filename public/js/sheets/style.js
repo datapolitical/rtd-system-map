@@ -178,13 +178,22 @@ export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 export const GROUP = { title: 9, titleSpacing: 0.12, titleInk: 0.7, row: 10.5, rowSpacing: 0.02, letter: 8.5, badge: 12, badgeCorner: 3,
   corner: 5, edge: 0.35, streetRim: 1.5, stopBadge: 11, stopRim: 1, stopLetter: 8 };
 const GROUP_FONT = { title: ['Overpass Bold'], row: ['Overpass SemiBold'] };
+// Each letter of a table its own colour, by its row (the build's `li`), the same in the table, on
+// the streets, on the stops and in the card (index.html, --g0...), so a rider matches a stop to its
+// row by colour as well as by its small letter (Chris, 2026-11-20: "make the XYZ stops different
+// colors or something so that they're easy to distinguish because the letters are small"). Slate,
+// rust and green: apart from each other and from the blue bus streets they sit on, and dark enough
+// in light (light enough in dark) for the letter in the ground's colour. A fourth letter takes the
+// first colour again.
+export const GROUP_INK = { light: ['#3a4560', '#b4441c', '#22775a'], dark: ['#c9d2e4', '#f4a57d', '#7fd0a6'] };
+const groupInk = ['to-string', ['%', ['coalesce', ['get', 'li'], 0], GROUP_INK.light.length]];
 
 // Station name size per sheet (SIZES.name in the build).
 const NAME_SIZE = { 0: 11, 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 };
 
 // A city at or under this rank in the tiles (Denver, Boulder, Aurora) is set a size up and a little brighter.
 export const PLACE_MAJOR_RANK = 8;
-const PLACE_SIZE = { 0: 10.5, 1: 10.5, 2: 10.5, 3: 10, 4: 10.5 };
+export const PLACE_SIZE = { 0: 10.5, 1: 10.5, 2: 10.5, 3: 10, 4: 10.5 };
 
 // A street's name in the short form a map sets it in: "West Colfax Avenue" is "W Colfax Ave".
 const STREET_PREFIX = { 'North ': 'N ', 'South ': 'S ', 'East ': 'E ', 'West ': 'W ' };
@@ -353,7 +362,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     // its letter in place of the ring: a small square in the stops' grey, the letter in the ground's.
     // Off a picked route it fades with the stops (pick-stop rings it again when it is on the route).
     if (n >= 4) layer('stop-letter', 'symbol', { filter: kind('stop', ['has', 'letter']),
-      layout: { 'icon-image': `stopgroup-stop-${theme}`, 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+      layout: { 'icon-image': ['concat', `stopgroup-stop-${theme}-i`, groupInk], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
         'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.stopLetter, 'text-allow-overlap': true, 'text-ignore-placement': true },
       paint: { 'text-color': c.ground, 'icon-opacity': unless(onBus(), 1, 1 - FADE.line), 'text-opacity': unless(onBus(), 1, 1 - FADE.line) } });
 
@@ -530,7 +539,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
         // The table is a key to the selected route, so it stays readable while the map fades.
         paint: { 'icon-opacity': 1 } });
       layer('group-badge', 'symbol', { filter: kind('group-badge'),
-        layout: { ...fixed, 'icon-anchor': 'center', 'text-anchor': 'center', 'icon-image': `stopgroup-badge-${theme}`, 'icon-offset': ['get', 'off'],
+        layout: { ...fixed, 'icon-anchor': 'center', 'text-anchor': 'center', 'icon-image': ['concat', `stopgroup-badge-${theme}-i`, groupInk], 'icon-offset': ['get', 'off'],
           'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.letter, 'text-offset': ['get', 'toff'],
           'icon-size': ['case', onBus(), 1.15, 1] },
         paint: { 'text-color': c.ground, 'icon-opacity': 1, 'text-opacity': 1 } });
@@ -543,7 +552,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
       // A lettered stop's letter on its street, in the table's square: placed first of all, so
       // nothing is set over it (the build kept route numbers and names off it).
       layer('group-stop', 'symbol', { filter: kind('group-stop'),
-        layout: { 'icon-image': `stopgroup-street-${theme}`, 'icon-allow-overlap': true, 'text-allow-overlap': true,
+        layout: { 'icon-image': ['concat', `stopgroup-street-${theme}-i`, groupInk], 'icon-allow-overlap': true, 'text-allow-overlap': true,
           'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.letter },
         // A picked route keeps its own stops' letters whole; the others fade as far as the lines,
         // so the route reads unbroken where it passes a stop it doesn't use.
