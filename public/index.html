@@ -138,7 +138,12 @@
   #card i { display: inline-block; min-width: 1.5em; height: 1.5em; margin-right: 6px; border-radius: 0.75em; text-align: center; font-style: normal; line-height: 1.55em; }
   /* A stop group's routes, a row per letter: the letter in a small square of ink, as on the map. */
   #card .rows { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 5px 8px; margin-top: 8px; font-size: 14px; font-weight: 600; }
-  #card .rows i { min-width: 18px; height: 18px; margin: 0; border-radius: 4px; background: var(--ink); color: var(--card); font-size: 11.5px; font-weight: 700; line-height: 19px; }
+  /* Each letter in its own colour, as on the map (style.js, GROUP_INK). */
+  :root { --g0: #3a4560; --g1: #b4441c; --g2: #22775a; }
+  :root[data-theme="dark"] { --g0: #c9d2e4; --g1: #f4a57d; --g2: #7fd0a6; }
+  #card .rows i.g1 { background: var(--g1); }
+  #card .rows i.g2 { background: var(--g2); }
+  #card .rows i { min-width: 18px; height: 18px; margin: 0; border-radius: 4px; background: var(--g0); color: var(--card); font-size: 11.5px; font-weight: 700; line-height: 19px; }
   #card .rows i.selected { outline: 2px solid var(--ink); outline-offset: 2px; }
   #card .rows em { font-style: normal; word-spacing: 0.15em; }
   /* While the map loads: a picture of the view it opens on, centred as the map is, and a line saying so (scripts/poster.mjs). */

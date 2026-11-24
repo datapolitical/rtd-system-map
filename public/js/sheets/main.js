@@ -1,7 +1,7 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
-import { SHEETS, OPENING, edge, sheetData, sheetStyle, PALETTES, GROUP, expressInk, airportInk } from './style.js';
+import { SHEETS, OPENING, edge, sheetData, sheetStyle, PALETTES, GROUP, GROUP_INK, PLACE_SIZE, PLACE_MAJOR_RANK, expressInk, airportInk } from './style.js';
 import { pickFrom, pickCard, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
@@ -37,23 +37,27 @@ const onMap = (c) => c && c[0] >= minLon - 0.3 && c[0] <= maxLon + 0.3 && c[1] >
 const asked = ((v) => (v && v.center && !onMap(v.center) ? null : v))(readView(location.hash));
 // The zoom each sheet rests at. Each rests at the zoom it is drawn for, but the whole district
 // (#152): it is drawn for a phone's width, and a wider screen comes as close as holds the rail
-// network (the build's `frame`) in the map above the sheet buttons, 16 px clear of each side, up
+// network (the build's `frame`) in the map above the sheet buttons, SIDE px clear at the sides, up
 // to just short of where the next sheet's band begins (style.js, edge). Chris, 2026-11-18: the
 // district at one zoom was too far out on a phone, and a desktop's screen is wider than it is tall.
 const rests = [...zooms];
-const SIDE = 32;
+// 44 px each side: the frame's sides are where frequent lines end, in a town whose name, centred on
+// its point, needs the room (Boulder; at 32 px its name ran off a phone's edge, Chris 2026-11-20).
+const SIDE = 44;
+// On a short screen (a phone in Safari, its bars taking a quarter of it) the district rests as far
+// out as this to show all of it, a little smaller than it is drawn, rather than cut off its top.
+const WHOLE_LEAST = 0.25;
 function fitWhole() {
   const i = SHEETS.findIndex((s) => s.whole);
   if (i < 0 || !wholeFrame) return;
   const [w, s, e, n] = wholeFrame;
   const y = (lat) => 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
   const box = document.getElementById('map');
-  // 32 px each side: the frame's sides are where frequent lines end, in a town whose name needs the room (Boulder).
   const across = box.clientWidth - 2 * SIDE;
   const down = box.clientHeight - stepsHeight() - 32;
   const fits = Math.min(Math.log2(across / (512 * ((e - w) / 360))), Math.log2(down / (512 * (y(s) - y(n)))));
   const top = i < SHEETS.length - 1 ? edge(i) - 0.05 : zooms[i];
-  rests[i] = Number.isFinite(fits) ? Math.max(zooms[i], Math.min(top, fits)) : zooms[i];
+  rests[i] = Number.isFinite(fits) ? Math.max(zooms[i] - WHOLE_LEAST, Math.min(top, fits)) : zooms[i];
 }
 // How much of the map the sheet buttons sit over at its foot: the whole district keeps clear of them.
 function stepsHeight() {
@@ -409,7 +413,7 @@ function tell(what) {
     return;
   }
   // Each letter is said as its stop ("Stop A"), then its routes.
-  const rows = groups.length ? `<div class="rows">${groups.map((g) => `<i><span class="sr">Stop </span>${esc(g.letter)}</i><div class="routes">${g.routes.map(chip).join('')}</div>`).join('')}</div>` : '';
+  const rows = groups.length ? `<div class="rows">${groups.map((g, i) => `<i class="g${i % GROUP_INK.light.length}"><span class="sr">Stop </span>${esc(g.letter)}</i><div class="routes">${g.routes.map(chip).join('')}</div>`).join('')}</div>` : '';
   const list = what.routes?.length ? `${what.also ? `<span>${esc(what.also)}</span>` : ''}<div class="routes">${what.routes.map(chip).join('')}</div>` : '';
   // A plain card says what it is before its routes; a stop-group card leads with its letters.
   const said = note ? `<span>${detail(note)}</span>` : '';
@@ -449,6 +453,36 @@ card.addEventListener('click', (e) => {
 addEventListener('keydown', (e) => { if (e.key === 'Escape') close({ focus: card.contains(document.activeElement) }); });
 // Panning only moves the sheet. Names keep the places chosen by the build.
 map.on('idle', keepVisible);
+// On the whole district a town's name that would run off the screen is left off, not cut (Chris,
+// 2026-11-20, of Boulder and Parker at a phone's edges): each town's name is measured where it is
+// centred on its point (style.js, place: its size, capitals and spacing) and kept only whole on
+// the screen. Panning brings it back where it fits.
+let edgeClause = null;
+function townsOnScreen() {
+  const n = SHEETS[sheet].id;
+  const id = `place-${n}`;
+  if (!SHEETS[sheet].whole || !map.getLayer(id)) return;
+  let filter = map.getFilter(id);
+  const had = edgeClause && JSON.stringify(filter.at(-1)) === JSON.stringify(edgeClause);
+  if (had) filter = filter.slice(0, -1);
+  const { clientWidth: wide, clientHeight: high } = map.getContainer();
+  const off = new Set();
+  for (const t of map.querySourceFeatures('ground', { sourceLayer: 'place', filter: ['in', ['get', 'class'], ['literal', ['city', 'town']]] })) {
+    const name = t.properties.name;
+    if (!name || t.geometry.type !== 'Point') continue;
+    const major = t.properties.class === 'city' && Number(t.properties.rank ?? 99) <= PLACE_MAJOR_RANK;
+    const size = PLACE_SIZE[n] + (major ? 2 : 0);
+    const half = (name.length * size * (0.68 + (major ? 0.26 : 0.22))) / 2 + 2;
+    const p = map.project(t.geometry.coordinates);
+    if (p.x - half < 0 || p.x + half > wide || p.y - size < 0 || p.y + size > high) off.add(name);
+  }
+  const clause = ['!', ['in', ['get', 'name'], ['literal', [...off].sort()]]];
+  if (had && JSON.stringify(clause) === JSON.stringify(edgeClause)) return;
+  edgeClause = clause;
+  map.setFilter(id, [...filter, clause]);
+}
+map.on('moveend', townsOnScreen);
+map.on('idle', townsOnScreen);
 new ResizeObserver(keepVisible).observe(card);
 // Each line's colour, as the sheets draw it (a station lists its lines by letter only).
 const colorOf = new Map();
@@ -727,9 +761,12 @@ if ('serviceWorker' in navigator) {
 // least twice the screen's pixels, so their edges stay crisp.
 const ratio = Math.max(2, Math.ceil(window.devicePixelRatio || 1));
 function groupImage(id) {
-  const m = /^stopgroup-(plate|badge|street|stop)-(light|dark)(?:-(\d+)x(\d+))?$/.exec(id);
+  const m = /^stopgroup-(plate|badge|street|stop)-(light|dark)(?:-(\d+)x(\d+)|-i(\d+))?$/.exec(id);
   if (!m) return null;
   const c = PALETTES[m[2]];
+  // A letter's own colour, by its row (style.js, GROUP_INK).
+  const inks = GROUP_INK[m[2]];
+  const ink = inks[Number(m[5] ?? 0) % inks.length];
   const square = { badge: GROUP.badge, street: GROUP.badge + 2 * GROUP.streetRim, stop: GROUP.stopBadge + 2 * GROUP.stopRim }[m[1]];
   const [w, h] = m[1] === 'plate' ? [Number(m[3]), Number(m[4])] : [square, square];
   const canvas = document.createElement('canvas');
@@ -748,7 +785,7 @@ function groupImage(id) {
     ctx.stroke();
   } else if (m[1] === 'badge') {
     ctx.roundRect(0, 0, w, h, GROUP.badgeCorner);
-    ctx.fillStyle = c.number;
+    ctx.fillStyle = ink;
     ctx.fill();
   } else {
     const rim = m[1] === 'street' ? GROUP.streetRim : GROUP.stopRim;
@@ -757,7 +794,7 @@ function groupImage(id) {
     ctx.fill();
     ctx.beginPath();
     ctx.roundRect(rim, rim, w - 2 * rim, h - 2 * rim, GROUP.badgeCorner);
-    ctx.fillStyle = m[1] === 'street' ? c.number : c.stop;
+    ctx.fillStyle = ink;
     ctx.fill();
   }
   return { width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data };

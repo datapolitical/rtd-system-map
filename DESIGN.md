@@ -2083,10 +2083,12 @@ width from 360 px. It is the one sheet that does not always rest at the zoom
 it is drawn at: a phone is narrower than the network is tall, and a desktop
 is wider, so one zoom left the network small on one or the other. It rests
 as close as fits its frame (below) in the screen above the sheet buttons,
-32 px clear at the sides, where frequent lines end in a town whose name
-needs the room (Boulder), and 16 px above and below, never farther out than 8.75 and never past the
+44 px clear at the sides, where frequent lines end in a town whose name,
+centred on its point, needs the room (Boulder), and 16 px above and below,
+never farther out than 8.5 (a phone in Safari, its bars taking a quarter of
+its height, rests a little under 8.75 to show it all) and never past the
 point where sheet 1's band begins (`edge`, halfway between the two sheets'
-zooms, less 0.05). A 402 px phone rests at about 8.94; a desktop or a tablet
+zooms, less 0.05). A 402 px phone rests at about 8.8 on its whole screen and about 8.7 in Safari; a desktop or a tablet
 stops at about 9.33 with room round the network. A turned phone or a
 resized window rests again for its new screen. It is the same procedure as
 the other sheets, with these differences, all set in `SIZES` and the page's
@@ -2095,10 +2097,14 @@ tables:
 - Stepping out to it by button, pinch or scroll frames the network,
   wherever the reader was: side to side, the frequent bus network (streets
   every 15 minutes or better), from Boulder to Parker; top to bottom, that
-  network and the rail lines, stations, letters and names within it
-  (`wholeFrame`; the build writes it as `frame` in `sheets.json`). The
-  hourly bus streets are left out: a few reach far past the rest (Nederland),
-  and framing them left the network small. The A line runs on past the
+  network and the rail lines, stations, letters, names and bus streets
+  within it (`wholeFrame`; the build writes it as `frame` in `sheets.json`),
+  so a town between its sides served by hourly buses (Longmont) is in. The
+  hourly bus streets out past its sides are left out: a few reach far past
+  the rest (Nederland), and framing them left the network small. A town's
+  name that would run off the screen there is left off until the reader
+  pans it into room (`townsOnScreen`, main.js): Parker sits at the frame's
+  corner, and its name was cut in half. The A line runs on past the
   frame's east side to the airport, off the screen on a phone: its far
   end's name is set on one row by the line where it goes off a phone's
   screen (`namePointer.reach`, 14 px past the frame's side, inside the
@@ -2485,7 +2491,11 @@ How it is built:
   so a stop at its true place can sit beside its line or between two. Each
   ring is moved to the nearest point of the nearest street, within two
   merge-widths, that carries one of its routes; stops that land ring on ring
-  (the two sides of one street) are one ring with the routes of both.
+  (the two sides of one street) are one ring with the routes of both. A
+  stop each way either side of a crossing (two stops RTD names for the same
+  crossing, on the same street with the same routes, 50 m apart or less)
+  is one ring between them, at the crossing: the FreeRide's pair at every
+  block, or a local route's stop before and after a side street.
 - **A line's curve into its last bar starts from the station**, fourteen
   pitches back along the line, not from the end of any tail track.
 - **A hall is drawn over the streets that end on it**, so each ends flat on
@@ -2513,15 +2523,18 @@ How it is built:
   group, not the whole list. There the routes are said once in a table, not
   along the street. Streets whose lettered stops share a letter and a route
   are one table (a one-way pair), titled with their names ("15th & 17th
-  St"), with a row for each letter: the letter in a small dark square, then
-  its routes, spaced, no commas. The table is a level plate in the ground's
+  St"), with a row for each letter: the letter in a small square in that
+  letter's own colour, then its routes, spaced, no commas. The colours go by
+  row (slate, rust and green, `GROUP_INK`; a fourth row takes the first
+  again), the same on the streets, on the stops and in the card, so a
+  stop is matched to its row by colour as well as by its small letter. The table is a level plate in the ground's
   colour with a hairline edge, which the build places on open ground
   nearest the middle of the lettered stops, clear of rail, bus streets,
   station names, route lists and the letters on the streets; place and
   street names give way to it. No bracket or leader ties it to the
   streets: the letters on them, in the table's squares, do that. On sheet 3
   the table replaces the lists along those streets, and each lettered stop
-  shows its letter on its street, in the table's small dark square with a
+  shows its letter on its street, in the table's square in its colour with a
   thin rim of ground, centred on the line at the stop's place as a rail
   line's letter sits on its line, so the street reads X Y Z block by block
   and matches the table. A square keeps off cross streets, rail, route
@@ -2529,7 +2542,7 @@ How it is built:
   it must, and two that would touch both stay, moved apart: none is
   dropped. On sheet 2 the table is set where it fits, and the streets
   carry no numbers where it doesn't. On sheet 4 each lettered stop shows
-  its letter in a small square in the stops' grey in place of its ring,
+  its letter in a small square in its colour in place of its ring,
   and the table is set once where it fits. A tap on these streets, a
   lettered stop or the table lists the routes by letter. Routes on those
   streets that stop at no lettered stop are still listed along the street.
@@ -5263,6 +5276,23 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   keep unmeasured criteria explicit. Fixes require rider priority and comparable
   before/after evidence; preserve score minimums and agent-owned routine QA.
   See docs/evaluation.md and the dated scorecard.
+- 2026-11-23: The whole district's frame takes in the bus streets between its
+  sides top to bottom, keeps 44 px at the sides, may rest as far out as 8.5,
+  and leaves off a town's name that would run off the screen. Reason: on the
+  v1.0 launch check Chris said "On my phone, Longmont is cut off, and I have
+  to scroll a little bit". In Safari his map is about 402 by 655 px; Longmont
+  lay north of the frame, and Boulder's and Parker's names ran off the sides.
+- 2026-11-23: Each stop letter of a table in its own colour, by row, on the
+  streets, the stops, the table and the card. Reason: Chris, on the
+  neighbourhood sheet: "Let's make the XYZ stops different colors or something
+  so that they're easy to distinguish because the letters are small. The
+  alternative is to make the XYZ letters bigger." Bigger squares don't fit:
+  on sheet 3 they stand about 22 px apart along the street.
+- 2026-11-23: A stop each way either side of a crossing is one ring at the
+  crossing. Reason: Chris, on the street sheet: "The pair of free ride stops
+  aren't helpful. Those should just be a single stop at the intersection."
+  The rule comes from RTD's stop names, so it applies wherever a route has a
+  stop each way within 50 m at one crossing (686 rings fewer on sheet 4).
 
 ## Sources
 
