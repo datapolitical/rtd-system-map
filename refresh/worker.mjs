@@ -1,12 +1,13 @@
 // The refresh Worker (DESIGN.md, "Zero maintenance", Rule 2). Every hour it
 // reads the live site's meta.json, asks RTD whether any source has changed
-// since that build, and if so calls the Pages deploy hook, which rebuilds
-// the site from RTD's current data. The build's own checks decide whether
+// since that build, and whether the basemap has a new tile build since the
+// loading pictures were taken, and if so calls the Pages deploy hook, which
+// rebuilds the site from RTD's current data (and takes new pictures). The build's own checks decide whether
 // the result goes live (Rule 3). Deploy with
 // `npx wrangler deploy --config refresh/wrangler.toml`; the hook URL is the
 // Worker's DEPLOY_HOOK secret.
 
-import { whatChanged } from './check.mjs';
+import { whatChanged, groundChanged } from './check.mjs';
 
 export default {
   async scheduled(event, env, ctx) {
@@ -27,6 +28,13 @@ async function refresh(env) {
   }
   const meta = await res.json();
   const { changes, problems } = await whatChanged(meta, { getJson, sha256 });
+  // The loading pictures show the basemap too: a new tile build needs new ones.
+  const [html, sheets] = await Promise.all([
+    fetch(`${site}/`, { headers: { 'cache-control': 'no-cache' } }).then((r) => (r.ok ? r.text() : '')),
+    fetch(`${site}/data/sheets.json`, { headers: { 'cache-control': 'no-cache' } }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  const ground = await groundChanged(html, sheets, { getJson: (url) => fetch(url).then((r) => r.json()) });
+  if (ground) changes.push(ground);
   for (const p of problems) console.log(p);
   if (!changes.length) {
     console.log(`unchanged since ${meta.built}`);

@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "postinstall": "node scripts/vendor.mjs",
-    "build": "node scripts/vendor.mjs && node scripts/build-data.mjs",
+    "build": "node scripts/vendor.mjs && node scripts/build-data.mjs && node scripts/poster-build.mjs",
     "sheets": "node scripts/sheets.mjs",
     "prototype:zoom": "node scripts/zoom-prototype.mjs",
     "check:zoom": "node qa/zoom-prototype.mjs",

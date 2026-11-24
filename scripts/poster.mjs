@@ -8,7 +8,7 @@
 //
 //   node scripts/poster.mjs [site]
 //
-// .github/workflows/poster.yml runs this after a change to how the sheets look, and daily.
+// scripts/poster-build.mjs runs this at the end of every build, on the site just built.
 import { chromium } from 'playwright';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
