@@ -175,7 +175,7 @@ export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 // a rim of ground `streetRim` wide, as a line's letter sits on its line (SIZES.groupStreetRim).
 // On sheet 4 a lettered stop shows its letter in a square `stopBadge` wide in the stops' grey,
 // with a rim of ground `stopRim` wide so it stands off its street as a stop's ring does.
-export const GROUP = { title: 9, titleSpacing: 0.12, titleInk: 0.7, row: 10.5, rowSpacing: 0.02, letter: 8.5, badge: 12, badgeCorner: 3,
+export const GROUP = { title: 9, titleSpacing: 0.12, titleInk: 0.7, row: 10.5, rowSpacing: 0.02, letter: 8.5, badge: 12, badgeCorner: 3, pickedBadge: 1.15,
   corner: 5, edge: 0.35, streetRim: 1.5, stopBadge: 11, stopRim: 1, stopLetter: 8 };
 const GROUP_FONT = { title: ['Overpass Bold'], row: ['Overpass SemiBold'] };
 // Each letter of a table its own colour, by its row (the build's `li`), the same in the table, on
@@ -360,11 +360,12 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
       paint: n === 3 ? { 'circle-radius': 1.3, 'circle-color': c.stop, 'circle-opacity': 0.7 } : { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': ['case', PICKED, fadeTo(c.stop, FADE.line), c.stop], 'circle-stroke-width': STOP_RING.stroke } });
     // A stop RTD letters (one of a street's stop groups, scripts/lib/sheets.mjs, stopGroups) shows
     // its letter in place of the ring: a small square in the stops' grey, the letter in the ground's.
-    // Off a picked route it fades with the stops (pick-stop rings it again when it is on the route).
-    if (n >= 4) layer('stop-letter', 'symbol', { filter: kind('stop', ['has', 'letter']),
+    // Off a picked route it fades with the stops; on it, pick-letter sets it again over the line.
+    const stopLetter = (filter, opacity) => ({ filter,
       layout: { 'icon-image': ['concat', `stopgroup-stop-${theme}-i`, groupInk], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
         'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.stopLetter, 'text-allow-overlap': true, 'text-ignore-placement': true },
-      paint: { 'text-color': c.ground, 'icon-opacity': unless(onBus(), 1, 1 - FADE.line), 'text-opacity': unless(onBus(), 1, 1 - FADE.line) } });
+      paint: { 'text-color': c.ground, 'icon-opacity': opacity, 'text-opacity': opacity } });
+    if (n >= 4) layer('stop-letter', 'symbol', stopLetter(kind('stop', ['has', 'letter']), unless(onBus(), 1, 1 - FADE.line)));
 
     // Rail: every line whole, with a rim of ground so lines side by side stay apart.
     layer('rail-rim', 'line', { filter: kind('rail'), layout: FLAT, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
@@ -383,6 +384,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     layer('pick-bus', 'line', { filter: pickBus, layout: ROUND, paint: { 'line-color': c.pick, 'line-width': w } });
     if (n >= 4) layers.push({ id: `pick-stop-${n}`, type: 'circle', source, ...band, filter: ['all', ['==', ['get', 'kind'], 'stop'], onBus()],
       paint: { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': c.pick, 'circle-stroke-width': STOP_RING.stroke } });
+    // A lettered stop on the picked route keeps its square over the line, as it reads off the route:
+    // the square stop-letter draws sits under the line, so it is set again here.
+    if (n >= 4) layer('pick-letter', 'symbol', stopLetter(['all', ['==', ['get', 'kind'], 'stop'], ['!=', ['coalesce', ['get', 'letter'], ''], ''], onBus()], 1));
 
     // Stations: one white bar across the lines that stop there; the hub's is heavier.
     const bar = kind('station', ['==', ['get', 'shape'], 'bar']);
@@ -436,7 +440,10 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
       layout: { 'symbol-placement': 'line', 'symbol-spacing': 520, 'text-field': ['get', 'label'], 'text-font': FONT.regular, 'text-size': NUMBER_SIZE[n], 'text-max-angle': 25, 'text-padding': 6,
         'text-offset': besideStreet(n), 'text-letter-spacing': 0.02 },
       paint: { 'text-color': c.busStreetName, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
-    if (n >= 2) layer('bus-number', 'symbol', { filter: kind('bus-label'),
+    // A list naming the picked route is set by picked-number and picked-stack below, placed before the
+    // marks that keep lettering off the picked route; here it gives way while that route is picked.
+    const notPicked = ['!', onBus('label')];
+    const busNumber = (filter) => ({ filter,
       // Set just beside the street, not on it: on it, the line shows between the figures and a
       // comma reads as a dash. The offset is the street's half width and a little air, in ems.
       // Where the build found room, the street's name leads its list, in the names' quieter grey and weight.
@@ -449,16 +456,18 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w)]]])))],
         'text-letter-spacing': 0.02, 'symbol-sort-key': ['-', 0, ['get', 'n']] },
       paint: { 'text-color': textInk(c.number, onBus('label')), 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
+    if (n >= 2) layer('bus-number', 'symbol', busNumber(kind('bus-label', notPicked)));
     // A list too long for its stretch in one row is stacked in two (scripts/lib/sheets.mjs, labelRuns): one piece
     // of lettering turned the way its street runs, so both rows show or neither does. Its middle sits half a row
     // farther off the street than a single row's, so the nearer row is where a single row would be.
-    if (n >= 2) layer('bus-stack', 'symbol', { filter: kind('bus-stack'),
+    const busStack = (filter) => ({ filter,
       layout: { 'text-field': ['get', 'label'], 'text-font': FONT.semibold, 'text-size': NUMBER_SIZE[n], 'text-max-width': 100, 'text-line-height': ROW_HEIGHT, 'text-justify': 'center', 'text-padding': 2,
         'text-rotate': ['get', 'angle'], 'text-rotation-alignment': 'map', 'text-letter-spacing': 0.02, 'symbol-sort-key': ['-', 0, ['get', 'n']],
         'text-offset': ['case', ['==', ['get', 'side'], -1],
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n, w) + ROW_HEIGHT / 2]]]))),
           byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n]).map(([k, w]) => [k, ['literal', [0, numberOffset(n, w) - ROW_HEIGHT / 2]]])))] },
       paint: { 'text-color': textInk(c.number, onBus('label')), 'text-halo-color': c.ground, 'text-halo-width': 1.8 } });
+    if (n >= 2) layer('bus-stack', 'symbol', busStack(kind('bus-stack', notPicked)));
     // Place names: on the first two sheets cities and towns, closer in a city's own neighbourhoods. They are
     // placed by rank (the tiles' importance, cities before towns, a city's statistical neighbourhoods before
     // OSM's smaller ones), after rail, its letters and station names but before route numbers and the marks
@@ -481,6 +490,10 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     // A picked bus route holds its ground like rail: placed before the place names, so a town's
     // name and its halo move off the route instead of cutting it.
     layer('keep-off-pick', 'symbol', { filter: pickBus, ...unseen });
+    // The picked route's own numbers, and the street's name leading them, placed before the marks
+    // above: otherwise those marks, which keep other lettering off the route, keep its own off too.
+    if (n >= 2) layer('picked-number', 'symbol', busNumber(kind('bus-label', onBus('label'))));
+    if (n >= 2) layer('picked-stack', 'symbol', busStack(kind('bus-stack', onBus('label'))));
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
     // A name the picked route runs under keeps a tight halo, so the line reads unbroken up to its
     // letters, and its line letters step aside while that route is picked. Panning keeps
@@ -539,9 +552,10 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
         // The table is a key to the selected route, so it stays readable while the map fades.
         paint: { 'icon-opacity': 1 } });
       layer('group-badge', 'symbol', { filter: kind('group-badge'),
-        layout: { ...fixed, 'icon-anchor': 'center', 'text-anchor': 'center', 'icon-image': ['concat', `stopgroup-badge-${theme}-i`, groupInk], 'icon-offset': ['get', 'off'],
-          'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.letter, 'text-offset': ['get', 'toff'],
-          'icon-size': ['case', onBus(), 1.15, 1] },
+        // A picked route's row has a larger square, drawn larger rather than scaled: MapLibre scales
+        // an icon's offset with its icon-size, which slid the square off its letter.
+        layout: { ...fixed, 'icon-anchor': 'center', 'text-anchor': 'center', 'icon-image': ['concat', ['case', onBus(), `stopgroup-picked-${theme}-i`, `stopgroup-badge-${theme}-i`], groupInk], 'icon-offset': ['get', 'off'],
+          'text-field': ['get', 'letter'], 'text-font': GROUP_FONT.title, 'text-size': GROUP.letter, 'text-offset': ['get', 'toff'] },
         paint: { 'text-color': c.ground, 'icon-opacity': 1, 'text-opacity': 1 } });
       layer('group-text', 'symbol', { filter: kind('group-text'),
         layout: { ...fixed, 'text-field': ['get', 'text'], 'text-offset': ['get', 'off'],
