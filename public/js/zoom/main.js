@@ -1,7 +1,7 @@
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { readView, writeView } from '../sheets/address.js';
 import { PALETTES } from '../sheets/style.js';
-import { MIN_ZOOM, MAX_ZOOM, attachedCollection, frameAt } from './model.js';
+import { MIN_ZOOM, MAX_ZOOM, attachedCollection, labelsAt } from './model.js';
 import { previewStyle } from './style.js';
 import { resolveImages } from './images.js';
 
@@ -14,6 +14,8 @@ let map, bundle, metadata, labelFrame;
 let updatePending = false;
 let moving = false;
 let updatedZoom = null;
+const labelState = { sides: new Map(), fades: new Map() };
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
 const timings = [];
 const errors = [];
 const fetchJSON = async (path) => {
@@ -40,23 +42,26 @@ function setPick(pick) {
 
 function update() {
   updatePending = false;
-  if (!map.isStyleLoaded()) return;
+  // While a source is still taking the last update, try again next frame rather than drop it.
+  if (!map.isStyleLoaded()) { schedule(); return; }
   const started = performance.now();
   const zoom = map.getZoom();
-  const frame = frameAt(bundle.frames, zoom);
   // Only the small rail-symbol sources change during a zoom; the rail and bus drawings stay cached.
   // Line letters appear as the zoom reaches them and stay for every closer zoom.
   const shown = { ...bundle.attached, features: bundle.attached.features.filter((f) => !(f.properties.minzoom > zoom + 1e-9)) };
   map.getSource('trial-attached').setData(attachedCollection(shown, bundle.sizes, zoom));
-  map.getSource('trial-labels').setData(attachedCollection(frame.labels, bundle.sizes, zoom));
-  labelFrame = frame.zoom;
+  const labels = labelsAt(bundle.frames, zoom, bundle.sizes, labelState, performance.now(), { motion: !calm.matches });
+  map.getSource('trial-labels').setData(labels.collection);
+  labelFrame = labels.frame.zoom;
+  // A name changing side fades on a timer, so keep drawing until it has finished.
+  if (labels.busy) schedule();
   updatedZoom = zoom;
   $('zoom').value = String(zoom);
   $('out').disabled = zoom <= MIN_ZOOM + 0.001;
   $('in').disabled = zoom >= MAX_ZOOM - 0.001;
   $('status').textContent = `Zoom ${zoom.toFixed(2)}`;
   timings.push(performance.now() - started);
-  window.zoomState = { zoom, labelFrame, updates: timings.length, lastUpdateMs: timings.at(-1) };
+  window.zoomState = { zoom, labelFrame, fading: labels.busy, updates: timings.length, lastUpdateMs: timings.at(-1) };
 }
 
 function schedule() {

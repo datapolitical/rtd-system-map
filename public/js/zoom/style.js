@@ -55,22 +55,25 @@ export function previewStyle(theme, metadata, bundle) {
   const casing = byId.get('rail-casing-2');
   if (casing) rails.splice(1, 0, { ...casing, id: 'trial-rail-casing', source: 'trial-rail', minzoom: 0, maxzoom: 24,
     layout: round, paint: { ...casing.paint, 'line-width': size('rail', (w) => w + 1.2), 'line-offset': offset } });
+  // A name and its chips fade together while the name changes side (model.js, labelsAt).
+  const fade = ['coalesce', ['get', 'fade'], 1];
   const labels = [{
     id: 'trial-name', type: 'symbol', source: 'trial-labels', filter: kind('name'),
     layout: { 'text-field': ['get', 'text'], 'text-font': ['Overpass SemiBold'], 'text-size': size('name'),
       'text-max-width': 40, 'text-line-height': 1.12, 'text-anchor': ['get', 'anchor'], 'text-offset': ['get', 'offset'],
       'text-justify': ['get', 'justify'], 'text-allow-overlap': true, 'text-ignore-placement': true },
-    paint: { 'text-color': c.name, 'text-halo-color': c.ground, 'text-halo-width': 2 },
+    paint: { 'text-color': c.name, 'text-halo-color': c.ground, 'text-halo-width': 2, 'text-opacity': fade },
   }];
   for (const source of ['trial-attached', 'trial-labels']) {
     labels.push({ id: `${source}-disc`, type: 'circle', source, filter: kind('letter'),
       paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], ...bundle.sizes.rail.flatMap(([z], i) => [z, ['case', ['to-boolean', ['get', 'small']], bundle.sizes.nameLetter[i][1], bundle.sizes.letterDisc[i][1] - 1.5]])],
-        'circle-color': rail.paint['line-color'], 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5 } });
+        'circle-color': rail.paint['line-color'], 'circle-stroke-color': c.ground, 'circle-stroke-width': 1.5,
+        'circle-opacity': fade, 'circle-stroke-opacity': fade } });
     labels.push({ id: `${source}-letter`, type: 'symbol', source, filter: kind('letter'),
       layout: { 'text-field': ['get', 'route'], 'text-font': ['Overpass ExtraBold'],
         'text-size': ['interpolate', ['linear'], ['zoom'], ...bundle.sizes.rail.flatMap(([z], i) => [z, ['case', ['to-boolean', ['get', 'small']], bundle.sizes.nameLetter[i][1] * 1.42, (bundle.sizes.letterDisc[i][1] - 1.5) * 1.42]])],
         'text-offset': [0, 0.06], 'text-allow-overlap': true, 'text-ignore-placement': true },
-      paint: { 'text-color': ['get', 'ink'] } });
+      paint: { 'text-color': ['get', 'ink'], 'text-opacity': fade } });
   }
   // Both detail drawings' base strokes precede rail. A selected bus is drawn
   // over rail at either detail level, then stations and their lettering follow.

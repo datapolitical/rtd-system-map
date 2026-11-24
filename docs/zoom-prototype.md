@@ -16,6 +16,9 @@ load this experiment. Nothing from this trial is ready to merge as v2.
   ones are added only where the closer view has room.
 - Station names keep their side, wording and chip order, and move only for
   a recorded reason; see "Names that keep their place" below.
+- Between drawings, a name that steps nearer or farther glides with the
+  zoom; a name that changes side fades out and back in; see "How a name
+  moves" below.
 - The existing wider and closer bus drawings change at zoom 13. This change
   is deliberately visible for evaluation; bus geometry is not morphed.
 - A route selection, geographic centre and fractional view URL survive
@@ -186,6 +189,38 @@ not rerun).
 Colorado's name meets the "40, 46" route list at 14, because route lists are
 placed without the names; route lists and street names get the same rule in
 #156.
+
+## How a name moves (2026-11-24)
+
+The plan says where each name is at every quarter zoom. Between those
+drawings the page decides how it gets there (`labelsAt` in
+`public/js/zoom/model.js`):
+
+- A name that keeps its side and wording glides: its offset and its chips
+  move in step with the zoom from one drawing's place to the next, so the 30
+  distance steps never jump.
+- A name that changes side fades out at its old place (120 ms), then fades
+  in at the new one (140 ms), with its chips. The two places never show
+  together. The fade runs on a clock, not on the pinch, so stopping mid-pinch
+  never leaves a name half-faded.
+- It changes side only once the zoom is a fifth of a step (0.05 zoom) past
+  halfway between the two drawings, and changes back only the same distance
+  past halfway the other way, so a shaky pinch cannot make it blink. Turning
+  back while it is still fading out brings it straight back.
+- With the phone's reduced-motion setting, the change is immediate.
+
+Sliding a name to its new side was not used. The label-transition study
+this follows (Depian, Li, Nöllenburg and Wulms, "Transitions in Dynamic
+Point Labeling", Cartography and Geographic Information Science, 2025)
+slides labels that always touch their point, and fades labels that are
+added or removed. These names stand off the track, and a slide would drag
+Union Station's name across the platform and the light rail. The study ran
+no user test of sliding against fading.
+
+Tests cover the glide, the hold past halfway, the fade order, a shaky pinch,
+turning back mid-fade, reduced motion, and every name shown exactly once
+through a full sweep of the real build. Captures of Union Station's fade at
+each stage are in `qa/.scratch/names154/fade-*.png`.
 
 ## Line letters
 

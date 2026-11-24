@@ -5,7 +5,8 @@ import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { SIZES, names } from '../scripts/lib/sheets.mjs';
 import { withZoom, zoomStops } from '../scripts/zoom-prototype.mjs';
 import { previewStyle } from '../public/js/zoom/style.js';
-import { attachedPoint, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChanges } from '../public/js/zoom/model.js';
+import { attachedPoint, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChanges,
+  labelsAt, SIDE_HOLD, FADE_OUT_MS, FADE_IN_MS } from '../public/js/zoom/model.js';
 import { railOrderErrors } from '../qa/lib/zoom-order.mjs';
 import { canonicalTracks, fitTerminalSpines } from '../scripts/lib/zoom-rail.mjs';
 import { spacingReport, terminalGaps } from '../qa/lib/zoom-spacing.mjs';
@@ -128,4 +129,106 @@ test('terminal check rejects a rail that protrudes beyond its station bar', () =
   assert.ok(terminalGaps(bundle, 13).every((r) => r.ok));
   rail.geometry.coordinates[0] = at(-10, 0);
   assert.ok(terminalGaps(bundle, 13).some((r) => !r.ok));
+});
+
+// Two names: 'a' keeps its side and steps its distance between drawings; 'b' changes side.
+const labelFrames = () => [12, 12.25].map((zoom, i) => ({ zoom, labels: { type: 'FeatureCollection', features: [
+  { type: 'Feature', properties: { kind: 'name', key: 'a', text: 'Alpha', anchor: 'left', offset: [i ? 2 : 1, 0] },
+    geometry: { type: 'Point', coordinates: [-105, 39.75] } },
+  { type: 'Feature', properties: { kind: 'name', key: 'b', text: 'Beta', anchor: i ? 'top' : 'bottom', offset: [0, i ? -1 : 1] },
+    geometry: { type: 'Point', coordinates: [-104.99, 39.75] } },
+  { type: 'Feature', properties: { kind: 'letter', small: true, key: 'b:A', route: 'A' },
+    geometry: { type: 'Point', coordinates: [-104.99, 39.75 + (i ? 0.001 : -0.001)] } },
+] } }));
+const shownAt = (frames, zoom, state, now, options) => {
+  const { collection, busy } = labelsAt(frames, zoom, sizes, state, now, options);
+  const by = (key) => collection.features.filter((f) => f.properties.key === key);
+  return { busy, a: by('a'), b: by('b'), chip: by('b:A') };
+};
+
+test('a name that keeps its side glides between drawings instead of stepping', () => {
+  const frames = labelFrames(), state = { sides: new Map(), fades: new Map() };
+  for (const [zoom, x] of [[12, 1], [12.0625, 1.25], [12.125, 1.5], [12.25, 2]]) {
+    const { a } = shownAt(frames, zoom, state, 0);
+    assert.equal(a.length, 1);
+    assert.ok(Math.abs(a[0].properties.offset[0] - x) < 1e-9, `offset at ${zoom}`);
+    assert.equal(a[0].properties.fade, undefined);
+  }
+});
+
+test('a side change waits past halfway, fades out then in, and never shows both places', () => {
+  const frames = labelFrames(), state = { sides: new Map(), fades: new Map() };
+  const hold = 12 + 0.25 * (0.5 + SIDE_HOLD);
+  assert.equal(shownAt(frames, 12.1, state, 0).b[0].properties.anchor, 'bottom');
+  // Halfway is not enough: the old side holds until SIDE_HOLD past it.
+  assert.equal(shownAt(frames, hold - 0.005, state, 0).b[0].properties.anchor, 'bottom');
+  const start = 1000;
+  let seen = shownAt(frames, hold + 0.005, state, start);
+  assert.ok(seen.busy);
+  assert.equal(seen.b.length, 1);
+  assert.equal(seen.b[0].properties.anchor, 'bottom');
+  assert.equal(seen.b[0].properties.fade ?? 1, 1);
+  seen = shownAt(frames, hold + 0.005, state, start + FADE_OUT_MS / 2);
+  assert.equal(seen.b[0].properties.anchor, 'bottom');
+  assert.ok(Math.abs(seen.b[0].properties.fade - 0.5) < 1e-9);
+  assert.equal(seen.chip[0].properties.fade, seen.b[0].properties.fade, 'chips fade with their name');
+  seen = shownAt(frames, hold + 0.005, state, start + FADE_OUT_MS + FADE_IN_MS / 2);
+  assert.equal(seen.b.length, 1);
+  assert.equal(seen.b[0].properties.anchor, 'top');
+  assert.ok(Math.abs(seen.b[0].properties.fade - 0.5) < 1e-9);
+  seen = shownAt(frames, hold + 0.005, state, start + FADE_OUT_MS + FADE_IN_MS + 1);
+  assert.equal(seen.busy, false);
+  assert.equal(seen.b[0].properties.anchor, 'top');
+  assert.equal(seen.b[0].properties.fade, undefined);
+  // Zooming back, it stays on its new side until the same distance past halfway.
+  const back = 12 + 0.25 * (0.5 - SIDE_HOLD);
+  assert.equal(shownAt(frames, back + 0.005, state, 5000).b[0].properties.anchor, 'top');
+  const returning = shownAt(frames, back - 0.005, state, 6000);
+  assert.ok(returning.busy);
+  assert.equal(returning.b[0].properties.anchor, 'top', 'it fades out where it was first');
+});
+
+test('a shaky pinch across halfway does not make a name blink', () => {
+  const frames = labelFrames(), state = { sides: new Map(), fades: new Map() };
+  for (const [i, t] of [0.3, 0.55, 0.45, 0.6, 0.4, 0.65, 0.35].entries()) {
+    const seen = shownAt(frames, 12 + 0.25 * t, state, i * 1000);
+    assert.equal(seen.busy, false);
+    assert.equal(seen.b[0].properties.anchor, 'bottom');
+  }
+});
+
+test('turning back while a name fades out brings it straight back, with no flash of the new place', () => {
+  const frames = labelFrames(), state = { sides: new Map(), fades: new Map() };
+  shownAt(frames, 12, state, 0);
+  shownAt(frames, 12.24, state, 1000);
+  const half = shownAt(frames, 12.24, state, 1000 + FADE_OUT_MS / 2).b[0].properties.fade;
+  const back = shownAt(frames, 12.01, state, 1000 + FADE_OUT_MS / 2);
+  assert.equal(back.b[0].properties.anchor, 'bottom');
+  assert.ok(Math.abs(back.b[0].properties.fade - half) < 1e-9);
+  const later = shownAt(frames, 12.01, state, 1000 + FADE_OUT_MS / 2 + FADE_IN_MS);
+  assert.equal(later.b[0].properties.anchor, 'bottom');
+  assert.equal(later.busy, false);
+});
+
+test('with reduced motion a side change is immediate', () => {
+  const frames = labelFrames(), state = { sides: new Map(), fades: new Map() };
+  shownAt(frames, 12, state, 0, { motion: false });
+  const seen = shownAt(frames, 12.24, state, 1, { motion: false });
+  assert.equal(seen.busy, false);
+  assert.equal(seen.b[0].properties.anchor, 'top');
+  assert.equal(seen.b[0].properties.fade, undefined);
+});
+
+test('the trial build shows every name exactly once at every zoom through a sweep', () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const state = { sides: new Map(), fades: new Map() };
+  const total = bundle.frames[0].labels.features.filter((f) => f.properties.kind === 'name').length;
+  let now = 0;
+  for (const zoom of [...Array(201).keys()].map((i) => 12 + i / 100).concat([...Array(201).keys()].map((i) => 14 - i / 100))) {
+    now += 16;
+    const { collection } = labelsAt(bundle.frames, zoom, bundle.sizes, state, now);
+    const keys = collection.features.filter((f) => f.properties.kind === 'name').map((f) => f.properties.key);
+    assert.equal(keys.length, total, `names at ${zoom}`);
+    assert.equal(new Set(keys).size, total, `duplicate name at ${zoom}`);
+  }
 });
