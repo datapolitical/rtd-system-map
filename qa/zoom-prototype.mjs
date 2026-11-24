@@ -41,8 +41,7 @@ try {
     await check(`${theme}: fractional URL restores without snapping`, async () => {
       assert.ok(Math.abs(await page.evaluate(() => window.zoomMap.getZoom()) - 12.37) < 1e-6);
     });
-    for (const mode of ['offset', 'drawn']) {
-      await page.locator(`[data-mode=${mode}]`).click();
+    for (const mode of ['offset']) {
       await settled();
       await check(`${theme}/${mode}: base bus strokes cannot paint over rail`, async () => {
         assert.deepEqual(railOrderErrors(await page.evaluate(() => ({ layers: window.zoomMap.getStyle().layers.map(({ id, type, source }) => ({ id, type, source })) }))), []);

@@ -7,16 +7,21 @@ load this experiment. Nothing from this trial is ready to merge as v2.
 ## What can be reviewed
 
 - Continuous pinch, wheel, slider and button zoom, with no sheet snapping.
-- Two rail comparisons: **Smooth spacing**, using pixel offsets, and
-  **Half-step drawings**, using finished drawings at 12, 12.5, 13, 13.5 and 14.
-- Station names prefer their preceding side and distance, adjusting the
-  distance on the same side before choosing another side. A change records
-  its obstruction or station-association reason.
-- Rail station bars and line letters follow the smooth model's spacing.
+- Rail drawn once at zoom 13 and spaced by the page: each line keeps its
+  slot in its pack and the page moves it sideways by slot times the pitch
+  for the current zoom. The half-step comparison has been removed; see
+  "Rail spacing: recommendation" below.
+- Station bars and line letters ride the same spacing. Letters are placed
+  outward from zoom 12: a letter placed at a wider zoom stays put, and new
+  ones are added only where the closer view has room.
+- Station names keep their side, wording and chip order, and move only for
+  a recorded reason; see "Names that keep their place" below.
 - The existing wider and closer bus drawings change at zoom 13. This change
   is deliberately visible for evaluation; bus geometry is not morphed.
 - A route selection, geographic centre and fractional view URL survive
   zooming and changing theme. A play control sweeps the zoom range.
+- Controls are a small pill at the top (zoom, `?` notes, theme) and one row
+  at the bottom (−, slider, +, play), so they leave the map clear.
 
 ## Evidence
 
@@ -33,8 +38,9 @@ Nine drawings, sampled every quarter zoom from 12 through 14:
 - Placement preferring the preceding side: **39** side changes, a **72%**
   reduction, with **zero** names disappearing. Every drawing has 67 names.
 - The rail offset comparison contains 393 constant-slot pieces.
-- The trial bundle, containing all nine rail/label drawings and the offset
-  comparison, is approximately **398 KB gzipped**. This is an experiment's
+- The trial bundle, containing the rail spacing data and all nine label
+  drawings, is approximately **221 KB gzipped** (398 KB while it also held
+  the half-step drawings). This is an experiment's
   combined bundle, not the intended production loading strategy.
 
 The exact pair-by-pair counts and reasons are generated at
@@ -81,12 +87,7 @@ platform bars. Stations and letters use small GeoJSON sources updated during
 zoom; this still needs physical-phone performance measurement before it can
 be chosen as a production approach.
 
-The half-step comparison intentionally has no correction between its
-drawings. Its spacing can therefore drift and change at the half steps.
-This is a comparison for evaluating the fallback, not a claim that the
-fallback is complete.
-
-Station-name side changes were later cut from 39 to 20; see "Names that
+Station-name side changes were later cut from 39 to 6; see "Names that
 keep their place" below. The trial does not yet carry
 bus route-number lists or street-name placements across scales. The normal
 picked-bus name alternatives are also excluded from this station-name
@@ -126,44 +127,112 @@ a performance sign-off for the corrected geometry.
 Three faults kept names jumping after the first trial:
 
 - Each drawing's names steered around that drawing's own line letters and
-  rail packs. The page shows neither: its letters are placed once at the
-  reference zoom and its rail is the reference centre line moved sideways by
-  slot times pitch. A name dodged letters that were not on screen, and jumped
-  when they moved. Names now keep off the rail and letters the page shows.
+  rail packs. The page shows neither: its letters and rail are spaced by the
+  page. A name dodged letters that were not on screen, and jumped when they
+  moved. Names now keep off the rail and letters the page shows.
 - A held name was allowed a fixed 8 units of ink. Its own box grows with the
   zoom, so it gathered more ink with nothing new under it, and lost its place.
 - That allowance was then taken from the name's own previous cost, so it
   could compound from step to step.
 
-Now a held name is measured against the clearest place for it at the same
-zoom. It keeps its side and wording unless another name is on it, it stands
-nearer another station, it crowds the station before, it would sit on more
-than 6 cells of rail beyond that place (`HOLD_RAIL_SLACK`; a cell is 3 px,
-so this is the name's edge brushing a line's margin), or on clearly more bus
-streets (`HOLD_INK_SLACK`, 24, or half the clearest place's ink). The rule
-runs only when the build passes a history; the sheets' names are unchanged
-(sheets 0 to 3 compared with the old module; sheet 4 not rerun).
+A held name is now measured against the clearest place for it at the same
+zoom. It can be held only if no other name is on it, it does not stand
+nearer another station, it does not crowd the station before, it sits on no
+more than 6 cells of rail beyond that place (`HOLD_RAIL_SLACK`; a cell is
+3 px, so this is the name's edge brushing a line's margin), and on not
+clearly more bus streets (`HOLD_INK_SLACK`, 24, or half the clearest
+place's ink). A name also keeps its wording and the order of its route
+chips from the zoom before.
+
+Names are then placed offline, as in Been, Daiches and Yap (2006). A first
+pass scores every side of every name at every quarter zoom. For each name a
+plan picks the run of sides with the fewest changes, using only sides that
+could be held, then the lowest cost. The second pass starts each name on its
+planned side and moves it only where the plan does. A move is made at the
+best zoom before the old side fails, not at the moment it fails.
 
 Over eight quarter-zoom steps from 12 to 14:
 
-| | Fresh each drawing | First trial | Now |
-|---|---|---|---|
-| Side changes | 138 | 39 | 20 |
-| Wording changes on the same side | 10 | — | 0 |
-| Names lost | — | 0 | 0 |
-| Names crossing a rail line or letter, all drawings | 2 | — | 1 |
+| | Fresh each drawing | First trial | Earlier fix | Now |
+|---|---|---|---|---|
+| Side changes | 133 | 39 | 20 | 6 |
+| Wording changes on the same side | 10 | — | 0 | 0 |
+| Chip order changes | — | — | 1 (Union Station) | 0 |
+| Names lost | — | 0 | 0 | 0 |
+| Names crossing a rail line or letter, all drawings | 1 | — | 1 | 0 |
 
-The one crossing is Decatur-Federal at 12, where fresh placement crosses
-too. The detector has a planted rail and a planted letter that it must catch
-at every zoom, or the build stops. Held names sit on more bus streets than
-fresh ones (3,900 against 1,700 units of ink summed over the drawings); the
-captures show them over thin bus lines and still readable. Allowing more bus
-ink gets to 12 changes but nearly triples it, so it was not taken.
+Six is the fewest the plan allows: each of these names has a zoom where
+none of its sides can be held all the way from 12 to 14.
 
-Of the 20 left, 14 are bus-street ink, 4 are rail and 2 are names whose held wording no longer fits. Most come where the
-closer street set starts at 13 or where a pack widens near a hub. Colorado's
-name meets the "40, 46" route list at 14, because route lists are placed
-without the names; route lists and street names get the same rule in #156.
+| Zoom | Name | Why the old side fails |
+|---|---|---|
+| 12.25 | 48th Ave/Brighton Blvd@Nat'l Western Ctr | bus streets, 28 more than the clearest place at 12.25 |
+| 12.5 | Olde Town Arvada | bus streets, 45 more at 12.75 |
+| 12.5 | 60th/Sheridan-Arvada Gold Strike | bus streets, 43 more at 12.75 |
+| 13 | Empower Field at Mile High | bus streets, 26 more at 13.25 |
+| 13.5 | 38th / Blake | bus streets, 35 more at 13.75 |
+| 14 | Union Station | light rail runs through its old place at 14 (26 rail cells) |
+
+Thirty further changes keep the side and step the distance from the station.
+The detector has a planted rail and a planted letter that it must catch at
+every zoom, or the build stops. Held names sit on more bus streets than
+fresh ones (4,533 against 1,615 units of ink summed over the drawings) and
+touch more rail margin (411 against 32 cells, each name-drawing within the
+6-cell limit); the captures show them over thin bus lines and still
+readable. The rule runs only when the build passes a history; the sheets'
+names are unchanged (sheets 0 to 3 compared with the old module; sheet 4
+not rerun).
+
+Colorado's name meets the "40, 46" route list at 14, because route lists are
+placed without the names; route lists and street names get the same rule in
+#156.
+
+## Line letters
+
+Letters are placed outward from 12, like the names: the letters at 12 stay
+where they are at every closer zoom, and a closer zoom adds a letter only
+where its line has none within 0.6 of the usual letter spacing, there is no
+other letter close by, and no name is in the way. There are 38 letters at 12
+and 129 at 14. In the Union Station view at 13 and 14 the B, C, E and W
+lines carry letters. The A, G and N lines leave that view without one: they
+share their pack for its whole length on screen, and the sheets put a letter
+only where a line can be read on its own. Their letters are just outside the
+view. The same is true of today's sheets; a letter held at the screen edge
+is #31.
+
+## Rail spacing: recommendation
+
+Use smooth spacing: draw the rail once at reference zoom 13 and let the page
+set the space between lines in a pack as the zoom changes.
+
+- Spacing is exact at every zoom. Over 11 zooms from 12 to 14, all 33
+  pair/zoom checks along the Union Station approach are within 0.25 px of
+  the target; at 14 the G–B, B–N and N–A centres are 7.58–7.62 px apart for
+  7.6 px. The check catches the earlier tapered pack before passing the fix.
+- Terminals stay square: 198 rail-end/zoom checks are within 1 px of their
+  station bars, and a planted overshoot is caught.
+- Bars, letters and names are positioned from the same model, so they move
+  with the rail and never drift against it.
+- It needs one rail drawing, not five, which halves the trial bundle.
+
+The half-step alternative was dropped. Finished drawings at 12, 12.5, 13,
+13.5 and 14 each have their own curves and spacing, so packs drift between
+steps and jump at each handover; correcting that would rebuild what smooth
+spacing already does. It also gave different letters and station marks in
+each drawing, so it could not be compared fairly.
+
+Limits of smooth spacing:
+
+- Curves and corners are the zoom-13 curves at every zoom. They are drawn to
+  look right at 13 and are only checked here from 12 to 14; zooms well
+  outside that band will need their own reference drawings (#157).
+- Each line's slot in its pack is fixed. Where a pack's membership would
+  change with the zoom, it cannot.
+- Performance on a real phone is not measured. In software-rendered
+  Chromium the JavaScript update per frame is 1.7–3.8 ms at the 95th
+  percentile, but the rendered frame interval was 150–217 ms, which says
+  nothing about a phone's GPU. This needs one check on Chris's phone before
+  the approach is built for production.
 
 ## Reproduce
 
@@ -186,6 +255,5 @@ node qa/zoom-spacing-browser.mjs http://127.0.0.1:8804
 node scripts/package-zoom-preview.mjs qa/.scratch/zoom-prototype/site
 ```
 
-Keep issue #154 open until the phone comparison has been reviewed and the
-rail-spacing approach chosen. This trial does not change its done-when
+Keep issue #154 open until the phone performance check is done. This trial does not change its done-when
 criteria, close v1.0, begin the production refactor in #155, or tag a release.

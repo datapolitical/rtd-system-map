@@ -6,7 +6,7 @@ const kind = (value) => ['==', ['get', 'kind'], value];
 const round = { 'line-cap': 'round', 'line-join': 'round' };
 const empty = { type: 'FeatureCollection', features: [] };
 
-export function previewStyle(theme, metadata, bundle, mode) {
+export function previewStyle(theme, metadata, bundle) {
   const original = sheetStyle(theme, metadata.stations, metadata.colors, new Set([2, 3]), metadata.district);
   const c = PALETTES[theme];
   const size = (key, transform = (v) => v) => ['interpolate', ['linear'], ['zoom'], ...bundle.sizes[key].flatMap(([z, v]) => [z, transform(v)])];
@@ -29,7 +29,8 @@ export function previewStyle(theme, metadata, bundle, mode) {
   const rail = byId.get('rail-2');
   const width = size('rail');
   const gap = size('gap');
-  const offset = mode === 'offset' ? ['interpolate', ['linear'], ['zoom'], ...bundle.sizes.rail.flatMap(([z]) => [z, ['*', ['get', 'slot'], pitchAt(bundle.sizes, z)]])] : 0;
+  // Each line is moved sideways from its track's one centre line by its slot times the pitch at this zoom.
+  const offset = ['interpolate', ['linear'], ['zoom'], ...bundle.sizes.rail.flatMap(([z]) => [z, ['*', ['get', 'slot'], pitchAt(bundle.sizes, z)]])];
   const rails = [
     { id: 'trial-rail-rim', type: 'line', source: 'trial-rail', layout: round,
       paint: { 'line-color': c.ground, 'line-width': curve((z) => at('rail', z) + 2 * at('gap', z)), 'line-offset': offset } },
@@ -77,7 +78,7 @@ export function previewStyle(theme, metadata, bundle, mode) {
   original.layers = original.layers.filter((l) => !/^pick-bus/.test(l.id));
   original.layers.push(...rails, ...pickedLayers, ...attached, ...labels);
   return { ...original, sources: { ...original.sources,
-    'trial-rail': { type: 'geojson', data: mode === 'offset' ? bundle.rails : empty, tolerance: 0, buffer: 256, maxzoom: 14 },
+    'trial-rail': { type: 'geojson', data: bundle.rails, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-attached': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-labels': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
   } };

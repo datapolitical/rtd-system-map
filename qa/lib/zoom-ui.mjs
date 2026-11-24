@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-// Exercise the real shared-street picker, range input, comparison and theme buttons.
+// Exercise the real shared-street picker, range input and theme button.
 export async function checkBusControls(page) {
   await page.evaluate(() => { window.zoomSetPick(null); window.zoomMap.jumpTo({ zoom: 13.37, center: window.zoomBundle.frames[0].labels.features.find((f) => f.properties.kind === 'name').geometry.coordinates }); });
   await page.waitForFunction(() => window.zoomMap.isStyleLoaded() && window.zoomMap.areTilesLoaded() && !window.zoomMap.isMoving(), null, { timeout: 30000 });
@@ -26,8 +26,6 @@ export async function checkBusControls(page) {
   await page.waitForFunction((from) => window.zoomMap.getZoom() > from + 0.005, before);
   const after = await page.evaluate(() => window.zoomMap.getZoom());
   assert.ok(Math.abs(after - before - 0.01) < 1e-6);
-  await page.locator('[data-mode=drawn]').click();
-  await page.waitForFunction(() => window.zoomState.mode === 'drawn' && window.zoomMap.isStyleLoaded());
   await page.locator('#theme').click();
   await page.waitForFunction(() => window.zoomMap.isStyleLoaded());
   assert.deepEqual(await page.evaluate(() => window.zoomPick), { mode: 'bus', route });
@@ -38,5 +36,5 @@ export async function checkBusControls(page) {
   await page.keyboard.press('Escape');
   assert.equal(await page.evaluate(() => window.zoomPick), null);
   assert.deepEqual(await page.evaluate(() => window.zoomErrors), []);
-  return { route, restoredZoom: after, comparedModes: true, changedTheme: true, sharedStreetChooser: true };
+  return { route, restoredZoom: after, changedTheme: true, sharedStreetChooser: true };
 }

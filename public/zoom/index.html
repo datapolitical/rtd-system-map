@@ -12,22 +12,16 @@
 <body>
   <main id="map" aria-label="RTD map zoom preview"></main>
   <header class="panel top">
-    <div><strong>Zoom preview</strong><span id="status" role="status">Loading map…</span></div>
+    <span id="status" role="status">Loading map…</span>
+    <details><summary aria-label="About this preview">?</summary><div class="about"><p>Zoom preview, 12 to 14. Pinch, scroll or drag the slider. Tap a line to keep it highlighted.</p><p>Rail lines are drawn once and spaced by the page as you zoom. Station names keep their place unless something covers them. Bus streets change detail at zoom 13.</p><p><a href="../">Open the current sheets</a> · <a href="https://github.com/datapolitical/rtd-system-map/issues/154">Work plan</a></p></div></details>
     <button id="theme" type="button" aria-label="Switch to dark theme" disabled>◐</button>
   </header>
-  <section class="panel controls" aria-label="Compare zoom approaches">
-    <div class="modes" role="group" aria-label="Rail drawing">
-      <button type="button" data-mode="offset" aria-pressed="true">Smooth spacing</button>
-      <button type="button" data-mode="drawn" aria-pressed="false">Half-step drawings</button>
-    </div>
-    <div class="zoom-row">
-      <button id="out" type="button" aria-label="Zoom out" disabled>−</button>
-      <label for="zoom" class="sr-only">Zoom from 12 to 14</label>
-      <input id="zoom" type="range" min="12" max="14" step="0.01" value="12" disabled>
-      <button id="in" type="button" aria-label="Zoom in" disabled>+</button>
-      <button id="sweep" type="button" disabled>Play zoom</button>
-    </div>
-    <details><summary>About this preview</summary><p>Pinch, scroll or drag the slider between zooms 12 and 14. Tap a line to keep it highlighted. Compare rail corners, junctions, station bars and names while zooming in and out.</p><p>Bus streets change detail at zoom 13. Smooth spacing tests offsets on the finished drawing; half-step drawings are a comparison without correction between samples. This is an experiment, with Live and full route panels to follow.</p><p><a href="../">Open the current sheets</a> · <a href="https://github.com/datapolitical/rtd-system-map/issues/154">Work plan</a></p></details>
+  <section class="panel controls" aria-label="Zoom">
+    <button id="out" type="button" aria-label="Zoom out" disabled>−</button>
+    <label for="zoom" class="sr-only">Zoom from 12 to 14</label>
+    <input id="zoom" type="range" min="12" max="14" step="0.01" value="12" disabled>
+    <button id="in" type="button" aria-label="Zoom in" disabled>+</button>
+    <button id="sweep" type="button" aria-label="Play zoom" disabled>▶</button>
   </section>
   <aside id="card" class="panel card" aria-label="Selected route" hidden><span id="selection"></span><button id="clear" type="button" aria-label="Clear selection">×</button><div id="route-options"></div></aside>
   <div id="error" role="alert" hidden></div>

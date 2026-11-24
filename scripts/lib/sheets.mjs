@@ -1109,7 +1109,11 @@ export function names(marks, lines, discs, sheet, streets = [], history = null, 
     const ending = (bi ? bar.ending : (m.bars ?? [bar]).filter((b, i) => !i || !again(b)).flatMap((b) => b.ending))
       .filter((l) => !farOnly || farLines(m).has(l.route));
     // On the whole district every far end carries its lines' letters: no letter fits on the lines there.
-    const row = ending.length >= 2 || (farOnly && ending.length) ? ending : [];
+    let row = ending.length >= 2 || (farOnly && ending.length) ? ending : [];
+    // A name keeps the order of its row of letters from one zoom to the next (zoom trial, #154).
+    if (previous?.row && row.length === previous.row.length && row.every((l) => previous.row.includes(l.route))) {
+      row = [...row].sort((a, b) => previous.row.indexOf(a.route) - previous.row.indexOf(b.route));
+    }
     // Where not every name fits, the hub and line ends are lettered larger than the rest.
     const minor = !must && !SIZES.nameAll[sheet.id];
     const size = minor ? SIZES.nameMinor : SIZES.name[sheet.id];
@@ -1146,6 +1150,9 @@ export function names(marks, lines, discs, sheet, streets = [], history = null, 
       const [w, h] = [Math.max(wide, row.length * (2 * r + 2)) + arrowRoom, tall + (row.length ? 2 * r + 5 : 0)];
       let best = null;
       let free = null;
+      // Every side's best score here, so the build can choose one side for a band of zooms.
+      const options = {};
+      const helds = [];
       for (const reach of [1, 1.4, 1.8, 2.8]) {
         for (const [dx, dy, anchor, cost] of sides) {
           // A pointing name stands on the frame's side of its line, its arrow at the end toward the edge.
@@ -1179,7 +1186,7 @@ export function names(marks, lines, discs, sheet, streets = [], history = null, 
             // A held name keeps its place while it still fits (Been, Daiches and Yap 2006): no other
             // name on it, still nearest its own station, not crowding the station before.
             const railCost = railInked(box);
-            candidate.placement = { anchor, text, reach, inkCost, railCost, historyKey };
+            candidate.placement = { anchor, text, reach, inkCost, railCost, historyKey, row: row.map((l) => l.route) };
             candidate.held = !extra && previous && previous.anchor === anchor && previous.text === text
               && !hits && !crowded && !strays;
             candidate.moved = previous ? Math.abs(reach - previous.reach) : 0;
@@ -1190,6 +1197,12 @@ export function names(marks, lines, discs, sheet, streets = [], history = null, 
             }
           }
           if (!free || score < free.score) free = candidate;
+          if (candidate.held) helds.push(candidate);
+          if (history && !extra) {
+            const ok = !hits && !strays && !crowded;
+            const o = options[anchor];
+            if (!o || (ok && !o.ok) || (ok === o.ok && score < o.score)) options[anchor] = { score: Math.round(score * 10) / 10, ok, ink: inkCost, rail: railInked(box) };
+          }
           if (!best || (candidate.held && !best.held) || (candidate.held && best.held && candidate.moved < best.moved)
             || (Boolean(candidate.held) === Boolean(best.held) && (!candidate.held || candidate.moved === best.moved) && score < best.score)) best = candidate;
         }
@@ -1198,13 +1211,21 @@ export function names(marks, lines, discs, sheet, streets = [], history = null, 
       // allowed one zoom out, so what it may cover cannot creep up step by step. It gives way
       // where it would sit on more rail than that place, or on clearly more bus streets: the
       // streets are redrawn at every zoom, and a held name gathers a little of them as it grows.
+      // On its side it keeps its distance from the station if it can, else the nearest distance
+      // that passes; only when none does is it moved to the clearest place.
       if (best?.held && free && free !== best) {
-        const extraRail = best.placement.railCost - free.placement.railCost;
-        const extraInk = best.placement.inkCost - free.placement.inkCost;
-        const blocked = extraRail > HOLD_RAIL_SLACK ? `rail under the name: ${extraRail} cells more than the clearest place`
-          : extraInk > Math.max(HOLD_INK_SLACK, free.placement.inkCost * 0.5) ? `line obstruction ${extraInk} more than the clearest place` : null;
-        if (blocked) return { ...free, blocked };
+        const tooMuch = (c) => {
+          const extraRail = c.placement.railCost - free.placement.railCost;
+          const extraInk = c.placement.inkCost - free.placement.inkCost;
+          return extraRail > HOLD_RAIL_SLACK ? `rail under the name: ${extraRail} cells more than the clearest place`
+            : extraInk > Math.max(HOLD_INK_SLACK, free.placement.inkCost * 0.5) ? `line obstruction ${extraInk} more than the clearest place` : null;
+        };
+        helds.sort((a, b) => a.moved - b.moved || a.score - b.score);
+        const kept = helds.find((c) => c === free || !tooMuch(c));
+        if (kept) best = kept;
+        else return { ...free, blocked: tooMuch(helds[0]), options };
       }
+      if (best) best.options = options;
       return best;
     };
     // A name is written out where it has room; where it would sit on lines or stand off from
@@ -1215,7 +1236,9 @@ export function names(marks, lines, discs, sheet, streets = [], history = null, 
       ? [m.name, shortened(m.name), wrapped(m.name), wrapped(shortened(m.name))]
       : [wrapped(m.name), wrapped(shortened(m.name)), wrapped(m.name).replace('\n', ' '), wrapped(shortened(m.name)).replace('\n', ' ')];
     const choose = (extra = null, self = null) => {
-      if (previous && !extra && texts.includes(previous.text)) {
+      // The wording a name had one zoom out is always open to it, even where this zoom would
+      // not offer it first (a wrap or shortening that depends on the size).
+      if (previous && !extra) {
         const held = placed(previous.text, extra, self);
         if (held.held) return held;
       }
@@ -1246,7 +1269,7 @@ export function names(marks, lines, discs, sheet, streets = [], history = null, 
     const { hits, ...chosen } = finish(best);
     const entry = { mark: m, at: c, minor, ...chosen, alts: [], left: [] };
     if (history) {
-      entry.placement = { ...best.placement, retained: Boolean(best.held), reason: previous ? (best.held
+      entry.placement = { ...best.placement, options: best.options, retained: Boolean(best.held), reason: previous ? (best.held
         ? (best.moved ? 'kept side; adjusted distance from the station' : 'kept')
         : [...previousBlocks, ...(best.blocked ? [best.blocked] : [])].join('; ') || 'previous wording is no longer available') : 'new label' };
     }

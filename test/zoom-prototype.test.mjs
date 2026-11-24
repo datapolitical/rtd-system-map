@@ -63,11 +63,11 @@ test('frames advance at boundaries without rounding a fractional camera zoom', (
   assert.deepEqual(labelChanges([n], []).disappeared, ['1:0']);
 });
 
-test('both comparison styles validate in both themes, including all fractional-zoom expressions', () => {
+test('the preview style validates in both themes, including all fractional-zoom expressions', () => {
   const bundle = { sizes, rails: { type: 'FeatureCollection', features: [] } };
-  for (const theme of ['light', 'dark']) for (const mode of ['offset', 'drawn']) {
-    assert.deepEqual(validateStyleMin(previewStyle(theme, { stations: [], colors: [] }, bundle, mode)).map((e) => e.message), [], `${theme}/${mode}`);
-    assert.deepEqual(railOrderErrors(previewStyle(theme, { stations: [], colors: [] }, bundle, mode)), []);
+  for (const theme of ['light', 'dark']) {
+    assert.deepEqual(validateStyleMin(previewStyle(theme, { stations: [], colors: [] }, bundle)).map((e) => e.message), [], theme);
+    assert.deepEqual(railOrderErrors(previewStyle(theme, { stations: [], colors: [] }, bundle)), []);
   }
 });
 
