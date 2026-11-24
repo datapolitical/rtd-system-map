@@ -19,8 +19,8 @@ load this experiment. Nothing from this trial is ready to merge as v2.
 - Between drawings, a name that steps nearer or farther glides with the
   zoom; a name that changes side fades out and back in; see "How a name
   moves" below.
-- The existing wider and closer bus drawings change at zoom 13. This change
-  is deliberately visible for evaluation; bus geometry is not morphed.
+- Bus streets come from three drawings, at 12, 13 and 14, and hand over
+  with a short fade; see "Bus drawings" below. Bus geometry is not morphed.
 - A route selection, geographic centre and fractional view URL survive
   zooming and changing theme. A play control sweeps the zoom range.
 - Controls are a small pill at the top (zoom, `?` notes, theme) and one row
@@ -43,7 +43,8 @@ Nine drawings, sampled every quarter zoom from 12 through 14:
 - The rail offset comparison contains 393 constant-slot pieces.
 - The trial bundle, containing the rail spacing data and all nine label
   drawings, is approximately **221 KB gzipped** (398 KB while it also held
-  the half-step drawings). This is an experiment's
+  the half-step drawings). The zoom-13 bus drawing adds about **290 KB
+  gzipped** (`bus-13.geojson`). This is an experiment's
   combined bundle, not the intended production loading strategy.
 
 The exact pair-by-pair counts and reasons are generated at
@@ -221,6 +222,37 @@ Tests cover the glide, the hold past halfway, the fade order, a shaky pinch,
 turning back mid-fade, reduced motion, and every name shown exactly once
 through a full sweep of the real build. Captures of Union Station's fade at
 each stage are in `qa/.scratch/names154/fade-*.png`.
+
+## Bus drawings (2026-11-24)
+
+Chris saw bus route labels vanish rather than fade between 13 and 14. Two
+things caused it. MapLibre lays out line labels at the whole zoom below the
+camera, so from 13 to 14 it placed the zoom-14 drawing's labels, which were
+cut to fit at 14, in the space of zoom 13: most did not fit and were dropped.
+In the Union Station view the drawn labels went 4, 3, 2, 0, 0 at 13, 13.25,
+13.5, 13.75 and 14. And a label that lost a collision was removed at once.
+
+- The trial now draws a bus drawing at 13 with the same sheet code
+  (`drawSheet` at zoom 13): 4,230 features, 1,130 labels. Each drawing serves
+  from its own zoom to the next: 12 to 13, 13 to 14, 14 up. Zooming out, the
+  closer drawing holds 0.05 of a zoom past its edge so a shaky pinch does not
+  swap back and forth (`busDrawingAt` in `model.js`).
+- At a handover the new streets come up over the first half of 260 ms and
+  the old go down over the second half, so the streets never look pale.
+  Labels do not overlap: the old labels fade out in 120 ms, then the new fade
+  in over 140 ms, as station names do. Reduced motion swaps at once.
+- `fadeDuration` is 200 ms, so a label that loses a collision while zooming
+  fades instead of blinking out.
+
+Measured in the Union Station view, the drawn labels are now 18, 13, 7, 5
+and 4 at the same five zooms. While zooming within one drawing, 5 of 213
+labels (13 to 14) and 3 of 274 (14 to 15) leave while still on screen, by
+collision, and now fade. New labels appear by about 400 ms after a handover
+in software Chromium: MapLibre's layout of the newly shown drawing plus its
+fade. Captures are `qa/.scratch/names154/bus13-{light,dark}-*.png`.
+
+Limit: the "15, 19" label touches the Union Station platform at 13. That is
+the drawing's own placement, not the handover.
 
 ## Line letters
 

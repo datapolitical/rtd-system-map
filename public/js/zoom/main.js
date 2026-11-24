@@ -1,7 +1,7 @@
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { readView, writeView } from '../sheets/address.js';
 import { PALETTES } from '../sheets/style.js';
-import { MIN_ZOOM, MAX_ZOOM, attachedCollection, labelsAt } from './model.js';
+import { MIN_ZOOM, MAX_ZOOM, attachedCollection, labelsAt, busDrawingAt } from './model.js';
 import { previewStyle } from './style.js';
 import { resolveImages } from './images.js';
 
@@ -15,6 +15,9 @@ let updatePending = false;
 let moving = false;
 let updatedZoom = null;
 const labelState = { sides: new Map(), fades: new Map() };
+const busState = {};
+let busLayers = null;
+const busShown = new Map();
 const calm = matchMedia('(prefers-reduced-motion: reduce)');
 const timings = [];
 const errors = [];
@@ -52,16 +55,31 @@ function update() {
   map.getSource('trial-attached').setData(attachedCollection(shown, bundle.sizes, zoom));
   const labels = labelsAt(bundle.frames, zoom, bundle.sizes, labelState, performance.now(), { motion: !calm.matches });
   map.getSource('trial-labels').setData(labels.collection);
+  // The bus drawing for this zoom, faded in from the one before (model.js, busDrawingAt).
+  const bus = busDrawingAt(zoom, busState, performance.now(), { motion: !calm.matches });
+  busLayers ??= map.getStyle().layers.filter((l) => l.metadata?.busKey).map((l) => ({ id: l.id, key: l.metadata.busKey, plain: l.metadata.busPlain, set: null }));
+  for (const [set, o] of Object.entries(bus.sets)) {
+    for (const [part, value] of [['Lines', o.lines], ['Labels', o.labels]]) {
+      const key = `bus${part}${set}`;
+      if (busShown.get(key) !== value) { map.setGlobalStateProperty(key, value); busShown.set(key, value); }
+    }
+  }
+  for (const l of busLayers) {
+    const value = busShown.get(l.key);
+    const visibility = value > 0 ? 'visible' : 'none';
+    if (map.getLayoutProperty(l.id, 'visibility') !== visibility) map.setLayoutProperty(l.id, 'visibility', visibility);
+    if (value > 0 && l.set !== value) { for (const [k, base] of l.plain) map.setPaintProperty(l.id, k, base * value); l.set = value; }
+  }
   labelFrame = labels.frame.zoom;
   // A name changing side fades on a timer, so keep drawing until it has finished.
-  if (labels.busy) schedule();
+  if (labels.busy || bus.busy) schedule();
   updatedZoom = zoom;
   $('zoom').value = String(zoom);
   $('out').disabled = zoom <= MIN_ZOOM + 0.001;
   $('in').disabled = zoom >= MAX_ZOOM - 0.001;
   $('status').textContent = `Zoom ${zoom.toFixed(2)}`;
   timings.push(performance.now() - started);
-  window.zoomState = { zoom, labelFrame, fading: labels.busy, updates: timings.length, lastUpdateMs: timings.at(-1) };
+  window.zoomState = { zoom, labelFrame, busSet: bus.set, fading: labels.busy || bus.busy, updates: timings.length, lastUpdateMs: timings.at(-1) };
 }
 
 function schedule() {
@@ -73,6 +91,8 @@ function applyStyle() {
   document.querySelector('meta[name=theme-color]').content = PALETTES[theme].ground;
   $('theme').setAttribute('aria-label', `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`);
   updatedZoom = null;
+  busLayers = null;
+  busShown.clear();
   const ready = () => { update(); setPick(picked); };
   map.once('style.load', ready);
   map.setStyle(previewStyle(theme, metadata, bundle));
@@ -86,7 +106,7 @@ try {
   document.documentElement.dataset.theme = theme;
   map = new maplibregl.Map({ container: 'map', style: previewStyle(theme, metadata, bundle),
     center, zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, asked?.zoom ?? 12)), minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
-    dragRotate: false, pitchWithRotate: false, touchPitch: false, fadeDuration: 0,
+    dragRotate: false, pitchWithRotate: false, touchPitch: false, fadeDuration: 200,
     attributionControl: false, maxTileCacheZoomLevels: 3 });
   map.addControl(new maplibregl.AttributionControl({ compact: true }));
   map.touchZoomRotate.disableRotation();

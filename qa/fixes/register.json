@@ -90,6 +90,20 @@
       "path": "qa/.scratch/fix-register-input/c233e0f/dark-14.png",
       "commit": "c233e0f",
       "type": "image"
+    },
+    {
+      "id": "bus13-handover-light",
+      "label": "Bus handover at zoom 13, light, 120 ms and 400 ms",
+      "path": "qa/.scratch/names154/bus13-light-400.png",
+      "commit": "9dfd5b5",
+      "type": "image"
+    },
+    {
+      "id": "bus13-handover-dark",
+      "label": "Bus handover at zoom 13, dark, 400 ms",
+      "path": "qa/.scratch/names154/bus13-dark-400.png",
+      "commit": "9dfd5b5",
+      "type": "image"
     }
   ],
   "findings": [
@@ -449,6 +463,25 @@
       ],
       "verification": "Build c233e0f: recorded in docs/zoom-prototype.md, 'Rail spacing: recommendation'.",
       "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
+    },
+    {
+      "id": "RTD-018",
+      "title": "Bus route labels vanish instead of fading between 13 and 14",
+      "kind": "defect",
+      "status": "open",
+      "priority": "next",
+      "scope": "Zoom trial · bus labels",
+      "issues": [
+        154
+      ],
+      "observation": "MapLibre placed the zoom-14 bus drawing's labels at zoom 13, where most did not fit; labels that lost a collision were removed at once.",
+      "next": "Phone check of the handover at 13 and 14 with #154's other preview checks.",
+      "done_when": "Bus labels stay in view from 13 to 14 and every label that leaves while zooming fades out; the 13 and 14 handovers never show both label sets or pale streets.",
+      "evidence": [
+        "bus13-handover-light",
+        "bus13-handover-dark"
+      ],
+      "verification": "Union Station view: drawn labels 18/13/7/5/4 at 13–14 by quarter zoom (were 4/3/2/0/0); unit tests cover the drawing per zoom, hold and handover; check:zoom and spacing browser checks pass; light and dark handover captures inspected."
     }
   ]
 }

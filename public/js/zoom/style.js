@@ -1,6 +1,8 @@
 import { sheetStyle, PALETTES } from '../sheets/style.js';
 import { pitchAt, sizeAt } from './model.js';
 
+export const BUS_13_URL = new URL('../../data/zoom-prototype/bus-13.geojson', import.meta.url).href;
+
 const zoomValue = (a, b) => ['interpolate', ['linear'], ['zoom'], 12, a, 14, b];
 const kind = (value) => ['==', ['get', 'kind'], value];
 const round = { 'line-cap': 'round', 'line-join': 'round' };
@@ -25,6 +27,40 @@ export function previewStyle(theme, metadata, bundle) {
         layer[section][key] = zoomValue(a[section][key], b[section][key]);
       }
     }
+  }
+  // Bus drawings at 12 (sheet 2), 13 (drawn for this trial) and 14 (sheet 3). Each serves from
+  // its own zoom up to the next (model.js, busDrawingAt). MapLibre lays line labels out at the
+  // whole zoom below the camera, so the zoom-14 drawing's labels, cut to fit at 14, cannot serve
+  // 13 to 14: they drop out. The page shows one set at a time and fades between them through
+  // global state, so the zoom ranges here only need to cover a handover.
+  const busSet = (l) => (l.source === 'sheet-2' ? '2' : l.source === 'sheet-3' ? '3' : null);
+  original.layers = original.layers.flatMap((l) => (busSet(l) === '3'
+    ? [{ ...structuredClone(l), id: l.id.replace(/-3$/, '-13'), source: 'trial-bus-13' }, l] : [l]));
+  const ranges = { 2: [11, 14], 13: [12, 15], 3: [13, 15] };
+  const busState = {};
+  for (const l of original.layers) {
+    const set = l.source === 'trial-bus-13' ? '13' : busSet(l);
+    if (!set) continue;
+    [l.minzoom, l.maxzoom] = ranges[set];
+    const part = l.type === 'symbol' ? 'Labels' : 'Lines';
+    const key = `bus${part}${set}`;
+    busState[key] = { default: set === '2' ? 1 : 0 };
+    l.layout = { ...l.layout, visibility: set === '2' ? 'visible' : 'none' };
+    // A plain opacity is set directly by the page, with no transition of its own. An opacity
+    // that already varies by feature is multiplied by global state instead.
+    const plain = [];
+    const keys = { line: ['line-opacity'], circle: ['circle-opacity', 'circle-stroke-opacity'], fill: ['fill-opacity'], symbol: ['text-opacity', 'icon-opacity'] }[l.type] ?? [];
+    for (const k of keys) {
+      const value = l.paint?.[k];
+      if (value === 0) continue;
+      if (k === 'icon-opacity' && !l.layout['icon-image']) continue;
+      if (k === 'text-opacity' && !l.layout['text-field']) continue;
+      if (value === undefined || typeof value === 'number') {
+        plain.push([k, value ?? 1]);
+        l.paint = { ...l.paint, [`${k}-transition`]: { duration: 0, delay: 0 } };
+      } else l.paint = { ...l.paint, [k]: ['*', value, ['global-state', key]] };
+    }
+    l.metadata = { ...l.metadata, busKey: key, busPlain: plain };
   }
   const rail = byId.get('rail-2');
   const width = size('rail');
@@ -80,7 +116,8 @@ export function previewStyle(theme, metadata, bundle) {
   const pickedLayers = original.layers.filter((l) => /^pick-bus/.test(l.id));
   original.layers = original.layers.filter((l) => !/^pick-bus/.test(l.id));
   original.layers.push(...rails, ...pickedLayers, ...attached, ...labels);
-  return { ...original, sources: { ...original.sources,
+  return { ...original, state: { ...original.state, ...busState },
+    sources: { ...original.sources, 'trial-bus-13': { ...original.sources['sheet-3'], data: BUS_13_URL },
     'trial-rail': { type: 'geojson', data: bundle.rails, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-attached': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-labels': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },

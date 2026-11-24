@@ -6,7 +6,7 @@ import { SIZES, names } from '../scripts/lib/sheets.mjs';
 import { withZoom, zoomStops } from '../scripts/zoom-prototype.mjs';
 import { previewStyle } from '../public/js/zoom/style.js';
 import { attachedPoint, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChanges,
-  labelsAt, SIDE_HOLD, FADE_OUT_MS, FADE_IN_MS } from '../public/js/zoom/model.js';
+  labelsAt, SIDE_HOLD, FADE_OUT_MS, FADE_IN_MS, busDrawingAt, BUS_HOLD, BUS_LINE_MS } from '../public/js/zoom/model.js';
 import { railOrderErrors } from '../qa/lib/zoom-order.mjs';
 import { canonicalTracks, fitTerminalSpines } from '../scripts/lib/zoom-rail.mjs';
 import { spacingReport, terminalGaps } from '../qa/lib/zoom-spacing.mjs';
@@ -231,4 +231,50 @@ test('the trial build shows every name exactly once at every zoom through a swee
     assert.equal(keys.length, total, `names at ${zoom}`);
     assert.equal(new Set(keys).size, total, `duplicate name at ${zoom}`);
   }
+});
+
+test('each bus drawing serves from its own zoom up to the next, holding a little when zooming out', () => {
+  const state = {};
+  const at = (zoom, now = 0) => busDrawingAt(zoom, state, now, { motion: false }).set;
+  assert.equal(at(12), '2');
+  assert.equal(at(12.99), '2');
+  assert.equal(at(13), '13', 'the closer drawing takes over at its own zoom, never squeezed below it');
+  assert.equal(at(13.99), '13');
+  assert.equal(at(14), '3');
+  assert.equal(at(14 - BUS_HOLD + 0.01), '3', 'zooming out holds just below 14');
+  assert.equal(at(14 - BUS_HOLD - 0.01), '13');
+  assert.equal(at(13 - BUS_HOLD + 0.01), '13');
+  assert.equal(at(12.5), '2');
+  assert.equal(at(13.5), '13');
+});
+
+test('at a bus handover the lines never go pale and the two label sets never show together', () => {
+  const state = {};
+  busDrawingAt(12.9, state, 0);
+  for (let p = 0; p <= BUS_LINE_MS + 20; p += 10) {
+    const { sets, busy } = busDrawingAt(13.05, state, 1000 + p);
+    const lines = Math.max(sets['2'].lines, sets['13'].lines);
+    assert.ok(lines >= 1 - 1e-9, `strongest lines at ${p} ms`);
+    assert.ok(!(sets['2'].labels > 0 && sets['13'].labels > 0), `both label sets at ${p} ms`);
+    if (p < FADE_OUT_MS) { assert.ok(sets['2'].labels > 0, `old labels still fading out at ${p} ms`); assert.equal(sets['13'].labels, 0); }
+    else assert.equal(sets['2'].labels, 0, `old labels gone at ${p} ms`);
+    assert.equal(sets['3'].lines + sets['3'].labels, 0);
+    if (p > BUS_LINE_MS) { assert.equal(busy, false); assert.deepEqual(sets['13'], { lines: 1, labels: 1 }); assert.deepEqual(sets['2'], { lines: 0, labels: 0 }); }
+  }
+});
+
+test('the preview style gives every bus layer a set, a zoom range covering its handovers, and a fade', () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
+  const style = previewStyle('light', metadata, bundle);
+  const bus = style.layers.filter((l) => ['sheet-2', 'sheet-3', 'trial-bus-13'].includes(l.source));
+  for (const set of ['2', '13', '3']) assert.ok(bus.some((l) => l.metadata.busKey.endsWith(set)), `set ${set}`);
+  for (const l of bus) {
+    assert.match(l.metadata.busKey, /^bus(Lines|Labels)(2|13|3)$/);
+    assert.equal(l.metadata.busKey.startsWith('busLabels'), l.type === 'symbol');
+    const set = l.metadata.busKey.replace(/^bus(Lines|Labels)/, '');
+    const from = { 2: 12, 13: 13 - BUS_HOLD, 3: 14 - BUS_HOLD }[set], to = { 2: 13 + 0.5, 13: 14, 3: 14 }[set];
+    assert.ok(l.minzoom <= from && l.maxzoom > to, `${l.id} range ${l.minzoom}-${l.maxzoom}`);
+  }
+  assert.equal(bus.filter((l) => l.source === 'trial-bus-13').length, bus.filter((l) => l.source === 'sheet-3').length);
 });

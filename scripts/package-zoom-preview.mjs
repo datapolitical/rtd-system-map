@@ -12,7 +12,8 @@ const files = ['public/zoom/index.html', 'public/css/zoom.css',
   'public/js/zoom/main.js', 'public/js/zoom/style.js', 'public/js/zoom/model.js', 'public/js/zoom/images.js',
   'public/js/sheets/style.js', 'public/js/sheets/address.js', 'public/js/color.js',
   'public/data/sheets.json', 'public/data/sheet-2.geojson', 'public/data/sheet-3.geojson',
-  'public/data/zoom-prototype/trial.json', 'public/data/zoom-prototype/report.json'];
+  'public/data/zoom-prototype/trial.json', 'public/data/zoom-prototype/report.json',
+  'public/data/zoom-prototype/bus-13.geojson'];
 const copies = [['public/vendor', 'vendor']];
 const hashes = {};
 for (const file of files) {

@@ -4,7 +4,7 @@ import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { SHEETS, SIZES, HOLD_RAIL_SLACK, HOLD_INK_SLACK, railLines, railTracks, stationMarks, letters, names, halls, busStreets,
+import { SHEETS, SIZES, drawSheet, HOLD_RAIL_SLACK, HOLD_INK_SLACK, railLines, railTracks, stationMarks, letters, names, halls, busStreets,
   nearest, resample, offset, toPx, toLonLat } from './lib/sheets.mjs';
 import { canonicalTracks, slotPieces, fitTerminalSpines } from './lib/zoom-rail.mjs';
 import { labelChanges, REFERENCE_ZOOM, pitchAt, sizeAt } from '../public/js/zoom/model.js';
@@ -317,6 +317,15 @@ async function main() {
   report.letters = { total: carried.length, byZoom: Object.fromEntries(frames.map((f) => [f.zoom, carried.filter((l) => l.minzoom <= f.zoom).length])) };
   const bundle = { sizes, referenceZoom: REFERENCE_ZOOM, rails: base.rails, attached: collection([...base.attached.features, ...letterFeatures]),
     frames: frames.map(({ zoom, labels }) => ({ zoom, labels })), report };
+  // The bus drawing at 13, between sheets 2 and 3, so each bus drawing is only ever enlarged
+  // up to the next (public/js/zoom/model.js, busDrawingAt). Rail, stations and their lettering
+  // come from the trial's own model, so they are left out.
+  const bus13 = withZoom(13, (sheet) => drawSheet(data, sheet));
+  bus13.features = bus13.features.filter((f) => !['rail', 'station', 'letter'].includes(f.properties.kind) && f.properties.shape !== 'name');
+  const busRaw = JSON.stringify(bus13);
+  await writeFile(path.join(out, 'bus-13.geojson'), busRaw);
+  report.bus13 = { features: bus13.features.length, labels: bus13.features.filter((f) => f.properties.kind === 'bus-label').length,
+    bytes: { raw: Buffer.byteLength(busRaw), gzip: gzipSync(busRaw).length } };
   const raw = JSON.stringify(bundle);
   report.bytes = { raw: Buffer.byteLength(raw), gzip: gzipSync(raw).length };
   await writeFile(path.join(out, 'trial.json'), JSON.stringify(bundle));

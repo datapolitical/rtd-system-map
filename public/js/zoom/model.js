@@ -151,3 +151,38 @@ export function labelsAt(frames, zoom, sizes, state, now, { motion = true, step 
   }
   return { collection: { type: 'FeatureCollection', features }, busy, frame: a };
 }
+
+// The bus drawings: each serves from its own zoom up to the next, so its lettering is only ever
+// enlarged, never squeezed below the size it was placed for. Zooming in, the next drawing takes
+// over at its zoom; zooming out, the closer drawing holds BUS_HOLD below its zoom before handing
+// back. At a handover the lines cross over, and the old labels fade out before the new fade in.
+export const BUS_DRAWINGS = [{ zoom: 12, set: '2' }, { zoom: 13, set: '13' }, { zoom: 14, set: '3' }];
+export const BUS_HOLD = 0.05;
+export const BUS_LINE_MS = FADE_OUT_MS + FADE_IN_MS;
+
+export function busDrawingAt(zoom, state, now, { motion = true } = {}) {
+  const target = [...BUS_DRAWINGS].reverse().find((d) => zoom >= d.zoom - 1e-9) ?? BUS_DRAWINGS[0];
+  const current = BUS_DRAWINGS.find((d) => d.set === state.set) ?? target;
+  let next = target;
+  if (current.zoom > target.zoom && zoom >= current.zoom - BUS_HOLD) next = current;
+  if (state.set === undefined) state.set = next.set;
+  else if (next.set !== state.set) {
+    state.fade = motion ? { from: state.set, to: next.set, start: now } : null;
+    state.set = next.set;
+  }
+  const out = Object.fromEntries(BUS_DRAWINGS.map((d) => [d.set, { lines: 0, labels: 0 }]));
+  out[state.set] = { lines: 1, labels: 1 };
+  let busy = false;
+  if (state.fade) {
+    const p = now - state.fade.start;
+    if (p < BUS_LINE_MS) {
+      busy = true;
+      const t = p / BUS_LINE_MS;
+      // New lines come up over the first half and old ones go over the second, so the streets
+      // never pass through a pale middle where both are half-faded.
+      out[state.fade.from] = { lines: Math.min(1, 2 - 2 * t), labels: p < FADE_OUT_MS ? 1 - p / FADE_OUT_MS : 0 };
+      out[state.fade.to] = { lines: Math.min(1, 2 * t), labels: p < FADE_OUT_MS ? 0 : Math.min(1, (p - FADE_OUT_MS) / FADE_IN_MS) };
+    } else state.fade = null;
+  }
+  return { sets: out, busy, set: state.set };
+}

@@ -2117,6 +2117,39 @@
       "pinned_by": "Codex, measured against the rendered rail geometry, 2026-11-20",
       "confidence": "clear",
       "note": "B\u2013N centre spacing reaches 2.68 px while strokes are 5.6 px and target pitch is 7.6 px. Frozen local-pixel geometry: prototype-spacing.json. Full static snapshot: qa/.scratch/zoom-spacing/before-site. The shared-spine correction passes 33 pair/zoom checks over 11 zooms; zoom-14 spacings are 7.58\u20137.62 px. Physical phone review is pending."
+    },
+    {
+      "id": "154-prototype-bus-labels-vanish",
+      "issue": 154,
+      "place": "Zoom preview, bus streets around Union Station",
+      "said": "Bus route labels disappear instead of fading while zooming from 13 toward 14; drawn labels in the view go 4, 3, 2, 0, 0.",
+      "kind": "label-pop",
+      "caught_by": [
+        "prototype-bus-drawings"
+      ],
+      "seen_on": [
+        "9dfd5b5"
+      ],
+      "theme": "light",
+      "zoom": 13.5,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "13.5/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris, on the names preview, 2026-11-24",
+      "pinned_by": "Claude, counting rendered bus labels at quarter zooms, 2026-11-24",
+      "confidence": "clear",
+      "note": "Prototype only. MapLibre lays line labels out at floor(zoom), so the zoom-14 drawing's labels did not fit from 13 to 14, and collision losers were removed with no fade. Checked by the bus-drawing tests in test/zoom-prototype.test.mjs. Classic recall fixtures do not run the /zoom/ page."
     }
   ]
 }
