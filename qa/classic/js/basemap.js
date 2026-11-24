@@ -7,7 +7,7 @@
 
 import { P } from './palette.js';
 import { DETAIL_FROM, PART_TIME, STREETS, TIERS, classWidth, tierWidth } from './shared.js';
-import { OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, ZOOMS } from './sizes.js';
+import { OVERVIEW_UNTIL, RAIL_GAP, RAIL_WIDTH, ZOOMS } from '../../../public/js/sizes.js';
 
 // Overpass, the interface's own face, drawn from glyphs the site makes itself
 // (scripts/glyphs.mjs).

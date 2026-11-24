@@ -1,13 +1,21 @@
 # RTD system map: design specification
 
+> Current implementation: `main` deploys the five-sheet map. Smooth zoom is
+> developed separately on `zoom-prototype-154`. Classic is preserved on
+> `classic-archive`; its older interface details below are historical or planned
+> features, rather than a second deployed application. See
+> [the development guide](docs/development.md).
+
+
 This is the source of truth for what this site is, who it is for, and how it
 should look and behave. Read it before changing the map, the interface, or the
 data pipeline. When a decision changes, update this file and add a line to the
 decision log at the bottom.
 
-The site has two pages. The front page is the four sheets, with the whole district one step out from them ("Four sheets").
-The continuous map the rest of this document describes is the Classic map, at
-`/classic/`. The front page does not link to it: it is reached by its address.
+The deployed front page is the four sheets, with the whole district one step
+out from them ("Four sheets"). Old `/classic/` links redirect to that page.
+The smooth-zoom trial has its own branch and `/zoom/` entry point. Classic
+details elsewhere below describe the archive or planned features.
 
 ## Principles
 
@@ -2044,18 +2052,20 @@ repositioning, shortening or hiding its labels to fit the screen. Names may
 be cropped by the viewport, as on a printed map. Zooming selects another
 built drawing; choosing a route may select its built name alternatives.
 
-The sheets are `public/index.html`. The map they took the front page from is
-the Classic map, `public/classic/index.html`; the sheets do not link to it.
-Each page finds its files wherever it is served from: the front
-page asks for them from the site's root, so it also works at any address
-Cloudflare answers with it (the site has no 404 page, so that is every address
-with no page of its own, the old `/sheets/` among them), and the classic
-map's scripts ask from where the scripts are. Both pages read the address the
-same way (`#zoom/lat/lon`), so a link made on the classic map when it was the
-front page opens the sheets at the same place. The checks in `qa/` read the
-classic map and find it with `qa/lib/where.mjs`: `/classic/` on a site that
-has a page there, the root on a build from before. `test/pages.test.mjs`
-holds these rules.
+The sheets are `public/index.html`, the only deployed application. Classic is
+preserved on `classic-archive` at commit
+`811135ffe4230f598082667c7fda20994d1bd97d`; its source page remains at
+`public/classic/index.html` on that branch. Main redirects `/classic/` and
+`/classic/*` to `/`, preserving view fragments. The current page asks for
+files from the site's root, including at addresses the host answers with it.
+
+`main` holds the current sheets. Smooth-zoom work stays on
+`zoom-prototype-154`, in its own worktree and `/zoom/` preview, until reviewed.
+Shared/current-map fixes land on main first and then merge into that branch.
+See `docs/development.md` for the workflow and separate verification commands.
+`npm run check` exercises the sheets. Historical browser checks and renderer
+fixtures live outside `public/`, under `qa/classic/`; the frozen-build recall
+suite still checks the original historical drawings.
 
 | Sheet | Zoom | What it adds |
 |---|---|---|
@@ -2073,10 +2083,12 @@ width from 360 px. It is the one sheet that does not always rest at the zoom
 it is drawn at: a phone is narrower than the network is tall, and a desktop
 is wider, so one zoom left the network small on one or the other. It rests
 as close as fits its frame (below) in the screen above the sheet buttons,
-32 px clear at the sides, where frequent lines end in a town whose name
-needs the room (Boulder), and 16 px above and below, never farther out than 8.75 and never past the
+44 px clear at the sides, where frequent lines end in a town whose name,
+centred on its point, needs the room (Boulder), and 16 px above and below,
+never farther out than 8.5 (a phone in Safari, its bars taking a quarter of
+its height, rests a little under 8.75 to show it all) and never past the
 point where sheet 1's band begins (`edge`, halfway between the two sheets'
-zooms, less 0.05). A 402 px phone rests at about 8.94; a desktop or a tablet
+zooms, less 0.05). A 402 px phone rests at about 8.8 on its whole screen and about 8.7 in Safari; a desktop or a tablet
 stops at about 9.33 with room round the network. A turned phone or a
 resized window rests again for its new screen. It is the same procedure as
 the other sheets, with these differences, all set in `SIZES` and the page's
@@ -2085,10 +2097,14 @@ tables:
 - Stepping out to it by button, pinch or scroll frames the network,
   wherever the reader was: side to side, the frequent bus network (streets
   every 15 minutes or better), from Boulder to Parker; top to bottom, that
-  network and the rail lines, stations, letters and names within it
-  (`wholeFrame`; the build writes it as `frame` in `sheets.json`). The
-  hourly bus streets are left out: a few reach far past the rest (Nederland),
-  and framing them left the network small. The A line runs on past the
+  network and the rail lines, stations, letters, names and bus streets
+  within it (`wholeFrame`; the build writes it as `frame` in `sheets.json`),
+  so a town between its sides served by hourly buses (Longmont) is in. The
+  hourly bus streets out past its sides are left out: a few reach far past
+  the rest (Nederland), and framing them left the network small. A town's
+  name that would run off the screen there is left off until the reader
+  pans it into room (`townsOnScreen`, main.js): Parker sits at the frame's
+  corner, and its name was cut in half. The A line runs on past the
   frame's east side to the airport, off the screen on a phone: its far
   end's name is set on one row by the line where it goes off a phone's
   screen (`namePointer.reach`, 14 px past the frame's side, inside the
@@ -2475,7 +2491,12 @@ How it is built:
   so a stop at its true place can sit beside its line or between two. Each
   ring is moved to the nearest point of the nearest street, within two
   merge-widths, that carries one of its routes; stops that land ring on ring
-  (the two sides of one street) are one ring with the routes of both.
+  (the two sides of one street) are one ring with the routes of both. On a
+  free route (one RTD names free: the FreeRide and the MetroRide), a stop
+  each way either side of a crossing (two stops RTD names for the same
+  crossing, on the same street with the same routes, 50 m apart or less)
+  is one ring between them, at the crossing: the FreeRide's pair at every
+  block. Other routes keep both rings.
 - **A line's curve into its last bar starts from the station**, fourteen
   pitches back along the line, not from the end of any tail track.
 - **A hall is drawn over the streets that end on it**, so each ends flat on
@@ -2503,15 +2524,18 @@ How it is built:
   group, not the whole list. There the routes are said once in a table, not
   along the street. Streets whose lettered stops share a letter and a route
   are one table (a one-way pair), titled with their names ("15th & 17th
-  St"), with a row for each letter: the letter in a small dark square, then
-  its routes, spaced, no commas. The table is a level plate in the ground's
+  St"), with a row for each letter: the letter in a small square in that
+  letter's own colour, then its routes, spaced, no commas. The colours go by
+  row (slate, rust and green, `GROUP_INK`; a fourth row takes the first
+  again), the same on the streets, on the stops and in the card, so a
+  stop is matched to its row by colour as well as by its small letter. The table is a level plate in the ground's
   colour with a hairline edge, which the build places on open ground
   nearest the middle of the lettered stops, clear of rail, bus streets,
   station names, route lists and the letters on the streets; place and
   street names give way to it. No bracket or leader ties it to the
   streets: the letters on them, in the table's squares, do that. On sheet 3
   the table replaces the lists along those streets, and each lettered stop
-  shows its letter on its street, in the table's small dark square with a
+  shows its letter on its street, in the table's square in its colour with a
   thin rim of ground, centred on the line at the stop's place as a rail
   line's letter sits on its line, so the street reads X Y Z block by block
   and matches the table. A square keeps off cross streets, rail, route
@@ -2519,7 +2543,7 @@ How it is built:
   it must, and two that would touch both stay, moved apart: none is
   dropped. On sheet 2 the table is set where it fits, and the streets
   carry no numbers where it doesn't. On sheet 4 each lettered stop shows
-  its letter in a small square in the stops' grey in place of its ring,
+  its letter in a small square in its colour in place of its ring,
   and the table is set once where it fits. A tap on these streets, a
   lettered stop or the table lists the routes by letter. Routes on those
   streets that stop at no lettered stop are still listed along the street.
@@ -3129,11 +3153,13 @@ principles by now"). The gates and rows are this document's own principles
 claim about a section above, not taste.
 
 **The views.** Judged from phone captures (390 x 844), light and dark,
-before and after, at the same fixed views every time: the metro at 10.5
-over downtown, the west side at 10.7, the south at 10.2, downtown at 12.5
-and 14.5 over the hub, and whatever the change is about (a corridor, a
-terminal). `qa/checks` takes them headless. A row is scored on the worst
-view, not the best.
+before and after. Current sheets use scales 8.75, 10, 12, 14 and 16, with the
+actual settled camera recorded. The smooth-zoom trial is evaluated explicitly
+at `/zoom/`, both modes, over 12–14 including fractional samples and both
+sides of drawing boundaries. Classic's older fractional views are historical
+only. Include data-derived hub/shared-track/terminal examples, reproducible
+unfamiliar samples and the affected place. Judge the worst view, not the best.
+See [evaluation scope and evidence](docs/evaluation.md).
 
 **The gates.** Two things are not scored. They pass or fail (Chris,
 2026-11-10: a score of "poster quality" means nothing for accuracy or
@@ -3166,8 +3192,9 @@ hand-drawn transit maps.
 
 **Why usefulness and looks are both on the card.** Roberts (2014) scores
 schematic maps on five criteria (simplicity, coherence, balance, harmony,
-topographicity) and found that how much people like a map has no
-correlation with how well they use it. So usefulness (the Useful row and the
+topographicity) and discusses evidence that preference and actual task
+performance can diverge. This does not establish a universal zero correlation.
+So usefulness (the Useful row and the
 Validation tasks) and looks are scored separately, and a version that is
 useful but ugly, or lovely but wrong, cannot pass on the strength of the
 other. Until 2026-11-10 the five were a second total out of 15 beside the
@@ -3187,24 +3214,34 @@ if Chris accepts that trade, and the decision log says so. Every card is
 kept, dated, in `scorecards.md`, so each version is scored against the one
 before it.
 
-**Who scores.** Not whoever did the work. The orchestrator scores from the
-captures; for anything large (a new kind of mark, a roadmap step) a second
-reviewer who did not build it scores independently, and the two cards are
-shown side by side. Each score cites the capture that earns it. The measured
-checks (`npm run check`, the sweep) decide the gates where they exist and
-back the rows they can (Drawn on purpose, Association, Phone), and a failing
-check caps its row at 1. Chris's verdict on the screenshots overrides the
-card.
-The second reviewer is the project's `design-reviewer` agent
-(`.claude/agents/design-reviewer.md`): it takes its own captures from a
-running server, never sees the builder's report, judges against the
-hand-drawn Denver transit poster (kept outside the repo), and returns a card
-without editing anything.
+**Who scores.** The implementation agent owns routine visual QA and scores
+from inspected captures and measurements. It must reproduce and fix visible
+faults before declaring a candidate ready; a green script alone is not a
+visual pass. An independent reviewer is useful where available, but routine
+work never waits for the user to inspect every view or choose a technical
+algorithm. The project's `design-reviewer` prompt is available for a distinct
+review pass; a self-review is not described as independent.
+
+Measured checks decide the gates they actually cover; a failing check caps its
+row at 1. The gates, minimum scores and no-regression rule above remain in force.
+Every score cites its evidence and scope. An unmeasured applicable gate or
+row prevents an overall pass. Broad geometry/labeling changes need a distinct
+review before unqualified visual acceptance; if unavailable, retain that gap
+and continue routine engineering. Each meaningful fix records rider impact
+and priority, a reproducible bad case, comparable after evidence, detector
+challenges/controls and limits, as specified in [evaluation.md](docs/evaluation.md).
+Device emulation is not evidence of
+physical-phone speed or real VoiceOver speech. Ask the user only for a prepared device-only check,
+a product tradeoff that evidence and principles cannot resolve, or concise
+formal-release approval. See `docs/verification.md`. The user's verdict can
+override a card; asking for that verdict on every zoom band is not a required
+QA step (updated 2026-11-21).
 
 ## Validation
 
-Before a version is called done, these six tasks are tried on a phone and
-measured: whether each was completed, how long it took, and wrong answers.
+Before a version is called done, the agent tries the applicable tasks in a
+phone-size browser and measures completion, time and wrong answers. Physical
+device behavior is checked separately where the available tools cannot verify it.
 Not whether anyone likes the map (see "Preference is not performance" under
 "Why").
 
@@ -3221,11 +3258,13 @@ Not whether anyone likes the map (see "Preference is not performance" under
 Tasks 1, 5 and 6 need Live or the key's other times; tasks 2 to 4 should work
 from the opening view without either.
 
-**Who tries them.** No panel of people (Chris, 2026-11-10: validation is
-automated, apart from his own review, which he does when he chooses).
-Before that the plan was five people who don't know the system. The tasks
-are run by an automated task test, which is not built yet (#66). As
-proposed there:
+**Who tries them.** The implementation agent, using the available browser
+tools and direct data checks, with rendered inspection as well as assertions.
+The user reviews when a specific valuable decision or device-only observation
+is ready, rather than serving as a manual QA panel (updated 2026-11-21).
+
+The independent task-test proposal in #66 remains useful for checking answers
+without sharing the implementation's assumptions. Its design is:
 
 - Each task's place or route is picked from the data at run time, never
   written down.
@@ -3400,44 +3439,31 @@ RTD GTFS ──────────────────────┼�
   dev:live` the relay beside it, which the site finds on its own.
 - Updates are automatic (see "Zero maintenance").
 
-The page is plain ES modules in `public/js/`, served as they are (no
-bundler), one concern to a file, so a change to one concern is a change to
-one file:
+The deployed page uses plain ES modules under `public/js/sheets/`:
 
-- `main.js`: startup only. Makes the map, its controls and framing ("Opening
-  state", "Layout"), the theme switch, and wires the other modules to it.
-- `network.js`: RTD's network as map layers: each line's colors in both
-  themes (`railStyle`), lines and areas (`transitLines`), stations, signs,
-  letters and names (`transitMarks`), their zooms, and the data sources.
-- `symbols.js`: every picture the map draws on a canvas, by image id
-  (stations, bullets, signs, vehicles, shields, icons), drawn on demand.
-- `legend.js`: the key ("The key"), drawn from the layers and `symbols.js`.
-- `sizes.js`: rail widths, station mark sizes and the zooms marks change at.
-  No DOM or MapLibre, so the build imports the same file
-  (`scripts/lib/stationmarks.mjs`) rather than a copy kept in step by hand;
-  it sits in `public/` because that is served with no copy step.
-- `basemap.js`: our basemap's layers on OpenFreeMap tiles ("Basemap").
-- `palette.js`, `color.js`: every color in both themes, and the rules that
-  keep RTD's colors legible ("Dark mode", "Rail line colors").
-- `shared.js`: bus tiers, frequency words and formatting both the map and
-  the panels use.
-- `highlight.js`: fading the rest of the network when a route is open.
-- `select.js`, `panel.js`: what a tap opens, the panels' words, and the
-  panel container ("One tap model").
-- `search.js`: the search box ("Search").
-- `edgeletters.js`: a line's letter where it enters the screen.
-- `evaluate.js`: style expressions worked out for one zoom, for the key.
-- `live.js`, `realtime.js`, `age.js`, `track.js`: Live: the button and
-  vehicles, the relay's protocol, the pill's words, and on-track checks.
-- `tabbable.js`: Tab order for Safari.
+- `main.js`: startup, sheet transitions, selection, theme, offline loading and framing.
+- `style.js`: sheet scales, palettes, map sources and layers.
+- `pick.js`, `say.js`: hit testing, route cards and screen-reader wording.
+- `address.js`, `view.js`, `settle.js`: share links, visible space and zoom settling.
+- `public/js/color.js` and `often.js`: shared colour and frequency helpers.
 
-Checks on the page live in `qa/checks/`: Playwright Test specs that open the
-site in headless Chromium (an iPhone 14 profile, light and dark) and measure
-what the map draws, one spec per "Done when" line of milestone 3 (`npm run
-check`, against a running `npm run dev`). `npm test` stays pure Node for the
-build's own modules. The specs are the record of what each step measured;
-the detectors that look for faults nobody has named yet (a line that breaks,
-marks that overlap, a letter missing) are the next thing to add there.
+`scripts/build-data.mjs` still builds the shared transit data, then
+`scripts/sheets.mjs` draws the sheets with `scripts/lib/sheets.mjs`.
+Shared size and frequency modules remain inputs to that data build. The Live
+relay and protocol are retained for the planned smooth-zoom features.
+
+The Classic application is archived on `classic-archive`, rather than shipped
+from `public/`. `qa/classic/js/` retains only the renderer dependencies needed
+by unit tests and frozen-build recall. `qa/drawn/` reads those fixtures or an
+old frozen build's original `public/js/` layout; it does not model the current
+sheets. Its historical browser checks require an explicit archive target.
+
+`qa/checks/` checks the deployed sheet map in light and dark: page health at
+each scale, route selection, theme changes, reload, Escape and old-link
+redirects. `qa/sheets.mjs` and `qa/a11y.mjs` retain the longer sheet and
+accessibility checks. `npm test` runs unit tests without a server. Nightly
+checks exercise sheet-map health; the branch workflow stays disabled until
+explicitly enabled.
 
 ## Unattended work
 
@@ -3697,9 +3723,11 @@ work against the real structure before asking for evaluation.
 ### Launch and versions
 
 Decided 2026-11-13. The site is called launched at **v1.0**, when the
-"Launch (v1.0)" milestone closes: Chris has signed off the four sheets on
-his phone in both themes, the sheets can highlight one route, and the
-version is closed (#14: view URLs, screen reader, offline). The page address
+"Launch (v1.0)" milestone closes: the agent has verified the five sheets
+in both themes, route highlighting, view URLs, offline use and accessibility
+(#14), with specific physical-device gaps recorded and resolved where required,
+and Chris has given concise release approval. Routine QA belongs to the agent;
+release approval does not ask the user to repeat that test matrix. The page address
 is its share link; a custom domain is not a launch requirement. V1 to
 V3 above are the names of the design stages that led there, not releases.
 What comes after launch is in four milestones, in this order (decided
@@ -3709,8 +3737,10 @@ What comes after launch is in four milestones, in this order (decided
    draw from.
 2. **v2: One zoomable map.** The sheets' drawing at every zoom, one map
    that zooms smoothly. The milestone holds only the steps to it, in
-   order; the plan is #129. The classic map is paused until the sheets
-   launch; its open issues carry the `classic` label.
+   order; the plan is #129. Classic is preserved on
+   `classic-archive`; its historical issues carry the `classic` label. Work on
+   the isolated smooth-zoom branch proceeds under regression and current-sheet
+   parity checks; blanket manual launch review is not an engineering gate.
 3. **v2.x: Classic features, other times and Live.** On the zoomable map:
    the classic map's features carried over (edge letters, relief, route
    panel, route tracing, Live), then Saturday, Sunday and evening in the
@@ -5234,6 +5264,52 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   and the rest. The v2 milestone mixed the path to the zoomable map with
   faults in a drawing it replaces, and the smooth zoom can ship before the
   classic features come over.
+- 2026-11-21: Separate the active map versions for handoff. Preserve Classic on
+  `classic-archive` at `811135f`, remove its page, startup and CSS from the deployed
+  site, and move its remaining renderer dependencies and browser checks into
+  `qa/classic/` for historical regressions. Old Classic links redirect to the
+  current map. `main` owns the sheets, `zoom-prototype-154` owns the smooth-zoom
+  experiment, and current/shared fixes flow from main into the trial. Standard
+  browser and nightly health checks now exercise the sheets. Reason: Chris
+  asked to make the version separation concrete while both active tracks continue.
+
+- 2026-11-21: Routine visual and interaction QA belongs to the implementation
+  agent. It inspects captures, fixes defects, proves regression checks on bad
+  examples and recommends technical choices from evidence. Replace blanket
+  user inspection of every sheet or zoom band with that verification. User
+  requests are limited to prepared device-only checks, unresolved product
+  tradeoffs and brief formal-release approval. Quality requirements and honest
+  reporting of real-device evidence gaps remain. Isolated engineering can
+  continue under parity checks while those requests are pending. Reason: Chris
+  asked the agent to take on fixing and evaluation rather than defaulting to
+  extensive manual review. The workflow is in `docs/verification.md`.
+
+- 2026-11-21: Make evaluation version-specific and evidence-backed. Current-sheet
+  whole-feature audits and fingerprinted captures are distinct from historical
+  Classic recall. Report detector blind spots, triage heuristic findings, and
+  keep unmeasured criteria explicit. Fixes require rider priority and comparable
+  before/after evidence; preserve score minimums and agent-owned routine QA.
+  See docs/evaluation.md and the dated scorecard.
+- 2026-11-23: The whole district's frame takes in the bus streets between its
+  sides top to bottom, keeps 44 px at the sides, may rest as far out as 8.5,
+  and leaves off a town's name that would run off the screen. Reason: on the
+  v1.0 launch check Chris said "On my phone, Longmont is cut off, and I have
+  to scroll a little bit". In Safari his map is about 402 by 655 px; Longmont
+  lay north of the frame, and Boulder's and Parker's names ran off the sides.
+- 2026-11-23: Each stop letter of a table in its own colour, by row, on the
+  streets, the stops, the table and the card. Reason: Chris, on the
+  neighbourhood sheet: "Let's make the XYZ stops different colors or something
+  so that they're easy to distinguish because the letters are small. The
+  alternative is to make the XYZ letters bigger." Bigger squares don't fit:
+  on sheet 3 they stand about 22 px apart along the street.
+- 2026-11-23: A stop each way either side of a crossing is one ring at the
+  crossing. Reason: Chris, on the street sheet: "The pair of free ride stops
+  aren't helpful. Those should just be a single stop at the intersection."
+  The rule comes from RTD's stop names, so it applies wherever a route has a
+  stop each way within 50 m at one crossing (686 rings fewer on sheet 4).
+- 2026-11-23: The pair rule above is for free routes only, the ones RTD names
+  free (the FreeRide and the MetroRide). Reason: shown the same
+  rule on route 65 at Monaco & Mansfield, Chris picked "FreeRide only".
 - 2026-11-20: An isolated zoom-12-to-14 comparison for #154 lives at `/zoom/`
   on `zoom-prototype-154`. It measures station-name consistency and compares
   reconstructed centre-line offsets with half-zoom rail drawings. This is

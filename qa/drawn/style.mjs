@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { classicScript } from '../classic/source.mjs';
 
 const theme = process.argv.includes('--theme') ? process.argv[process.argv.indexOf('--theme') + 1] : 'dark';
 if (!['light', 'dark'].includes(theme)) {
@@ -47,7 +48,7 @@ globalThis.location = { hash: '' };
 globalThis.innerWidth = 390;
 globalThis.innerHeight = 844;
 
-const js = (name) => path.join(root, 'public', 'js', name);
+const js = (name) => classicScript(root, name);
 
 // `--sources`: only the build files the page draws (network.js DATA_SOURCES),
 // for a caller that has to fetch the data before it can build the style.

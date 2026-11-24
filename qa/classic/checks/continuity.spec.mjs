@@ -20,8 +20,8 @@
 // each piece's direction) differ by more than a sixteenth of a width (the build steps a thirty-second).
 // Any finding fails. Captures are attached with each finding circled.
 import { test, expect, siteData, summary as say } from './fixtures.mjs';
-import { routeJoins } from '../lib/detect.mjs';
-import { seededViews } from '../lib/views.mjs';
+import { routeJoins } from '../../lib/detect.mjs';
+import { seededViews } from '../../lib/views.mjs';
 
 test('routes.geojson: joined pieces meet and ease between slots @deep', async ({}, testInfo) => {
   test.skip(testInfo.project.name !== 'phone-light', 'data only: once');

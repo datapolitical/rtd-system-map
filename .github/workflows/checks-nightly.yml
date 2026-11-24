@@ -5,7 +5,7 @@
 # a pass closes it. The other browser checks and the map checks no longer run
 # here: Chris stopped them on 2026-11-13 because they failed every night
 # without finding faults he hadn't, and slowed work down. They can still be
-# run by hand (npm run check, npm run check:map).
+# run by hand. This watchdog now exercises the sheet map, not Classic.
 name: Checks (nightly)
 
 on:

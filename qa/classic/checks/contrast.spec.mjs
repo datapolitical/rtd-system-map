@@ -18,7 +18,7 @@
 // Any finding fails. The views are seeded from the rail geometry (the same
 // seed as letters.spec.mjs) at 10 to 12, and 14.
 import { test, expect, siteData, summary } from './fixtures.mjs';
-import { seededViews } from '../lib/views.mjs';
+import { seededViews } from '../../lib/views.mjs';
 
 test('lines, marks, letters and bus tiers read in ten seeded views at 10 to 14 @deep', async ({ mapPage }, testInfo) => {
   test.setTimeout(900_000);

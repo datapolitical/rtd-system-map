@@ -12,11 +12,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
-import { annotate, contrast, detect, install, jump, measure, pixels } from '../lib/detect.mjs';
-import { stubAnalytics } from '../lib/analytics.mjs';
-import { mapPath } from '../lib/where.mjs';
+import { annotate, contrast, detect, install, jump, measure, pixels } from '../../lib/detect.mjs';
+import { stubAnalytics } from '../../lib/analytics.mjs';
+import { mapPath } from '../../lib/where.mjs';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 // The site's own data, as the server under test serves it (CHECK_URL or the
 // dev server), so a run against production reads production's data.
 const BASE = (process.env.CHECK_URL || 'http://127.0.0.1:8788').replace(/\/$/, '');

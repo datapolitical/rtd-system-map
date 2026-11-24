@@ -1,0 +1,70 @@
+{
+  "sourceCommit": "329752293fdc756a10f5d68a1c17391f4e849684",
+  "sourceDataBuilt": "2026-11-19T04:51:34.367Z",
+  "evidenceArchive": "evaluation-2026-11-21-f8299c0-3297522.zip",
+  "description": "Actual rendered station anchor flip, confirmed against screenshots. Not a synthetic map.",
+  "captures": [
+    {
+      "file": "light-offset-hub-13.01.png",
+      "sha256": "ad2940bb34ae654fce9e162305990e22da71424ab04e34f49c7d6c76f7bfc2df",
+      "theme": "light",
+      "mode": "offset",
+      "view": "hub",
+      "actual": {
+        "zoom": 13.01,
+        "center": [
+          -105.00067,
+          39.7536
+        ],
+        "names": [
+          {
+            "layer": "trial-name",
+            "id": 89,
+            "name": "Union Station",
+            "text": "Union Station",
+            "anchor": "bottom-right"
+          }
+        ]
+      }
+    },
+    {
+      "file": "light-offset-hub-14.png",
+      "sha256": "1598c87fc654e3d0690711b9cf2da20a32ce0e901f6a3484ae87e649f0718545",
+      "theme": "light",
+      "mode": "offset",
+      "view": "hub",
+      "actual": {
+        "zoom": 14,
+        "center": [
+          -105.00067,
+          39.7536
+        ],
+        "names": [
+          {
+            "layer": "trial-name",
+            "id": 89,
+            "name": "Union Station",
+            "text": "Union Station",
+            "anchor": "top"
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "kind": "label-anchor-change",
+    "group": "light/offset/hub",
+    "id": 89,
+    "name": "Union Station",
+    "before": {
+      "file": "light-offset-hub-13.01.png",
+      "zoom": 13.01,
+      "anchor": "bottom-right"
+    },
+    "after": {
+      "file": "light-offset-hub-14.png",
+      "zoom": 14,
+      "anchor": "top"
+    }
+  }
+}

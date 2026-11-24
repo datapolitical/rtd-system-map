@@ -1,43 +1,18 @@
-// Makes the picture a link to the site shows in messages and social posts:
-// a 600x315 view at twice the pixels (1200x630, the size Open Graph previews
-// use), with the interface hidden: the front page in the dark theme, where
-// the rail lines stand out most, and the classic map in the light. OG_THEME
-// overrides the theme. `sheets` is the front page
-// (public/og.png); `classic` is the classic map (public/classic/og.png),
-// whose route letters are hidden too: at this size they stack at Union
-// Station (#114), and the lines' colours say enough.
-//
-//   node scripts/og-image.mjs [site] [sheets|classic] [#zoom/lat/lon]
-import { chromium } from 'playwright';
+// The current map's sharing image: 1200x630 with its interface hidden.
+// node scripts/og-image.mjs [site] [#zoom/lat/lon]
+import { chromium } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
 const site = process.argv[2] ?? 'https://rtd-system-map.pages.dev/';
-const classic = process.argv[3] === 'classic';
-const view = process.argv[4] ?? (classic ? '#11/39.7400/-104.9700' : '#12/39.7500/-105.0085');
-const out = fileURLToPath(new URL(classic ? '../public/classic/og.png' : '../public/og.png', import.meta.url));
-
+if (process.argv[3] === 'classic') throw new Error('Classic image generation is preserved on classic-archive.');
+const view = (process.argv[3] === 'sheets' ? process.argv[4] : process.argv[3]) ?? '#12/39.7500/-105.0085';
+const out = fileURLToPath(new URL('../public/og.png', import.meta.url));
 const browser = await chromium.launch();
 try {
-  const page = await browser.newPage({ viewport: { width: 600, height: 315 }, deviceScaleFactor: 2, colorScheme: process.env.OG_THEME ?? (classic ? 'light' : 'dark') });
-  if (classic) {
-    await page.route('**/js/main.js', async (route) => {
-      const res = await route.fetch();
-      const body = (await res.text()).replace('loadWhenNeeded(map);', 'window.__map=map;loadWhenNeeded(map);');
-      await route.fulfill({ response: res, body });
-    });
-  }
-  await page.goto(new URL(`${classic ? 'classic/' : ''}${view}`, site).href, { waitUntil: 'networkidle', timeout: 60_000 });
-  if (classic) {
-    await page.waitForFunction(() => window.__map && window.__map.loaded(), null, { timeout: 60_000 });
-    await page.evaluate(() => {
-      const m = window.__map;
-      for (const l of m.getStyle().layers) if (/bullets|edge-letters|line-signs/.test(l.id)) m.setLayoutProperty(l.id, 'visibility', 'none');
-    });
-    await page.waitForFunction(() => window.__map.loaded(), null, { timeout: 30_000 });
-  }
+  const page = await browser.newPage({ viewport: { width: 600, height: 315 }, deviceScaleFactor: 2, colorScheme: process.env.OG_THEME ?? 'dark' });
+  await page.goto(new URL(view, site).href, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await page.waitForFunction(() => window.sheetsReady && window.sheetsMap?.loaded(), null, { timeout: 60_000 });
   await page.addStyleTag({ content: 'body > :not(main):not(#map):not(.maplibregl-map), main > :not(#map):not(.maplibregl-map) { visibility: hidden !important } .maplibregl-control-container { display: none !important }' });
-  if (!await page.locator('#map, .maplibregl-map').first().isVisible()) throw new Error('The sharing image must contain the visible map');
-  await page.waitForTimeout(2500);
   await page.screenshot({ path: out });
   console.log(`wrote ${out}`);
 } finally {

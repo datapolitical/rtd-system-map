@@ -28,11 +28,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect, siteData } from './fixtures.mjs';
-import { openModel, pageSources } from '../drawn/model.mjs';
-import { styleErrors } from '../drawn/expressions.mjs';
-import { compareBoxes, compareLines, compareLinesBack, compareProbes, comparePoints, lineSamples, modelHitMap, probeLines, signature } from '../drawn/compare.mjs';
-import { offsetParts } from '../drawn/strokes.mjs';
-import { seededViews } from '../lib/views.mjs';
+import { openModel, pageSources } from '../../drawn/model.mjs';
+import { styleErrors } from '../../drawn/expressions.mjs';
+import { compareBoxes, compareLines, compareLinesBack, compareProbes, comparePoints, lineSamples, modelHitMap, probeLines, signature } from '../../drawn/compare.mjs';
+import { offsetParts } from '../../drawn/strokes.mjs';
+import { seededViews } from '../../lib/views.mjs';
 
 const VIEWS = Number(process.env.DRAWN_VIEWS ?? 10);
 const ZOOMS = (process.env.DRAWN_ZOOMS ?? '10,12,14,16').split(',').map(Number);

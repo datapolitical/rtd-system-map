@@ -12,6 +12,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createCanvas } from '@napi-rs/canvas';
+import { classicScript } from '../classic/source.mjs';
 
 let booted = null;
 
@@ -31,7 +32,7 @@ export async function icons(theme = 'dark', root = path.resolve(path.dirname(new
     },
   };
   globalThis.window = globalThis;
-  const { addSymbol, RATIO } = await import(pathToFileURL(path.join(root, 'public', 'js', 'symbols.js')).href);
+  const { addSymbol, RATIO } = await import(pathToFileURL(classicScript(root, 'symbols.js')).href);
   const sizes = new Map();
   const map = {
     hasImage: (id) => sizes.has(id),

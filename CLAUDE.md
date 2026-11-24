@@ -28,8 +28,12 @@ we are" section from them (closed issues show as done).
   of the newest comment under the step.
 - Close work with `Fixes #N` in the commit message. It closes when the commit
   reaches main on GitHub. Close it by hand if the work lands another way.
-- When something waits on Chris (a phone check, a decision, the go-ahead to
-  publish), add the `needs Chris` label and say what is needed in a comment.
+- The implementation agent owns routine visual, interaction and regression QA
+  ([docs/verification.md](docs/verification.md), updated 2026-11-21). Inspect
+  actual captures, fix defects and verify them before involving Chris.
+  `needs Chris` is only for a specific product tradeoff, final release approval,
+  or a prepared physical-device check the available tools cannot perform.
+  State the exact question, evidence and why the agent cannot resolve it.
 - "Launch (v1.0)" holds what must be done before launch; the later
   milestones (DESIGN.md, the roadmap after launch) hold what can wait. Put
   new work in the one it belongs to, and ask Chris before adding to the
@@ -58,6 +62,15 @@ still need an issue or an update to an existing issue when write access permits.
 before publishing so missing captures stop the build. The historical pins
 in `qa/recall/finds.json` remain regression evidence, not confirmed current bugs.
 
+- Read [docs/development.md](docs/development.md) for the branch boundaries.
+  `main` owns the current sheet map; `zoom-prototype-154` owns smooth-zoom
+  experiments; `classic-archive` preserves the earlier application. Do not
+  merge the archive back into main or restore Classic under `public/`.
+  Fix shared/current-map faults on main first, then bring main into the
+  smooth-zoom branch. Its preview and checks must explicitly exercise `/zoom/`.
+- `npm run check` checks the current sheet map. `check:classic*` requires an
+  explicitly selected archive server and never substitutes for a current-map check.
+
 - The bar is a map that is both useful and beautiful. Visual work isn't done
   until it is both. Put visual criteria in every builder brief and every
   review.
@@ -75,7 +88,16 @@ in `qa/recall/finds.json` remain regression evidence, not confirmed current bugs
 
 ## Checks: what "done" and "verified" mean
 
-- A "Done when" line in an issue changes only when Chris says so. If one
+- Follow [docs/evaluation.md](docs/evaluation.md): name the version, rider
+  consequence and priority; preserve before/after evidence and detector controls;
+  record unmeasured criteria. Historical Classic recall is not current-map
+  acceptance. `npm run check:evidence` collects scoped, fingerprinted evidence.
+
+- A "Done when" line in an issue changes only when Chris says so. His
+  2026-11-21 instruction assigns routine evaluation to the agent; replace
+  blanket manual-review gates with evidence-backed agent verification,
+  preserving correctness, accessibility and performance requirements.
+  Device-specific gaps and formal release approval stay explicit. If one
   looks wrong, say why in a comment and add `needs Chris`; keep working to it
   until he answers.
 - "Verified" says what was run: the themes, the views or places, the zooms,

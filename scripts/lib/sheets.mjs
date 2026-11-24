@@ -74,7 +74,7 @@ export function districtShape(boundary, metres = 250, minKm2 = 1) {
 /**
  * What stepping out to the whole-district sheet frames, as [west, south, east, north]: the
  * frequent network (bus streets every 15 minutes or better) side to side, and the rail lines,
- * stations, letters and station names (`bx`, px from the station) within that span top to bottom
+ * stations, letters, station names (`bx`, px from the station) and bus streets within that span top to bottom
  * (wholeFrame). The map centres on this and comes as close as fits each screen (#152,
  * public/js/sheets/main.js). The rail lines that run on past its sides, to the airport, are
  * named where they leave it (Chris, 2026-11-18). A sheet with no frequent bus frames its rail.
@@ -221,6 +221,9 @@ export const SIZES = {
   streetEvery: { 0: 0, 1: 0, 2: 0, 3: 520, 4: 360 },
   // A stop's ring, out to its edge (public/js/sheets/style.js, STOP_RING).
   stopRing: 4.75,
+  // Two stops named for one crossing, on one street with the same routes, this many metres apart
+  // or less are one ring at the crossing (stopRings): a stop each way, either side of it.
+  stopPair: 50,
   // The page keeps lettering this far off a ring's middle (public/js/sheets/style.js, STOP_ROOM and its padding).
   stopRoom: 7.25,
   // A street's name that would sit on a stop is tried this many pixels at a time along its street.
@@ -985,8 +988,11 @@ export function strayed(box, mine, others) {
  */
 /**
  * The whole-district sheet's frame, in px: the frequent network (bus streets every 15 minutes or
- * better) side to side, and every rail line and station within that span top to bottom, with the
- * frequent network's own top and bottom. `streets` are `{ cls, path }`; `rail` is paths.
+ * better) side to side, and every rail line, station and bus street within that span top to
+ * bottom. A town served only by less frequent buses (Longmont) is in the frame when it lies
+ * between the frequent network's sides (Chris, 2026-11-20: "On my phone, Longmont is cut off, and
+ * I have to scroll a little bit"); one out past them (Nederland) still is not. `streets` are
+ * `{ cls, path }`; `rail` is paths.
  */
 export function wholeFrame(streets, rail) {
   let box = [Infinity, Infinity, -Infinity, -Infinity];
@@ -994,7 +1000,7 @@ export function wholeFrame(streets, rail) {
   for (const st of streets) if (CLASS_ORDER.indexOf(st.cls) >= CLASS_ORDER.indexOf('c15')) st.path.forEach(add);
   if (!Number.isFinite(box[0])) for (const path of rail) path.forEach(add);
   const [x0, x1] = [box[0], box[2]];
-  for (const path of rail) for (const p of path) if (p[0] >= x0 && p[0] <= x1) add(p);
+  for (const path of [...rail, ...streets.map((st) => st.path)]) for (const p of path) if (p[0] >= x0 && p[0] <= x1) add(p);
   return Number.isFinite(box[0]) ? box : null;
 }
 
@@ -3151,8 +3157,22 @@ export function inOrder(routes) {
  * not traced, so a stop at its true place can sit off its line, or between two. Each is moved
  * to the nearest point of the nearest street within `reach` that carries one of its routes.
  * Stops that land ring on ring (the two sides of one street) are one ring with the routes of all.
+ * So is a pair either side of a crossing on a free route: two stops RTD names for the same
+ * crossing, on the same street, with the same routes, all of them in `paired`, within
+ * SIZES.stopPair metres (a stop each way, one before the crossing and one after it) are one ring
+ * between them, at the crossing (Chris, 2026-11-20: "The pair of free ride stops aren't helpful.
+ * Those should just be a single stop at the intersection"; 2026-11-23: FreeRide only, not every
+ * route). `paired` is the routes RTD names free (freeRoutes).
  */
-export function stopRings(stops, streets, sheet, reach = 2 * SIZES.busMerge[sheet.id]) {
+/** The bus routes RTD names free ("16th Street FreeRide", "Free MetroRide"). */
+export function freeRoutes(routes) {
+  return new Set(routes.features.filter((f) => f.properties.mode !== 'rail' && /\bfree/i.test(f.properties.name ?? '')).map((f) => f.properties.route));
+}
+export function stopCrossing(name) {
+  const parts = String(name ?? '').replace(/\s*\[[^\]]*\]/g, '').split(' & ').map((s) => s.trim().replace(/^[NSEW] /, ''));
+  return parts.length === 2 && parts.every(Boolean) ? parts.join(' & ') : null;
+}
+export function stopRings(stops, streets, sheet, reach = 2 * SIZES.busMerge[sheet.id], paired = new Set()) {
   const cell = 64;
   const grid = new Map();
   const key = (p) => `${Math.floor(p[0] / cell)},${Math.floor(p[1] / cell)}`;
@@ -3181,13 +3201,27 @@ export function stopRings(stops, streets, sheet, reach = 2 * SIZES.busMerge[shee
       }
     }
     const at = best ? best.at : p;
+    const crossing = mine.length && mine.every((r) => paired.has(r)) ? stopCrossing(q.name) : null;
+    const served = inOrder(mine).join(' ');
+    // Metres to the sheet's pixels where the stop is.
+    const pairPx = (SIZES.stopPair * world(sheet.zoom)) / (40075016.7 * Math.cos((f.geometry.coordinates[1] * Math.PI) / 180));
+    const pair = crossing && rings.find((r) => !r.paired && r.crossing === crossing && r.served === served && dist(r.at, at) <= pairPx);
+    if (pair) {
+      pair.at = lerp(pair.at, at, 0.5);
+      pair.paired = true;
+      if (pair.heading !== (q.heading ?? '')) pair.heading = '';
+      if (pair.letter !== stopLetter(q.name)) pair.letter = null;
+      continue;
+    }
     const same = rings.find((r) => dist(r.at, at) < apart);
     if (same) {
       same.routes = inOrder([...new Set([...same.routes, ...mine])]);
+      same.served = same.routes.join(' ');
+      if (same.crossing !== crossing) same.crossing = null;
       if (same.heading !== (q.heading ?? '')) same.heading = '';
       // A ring says a letter only where every stop in it has that letter.
       if (same.letter !== stopLetter(q.name)) same.letter = null;
-    } else rings.push({ id: q.id, name: q.name, heading: q.heading ?? '', routes: inOrder(mine), at, letter: stopLetter(q.name) });
+    } else rings.push({ id: q.id, name: q.name, heading: q.heading ?? '', routes: inOrder(mine), at, letter: stopLetter(q.name), crossing, served });
   }
   return rings;
 }
@@ -3252,6 +3286,15 @@ export function groupTitle(streets) {
   const last = words[0].at(-1);
   if (words.length > 1 && words.every((w) => w.length > 1 && w.at(-1) === last)) return `${words.map((w) => w.slice(0, -1).join(' ')).join(' & ')} ${last}`;
   return words.map((w) => w.join(' ')).join(' & ');
+}
+
+/**
+ * A letter's place among its table's rows (0 for the first): the page gives each its own colour,
+ * the same in the table, on the streets and on the stops (style.js, GROUP_INK), so a stop's letter
+ * is told apart by its colour as well as by its small letter (Chris, 2026-11-20).
+ */
+export function letterIndex(table, letter) {
+  return Math.max(0, table?.rows.findIndex((r) => r.letter === letter) ?? 0);
 }
 
 /** Each lettered stop's routes by its letter, as a tap shows them: "X 15 15L" rows joined by " | ". */
@@ -3642,7 +3685,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // The stops' rings, from the sheet that draws them. A ring half under a rail line can't be read
   // as a stop: one that close to a line is not drawn.
   const clear = SIZES.rail[sheet.id] / 2 + SIZES.stopRing;
-  const rings = sheet.id < SIZES.stopSheet ? [] : stopRings(busStops(stops, routes), bus, sheet)
+  const rings = sheet.id < SIZES.stopSheet ? [] : stopRings(busStops(stops, routes), bus, sheet, undefined, freeRoutes(routes))
     .filter((r) => !lines.some((l) => l.paths.some((path) => boxed(path, r.at, clear) && nearest(path, r.at).d < clear)));
   // A name or a list keeps off each stop's ring, where the page keeps lettering off it.
   const cell = 64;
@@ -3773,14 +3816,14 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     features.push(feature({ kind: 'group-text', ...common, role: 'title', text: layout.title.text, off: off(layout.title.at, G.title) }, here));
     for (const row of layout.rows) {
       const routes = g.table.rows.find((r) => r.letter === row.letter).routes.join(', ');
-      features.push(feature({ kind: 'group-badge', ...common, routes, letter: row.letter, off: off(row.badge), toff: off(row.badge, G.letter) }, here));
+      features.push(feature({ kind: 'group-badge', ...common, routes, letter: row.letter, li: letterIndex(g.table, row.letter), off: off(row.badge), toff: off(row.badge, G.letter) }, here));
       features.push(feature({ kind: 'group-text', ...common, routes, role: 'row', text: row.text, off: off(row.at, G.row) }, here));
     }
   }
   // Each lettered stop's square on its street: its letter, and for a tap its name and routes.
   for (const q of squares) {
     const p = q.feature.properties;
-    features.push(feature({ kind: 'group-stop', group: q.group, letter: q.letter, name: stopName(p.name), heading: p.heading ?? '', routes: inOrder(q.routes).join(', ') }, { type: 'Point', coordinates: back(q.at) }));
+    features.push(feature({ kind: 'group-stop', group: q.group, letter: q.letter, li: letterIndex(grouped[q.group].table, q.letter), name: stopName(p.name), heading: p.heading ?? '', routes: inOrder(q.routes).join(', ') }, { type: 'Point', coordinates: back(q.at) }));
   }
   const onPlate = (path) => plates.some(([x, y, w, h]) => resample(path, 2).some((p) => p[0] > x - size / 2 && p[0] < x + w + size / 2 && p[1] > y - size / 2 && p[1] < y + h + size / 2));
   // From sheet 3 the bus streets are named, from their stops (runStreet): each piece takes the name its
@@ -3860,7 +3903,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // Where a bus line ends, on the sheets that draw no stops: a mark on the end of the line.
   if (sheet.id <= 3) for (const e of ends) features.push(feature({ kind: 'bus-end', cls: e.cls, routes: listed(e.routes), ...(isExpress(String(e.routes), express) ? { express: true } : {}), ...(isExpress(String(e.routes), airport) ? { airport: true } : {}) }, { type: 'Point', coordinates: back(e.at) }));
   // A stop RTD letters by its group says its letter where its ring would be.
-  for (const r of rings) features.push(feature({ kind: 'stop', id: r.id, name: r.letter ? stopName(r.name) : r.name, heading: r.heading, routes: r.routes.join(', '), ...(r.letter ? { letter: r.letter } : {}) }, { type: 'Point', coordinates: back(r.at) }));
+  for (const r of rings) features.push(feature({ kind: 'stop', id: r.id, name: r.letter ? stopName(r.name) : r.name, heading: r.heading, routes: r.routes.join(', '), ...(r.letter ? { letter: r.letter, li: letterIndex(tables.find((t) => t.streets.includes(stopStreet(r.name))), r.letter) } : {}) }, { type: 'Point', coordinates: back(r.at) }));
   const hub = marks.find((m) => m.hub);
   return { type: 'FeatureCollection', hub: hub ? back(lerp(hub.ends[0], hub.ends[1], 0.5)) : null, features };
 }
