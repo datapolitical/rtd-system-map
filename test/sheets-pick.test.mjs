@@ -167,3 +167,30 @@ test('a picked route\'s card says what the route is, from RTD\'s directory, in t
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.match(html, /#card\.route \{[^}]*padding: 6px/, 'the route card is compact');
 });
+
+test("a picked route keeps its own numbers, its table square on its letter and its stops' letters (v1.0 check)", () => {
+  for (const theme of ['light', 'dark']) {
+    const style = sheetStyle(theme, [], ['#57C1E9']);
+    const at = (id) => style.layers.findIndex((l) => l.id === id);
+    const picked = { ...none, bus: '15L' };
+    for (const n of [2, 3, 4]) {
+      // Its numbers are set after the marks that keep other lettering off it, so they are not kept off too.
+      assert.ok(at(`picked-number-${n}`) > at(`keep-off-pick-${n}`), `sheet ${n}: the picked numbers come after keep-off-pick`);
+      assert.ok(at(`picked-stack-${n}`) > at(`keep-off-pick-${n}`));
+      const label = { kind: 'bus-label', label: '15, 15L' };
+      assert.equal(evaluate(layer(style, `picked-number-${n}`).filter, { props: label, state: picked }), true);
+      assert.equal(evaluate(layer(style, `bus-number-${n}`).filter, { props: label, state: picked }), false, 'drawn once, by picked-number');
+      assert.equal(evaluate(layer(style, `bus-number-${n}`).filter, { props: label, state: none }), true);
+    }
+    // The picked row's square is its own larger image, not icon-size, which slides an offset icon.
+    const badge = layer(style, 'group-badge-3').layout;
+    assert.equal(badge['icon-size'], undefined);
+    assert.match(JSON.stringify(badge['icon-image']), /stopgroup-picked-/);
+    // A lettered stop on the picked route is set again over the picked line and its rings.
+    assert.ok(at('pick-letter-4') > at('pick-stop-4'));
+    const x = { kind: 'stop', routes: '1, 15, 15L, 20', letter: 'X' };
+    assert.equal(evaluate(layer(style, 'pick-letter-4').filter, { props: x, state: picked }), true);
+    assert.equal(evaluate(layer(style, 'pick-letter-4').filter, { props: x, state: { ...none, bus: '28' } }), false);
+    assert.equal(evaluate(layer(style, 'pick-letter-4').filter, { props: { kind: 'stop', routes: '15L' }, state: picked }), false);
+  }
+});

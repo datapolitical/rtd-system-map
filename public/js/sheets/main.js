@@ -504,7 +504,7 @@ map.on('click', (e) => {
   const table = hit(['group-area'])[0]?.properties;
   if (table) return tell({ title: esc(table.title), lead: 'Each stop serves the routes of its letter', groups: groupList(table.rows) });
   const station = hit(['station', 'name'])[0]?.properties;
-  const lettered = station ? null : hit(['group-stop', 'stop-letter'])[0]?.properties;
+  const lettered = station ? null : hit(['group-stop', 'pick-letter', 'stop-letter'])[0]?.properties;
   if (lettered?.letter) return placeCard({ lettered });
   const bus = hit(['bus']).map((f) => f.properties).sort((a, b) => b.n - a.n)[0];
   const stop = hit(['stop'])[0]?.properties;
@@ -513,7 +513,7 @@ map.on('click', (e) => {
     letter: hit(['letter'])[0]?.properties,
     rail: [...new Map(hit(['rail']).map((f) => [f.properties.route, f.properties])).values()],
     stop,
-    label: hit(['bus-number', 'bus-stack'])[0]?.properties,
+    label: hit(['picked-number', 'picked-stack', 'bus-number', 'bus-stack'])[0]?.properties,
     bus,
   });
   if (!what) {
@@ -761,13 +761,14 @@ if ('serviceWorker' in navigator) {
 // least twice the screen's pixels, so their edges stay crisp.
 const ratio = Math.max(2, Math.ceil(window.devicePixelRatio || 1));
 function groupImage(id) {
-  const m = /^stopgroup-(plate|badge|street|stop)-(light|dark)(?:-(\d+)x(\d+)|-i(\d+))?$/.exec(id);
+  const m = /^stopgroup-(plate|badge|picked|street|stop)-(light|dark)(?:-(\d+)x(\d+)|-i(\d+))?$/.exec(id);
   if (!m) return null;
   const c = PALETTES[m[2]];
   // A letter's own colour, by its row (style.js, GROUP_INK).
   const inks = GROUP_INK[m[2]];
   const ink = inks[Number(m[5] ?? 0) % inks.length];
-  const square = { badge: GROUP.badge, street: GROUP.badge + 2 * GROUP.streetRim, stop: GROUP.stopBadge + 2 * GROUP.stopRim }[m[1]];
+  // `picked`: a picked route's row in its table, its square a little larger (style.js, group-badge).
+  const square = { badge: GROUP.badge, picked: Math.round(GROUP.badge * GROUP.pickedBadge), street: GROUP.badge + 2 * GROUP.streetRim, stop: GROUP.stopBadge + 2 * GROUP.stopRim }[m[1]];
   const [w, h] = m[1] === 'plate' ? [Number(m[3]), Number(m[4])] : [square, square];
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(w * ratio);
@@ -783,7 +784,7 @@ function groupImage(id) {
     ctx.strokeStyle = c.number;
     ctx.lineWidth = 1;
     ctx.stroke();
-  } else if (m[1] === 'badge') {
+  } else if (m[1] === 'badge' || m[1] === 'picked') {
     ctx.roundRect(0, 0, w, h, GROUP.badgeCorner);
     ctx.fillStyle = ink;
     ctx.fill();
