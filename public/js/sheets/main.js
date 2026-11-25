@@ -1,7 +1,7 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
-import { SHEETS, OPENING, edge, sheetData, sheetStyle, PALETTES, GROUP, GROUP_INK, PLACE_SIZE, PLACE_MAJOR_RANK, expressInk, airportInk } from './style.js';
+import { SHEETS, OPENING, edge, sheetData, sheetStyle, PALETTES, GROUP, GROUP_INK, PLACE_SIZE, PLACE_MAJOR_RANK, expressInk, airportInk, shortStreet } from './style.js';
 import { pickFrom, pickCard, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
@@ -483,6 +483,35 @@ function townsOnScreen() {
 }
 map.on('moveend', townsOnScreen);
 map.on('idle', townsOnScreen);
+// A street our own lettering names on the screen (a bus street's name, or the name leading its
+// route list) is not named again beside it by the ground's tiles (#174: "E 17th Ave" twice). The
+// two are matched in the short form the sheets set ("W Alameda Ave"), without a direction before
+// it. Panning brings the ground's name back where ours is off the screen.
+const bareStreet = (name) => String(name).replace(/^[NSEW] /, '');
+const groundStreet = ['let', 'short', shortStreet(['let', 'label', ['to-string', ['coalesce', ['get', 'name'], '']], ['case', ['==', ['var', 'label'], ''], ['to-string', ['coalesce', ['get', 'ref'], '']], ['var', 'label']]]),
+  ['case', ['in', ['slice', ['var', 'short'], 0, 2], ['literal', ['N ', 'S ', 'E ', 'W ']]], ['slice', ['var', 'short'], 2], ['var', 'short']]];
+const streetBase = new Map();
+let streetKey = '';
+function streetsOnScreen() {
+  const n = SHEETS[sheet].id;
+  const id = `street-name-${n}`;
+  if (!map.getLayer(id)) return;
+  if (!streetBase.has(id)) streetBase.set(id, map.getFilter(id));
+  const ours = ['bus-street', 'picked-street', 'bus-number', 'picked-number'].map((l) => `${l}-${n}`).filter((l) => map.getLayer(l));
+  const names = new Set();
+  for (const f of map.queryRenderedFeatures({ layers: ours })) {
+    const name = f.properties.kind === 'bus-street' ? f.properties.label : f.properties.street;
+    if (name) names.add(bareStreet(name));
+  }
+  const list = [...names].sort();
+  const filter = list.length ? ['all', streetBase.get(id), ['!', ['in', groundStreet, ['literal', list]]]] : streetBase.get(id);
+  // (A new style, on a change of theme, comes with the layer's own filter again.)
+  const key = JSON.stringify(filter);
+  if (key === streetKey && JSON.stringify(map.getFilter(id)) === key) return;
+  streetKey = key;
+  map.setFilter(id, filter);
+}
+map.on('idle', streetsOnScreen);
 new ResizeObserver(keepVisible).observe(card);
 // Each line's colour, as the sheets draw it (a station lists its lines by letter only).
 const colorOf = new Map();

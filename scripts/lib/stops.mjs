@@ -33,3 +33,20 @@ export function heading(dir) {
   if (/^[NS][EW]$/.test(short)) return `${WORDS[short[0]]}${WORDS[short[1]].toLowerCase()}-bound`;
   return null;
 }
+
+/**
+ * The stops no scheduled trip calls at. RTD's stops layer still lists a stop
+ * for a route that has stopped serving it (Ward Rd & W 61st Ave names the 52,
+ * which no trip calls at, #168), so a stop is kept only where a trip on one of
+ * the build's typical days stops. `known` is every stop id the GTFS feed has
+ * and `called` the ones its trips call at. A stop the feed doesn't know is
+ * kept: that is the two sources out of step, not a stop without service. When
+ * fewer than `share` of the stops are known to the feed at all, the ids no
+ * longer match and nothing is dropped (returns null).
+ */
+export function unservedStops(stops, known, called, share = 0.9) {
+  const ids = stops.map((f) => String(f.properties.id));
+  const matched = ids.filter((id) => known.has(id)).length;
+  if (!ids.length || matched < share * ids.length) return null;
+  return new Set(ids.filter((id) => known.has(id) && !called.has(id)));
+}
