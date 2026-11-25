@@ -287,7 +287,10 @@ async function main() {
 
   const looked = LOOK ? look(dir, evidence, left).filter((f) => !left[f.key]) : [];
   looked.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
-  const all = [...newChecks, ...looked];
+  // A finding an issue already carries (its "Round finding:" line) is being worked; leave it alone.
+  const listed = run('gh', ['issue', 'list', '--state', 'all', '--search', '"Round finding:" in:body', '--limit', '500', '--json', 'body'], { quiet: true });
+  const filed = new Set(listed.status === 0 ? JSON.parse(listed.stdout).flatMap((i) => [...i.body.matchAll(/^Round finding: (\S+)\s*$/gm)].map((m) => m[1])) : []);
+  const all = [...newChecks, ...looked].filter((f) => !filed.has(f.key));
   const proposed = all.slice(0, MOST), extra = all.slice(MOST);
   await capturePlaces(proposed, dir);
 
