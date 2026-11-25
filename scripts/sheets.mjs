@@ -29,8 +29,18 @@ export async function writeSheets(dir) {
   const colors = new Set();
   // What the whole-district sheet draws, end to end: stepping out to it frames this (#152).
   let frame = null;
+  // RTD's stop groups (15th & 17th downtown): the page shows each one's key on the screen while
+  // one of its lettered stops is in view on a sheet that draws them (public/js/sheets/main.js).
+  const groups = [];
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
+    drawn.features = drawn.features.filter((f) => {
+      if (f.properties.kind !== 'group-key') return true;
+      const { group, title, rows } = f.properties;
+      groups[group] ??= { title, rows, at: {} };
+      groups[group].at[sheet.id] = f.geometry.coordinates;
+      return false;
+    });
     if (sheet.whole) frame = sheetExtent(drawn, sheet);
     // Each route's whole line is drawn only for a picked route, so it is a file of its own that the
     // page asks for at the first pick (#193): about 40% of each sheet's bytes otherwise.
@@ -46,7 +56,7 @@ export async function writeSheets(dir) {
   }
   // RTD's district, for the towns the whole-district sheet names (#152). A build without it names every town.
   const district = districtShape(await read('boundary').catch(() => null));
-  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), code: await sheetsCode(), hub, stations: [...named], colors: [...colors], district, frame }));
+  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), code: await sheetsCode(), hub, stations: [...named], colors: [...colors], district, frame, groups: groups.filter(Boolean) }));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

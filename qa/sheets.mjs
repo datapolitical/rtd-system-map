@@ -81,13 +81,13 @@ try {
       assert.match(await page.locator('#card .hint').textContent(), /highlight/);
       assert.doesNotMatch(await page.locator('#card .hint').textContent(), /whole|way/);
     });
-    await check('#137 stop-group table stays readable while a route is picked', async () => {
+    await check('#137 #198 the stop-group key is on the screen and marks a picked route', async () => {
       await visit('#14/39.7465/-104.9925/bus/15L');
       await page.waitForFunction(() => window.sheetsPick?.route === '15L');
-      const opacity = await page.evaluate(() => window.sheetsMap.getPaintProperty('group-badge-3', 'text-opacity'));
-      assert.equal(opacity, 1);
-      const rows = await page.evaluate(() => window.sheetsMap.querySourceFeatures('sheet-3', { filter: ['==', ['get', 'kind'], 'group-text'] }).filter((f) => f.properties.role === 'row').map((f) => f.properties.routes));
-      assert.ok(rows.some((r) => String(r).split(/,\s*/).includes('15L')));
+      await page.waitForFunction(() => !document.querySelector('#key').classList.contains('off'));
+      const key = await page.evaluate(() => ({ picked: [...document.querySelectorAll('#key .routes span.picked')].map((e) => e.textContent), rows: document.querySelectorAll('#key .row.picked').length }));
+      assert.deepEqual(key.picked, ['15L']);
+      assert.equal(key.rows, 1);
       await page.screenshot({ path: path.join(OUT, `${theme}-groups.png`) });
     });
     await check('#141 separators are not spoken', async () => {
