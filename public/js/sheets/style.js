@@ -267,6 +267,8 @@ const FLAT = { 'line-cap': 'butt', 'line-join': 'round' };
 
 /** Where a sheet's drawing is; the page hands it to the map when the sheet is wanted. */
 export const sheetData = (n) => new URL(`../../data/sheet-${n}.geojson`, import.meta.url).href;
+// Each sheet's route lines, drawn only for a picked bus route: the page asks for them at the first pick (#193).
+export const routesData = (n) => new URL(`../../data/sheet-${n}-routes.geojson`, import.meta.url).href;
 const NOTHING = { type: 'FeatureCollection', features: [] };
 
 /**
@@ -274,7 +276,7 @@ const NOTHING = { type: 'FeatureCollection', features: [] };
  * `wanted` is the sheets whose drawings load now (all of them when not given); the rest start
  * empty, so the opening view doesn't wait on sheets it can't show (DESIGN.md, "Quality floor").
  */
-export function sheetStyle(theme, stations = [], colors = [], wanted = null, district = null) {
+export function sheetStyle(theme, stations = [], colors = [], wanted = null, district = null, routeLines = false) {
   // A place that shares a station's name is not lettered twice: the station's own name says it.
   const named = stations.map((s) => s.toUpperCase());
   const c = PALETTES[theme];
@@ -382,8 +384,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     // closed, round ends), so it reads as one line however many streets it takes. Its stops are
     // ringed again on top of it.
     const pickBus = ['all', ['==', ['get', 'kind'], 'route-line'], onBus()];
-    layer('pick-bus-rim', 'line', { filter: pickBus, layout: ROUND, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
-    layer('pick-bus', 'line', { filter: pickBus, layout: ROUND, paint: { 'line-color': c.pick, 'line-width': w } });
+    const routes = `routes-${n}`; // the route lines' own source (#193)
+    layer('pick-bus-rim', 'line', { source: routes, filter: pickBus, layout: ROUND, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
+    layer('pick-bus', 'line', { source: routes, filter: pickBus, layout: ROUND, paint: { 'line-color': c.pick, 'line-width': w } });
     if (n >= 4) layers.push({ id: `pick-stop-${n}`, type: 'circle', source, ...band, filter: ['all', ['==', ['get', 'kind'], 'stop'], onBus()],
       paint: { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': c.pick, 'circle-stroke-width': STOP_RING.stroke } });
     // A lettered stop on the picked route keeps its square over the line, as it reads off the route:
@@ -505,7 +508,7 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
       paint: { 'text-color': ['case', major, c.city, c.place], 'text-halo-color': c.ground, 'text-halo-width': 2.2, 'text-halo-blur': 0.4 } });
     // A picked bus route holds its ground like rail: placed before the place names, so a town's
     // name and its halo move off the route instead of cutting it.
-    layer('keep-off-pick', 'symbol', { filter: pickBus, ...unseen });
+    layer('keep-off-pick', 'symbol', { source: routes, filter: pickBus, ...unseen });
     // The picked route's own numbers, and the street's name leading them, placed before the marks
     // above: otherwise those marks, which keep other lettering off the route, keep its own off too.
     // The picked route's street names too (#174: on sheet 4 its lists show only its number, the
@@ -620,6 +623,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     sources: {
       ground: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
       ...Object.fromEntries(SHEETS.map((s) => [`sheet-${s.id}`, { type: 'geojson', data: !wanted || wanted.has(s.id) ? sheetData(s.id) : NOTHING, tolerance: 0.1,
+        // Big tiles with a wide margin, so a label's stretch of street is whole in the tile that places it.
+        maxzoom: Math.floor(s.zoom) - 1, buffer: 256 }])),
+      ...Object.fromEntries(SHEETS.map((s) => [`routes-${s.id}`, { type: 'geojson', data: routeLines && (!wanted || wanted.has(s.id)) ? routesData(s.id) : NOTHING, tolerance: 0.1,
         // Big tiles with a wide margin, so a label's stretch of street is whole in the tile that places it.
         maxzoom: Math.floor(s.zoom) - 1, buffer: 256 }])),
     },

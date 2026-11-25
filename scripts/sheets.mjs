@@ -32,6 +32,11 @@ export async function writeSheets(dir) {
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
     if (sheet.whole) frame = sheetExtent(drawn, sheet);
+    // Each route's whole line is drawn only for a picked route, so it is a file of its own that the
+    // page asks for at the first pick (#193): about 40% of each sheet's bytes otherwise.
+    const routeLines = drawn.features.filter((f) => f.properties.kind === 'route-line');
+    drawn.features = drawn.features.filter((f) => f.properties.kind !== 'route-line');
+    await writeFile(path.join(dir, `sheet-${sheet.id}-routes.geojson`), JSON.stringify({ type: 'FeatureCollection', features: routeLines }));
     if (sheet.opens) { hub = drawn.hub; opening = drawn; }
     for (const f of drawn.features) if (f.properties.shape === 'name') named.add(f.properties.name);
     for (const f of drawn.features) if (f.properties.kind === 'rail') colors.add(f.properties.color);

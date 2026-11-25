@@ -3159,6 +3159,11 @@ are deferred, not ruled out. See "Open questions".
     values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
   - MapLibre's stylesheet doesn't hold up the first paint: the page uses
     none of its controls, and the picture covers the map until it is drawn.
+  - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are a
+    file of their own, `sheet-N-routes.geojson`, asked for at the first pick, or at the opening when
+    the address picks a bus route (#193). They were about 40% of every sheet's bytes: the opening
+    sheet went from about 92 to 51 KB sent, sheet 4 from about 1.09 MB to 0.68 MB. The offline copy
+    still keeps them, so a pick works with no signal.
   - While it loads, the sheets page shows a picture of the view it opens on,
     with a "Loading…" line over it, and fades to the map once the map has
     drawn that view (or at once, if a button is pressed first). The pictures

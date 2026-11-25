@@ -1,7 +1,7 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
-import { SHEETS, OPENING, edge, sheetData, sheetStyle, PALETTES, GROUP, GROUP_INK, PLACE_SIZE, PLACE_MAJOR_RANK, expressInk, airportInk, shortStreet } from './style.js';
+import { SHEETS, OPENING, edge, sheetData, routesData, sheetStyle, PALETTES, GROUP, GROUP_INK, PLACE_SIZE, PLACE_MAJOR_RANK, expressInk, airportInk, shortStreet } from './style.js';
 import { pickFrom, pickCard, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
@@ -68,6 +68,8 @@ function stepsHeight() {
 fitWhole();
 const start = nearest(asked?.zoom ?? zooms[OPENING]);
 const wanted = new Set([SHEETS[start].id]);
+// The route lines (style.js, routesData): only once a bus route is picked, or when the address picks one.
+let routeLines = asked?.pick?.mode === 'bus';
 // The page opens on the hub, a little above the middle so the lines south of it show.
 const home = hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2];
 let openingSteps = !asked;
@@ -94,7 +96,7 @@ const LOWEST = zooms[0] - 0.6;
 const HIGHEST = zooms.at(-1) + 0.6;
 const map = new maplibregl.Map({
   container: 'map',
-  style: sheetStyle(theme(), stations, colors, wanted, district),
+  style: sheetStyle(theme(), stations, colors, wanted, district, routeLines),
   center: asked?.center ?? home,
   zoom: rests[start],
   minZoom: LOWEST,
@@ -127,7 +129,7 @@ function changeTheme(next) {
   document.querySelector('meta[name="theme-color"]').content = PALETTES[next].ground;
   themeButtonState();
   reveal();
-  map.setStyle(sheetStyle(next, stations, colors, wanted, district));
+  map.setStyle(sheetStyle(next, stations, colors, wanted, district, routeLines));
   map.once('styledata', () => setPick(picked));
 }
 themeButtonState();
@@ -173,6 +175,7 @@ function want(index) {
   if (!s || wanted.has(s.id)) return;
   wanted.add(s.id);
   map.getSource(`sheet-${s.id}`)?.setData(sheetData(s.id));
+  if (routeLines) map.getSource(`routes-${s.id}`)?.setData(routesData(s.id));
 }
 // One at a time, nearest the sheet shown first, so each gets the whole connection and the one
 // the reader will reach next comes soonest. A zoom asks for its sheet straight away (show).
@@ -519,6 +522,11 @@ let pickRevision = 0;
 function setPick(p) {
   pickRevision++;
   picked = p;
+  // A picked bus route is drawn from its sheets' route lines, asked for only now (#193).
+  if (p?.mode === 'bus' && !routeLines) {
+    routeLines = true;
+    for (const id of wanted) map.getSource(`routes-${id}`)?.setData(routesData(id));
+  }
   map.setGlobalStateProperty('bus', p?.mode === 'bus' ? p.route : '');
   map.setGlobalStateProperty('rail', p?.mode === 'rail' ? p.route : '');
   window.sheetsPick = p;
@@ -939,7 +947,7 @@ if ('serviceWorker' in navigator) {
         sent = entries.length;
         reg.active?.postMessage({ type: 'keep', urls });
       };
-      hand(firstVisit ? [...SHEETS.map((s) => sheetData(s.id)), new URL('../../data/directory.json', import.meta.url).href, ...groundTiles()] : []);
+      hand(firstVisit ? [...SHEETS.flatMap((s) => [sheetData(s.id), routesData(s.id)]), new URL('../../data/directory.json', import.meta.url).href, ...groundTiles()] : []);
       // What came in between, until the worker sees requests itself.
       if (!navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', () => hand(), { once: true });
       // The drawing worker never comes under it on this visit, so the tiles of each new view are named too.
