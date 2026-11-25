@@ -3135,8 +3135,7 @@ are deferred, not ruled out. See "Open questions".
     with; the glyphs are served as protobuf so Cloudflare compresses them
     (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
     CPU): drawn at 5.9 s, was 8.9 s; opening view settled at 6.5 s, was 12 s.
-  - Once a sheets view is at rest (from that same first touch or 5 seconds),
-    the page loads the neighbouring sheets' tiles for that view, and the
+  - Once a sheets view is at rest (from the opening on), the page loads the neighbouring sheets' tiles for that view, and the
     tiles of each whole zoom between them, into MapLibre's cache (nearest
     zoom first, again after each move), so the first step to a sheet draws
     at once instead of showing bare ground. Every zoom at once was about
@@ -3151,6 +3150,8 @@ are deferred, not ruled out. See "Open questions".
     sheet no step waits again. Measured on a 9 Mbps connection (local copy,
     412 px phone): a step 0.3 s after the opening waited 1.2 to 1.5 s and
     drew no blank frame, where the page before drew 9 or 10 blank frames.
+    Those tiles start loading at the opening, not at the first touch, so
+    the next sheet is finished as soon as on the page before.
   - MapLibre builds a GL program for each kind of layer and each mix of
     paint values that are fixed for the layer or vary by feature, and
     building them holds up the first drawing. Every line, circle and symbol
@@ -5479,7 +5480,8 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   line and then steps; a pinch or a scroll stops at the sheet's edge with
   the same line and steps on once the tiles are in; 8 seconds at most. The
   farther sheets now wait until a step either way is ready, so they never
-  hold one up.
+  hold one up. Chris: the wait made a step slower than before; the tiles a
+  step needs now load from the opening, not the first touch.
 
 ## Sources
 

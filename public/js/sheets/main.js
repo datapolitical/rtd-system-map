@@ -291,7 +291,8 @@ function cover(source, zoom) {
   }
   return tiles;
 }
-map.on('idle', () => { if (settled) warm(); });
+// From the opening on: a step soon after it is as quick as one later (Chris, 2026-11-25).
+map.on('idle', () => { if (window.sheetsReady) warm(); });
 
 // --- Resting only on a sheet -------------------------------------------------
 
@@ -429,7 +430,6 @@ function step(index, around) {
   hold({ to, around });
 }
 function hold(h) {
-  readerHasIt(); // the tiles come only once the reader has the map
   want(h.to);
   held = { ...h, since: held?.to === h.to ? held.since : performance.now() };
   waiting(true);
@@ -474,7 +474,7 @@ let watching = 0;
 function watch() {
   if (watching) return;
   watching = setInterval(() => {
-    if (settled && !map.isMoving()) warm();
+    if (!map.isMoving()) warm();
     if (held && !map.isMoving()) { // after a pinch, once the fingers are off
       const over = performance.now() - held.since > HOLD_MS;
       if (over) givenUp = sheet;
@@ -497,9 +497,7 @@ function fill() {
   filling = true;
   fillIn();
 }
-// Before the reader touches the map nothing makes the tiles (readerHasIt), so the map is only limited.
-map.on('idle', () => { if (limits() && settled) watch(); });
-whenSettled(watch);
+map.on('idle', () => { if (window.sheetsReady && limits()) watch(); });
 map.on('movestart', (e) => { if (e.originalEvent) openingSteps = false; });
 map.on('dragstart', () => { if (SHEETS[sheet].whole) cameFrom = null; framed = false; });
 show(sheet);
@@ -894,13 +892,13 @@ map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 
 // The opening view is drawn. The sheets either side of it come at once (the map's worker reads
 // them, off the main thread), so an early step finds its drawing. The rest of what the page does
-// for later (the other zooms' tiles, then the farther sheets (fill), the offline copy) waits
-// until the reader first touches the page, or until the opening has been on the screen for
-// SETTLE_MS, so none of it competes with the opening view on a slow phone (DESIGN.md, "Quality
-// floor"). A step to another sheet before then asks for that sheet itself (show). sheetsAll is
-// set once every sheet is in.
+// for later (the farther sheets (fill), the offline copy) waits until the reader first touches
+// the page, or until the opening has been on the screen for SETTLE_MS, so none of it competes
+// with the opening view on a slow phone (DESIGN.md, "Quality floor"). The tiles of a step to
+// either side (warm) come at once, with the sheets they draw. A step to another sheet before
+// then asks for that sheet itself (show). sheetsAll is set once every sheet is in.
 map.once('idle', () => { window.sheetsReady = true; reveal(); want(sheet - 1); want(sheet + 1); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
-whenSettled(() => { warm(); setTimeout(fill, FILL_MS); });
+whenSettled(() => setTimeout(fill, FILL_MS));
 
 // --- Offline (sw.js) ------------------------------------------------------------------
 // Asked for only once the opening view is drawn and the reader has it (whenSettled), so it
