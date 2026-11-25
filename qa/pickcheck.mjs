@@ -102,6 +102,9 @@ const report = { sheets: {}, worst: [] };
 for (const sheet of SHEETS) {
   const file = new URL(`../public/data/sheet-${sheet.id}.geojson`, import.meta.url);
   const fc = JSON.parse(fs.readFileSync(file, 'utf8'));
+  // Picked routes' lines live in their own file since #193 (loaded at the first pick).
+  const routesFile = new URL(`../public/data/sheet-${sheet.id}-routes.geojson`, import.meta.url);
+  if (fs.existsSync(routesFile)) fc.features.push(...JSON.parse(fs.readFileSync(routesFile, 'utf8')).features);
   const px = (c) => toPx(c, sheet.zoom);
   const lines = new Map();
   const names = [];
