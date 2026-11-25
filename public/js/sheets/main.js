@@ -21,7 +21,7 @@ const theme = () => root.dataset.theme ?? (scheme.matches ? 'dark' : 'light');
 const zooms = SHEETS.map((s) => s.zoom);
 
 // Both at once: neither needs the other (index.html has already asked for them).
-const [meta, { hub, stations, colors, drawing, district, frame: wholeFrame } = {}] = await Promise.all([
+const [meta, { hub, stations, colors, drawing, district, frame: wholeFrame, groups: stopGroups = [] } = {}] = await Promise.all([
   fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json()),
   fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({})),
 ]);
@@ -524,6 +524,7 @@ function setPick(p) {
   window.sheetsPick = p;
   document.documentElement.classList.toggle('picked', !!p);
   remember();
+  markKey();
 }
 function chip(r) {
   const on = picked?.mode === r.mode && picked.route === r.route;
@@ -687,10 +688,8 @@ map.on('click', (e) => {
   const box = [[e.point.x - reach, e.point.y - reach], [e.point.x + reach, e.point.y + reach]];
   const hit = (ids) => map.queryRenderedFeatures(box, { layers: ids.map((id) => `${id}-${n}`).filter((id) => map.getLayer(id)) });
   for (const f of hit(['rail', 'letter'])) if (f.properties.color) colorOf.set(f.properties.route, f.properties.color);
-  // RTD's stop groups first: a table, a lettered stop, or a street whose stops are lettered lists
-  // its routes by the letter of the stop each one uses.
-  const table = hit(['group-area'])[0]?.properties;
-  if (table) return tell({ title: esc(table.title), lead: 'Each stop serves the routes of its letter', groups: groupList(table.rows) });
+  // RTD's stop groups first: a lettered stop, or a street whose stops are lettered, lists its
+  // routes by the letter of the stop each one uses (the table itself is the key, below).
   const station = hit(['station', 'name'])[0]?.properties;
   const lettered = station ? null : hit(['group-stop', 'pick-letter', 'stop-letter'])[0]?.properties;
   if (lettered?.letter) return placeCard({ lettered });
@@ -746,6 +745,148 @@ function placeCard({ station, lettered, stop }, { focus = false } = {}) {
   }
   // Opened from the list, the card takes the focus its button had: the button is gone.
   if (focus) (card.querySelector('button:not(.close)') ?? card.querySelector('button.close')).focus();
+}
+
+// --- The stop groups' key (#198) --------------------------------------------------
+// Where RTD letters its stops (downtown's 15th and 17th Streets), the table saying which routes
+// stop at which letter is a key on the screen, not a plate on the map: it shows whenever one of
+// the lettered stops is in view, in whichever corner of the screen is free of them, the open
+// card and the controls, and fades out while the map moves when its corner covers a stop or the
+// stops go off the screen, to fade in again, moved if need be, once the map stops (Chris,
+// 2026-11-25: "it should always be on screen when it is supposed to be on screen"). The build
+// says where each group's stops are on each sheet (sheets.json, groups). A tap opens its table
+// on the card, its routes buttons there as on any card.
+const keyBox = document.querySelector('#key');
+const SLOTS = ['top-right', 'top-left', 'bottom-right', 'bottom-left'];
+// The room kept clear of a stop's letter, and between the key and the screen's edges.
+const KEY_CLEAR = 10;
+let keyGroup = null; // the group the key shows, by its index in stopGroups
+let keySlot = null;
+function keyRows(g) {
+  return groupList(g.rows).map((r, i) => `<span class="row"><i class="g${i % GROUP_INK.light.length}">${esc(r.letter)}</i><span class="routes">${r.routes
+    .map((x) => `<span data-route="${esc(x.route)}">${esc(x.route)}</span>`).join('')}</span></span>`).join('');
+}
+// A picked route's row in the key: its letter's square ringed and the route set as the card's
+// pressed chip is, so the reader sees which stop it uses.
+function markKey() {
+  if (!keyBox || keyGroup === null) return;
+  for (const row of keyBox.querySelectorAll('.row')) {
+    let on = false;
+    for (const r of row.querySelectorAll('[data-route]')) {
+      const it = picked?.mode === 'bus' && picked.route === r.dataset.route;
+      r.classList.toggle('picked', it);
+      on ||= it;
+    }
+    row.classList.toggle('picked', on);
+  }
+}
+// Each group's stops on the screen now, in the map's own pixels.
+function keyStops() {
+  const box = map.getContainer();
+  const w = box.clientWidth;
+  const h = box.clientHeight;
+  const id = SHEETS[sheet].id;
+  return stopGroups.map((g) => (g.at?.[id] ?? []).map((c) => map.project(c)).filter((p) => p.x >= 0 && p.y >= 0 && p.x <= w && p.y <= h));
+}
+// Each corner's rectangle for the key, in the map's pixels: the top corners under the top edge
+// (where the keyboard's list button sits), the bottom ones above the sheet buttons and the
+// theme button, where the card opens.
+function slotRect(slot) {
+  const box = map.getContainer().getBoundingClientRect();
+  const steps = document.querySelector('#steps').getBoundingClientRect();
+  const toggle = themeButton.getBoundingClientRect();
+  const top = parseFloat(getComputedStyle(document.querySelector('#inview')).top) || 12;
+  const w = keyBox.offsetWidth;
+  const h = keyBox.offsetHeight;
+  const left = slot.endsWith('left') ? steps.left - box.left : toggle.right - box.left - w;
+  const y = slot.startsWith('top') ? top : steps.top - box.top - 12 - h;
+  return { left, top: y, right: left + w, bottom: y + h };
+}
+const overlaps = (a, b, pad = 0) => a.left - pad < b.right && b.left - pad < a.right && a.top - pad < b.bottom && b.top - pad < a.bottom;
+function slotFree(slot, stops) {
+  const r = slotRect(slot);
+  if (stops.some((p) => p.x > r.left - KEY_CLEAR && p.x < r.right + KEY_CLEAR && p.y > r.top - KEY_CLEAR && p.y < r.bottom + KEY_CLEAR)) return false;
+  if (!card.hidden) {
+    const box = map.getContainer().getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    if (overlaps(r, { left: c.left - box.left, top: c.top - box.top, right: c.right - box.left, bottom: c.bottom - box.top }, 8)) return false;
+  }
+  return true;
+}
+// How much of the network a corner would cover: the sheet's lines, stops and areas drawn in its
+// rectangle. Not its lettering: a query over a symbol layer evaluates the layer's layout on the
+// tile's copy of each feature, whose list-valued properties (a name's offset) are strings, and
+// MapLibre warns of each.
+function slotCovers(slot) {
+  const r = slotRect(slot);
+  const layers = map.getStyle().layers.filter((l) => l.source?.startsWith('sheet-') && l.type !== 'symbol').map((l) => l.id);
+  return map.queryRenderedFeatures([[r.left, r.top], [r.right, r.bottom]], { layers }).length;
+}
+function keyShown(on) {
+  keyBox.classList.toggle('off', !on);
+  keyBox.setAttribute('aria-hidden', String(!on));
+  keyBox.tabIndex = on ? 0 : -1;
+}
+// While the map moves: the key stays where it is, and fades out if that corner is no longer
+// free or its stops have left the screen; it fades back in if both come right again there.
+function keyMoving() {
+  if (!keyBox || keyGroup === null) return;
+  const stops = keyStops()[keyGroup];
+  keyShown(!(shown?.key) && stops.length > 0 && !!keySlot && slotFree(keySlot, stops));
+}
+// Once the map stops (or the card opens or closes): the group whose stops are in view, in its
+// corner if that is still free, or else in the free corner covering the least of the network.
+function placeKey() {
+  if (!keyBox || !map.isStyleLoaded()) return;
+  const stops = keyStops();
+  const g = stops.findIndex((s) => s.length);
+  if (g < 0 || shown?.key) return keyShown(false);
+  if (g !== keyGroup) {
+    keyGroup = g;
+    keySlot = null;
+    const group = stopGroups[g];
+    keyBox.innerHTML = `<b>${esc(group.title)}</b>${keyRows(group)}`;
+    keyBox.setAttribute('aria-label', `${group.title}: which routes stop at each lettered stop`);
+    markKey();
+  }
+  const free = SLOTS.filter((slot) => slotFree(slot, stops[g]));
+  if (!free.length) return keyShown(false);
+  if (!free.includes(keySlot)) {
+    const covers = free.map(slotCovers);
+    keySlot = free[covers.indexOf(Math.min(...covers))];
+  }
+  const r = slotRect(keySlot);
+  const moved = keyBox.dataset.slot !== keySlot;
+  // A key that moves corner is set there unseen, then fades in.
+  if (moved) {
+    keyShown(false);
+    keyBox.classList.add('still');
+    keyBox.dataset.slot = keySlot;
+    keyBox.style.left = `${r.left}px`;
+    keyBox.style.top = `${r.top}px`;
+    void keyBox.offsetWidth;
+    keyBox.classList.remove('still');
+  }
+  keyShown(true);
+}
+if (keyBox) {
+  keyShown(false);
+  map.on('move', keyMoving);
+  map.on('moveend', placeKey);
+  map.on('idle', placeKey);
+  addEventListener('resize', () => { keySlot = null; placeKey(); });
+  new MutationObserver(() => requestAnimationFrame(placeKey)).observe(card, { attributes: true, attributeFilter: ['hidden', 'class'] });
+  new ResizeObserver(() => requestAnimationFrame(placeKey)).observe(card);
+  keyBox.addEventListener('click', (e) => {
+    if (keyGroup === null) return;
+    const g = stopGroups[keyGroup];
+    opener = keyBox;
+    selectedAt = null;
+    tell({ title: esc(g.title), lead: 'Each stop serves the routes of its letter', groups: groupList(g.rows), key: true });
+    keyShown(false);
+    // From the keyboard (a click with no pointer), the card takes the key's focus: the key is gone.
+    if (e.detail === 0) (card.querySelector('button:not(.close)') ?? card.querySelector('button.close')).focus({ preventScroll: true });
+  });
 }
 
 // --- What's in view, for a keyboard or a screen reader (#135) ----------------------
@@ -948,52 +1089,34 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// --- The stop-group tables' plates and letter squares (style.js, GROUP) -------------
+// --- The stop groups' letter squares on the map (style.js, GROUP) -------------------
 
-// Drawn here, in the theme's colours, the first time the map asks for one: a plate of the
-// size the build laid its table out at, a letter's square, a letter's square on its street (with
-// a rim of ground), or a lettered stop's square. At
-// least twice the screen's pixels, so their edges stay crisp.
+// Drawn here, in the theme's colours, the first time the map asks for one: a letter's square on
+// its street (with a rim of ground), or a lettered stop's square. At least twice the screen's
+// pixels, so their edges stay crisp.
 const ratio = Math.max(2, Math.ceil(window.devicePixelRatio || 1));
 function groupImage(id) {
-  const m = /^stopgroup-(plate|badge|picked|street|stop)-(light|dark)(?:-(\d+)x(\d+)|-i(\d+))?$/.exec(id);
+  const m = /^stopgroup-(street|stop)-(light|dark)-i(\d+)$/.exec(id);
   if (!m) return null;
   const c = PALETTES[m[2]];
   // A letter's own colour, by its row (style.js, GROUP_INK).
   const inks = GROUP_INK[m[2]];
-  const ink = inks[Number(m[5] ?? 0) % inks.length];
-  // `picked`: a picked route's row in its table, its square a little larger (style.js, group-badge).
-  const square = { badge: GROUP.badge, picked: Math.round(GROUP.badge * GROUP.pickedBadge), street: GROUP.badge + 2 * GROUP.streetRim, stop: GROUP.stopBadge + 2 * GROUP.stopRim }[m[1]];
-  const [w, h] = m[1] === 'plate' ? [Number(m[3]), Number(m[4])] : [square, square];
+  const ink = inks[Number(m[3]) % inks.length];
+  const rim = m[1] === 'street' ? GROUP.streetRim : GROUP.stopRim;
+  const w = (m[1] === 'street' ? GROUP.badge : GROUP.stopBadge) + 2 * rim;
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(w * ratio);
-  canvas.height = Math.round(h * ratio);
+  canvas.width = canvas.height = Math.round(w * ratio);
   // Drawn on the CPU: its pixels are read straight back, which from the GPU stalls the map's drawing.
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.scale(ratio, ratio);
   ctx.beginPath();
-  if (m[1] === 'plate') {
-    ctx.roundRect(0.5, 0.5, w - 1, h - 1, GROUP.corner - 0.5);
-    ctx.fillStyle = c.ground;
-    ctx.fill();
-    ctx.globalAlpha = GROUP.edge;
-    ctx.strokeStyle = c.number;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  } else if (m[1] === 'badge' || m[1] === 'picked') {
-    ctx.roundRect(0, 0, w, h, GROUP.badgeCorner);
-    ctx.fillStyle = ink;
-    ctx.fill();
-  } else {
-    const rim = m[1] === 'street' ? GROUP.streetRim : GROUP.stopRim;
-    ctx.roundRect(0, 0, w, h, GROUP.badgeCorner + rim);
-    ctx.fillStyle = c.ground;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.roundRect(rim, rim, w - 2 * rim, h - 2 * rim, GROUP.badgeCorner);
-    ctx.fillStyle = ink;
-    ctx.fill();
-  }
+  ctx.roundRect(0, 0, w, w, GROUP.badgeCorner + rim);
+  ctx.fillStyle = c.ground;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(rim, rim, w - 2 * rim, w - 2 * rim, GROUP.badgeCorner);
+  ctx.fillStyle = ink;
+  ctx.fill();
   return { width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data };
 }
 // The marks repeated along the express and the airport buses (style.js): the express's shield, a slanted

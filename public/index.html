@@ -19,7 +19,7 @@
 <meta property="og:title" content="RTD system map">
 <meta property="og:description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs.">
 <meta property="og:url" content="https://map.chrisfnicholson.com/">
-<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=c7d23e88cf">
+<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=c5047cefbd">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -155,6 +155,23 @@
   #card .rows i { min-width: 18px; height: 18px; margin: 0; border-radius: 4px; background: var(--g0); color: var(--card); font-size: 11.5px; font-weight: 700; line-height: 19px; }
   #card .rows i.selected { outline: 2px solid var(--ink); outline-offset: 2px; }
   #card .rows em { font-style: normal; word-spacing: 0.15em; }
+  /* The stop groups' key (main.js, placeKey, #198): RTD's table for its lettered stops, set on the screen in a free corner and faded in and out as the map moves. */
+  #key { all: unset; box-sizing: border-box; position: absolute; left: 0; top: 0; display: grid; gap: 3px; padding: 7px 10px 8px; background: var(--card); color: var(--ink);
+    border-radius: 10px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); cursor: pointer; touch-action: manipulation; user-select: none; -webkit-touch-callout: none;
+    opacity: 1; transition: opacity 200ms ease-out; }
+  #key.off { opacity: 0; pointer-events: none; transition-duration: 150ms; }
+  #key.still { transition: none; }
+  #key:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  #key b { margin-bottom: 1px; font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--note); }
+  #key .row { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 600; line-height: 14px; }
+  #key i { flex: none; width: 13px; height: 13px; border-radius: 3px; background: var(--g0); color: var(--card); font-size: 8.5px; font-weight: 700; font-style: normal; line-height: 14px; text-align: center; }
+  #key i.g1 { background: var(--g1); }
+  #key i.g2 { background: var(--g2); }
+  #key .routes { display: flex; flex-wrap: wrap; gap: 0 5px; max-width: 150px; }
+  #key .routes span { padding: 0 1px; border-radius: 3px; }
+  /* A picked route: its stop's square ringed, and the route itself as the card's pressed chip. */
+  #key .row.picked i { outline: 1.5px solid var(--ink); outline-offset: 1px; }
+  #key .routes span.picked { background: var(--ink); color: var(--card); padding: 0 3px; }
   /* While the map loads: a picture of the view it opens on, centred as the map is, and a line saying so (scripts/poster.mjs). */
   /* Touches go through the picture to the map under it: a pinch on the picture zoomed the page, not the map. */
   #poster { position: absolute; inset: 0; overflow: hidden; background: var(--ground); transition: opacity 250ms ease-out; pointer-events: none; }
@@ -168,7 +185,7 @@
   #wait { z-index: 3; pointer-events: none; }
   #wait[hidden] { display: none; }
   @keyframes breathe { 50% { opacity: 0.45; } }
-  @media (prefers-reduced-motion: reduce) { #poster, #poster img { transition: none; } #loading span, #wait span { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #poster, #poster img, #key { transition: none; } #loading span, #wait span { animation: none; } }
 </style>
 </head>
 <body>
@@ -176,9 +193,10 @@
 <div id="map"></div>
 <!-- What a tap names. Next after the map, so a screen reader reaches it from there (#14). -->
 <div id="card" role="region" aria-labelledby="card-title" hidden></div>
+<button id="key" type="button" class="off" aria-hidden="true" tabindex="-1"></button>
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
-<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="c0430b09ff36057c80615dc850efcc8ec1c8e67563476f1932bb8d7da8897c4d" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="5db20a0b6cfb0425bf10267c7aef4436c0f95abf9643a0c1a6014ef095699ca0" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
   <picture>
     <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
     <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">

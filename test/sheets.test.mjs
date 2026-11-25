@@ -1480,7 +1480,7 @@ test("RTD's stop groups: a stop's letter from its name, and a pair of streets th
   assert.deepEqual(stopGroups(all([stop('Oak St & 1st Ave', '5')])), [], 'no letters: no tables');
 });
 
-test('on sheet 3 a lettered pair gets one table in place of its route lists, tied to its streets by their letters, with no bracket; with no letters, the lists stay', () => {
+test('on sheet 3 a lettered pair gets one key in place of its route lists, its letters on its streets; with no letters, the lists stay', () => {
   // Two one-way streets 50 px apart carrying the same six routes, each stop serving two of them.
   const routes = '1 2 3 4 5 6';
   const street = (y) => line({ mode: 'bus', cls: 'c10', routes, n: 6, hw: 5, zoom: 'near' }, [at3(0, y), at3(900, y)]);
@@ -1492,31 +1492,25 @@ test('on sheet 3 a lettered pair gets one table in place of its route lists, tie
   const kinds = (features, kind) => features.filter((f) => f.properties.kind === kind);
 
   const plain = draw(false);
-  assert.equal(plain.filter((f) => String(f.properties.kind).startsWith('group')).length, 0, 'no letters: no table');
+  assert.equal(plain.filter((f) => String(f.properties.kind).startsWith('group')).length, 0, 'no letters: no key');
   assert.ok(kinds(plain, 'bus-label').some((f) => f.properties.label === '1, 2, 3, 4, 5, 6'), "no letters: today's lists");
 
   const grouped = draw(true);
-  assert.equal(kinds(grouped, 'group-plate').length, 1, 'one table for the pair');
-  assert.equal(kinds(grouped, 'group-bracket').length, 0, 'no bracket: the letters on the streets tie the table to them');
+  // The table is a key on the screen (main.js, placeKey), not a plate on the map (#198).
+  for (const gone of ['group-plate', 'group-area', 'group-badge', 'group-text', 'group-leader', 'group-bracket']) assert.equal(kinds(grouped, gone).length, 0, `no ${gone} on the map`);
+  const [key, ...more] = kinds(grouped, 'group-key');
+  assert.equal(more.length, 0, 'one key for the pair');
+  assert.equal(key.properties.title, 'Elm & Oak St');
+  assert.equal(key.properties.rows, 'X 1 2 | Y 3 4 | Z 5 6');
+  // Where its lettered stops are, so the page shows the key when one is on the screen.
+  assert.equal(key.geometry.type, 'MultiPoint');
+  assert.equal(key.geometry.coordinates.length, 12);
   assert.equal(kinds(grouped, 'group-stop').length, 12, 'each lettered stop shows its letter on its street');
-  assert.equal(kinds(grouped, 'group-area').length, 1, 'a tap on the plate finds the table');
-  assert.deepEqual(kinds(grouped, 'group-badge').map((f) => f.properties.letter), ['X', 'Y', 'Z']);
-  const rows = kinds(grouped, 'group-text').filter((f) => f.properties.role === 'row').map((f) => f.properties.text);
-  assert.deepEqual(rows, ['1 2', '3 4', '5 6'], 'routes spaced, no commas');
-  assert.equal(kinds(grouped, 'group-text').find((f) => f.properties.role === 'title').properties.text, 'ELM & OAK ST');
   assert.equal(kinds(grouped, 'bus-label').length, 0, 'the long lists are gone');
   assert.ok(kinds(grouped, 'bus').every((f) => f.properties.groups === 'X 1 2 | Y 3 4 | Z 5 6'), 'a tap on either street gives its routes by letter');
-  // The plate is level, clear of both streets, and near its stops.
-  const plate = kinds(grouped, 'group-plate')[0];
-  const at = toPx(plate.geometry.coordinates, near.zoom);
-  const box = [at[0] + plate.properties.off[0] - origin3[0], at[1] + plate.properties.off[1] - origin3[1]];
-  const [w, h] = [plate.properties.w, plate.properties.h];
-  assert.ok(box[1] + h < -2 || box[1] > 52 || (box[1] > 2 && box[1] + h < 48), 'the plate keeps off both streets');
-  assert.ok(Math.hypot(box[0] + w / 2 - 425, box[1] + h / 2 - 25) <= SIZES.groupReach, 'near the middle of its stops');
-  assert.ok(w > 40 && h > 40);
 });
 
-test('on sheet 2 a lettered pair gets a small box with its letters and a hairline to its stops, in place of the table; a tap gives the full table', () => {
+test('on sheet 2 a lettered pair gets the key too, with no box or hairline on the map and no letters on its streets', () => {
   const city = SHEETS.find((s) => s.id === 2);
   const origin = toPx([-105, 39.75], city.zoom);
   const at = (x, y) => toLonLat([origin[0] + x, origin[1] + y], city.zoom);
@@ -1528,19 +1522,11 @@ test('on sheet 2 a lettered pair gets a small box with its letters and a hairlin
   }));
   const features = drawSheet({ routes: all([]), stations: all([]), terminals: null, streets: all([street(0), street(12)]), stops: all(lettered) }, city).features;
   const kinds = (kind) => features.filter((f) => f.properties.kind === kind);
-  assert.equal(kinds('group-plate').length, 1, 'one box for the pair');
-  assert.deepEqual(kinds('group-badge').map((f) => f.properties.letter), ['X', 'Y', 'Z']);
-  assert.deepEqual(kinds('group-text').map((f) => f.properties.role).sort(), ['hint', 'title'], 'no route rows in the box');
-  assert.equal(kinds('group-text').find((f) => f.properties.role === 'hint').properties.text, 'Tap');
+  for (const gone of ['group-plate', 'group-area', 'group-badge', 'group-text', 'group-leader']) assert.equal(kinds(gone).length, 0, `no ${gone} on the map`);
+  assert.equal(kinds('group-key').length, 1, 'one key for the pair');
+  assert.equal(kinds('group-key')[0].properties.rows, 'X 1 2 | Y 3 4 | Z 5 6', 'the key gives the full table');
+  assert.equal(kinds('group-key')[0].geometry.coordinates.length, 12);
   assert.equal(kinds('group-stop').length, 0, 'no letters on the streets on sheet 2');
-  assert.equal(kinds('group-area')[0].properties.rows, 'X 1 2 | Y 3 4 | Z 5 6', 'a tap on the box gives the full table');
-  const plate = kinds('group-plate')[0];
-  assert.ok(plate.properties.h < 40, 'smaller than a table');
-  // The hairline runs from the middle of the lettered stops to the box.
-  const leader = kinds('group-leader');
-  assert.equal(leader.length, 1, 'a hairline ties the box to its stops');
-  const [a] = leader[0].geometry.coordinates.map((p) => toPx(p, city.zoom));
-  assert.ok(Math.hypot(a[0] - origin[0] - 120, a[1] - origin[1] - 6) < 3, 'from the middle of the stops');
 });
 
 // Two one-way streets 50 px apart on sheet 3 carrying the same six routes, each lettered stop
