@@ -1108,6 +1108,22 @@ test('a loop round blocks keeps its own path: a sweep is drawn only where it sta
   assert.notDeepEqual(smooth.path, bow, 'a wandering bow is still drawn in one sweep');
 });
 
+test('a turnaround whose own path runs against rail is drawn as a sweep beside it, and keeps its path where rail is far', () => {
+  // A loop out west of the corners (0,0) and (0,100), its far side 8 px from rail down x = -108:
+  // too far from a sweep to be smoothed (along 3), but the rail drawn wider than its track covers it.
+  const bow = [[0, 0], [-60, -5], [-95, 20], [-100, 50], [-95, 80], [-60, 105], [0, 100]];
+  const pair = () => [st(bow), st([[0, 0], [0, 100]])];
+  const rail = (p) => Math.abs(p[0] + 108);
+  const [free] = arced(pair(), () => Infinity, 20, 3);
+  assert.deepEqual(free.path, bow, 'with no rail near, the loop keeps its own path');
+  const [held] = arced(pair(), rail, 20, 3);
+  const clearOf = Math.min(...held.path.map(rail));
+  const off = Math.max(...held.path.map((p) => nearest(bow, p).d));
+  assert.ok(clearOf >= 20, `stands ${clearOf.toFixed(1)} px from rail`);
+  assert.ok(off <= 20, `drawn within ${off.toFixed(1)} px of where it runs`);
+  assert.deepEqual([held.path[0], held.path.at(-1)], [bow[0], bow.at(-1)], 'its corners stay put');
+});
+
 test("a turnaround's bow is drawn tighter where it would run against rail, and a line's lead-in starts from its station, not its tail track's end", () => {
   // A bow from (0,0) round to (0,100) that reaches 120 out; rail runs down x = 125.
   const loop = [st([[0, 0], [60, -10], [120, 50], [60, 110], [0, 100]]), st([[0, 0], [0, 100]])];
