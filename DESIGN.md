@@ -5437,6 +5437,11 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   what Chris picks is fixed. Reason: Chris: "this type of process is what we want to have going
   on regularly to refine the map", and once it is finished "it should be
   clear how we're doing what we're doing to keep it working".
+- 2026-11-25: The live page shows a timing readout when its address has
+  ?timing (public/js/timing.js, loaded only then): when the files arrived,
+  the tiles were ready and the opening view was drawn. Reason: a visit took
+  about six seconds on Chris's phone, while the test copy opened in under a
+  second there; only the live address on his phone can show the difference.
 - 2026-11-25: The 15th & 17th table is a key on the screen, not a plate or
   a small box on the map (#198, replacing the box of 2026-11-24 and the
   plate placed on open ground): it shows in a free corner whenever a
