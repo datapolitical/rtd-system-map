@@ -3150,7 +3150,12 @@ are deferred, not ruled out. See "Open questions".
     sheet's own zoom), shows the same line, and steps on once they are in.
     While a step waits, its own tiles are the only ones asked for. After 8
     seconds (a dropped connection) the step goes ahead anyway, and on that
-    sheet no step waits again. Measured on a 9 Mbps connection (local copy,
+    sheet no step waits again. A tap made during the wait adds a step to
+    it (#210): two taps on + go two sheets on, up to the last sheet, one
+    sheet at a time, each step waiting for its sheet as above (a move of
+    two sheets at once drew bare ground on the way: 2 of 8 frames, and 9
+    of 14 for three); a tap on − takes one off, and back to the sheet shown
+    ends the wait. The + and − keys step as the buttons do. Measured on a 9 Mbps connection (local copy,
     412 px phone): a step 0.3 s after the opening waited 1.2 to 1.5 s and
     drew no blank frame, where the page before drew 9 or 10 blank frames.
     Those tiles start loading at the opening, not at the first touch, so
@@ -5504,6 +5509,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   were the FreeRide and the MetroRide on the whole-district sheet, each
   drawn whole as one 8 px dash, with nothing for it to be left over from.
   Chris said go.
+- 2026-11-25: Sheets: a tap during a step's wait adds a step (#210). Each
+  tap on + or − counts from the sheet the map is going to, not the one
+  shown, clamped at the first and last sheets; − during a wait for + ends
+  it. The map goes one sheet at a time, each step waiting for its sheet.
+  The + and − keys go the same way instead of through MapLibre's own
+  keyboard zoom. Reason: three taps on + during a wait gave one step, since
+  each asked for the same next sheet. The checks wait while a step is held.
 
 ## Sources
 

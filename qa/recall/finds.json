@@ -2141,6 +2141,38 @@
       "found_by": "Claude, the v1.0 final check of the live map (light and dark, 402x655), 2026-11-24",
       "pinned_by": "Claude, from captures of the live build 817128a (qa/.scratch/v1-final), 2026-11-24",
       "confidence": "clear"
+    },
+    {
+      "id": "210-taps-lost-during-wait",
+      "issue": 210,
+      "place": "The + and - buttons and keys, any view; most often in the first seconds of a visit, on the opening sheet",
+      "said": "three taps on + while a step waits for the next sheet give one step: every tap during the wait asks for the same next sheet, so the extra taps are lost",
+      "kind": "lost-tap",
+      "caught_by": [
+        "lost-tap"
+      ],
+      "theme": "dark",
+      "zoom": 10,
+      "points": [
+        [
+          -105.001838,
+          39.754193
+        ]
+      ],
+      "radius_px": 40,
+      "capture": {
+        "view": "10/39.754193/-105.001838",
+        "size": [
+          402,
+          655
+        ]
+      },
+      "seen_on": [
+        "3c3b242"
+      ],
+      "found_by": "Claude, the v1.1 final check of the live map, 2026-11-25 (issue #210)",
+      "pinned_by": "Claude; an interaction fault, not a drawing one: qa/checks/steps.spec.mjs catches it (fails on the 3c3b242 preview, passes on the fix), 2026-11-25",
+      "confidence": "clear"
     }
   ]
 }
