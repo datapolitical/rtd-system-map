@@ -81,15 +81,25 @@ step it belongs to.
 
 ## The weekly round
 
-Once a week a round runs steps 1 and 2 over the whole map and proposes; Chris
-picks what gets fixed, and each pick then goes through steps 3 to 9.
+Once a week a round runs steps 1 and 2 over the live map and proposes; Chris
+picks what gets fixed, and each pick then goes through steps 3 to 9. It is
+`qa/round/round.mjs`, run early on Monday by a user timer on the build
+machine (`qa/round/systemd/`); `--dry-run` runs it without posting anything.
 
-- It looks at the route check, the sheet checks and the recall set,
-  each compared with last week's run; Chris's comments still open on the
-  review page; and captures of a sample of stations at every sheet, both
-  themes, drawn with a recorded seed so a later round can repeat it.
+- It checks out origin/main, the code and data that are live, and runs
+  against the live site the evidence collector (the sheets' whole-feature
+  checks, and captures of Union Station at every sheet, a shared station, a
+  terminal and three stations drawn with the week's seed at sheets 1 to 4,
+  both themes), the sheet checks and the route check on RTD's current GTFS.
+- A check finding is proposed when it was not there the week before. Claude
+  looks at every capture with the brief in `qa/round/look.md` and names what
+  a rider would get wrong or could not read.
 - It posts one review request, one item per finding, each with the
-  capture, the place and zoom, what looks wrong and the rider consequence
-  (evaluation.md, "Priority and evidence"), and the choices Fix and Leave.
-  Findings already left once are not proposed again unless they change.
+  picture, a link to the same view on the live map, what is wrong, the rider
+  consequence, and the choices Fix and Leave.
+- The next round reads the picks. Fix is filed as an issue labelled
+  `weekly round`, carrying the item's `Round finding:` line; a session that
+  takes a Fix pick up sooner files it with that line itself, and the round
+  then leaves it alone. Leave is remembered and not proposed again. An item
+  not picked is proposed again if it is still found.
 - It never changes the map. A round only finds and proposes.

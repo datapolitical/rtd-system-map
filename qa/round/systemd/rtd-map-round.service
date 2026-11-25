@@ -1,0 +1,23 @@
+# The weekly round (../round.mjs): finds what is drawn wrong on the live map and
+# posts it to the review page with Fix and Leave. It never changes the map. A
+# systemd user unit, written for a clone of the repo at
+# /srv/projects/rtd-system-map-round (npm ci run there), run by the account that
+# runs the review page, with Pushover keys in ~/.config/myagent/pushover.env and
+# a signed-in claude in ~/.local/bin.
+#   systemctl --user link /srv/projects/rtd-system-map-round/qa/round/systemd/rtd-map-round.service
+#   systemctl --user link /srv/projects/rtd-system-map-round/qa/round/systemd/rtd-map-round.timer
+#   systemctl --user enable --now rtd-map-round.timer
+# To update it: git -C /srv/projects/rtd-system-map-round pull --ff-only && npm ci there.
+[Unit]
+Description=RTD map: weekly round
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/projects/rtd-system-map-round
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=%h/.config/myagent/pushover.env
+ExecStart=/usr/bin/env node qa/round/round.mjs
+TimeoutStartSec=5400
+Nice=10
+MemoryMax=3G

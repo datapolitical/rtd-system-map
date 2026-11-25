@@ -44,7 +44,9 @@ locally gives the same answer Cloudflare's build will.
   error. A failure opens an issue labelled `found by checks`; the next pass
   closes it.
 - The hourly check above, for RTD's data and the basemap.
-- The weekly refinement round (refining.md), for how the map looks.
+- The weekly round (refining.md, `qa/round/`), for how the map looks. Its
+  files are in `~/.local/state/rtd-map-round/` of the account that runs it,
+  one folder per week; `journalctl --user -u rtd-map-round` shows its runs.
 
 ## What has broken before
 
