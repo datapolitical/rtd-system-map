@@ -1647,7 +1647,11 @@ streets that no longer met):
   ended, and the street beyond it taken for a loop's stem and dropped.
 - Gaps are closed before loops are tidied (a terminal loop RTD draws open
   is one), and again after, onto a line ahead only (a ramp whose circle
-  went stops short of the road it led onto).
+  went stops short of the road it led onto). Each pass that merges a divided
+  road's two ways into one centre builds the graph again from RTD's pieces,
+  so the graph is tidied again after every pass: a terminal loop a pass
+  brings back is made a short end too (#102; the 120's loop at Eastlake /
+  124th had come back as a spike).
 - A street with only part-time routes is drawn from the graph too, as their
   dashed or dotted line (`n: 0`, `tier`), so it meets the streets it joins
   and moves with a divided road.
@@ -2254,7 +2258,10 @@ How it is built:
   its own lines, and a near one puts its letters on the first name. A hall
   long enough is lettered down its length with what it is ("Bus concourse"
   where the data says underground, "Bus station" otherwise), and street
-  names give way to it. A place the ground map names the same as a station
+  names give way to it. From sheet 3 a bus station that is not a rail
+  station's (Civic Center, Downtown Boulder) is named beside its hall, as a
+  station is, on whichever side has room once the route numbers are
+  placed. A place the ground map names the same as a station
   is not lettered twice. Places are named by rank: cities and towns on
   sheets 1 and 2, a city's neighbourhoods on 3 and 4 (its own statistical
   neighbourhoods before smaller ones), the most important first. A place's
@@ -2265,7 +2272,9 @@ How it is built:
   ("... Historic District") is not a place name and is not set.
   From sheet 3 a bus street is named from its stops: the street most of
   the stops its routes serve along it give (RTD names a stop "Colfax Ave &
-  Hudson St"), set beside the street like its route list, in a quieter
+  Hudson St"; a stop that leaves the kind off, "Colfax & Elati", counts for
+  the same street, and the name is set in its full form, so a sheet names a
+  street one way), set beside the street like its route list, in a quieter
   grey, on a stretch no list is on, about once a screen (on sheet 4 a little
   more often than a phone is wide, so a street across the screen is named
   on it). Where a list's block holds both, the street's name leads the list
@@ -2276,7 +2285,9 @@ How it is built:
   across a tile's edge). Route lists are placed first, and a list a name
   leads stays in its block, so a name never costs one. The streets between bus streets
   keep the ground map's names, shortened ("W 13th Ave"), on the centreline,
-  at about 3:1. Lines that end over a bus station's hall end at the
+  at about 3:1. A ground-map name for a street one of our labels names on
+  the screen (a bus street's name, a list it leads, a picked route's label)
+  is hidden while that label shows, so a street is not named twice. Lines that end over a bus station's hall end at the
   wall they come in through, with their bar on it, not at a point inside the
   room. A corner of bus streets beside a hall's wall sits on the wall. A
   street's weight is its own buses'. Where streets gather into one (a
@@ -2314,6 +2325,11 @@ How it is built:
   station's mark, heading for it, is led on to the mark: a route that turns
   round at a station ends at the station, not in the open beside it.
   An end at a bus station's hall is not led on: that is where its buses go.
+  A last stop behind a line's end (more than 100° round from the way the
+  line ends, where the line ran on past it round a loop drawn simpler) is
+  not led back to, which would double the line back on itself: the line is
+  cut to end level with the stop, and an end already on its mark is not led
+  on to the next stop.
   A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
   Where a full name would sit on lines or stand off from its mark, common
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
@@ -2494,7 +2510,10 @@ How it is built:
   merge-widths or 100 m (`stopReach`), whichever is farther, that carries
   one of its routes, so a stop in a station's bay or set back from the road
   still sits on its line; stops that land ring on ring
-  (the two sides of one street) are one ring with the routes of both. On a
+  (the two sides of one street) are one ring with the routes of both. Two
+  stops the same way round that land ring on ring but are not one stop (a
+  station's Gate A and Gate B) are rings in a row along their street, each
+  with its own name and routes. On a
   free route (one RTD names free: the FreeRide and the MetroRide), a stop
   each way either side of a crossing (two stops RTD names for the same
   crossing, on the same street with the same routes, 50 m apart or less)
@@ -5320,6 +5339,18 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   their lines on the street sheet (station bays and set-back stops the drawn
   street passes, and six Ward Rd stops for a 52 that no longer runs there)
   and no B letter on the whole district.
+- 2026-11-24: The street graph is tidied after each merge pass, and a line
+  whose last stop is behind its end ends level with the stop (#102). A sheet
+  names a street one way, the ground map's name for a street our labels
+  name on screen is hidden, and a bus station that isn't a rail station's is
+  named beside its hall from sheet 3 (#174). Reason: the v1.0 check found a
+  spike and a hook at Eastlake / 124th, "Colfax" beside "Colfax Ave", the
+  same street named twice, and Civic Center's hall with no name. The line
+  is cut level with the stop only where it ran on 40 m or less; farther is
+  the bus's way round to turn, drawn to its tip (the 323 on Olympia Ave).
+  Stops the same way round that land ring on ring keep a ring each (the
+  120L's Gate B had become part of Gate A's ring). The picked route's own
+  street names stay on the screen while it is picked.
 
 ## Sources
 

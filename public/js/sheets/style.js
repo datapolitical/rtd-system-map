@@ -436,10 +436,22 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     const besideStreet = (n2, shift = 0) => ['case', ['==', ['get', 'side'], -1],
       byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n2]).map(([k, w]) => [k, ['literal', [0, -numberOffset(n2, w) + shift]]]))),
       byClass(Object.fromEntries(Object.entries(BUS_WIDTH[n2]).map(([k, w]) => [k, ['literal', [0, numberOffset(n2, w) - shift]]])))];
-    if (n >= 3) layer('bus-street', 'symbol', { filter: kind('bus-street'),
+    const busStreet = (filter) => ({ filter,
       layout: { 'symbol-placement': 'line', 'symbol-spacing': 520, 'text-field': ['get', 'label'], 'text-font': FONT.regular, 'text-size': NUMBER_SIZE[n], 'text-max-angle': 25, 'text-padding': 6,
         'text-offset': besideStreet(n), 'text-letter-spacing': 0.02 },
       paint: { 'text-color': c.busStreetName, 'text-halo-color': c.ground, 'text-halo-width': 1.6 } });
+    // A name on the picked route's own street is set by picked-street below, as its numbers are.
+    if (n >= 3) layer('bus-street', 'symbol', busStreet(kind('bus-street', ['!', onBus('lines')])));
+    // A bus station's name beside its hall, on whichever side has room (#174), the size of a
+    // lesser station's name; placed after the route numbers, which a rider at the hall needs
+    // more, and before the street names, which give way to it.
+    if (n >= 3) {
+      const size = NAME_SIZE[n] - 2;
+      layer('hall-label', 'symbol', { filter: kind('hall-label'),
+        layout: { 'text-field': ['get', 'text'], 'text-font': FONT.semibold, 'text-size': size, 'text-max-width': 9, 'text-line-height': 1.12,
+          'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': ['+', ['/', ['coalesce', ['get', 'r'], 0], size], 0.5], 'text-justify': 'auto', 'text-padding': 3 },
+        paint: { 'text-color': ['case', PICKED, fadeTo(c.name, FADE.text), c.name], 'text-halo-color': c.ground, 'text-halo-width': 2 } });
+    }
     // A list naming the picked route is set by picked-number and picked-stack below, placed before the
     // marks that keep lettering off the picked route; here it gives way while that route is picked.
     const notPicked = ['!', onBus('label')];
@@ -492,6 +504,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     layer('keep-off-pick', 'symbol', { filter: pickBus, ...unseen });
     // The picked route's own numbers, and the street's name leading them, placed before the marks
     // above: otherwise those marks, which keep other lettering off the route, keep its own off too.
+    // The picked route's street names too (#174: on sheet 4 its lists show only its number, the
+    // street named between them), placed after its numbers so a list keeps its room first.
+    if (n >= 3) layer('picked-street', 'symbol', busStreet(kind('bus-street', onBus('lines'))));
     if (n >= 2) layer('picked-number', 'symbol', busNumber(kind('bus-label', onBus('label'))));
     if (n >= 2) layer('picked-stack', 'symbol', busStack(kind('bus-stack', onBus('label'))));
     // Station names: the build has chosen each one's side of its mark (scripts/lib/sheets.mjs, names).
