@@ -3125,9 +3125,10 @@ are deferred, not ruled out. See "Open questions".
     timetable only when its panel opens. Live feeds are fetched only while
     Live is on (or a stop panel is open) and the tab is visible.
   - The sheets page (the front page) loads only the sheet it opens on. The
-    others follow one at a time, nearest first, once the reader first
-    touches the page or that view has been drawn for 5 seconds, so they
-    never compete with it; a zoom asks for its sheet straight away.
+    two next to it follow as soon as that view is drawn (the map's worker
+    reads them, off the main thread), and the rest one at a time, nearest
+    first, once the reader first touches the page or that view has been
+    drawn for 5 seconds; a zoom asks for its sheet straight away.
     Its HTML asks at once for the modules, `meta.json`, `sheets.json`, the
     opening sheet, the tile index and the glyphs the opening view letters
     with; the glyphs are served as protobuf so Cloudflare compresses them
@@ -5453,8 +5454,10 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   second there; only the live address on his phone can show the difference.
 - 2026-11-25: The opening does less on the phone's main thread (PageSpeed
   Insights' mobile score, which counts each long task the page makes the
-  phone wait through): the other sheets, the warmed tiles and the offline
-  copy start at the reader's first touch or 5 seconds after the opening;
+  phone wait through): the farther sheets, the warmed tiles and the offline
+  copy start at the reader's first touch or 5 seconds after the opening
+  (the two neighbouring sheets still load at once, so an early step finds
+  its drawing);
   the warmed tiles are the neighbouring sheets' only; layers share GL
   programs (17 to 10, the drawing unchanged to the pixel); MapLibre's
   stylesheet no longer blocks the first paint; and the stop tables' plates

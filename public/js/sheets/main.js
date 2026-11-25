@@ -757,12 +757,14 @@ for (const button of document.querySelectorAll('#steps button')) button.addEvent
 // A pinch, drag or double tap reaches the map through the picture (index.html), and moves it.
 map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 
-// The opening view is drawn. What the page does for later (the other sheets, the other zooms'
-// tiles, the offline copy) waits until the reader first touches the page, or until the opening
-// has been on the screen for SETTLE_MS, so none of it competes with the opening view on a slow
-// phone or a slow connection (DESIGN.md, "Quality floor"). A step to another sheet before then
-// asks for that sheet itself (show). sheetsAll is set once every sheet is in.
-map.once('idle', () => { window.sheetsReady = true; reveal(); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
+// The opening view is drawn. The sheets either side of it come at once (the map's worker reads
+// them, off the main thread), so an early step finds its drawing. The rest of what the page does
+// for later (the farther sheets, the other zooms' tiles, the offline copy) waits until the reader
+// first touches the page, or until the opening has been on the screen for SETTLE_MS, so none of
+// it competes with the opening view on a slow phone (DESIGN.md, "Quality floor"). A step to
+// another sheet before then asks for that sheet itself (show). sheetsAll is set once every
+// sheet is in.
+map.once('idle', () => { window.sheetsReady = true; reveal(); want(sheet - 1); want(sheet + 1); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
 whenSettled(() => { fillIn(); warm(); });
 
 // --- Offline (sw.js) ------------------------------------------------------------------
