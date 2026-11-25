@@ -213,11 +213,13 @@ Links are in [Sources](#sources).
 
 ## Zero maintenance: RTD's changes flow through automatically
 
-When RTD edits its map or publishes a new schedule, the site picks it up on
-its own within about an hour. Nobody should have to touch the code, the data,
-or a deploy button for routine changes: new or retired routes, a new rail
-line, recolored lines, moved stops, new Park-n-Rides, a new runboard, or RTD
-pointing its map at different services.
+When RTD edits its map or publishes a new schedule, nobody should have to
+touch the code for routine changes: new or retired routes, a new rail line,
+recolored lines, moved stops, new Park-n-Rides, a new runboard, or RTD
+pointing its map at different services. The build draws them all from RTD's
+data as it is. Since 2026-11-24 a person starts that build and looks at the
+result before it goes live (Rule 2): a new map from RTD's data is where a
+drawing fault first shows, and it is ours to fix before riders see it.
 
 ### Rule 1: nothing about the network is hardcoded
 
@@ -273,31 +275,51 @@ meant writing an algorithm for any network to tidy a single station).
 Not built yet: neither the file nor the build's reading of it exists (#64).
 Until it does, every cleanup is still a rule in the build.
 
-### Rule 2: the site refreshes itself
+### Rule 2: we rebuild; Cloudflare only publishes
 
 ```
-every hour   Cloudflare Worker (cron)
+every hour   timer on our machine (refresh/watch.mjs)
                │  ask RTD: has anything changed?
-               │  (Experience, web map and layer edit dates; GTFS file hash)
+               │  (Experience, web map and layer edit dates; GTFS file hash;
+               │   the basemap's tile build)
                │  compare with /data/meta.json on the live site
                ▼
-   changed?  ──yes──> Cloudflare Pages deploy hook
-                         └─> fresh build: npm run build, checks, deploy
+   changed?  ──yes──> one phone alert; nothing is rebuilt
+
+when we choose   npm run build:data on our machine (download, checks, sheets,
+                 loading pictures) ─> look at it ─> commit public/data
+                   └─> push ─> Cloudflare Pages: npm run build checks the
+                                committed site is whole and current, publishes
 ```
+
+- RTD changes its schedules three times a year (January, May, and late
+  August or September), and republishes a feed or edits its map now and then
+  in between. Each new map is built here, its pictures checked, and anything
+  the new data draws badly fixed before it is committed. The alert says what
+  changed and is sent once per change.
+- The data is committed (`public/data/`, with the loading pictures in
+  `public/poster/` and `public/index.html`). Cloudflare's build
+  (`npm run build`, `scripts/publish-check.mjs`) downloads nothing. It fails,
+  and the live site stays as it is, when a file is missing or the committed
+  data was not made by the code going live: each build records a hash of the
+  modules that made it (`scripts/lib/fingerprint.mjs`), the data build's in
+  `meta.json` and the sheets' in `sheets.json`, and the loading pictures must
+  show the current drawing. A change to the sheets or the page's drawing code
+  needs only `npm run build:sheets` (redraw from the committed data, new
+  pictures), so a drawing fix doesn't bring in RTD's newer data with it.
 
 - ArcGIS reports change dates directly: the Experience and web map items have
   `modified`, and each feature service has `editingInfo.lastEditDate`.
 - RTD's GTFS download sends no `Last-Modified` or `ETag` header, but its bytes
   are identical between downloads. The checker downloads the file (about
   11 MB) and compares its SHA-256 hash with the last build's.
-- A full build runs only when something has actually changed.
 - `meta.json`, published with each build, records the version of every source
-  the build used. The checker compares against it, so it needs no stored
-  state of its own.
-- This runs on Cloudflare, not as a scheduled GitHub Action, because GitHub
-  turns off scheduled workflows in public repos after 60 days without
-  commits. That would silently stop updates.
+  the build used. The checker compares against it; the only state it keeps
+  is which change it last alerted on.
 - Live vehicle data needs none of this. It is always current.
+- Until 2026-11-24 a Cloudflare Worker ran this check and called a Pages
+  deploy hook, so Cloudflare rebuilt the whole map from RTD's data on every
+  change and on every push (about 12 minutes each). See the decision log.
 
 ### Rule 3: a bad update never breaks the site
 
@@ -313,8 +335,8 @@ The build checks the data before it deploys:
 
 OpenStreetMap's shapes are checked the same way (#69). A station or hall whose
 box OSM doesn't answer for (an error or a timeout) keeps the last good build's
-shapes, roofs included: this folder's, or on a fresh checkout (every
-Cloudflare build) the published site's. The count checks compare with the
+shapes, roofs included: the committed data's, or on a checkout without it
+the published site's. The count checks compare with the
 same last good build. So OSM being down costs nothing, and a build fails when:
 
 - OSM answers with much less than before: the stations' shapes (platforms,
@@ -327,14 +349,13 @@ is taken as a change in the place and drawn. The drills are in
 `qa/drills/mock-fetch.mjs` (`DRILL=osm-down`, `osm-empty`, `osm-half`,
 `osm-down-cold`).
 
-If any check fails, the build fails, and Cloudflare keeps serving the last good
-version. The live `meta.json` still shows the old versions, so the next hourly
-check tries again. A temporary outage at RTD therefore fixes itself.
+If any check fails, the build fails and writes nothing, so there is nothing to
+commit and the live site keeps the last good version. A temporary outage at
+RTD means building again later. A failure that lasts means RTD changed
+something structural, such as renaming fields or retiring the map.
 
-Cloudflare's deployment-failure notification emails the owner. That email is
-the only time a person needs to look, and it should be rare: a failure that
-lasts means RTD changed something structural, such as renaming fields or
-retiring the map.
+Cloudflare's deployment-failure notification emails the owner when the
+publish check refuses a push.
 
 The footer shows when the map data was last updated ("Map data from RTD,
 updated Oct 30"), so a stale map is visible to everyone.
@@ -3099,8 +3120,8 @@ are deferred, not ruled out. See "Open questions".
     (`public/poster/`, one per theme for a phone and for a wider screen, about
     60 to 150 KB each) are taken by `scripts/poster.mjs` at the end of every
     build, from the site just built (`scripts/poster-build.mjs`), so they go
-    live with the drawing they show. The hourly refresh Worker rebuilds the
-    site when the basemap has a new tile build. A fingerprint of the opening drawing
+    live with the drawing they show. The hourly check alerts when the basemap
+    has a new tile build; `npm run build:sheets` then takes new pictures. A fingerprint of the opening drawing
     and its rendering code is captured with the pictures, along with the
     basemap tile version. The picture stays
     hidden unless its fingerprint matches the current `sheets.json`; a stale
@@ -3419,9 +3440,10 @@ and failure states have words.
 ## Architecture
 
 ```
-refresh Worker (hourly cron) ── RTD changed? ──> Pages deploy hook
-                                                      │
-build (npm run build)              Cloudflare Pages site
+hourly check (refresh/watch.mjs) ── RTD changed? ──> phone alert
+
+build (npm run build:data,         Cloudflare Pages site
+ on our machine, committed)        (npm run build only checks and publishes)
 ───────────────────────            ─────────────────────────────
 RTD Experience item                /              static map app, service worker
  └─> web map ─> ArcGIS layers ─┐   /data/*        GeoJSON, frequency, lookups
@@ -3435,7 +3457,7 @@ RTD GTFS ──────────────────────┼�
                                     anyone is connected, pushes each change
 ```
 
-- Static site with no backend beyond the Live relay and the refresh Worker.
+- Static site with no backend beyond the Live relay.
   Live tiers are computed in the page from the schedule summary and the
   clock, so the server never does per-visitor work. The relay is one Durable
   Object that polls RTD while anyone has Live on and pushes to every page
@@ -3450,10 +3472,14 @@ RTD GTFS ──────────────────────┼�
   file and a worker, about 360 KB with brotli). Older versions are smaller
   but carry an unpatched attribution XSS (fixed in 6.4.1) and get no fixes.
   The page preloads the main module and starts the worker early.
-- `npm run build` discovers, fetches, checks, and writes the data; `npm run
+- `npm run build:data` discovers, fetches, checks, and writes the data and
+  takes the loading pictures; `npm run build:sheets` redraws the sheets and
+  pictures from the data on disk; `npm run build` (what Cloudflare runs)
+  only checks the committed site and publishes it; `npm run
   dev` runs the site locally with `wrangler pages dev`, and `npm run
   dev:live` the relay beside it, which the site finds on its own.
-- Updates are automatic (see "Zero maintenance").
+- Updates are built by hand when the hourly check alerts (see "Zero
+  maintenance", Rule 2).
 
 The deployed page uses plain ES modules under `public/js/sheets/`:
 
@@ -3730,7 +3756,8 @@ work against the real structure before asking for evaluation.
    builds `main` with `npm run build` on Node 22, output `public`; a deploy
    hook named `daily-refresh` exists; the refresh Worker is written in
    `refresh/` (`check.mjs` with tests, `worker.mjs`, `wrangler.toml`, hourly
-   at :23, no page of its own). Live since 2026-11-06: the first production
+   at :23, no page of its own; retired 2026-11-24 for the hourly alert,
+   Rule 2). Live since 2026-11-06: the first production
    build succeeded and the site answers at rtd-system-map.pages.dev; the
    Worker is deployed with its `DEPLOY_HOOK` secret and cron. Not yet done:
    the deployment-failure email (Cloudflare dashboard, Notifications),
@@ -5351,6 +5378,15 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   Stops the same way round that land ring on ring keep a ring each (the
   120L's Gate B had become part of Gate A's ring). The picked route's own
   street names stay on the screen while it is picked.
+- 2026-11-24: The map is built on our machine and committed; Cloudflare only
+  publishes (Rule 2). The hourly check sends a phone alert instead of
+  rebuilding, and `npm run build` on Cloudflare checks that the committed
+  data was made by the code going live. Reason: Chris: "I don't actually want
+  it to check RTD data and rebuild, because there's probably things we're
+  gonna need to tweak when there's new map data." RTD's schedules change
+  three times a year, so building those by hand costs little, and each
+  Cloudflare build no longer takes about 12 minutes. This replaces the
+  2026-11-01 entry's automatic rebuild and the refresh Worker.
 
 ## Sources
 

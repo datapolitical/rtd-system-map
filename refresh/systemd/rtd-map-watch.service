@@ -1,0 +1,20 @@
+# The hourly check (../watch.mjs): a phone alert when RTD changes its data; it
+# rebuilds nothing. A systemd user unit, written for a checkout pinned to main
+# at /srv/projects/rtd-system-map-watch, run by the account whose Pushover keys
+# are in ~/.config/myagent/pushover.env.
+#   systemctl --user link /srv/projects/rtd-system-map-watch/refresh/systemd/rtd-map-watch.service
+#   systemctl --user link /srv/projects/rtd-system-map-watch/refresh/systemd/rtd-map-watch.timer
+#   systemctl --user enable --now rtd-map-watch.timer
+[Unit]
+Description=RTD map: alert when RTD changes its data
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/projects/rtd-system-map-watch
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=%h/.config/myagent/pushover.env
+ExecStart=/usr/bin/env node refresh/watch.mjs
+TimeoutStartSec=900
+Nice=10
+UMask=0077

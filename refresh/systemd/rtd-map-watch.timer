@@ -1,0 +1,11 @@
+# Starts rtd-map-watch.service once an hour (see that file).
+[Unit]
+Description=RTD map: check RTD for new data hourly
+
+[Timer]
+OnCalendar=*-*-* *:23:00
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

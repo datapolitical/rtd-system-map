@@ -1,10 +1,12 @@
 // Draws the four sheets from the build's output: public/data/sheet-<n>.geojson.
-// `npm run build` runs this last; run it alone to redraw from the data on disk.
+// `npm run build:data` runs this last; `npm run build:sheets` runs it alone to
+// redraw from the data on disk, then retakes the loading pictures.
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SHEETS, drawSheet, districtShape, sheetExtent } from './lib/sheets.mjs';
+import { sheetsCode } from './lib/fingerprint.mjs';
 
 // The picture must match both the built transit drawing and the code that inks it.
 export async function drawingFingerprint(sheet) {
@@ -39,7 +41,7 @@ export async function writeSheets(dir) {
   }
   // RTD's district, for the towns the whole-district sheet names (#152). A build without it names every town.
   const district = districtShape(await read('boundary').catch(() => null));
-  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), hub, stations: [...named], colors: [...colors], district, frame }));
+  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), code: await sheetsCode(), hub, stations: [...named], colors: [...colors], district, frame }));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
