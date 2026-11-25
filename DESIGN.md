@@ -2524,7 +2524,13 @@ How it is built:
   station's bar it is drawn tighter, down to half its reach, until it stands
   a line's width clear. The curve only smooths the street: it is drawn only
   where it stays within a street's width of it all the way, both ways. A
-  loop round blocks is not a bow and keeps its own path.
+  loop round blocks is not a bow and keeps its own path, unless its own path
+  runs against rail: rail is drawn wider than its track, so a turnaround
+  beside a station is covered by it. Then the loop is drawn as the widest
+  sweep that stands clear of the rail, or the one that stands clearest, as
+  long as it stays within that clearance of the street. Its stops follow it.
+  At Union Station's light rail this draws the 15 and FreeRide loop beside the
+  E Line on sheet 4 and slims it to the concourse on sheet 3.
 - **A stop's ring sits on its street.** The streets are drawn, not traced,
   so a stop at its true place can sit beside its line or between two. Each
   ring is moved to the nearest point of the nearest street, within two
@@ -5416,6 +5422,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   clear of them is near enough. Reason: Chris asked for "a downtown table or
   some kind of box that represents downtown" on the city sheet, where the
   table didn't fit, and picked the small box from three mocks.
+- 2026-11-24: A turnaround whose own path runs against rail is drawn as a
+  sweep clear of it, even where the sweep strays further from the street
+  than the rule for smoothing allows (#97). Reason: Chris, of Union Station:
+  the light rail "overlaps the bus routes in a way that a hand drawn map
+  wouldn't". The 15 and FreeRide loop's own path ran against the E Line and
+  its stop ring sat on it; the street was right, the rail drawn wider.
 
 ## Sources
 

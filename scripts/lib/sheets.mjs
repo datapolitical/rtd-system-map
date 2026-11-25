@@ -1635,15 +1635,34 @@ export function arced(streets, away = () => Infinity, clear = 0, along = Infinit
     };
     // The bow is the drawing's own, so it gives way to rail: where it would run against a
     // line or a station's bar it is drawn tighter, down to half its reach, until it stands clear.
-    let h = Math.min(1.5 * chord, far / pull);
+    const reach = Math.min(1.5 * chord, far / pull);
+    let h = reach;
     let curve = sweep(h);
     for (const least = h / 2; h > least && curve.some((p) => away(p) < clear); curve = sweep(h)) h *= 0.94;
     // A sweep only smooths the street: it stays within `along` pixels of it all the way, both ways, or the
     // street keeps its own path (a loop around blocks is not a bow, and a curve across it would
     // draw the route where it never runs and leave out where it does).
-    const within = (x, y) => resample(x, 2).every((p) => nearest(y, p).d <= along);
-    if (!within(curve, path) || !within(path, curve)) continue;
-    out[i] = { ...edges[i].st, path: curve };
+    const within = (x, y, most) => resample(x, 2).every((p) => nearest(y, p).d <= most);
+    if (within(curve, path, along) && within(path, curve, along)) {
+      out[i] = { ...edges[i].st, path: curve };
+      continue;
+    }
+    // Unless the street's own path runs against rail, where rail drawn wider than its track covers
+    // it (a turnaround beside a station). Then the bow is drawn beside the rail on purpose: the
+    // widest sweep that stands clear, or failing that the one that stands clearest, so long as
+    // it stays within `clear` of the street and stands clear of rail by more than the street did.
+    const nearRail = (pts) => Math.min(...resample(pts, 2).map(away));
+    const own = nearRail(path);
+    if (own >= clear) continue;
+    let best = null;
+    for (let k = reach; k > 1; k *= 0.94) {
+      const c = sweep(k);
+      const m = nearRail(c);
+      if (!best || m > best.m) best = { c, m };
+      if (m >= clear) break;
+    }
+    if (!best || best.m <= own + 1 || !within(best.c, path, clear) || !within(path, best.c, clear)) continue;
+    out[i] = { ...edges[i].st, path: best.c };
   }
   return out;
 }
