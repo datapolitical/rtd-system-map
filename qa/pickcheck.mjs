@@ -3,13 +3,15 @@
 // From the built sheets (public/data/sheet-<n>.geojson), for every bus route on every sheet, the
 // line the page draws when it is picked (`route-line`), in that sheet's screen pixels:
 //   gaps      parts of the line that don't meet (a picked route is one continuous stroke)
-//   stubs     a part shorter than a stub (SIZES.pickStub)
+//   stubs     a part shorter than a stub (SIZES.pickStub) beside the rest of the line
 //   crossings the line crossing itself, or a second part running along the first
 //   steps     a turn sharper than STEP° followed within JOG px by one back the other way
 //   names     a station name shown while the route is picked whose box the line runs through
 //             (a name it runs under by design, `cover`, is counted apart as `under`)
 //   strays    points of the line farther from the route's own street pieces than a line's width
 //             (DESIGN.md: the smoothing's allowance, the only tolerance the picked line gets)
+//   small     informational: the whole route drawn as one part shorter than a stub (a short
+//             route on a far-out sheet), not a fault
 // qa/pickcheck-browser.mjs opens a pick link for each route on a phone (chromium, both themes)
 // and counts routes not framed whole above the card. Cropped names are reported as information
 // on the fixed printed sheet. Prints counts per sheet and the worst routes; JSON with --json.
@@ -57,7 +59,7 @@ export function steps(path) {
 
 export function checkRoute(paths, names, route, sheet, streets = []) {
   const w = SIZES.rail[sheet.id];
-  const out = { gaps: 0, stubs: 0, crossings: 0, steps: 0, names: 0, under: 0, strays: 0, where: [] };
+  const out = { gaps: 0, stubs: 0, crossings: 0, steps: 0, names: 0, under: 0, strays: 0, small: 0, where: [] };
   // Parts that meet: an end within 2 px of another part.
   const part = paths.map((_, i) => i);
   const root = (i) => (part[i] === i ? i : (part[i] = root(part[i])));
@@ -68,8 +70,12 @@ export function checkRoute(paths, names, route, sheet, streets = []) {
   out.gaps = new Set(paths.map((_, i) => root(i))).size - 1;
   if (out.gaps) out.where.push(...paths.map((p) => p[0]));
   // A stub: a short part with a loose end (a short link between two parts is no stub).
+  // A route drawn whole as one short part is small at this scale, not a stub: there is
+  // nothing for it to be left over from (the FreeRide downtown on the whole-district sheet).
   const touches = (p, e) => paths.some((q) => q !== p && nearestD(q, e) <= 2);
-  out.stubs = paths.filter((p) => length(p) < SIZES.pickStub[sheet.id] && !(touches(p, p[0]) && touches(p, p.at(-1)))).length;
+  const short = (p) => length(p) < SIZES.pickStub[sheet.id];
+  if (paths.length === 1 && short(paths[0])) out.small = 1;
+  else out.stubs = paths.filter((p) => short(p) && !(touches(p, p[0]) && touches(p, p.at(-1)))).length;
   for (const [pi, p] of paths.entries()) {
     out.steps += steps(p);
     for (let i = 1; i < p.length; i++) for (let j = i + 2; j < p.length; j++) if (cross(p[i - 1], p[i], p[j - 1], p[j])) { out.crossings++; out.where.push(p[i]); }
@@ -97,7 +103,7 @@ export function checkRoute(paths, names, route, sheet, streets = []) {
   return out;
 }
 
-const KEYS = ['gaps', 'stubs', 'crossings', 'steps', 'names', 'under', 'strays'];
+const KEYS = ['gaps', 'stubs', 'crossings', 'steps', 'names', 'under', 'strays', 'small'];
 const report = { sheets: {}, worst: [] };
 for (const sheet of SHEETS) {
   const file = new URL(`../public/data/sheet-${sheet.id}.geojson`, import.meta.url);
