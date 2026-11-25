@@ -70,6 +70,24 @@ const start = nearest(asked?.zoom ?? zooms[OPENING]);
 const wanted = new Set([SHEETS[start].id]);
 // The route lines (style.js, routesData): only once a bus route is picked, or when the address picks one.
 let routeLines = asked?.pick?.mode === 'bus';
+// Once every sheet is in, each sheet's route lines are fetched quietly, the sheet in view first, so
+// a first pick finds them on the phone. Only the bytes: the map reads a sheet's lines (the work on
+// the phone) only at a pick, from this copy. Not with Data Saver on.
+const routeCopies = new Map(); // sheet id -> object URL of its route lines
+const routesUrl = (id) => routeCopies.get(id) ?? routesData(id);
+let routesFetched = false;
+async function fetchRoutes() {
+  if (routesFetched || routeLines || !window.sheetsAll || navigator.connection?.saveData) return;
+  routesFetched = true;
+  const order = SHEETS.map((s, i) => [s.id, Math.abs(i - sheet)]).sort((a, b) => a[1] - b[1]);
+  for (const [id] of order) {
+    if (routeLines) return; // a pick has asked for them itself
+    try {
+      const r = await fetch(routesData(id), { priority: 'low' });
+      if (r.ok) routeCopies.set(id, URL.createObjectURL(await r.blob()));
+    } catch { return; } // no connection: a pick asks again
+  }
+}
 // The page opens on the hub, a little above the middle so the lines south of it show.
 const home = hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2];
 let openingSteps = !asked;
@@ -175,7 +193,7 @@ function want(index) {
   if (!s || wanted.has(s.id)) return;
   wanted.add(s.id);
   map.getSource(`sheet-${s.id}`)?.setData(sheetData(s.id));
-  if (routeLines) map.getSource(`routes-${s.id}`)?.setData(routesData(s.id));
+  if (routeLines) map.getSource(`routes-${s.id}`)?.setData(routesUrl(s.id));
 }
 // One at a time, nearest the sheet shown first, so each gets the whole connection and the one
 // the reader will reach next comes soonest. A zoom asks for its sheet straight away (show).
@@ -300,6 +318,7 @@ map.on('idle', () => { if (window.sheetsReady) warm(); });
 // --- Resting only on a sheet -------------------------------------------------
 
 let sheet = nearest(map.getZoom());
+map.on('idle', fetchRoutes);
 function nearest(zoom) {
   return rests.reduce((best, z, i) => (Math.abs(z - zoom) < Math.abs(rests[best] - zoom) ? i : best), 0);
 }
@@ -525,7 +544,7 @@ function setPick(p) {
   // A picked bus route is drawn from its sheets' route lines, asked for only now (#193).
   if (p?.mode === 'bus' && !routeLines) {
     routeLines = true;
-    for (const id of wanted) map.getSource(`routes-${id}`)?.setData(routesData(id));
+    for (const id of wanted) map.getSource(`routes-${id}`)?.setData(routesUrl(id));
   }
   map.setGlobalStateProperty('bus', p?.mode === 'bus' ? p.route : '');
   map.setGlobalStateProperty('rail', p?.mode === 'rail' ? p.route : '');
