@@ -19,7 +19,7 @@
 <meta property="og:title" content="RTD system map">
 <meta property="og:description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs.">
 <meta property="og:url" content="https://map.chrisfnicholson.com/">
-<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=df0e0d4089">
+<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=c7d23e88cf">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -48,7 +48,8 @@
     document.head.append(link);
   }
 </script>
-<link rel="stylesheet" href="/vendor/maplibre-gl.css">
+<!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the loading picture. -->
+<link rel="stylesheet" href="/vendor/maplibre-gl.css" media="print" onload="this.media='all'">
 <!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
      for the one that names it (DESIGN.md, "Quality floor"). The sheet and the glyphs are fetched
      by the map's worker, which finds them in the browser's cache. -->
@@ -174,7 +175,7 @@
 <div id="card" role="region" aria-labelledby="card-title" hidden></div>
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
-<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="578621a8a83481b73e6989231c4b17ea46c476108a2e65d3ef322691f141e0c1" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="366d0f96c5d12bcea3994db29ac51a1a16fa53371e0a443692706991454fbc92" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
   <picture>
     <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
     <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">

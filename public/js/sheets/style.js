@@ -592,6 +592,27 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
         paint: { 'text-color': c.ground, 'icon-opacity': unless(onBus(), 1, 1 - FADE.line), 'text-opacity': unless(onBus(), 1, 1 - FADE.line) } });
     }
   });
+  // One GL program per kind of layer. MapLibre builds a program for each mix of paint values that
+  // are the same for the whole layer and that vary by feature, and building one holds up the
+  // first drawing (17 at the opening, about a third of the main thread's work before it on a
+  // phone without a fast GPU). So every line, circle and symbol layer gives these values per
+  // feature, with the value it had: the same drawing from 10 programs.
+  const SAME = {
+    line: { 'line-color': '#000000', 'line-width': 1 },
+    circle: { 'circle-radius': 5, 'circle-color': '#000000', 'circle-stroke-color': '#000000' },
+    symbol: { 'text-color': '#000000', 'text-halo-width': 0, 'text-opacity': 1, 'icon-opacity': 1 },
+  };
+  const perFeature = (v) => ['case', ['==', ['geometry-type'], 'Nothing'], v, v];
+  for (const l of layers) {
+    for (const [prop, initial] of Object.entries(SAME[l.type] ?? {})) {
+      if (l.type === 'symbol' && !l.layout?.[prop.startsWith('text') ? 'text-field' : 'icon-image']) continue;
+      const v = l.paint?.[prop] ?? initial;
+      // A value that follows the zoom can't sit inside a per-feature choice; one that already varies stays.
+      if (typeof v === 'object' && !Array.isArray(v)) continue;
+      if (/"(zoom|get|has|properties|geometry-type|feature-state)"/.test(JSON.stringify(v))) continue;
+      l.paint = { ...l.paint, [prop]: perFeature(v) };
+    }
+  }
   return {
     version: 8,
     state: STATE,

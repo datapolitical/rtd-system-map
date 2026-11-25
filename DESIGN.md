@@ -3125,17 +3125,27 @@ are deferred, not ruled out. See "Open questions".
     timetable only when its panel opens. Live feeds are fetched only while
     Live is on (or a stop panel is open) and the tab is visible.
   - The sheets page (the front page) loads only the sheet it opens on. The
-    other three, about half its weight, follow one at a time once that view
-    is drawn, nearest first, and a zoom asks for its sheet straight away.
+    others follow one at a time, nearest first, once the reader first
+    touches the page or that view has been drawn for 5 seconds, so they
+    never compete with it; a zoom asks for its sheet straight away.
     Its HTML asks at once for the modules, `meta.json`, `sheets.json`, the
     opening sheet, the tile index and the glyphs the opening view letters
     with; the glyphs are served as protobuf so Cloudflare compresses them
     (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
     CPU): drawn at 5.9 s, was 8.9 s; opening view settled at 6.5 s, was 12 s.
-  - Once a sheets view is at rest, the page loads every other sheet's tiles
-    for that view, and the tiles of each whole zoom between the sheets, into
-    MapLibre's cache (nearest zoom first, again after each move), so the
-    first step to a sheet draws at once instead of showing bare ground.
+  - Once a sheets view is at rest (from that same first touch or 5 seconds),
+    the page loads the neighbouring sheets' tiles for that view, and the
+    tiles of each whole zoom between them, into MapLibre's cache (nearest
+    zoom first, again after each move), so the first step to a sheet draws
+    at once instead of showing bare ground. Every zoom at once was about
+    twice the work, all of it handled on the phone's main thread.
+  - MapLibre builds a GL program for each kind of layer and each mix of
+    paint values that are fixed for the layer or vary by feature, and
+    building them holds up the first drawing. Every line, circle and symbol
+    layer gives its colour, width and opacity per feature, with the same
+    values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
+  - MapLibre's stylesheet doesn't hold up the first paint: the page uses
+    none of its controls, and the picture covers the map until it is drawn.
   - While it loads, the sheets page shows a picture of the view it opens on,
     with a "Loading…" line over it, and fades to the map once the map has
     drawn that view (or at once, if a button is pressed first). The pictures
@@ -3172,7 +3182,8 @@ are deferred, not ruled out. See "Open questions".
   name every file, and would show the old version once after each deploy).
   Basemap tiles are cache-first, since their addresses name the tile build,
   up to 3000 tiles, oldest dropped first. The worker is registered only after
-  the opening view is drawn, so it never slows the first load; the files that
+  the opening view is drawn and the reader has it (the first touch, or 5
+  seconds), so it never slows the first load; the files that
   load fetched are handed to it then. Navigation preload keeps it from
   delaying later loads. The Live relay and other pages are never touched.
 - **Accessibility:** WCAG AA contrast for text, visible keyboard focus, every
@@ -5440,6 +5451,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   the tiles were ready and the opening view was drawn. Reason: a visit took
   about six seconds on Chris's phone, while the test copy opened in under a
   second there; only the live address on his phone can show the difference.
+- 2026-11-25: The opening does less on the phone's main thread (PageSpeed
+  Insights' mobile score, which counts each long task the page makes the
+  phone wait through): the other sheets, the warmed tiles and the offline
+  copy start at the reader's first touch or 5 seconds after the opening;
+  the warmed tiles are the neighbouring sheets' only; layers share GL
+  programs (17 to 10, the drawing unchanged to the pixel); MapLibre's
+  stylesheet no longer blocks the first paint; and the stop tables' plates
+  are drawn on CPU canvases, which the sheets page had missed (#105).
 
 ## Sources
 

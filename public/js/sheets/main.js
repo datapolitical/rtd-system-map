@@ -145,6 +145,23 @@ scheme.addEventListener('change', () => {
   if (!manualTheme) changeTheme(scheme.matches ? 'dark' : 'light');
 });
 
+// --- Waiting for the reader before doing what is for later ------------------------
+
+const SETTLE_MS = 5000;
+let settled = false;
+const later = [];
+function whenSettled(fn) { if (settled) fn(); else later.push(fn); }
+const settleOn = ['pointerdown', 'wheel', 'keydown'];
+let touched = false; // before the opening is drawn, a touch only brings the start forward
+function readerHasIt() {
+  if (settled) return;
+  if (!window.sheetsReady) { touched = true; return; }
+  settled = true;
+  for (const type of settleOn) removeEventListener(type, readerHasIt, true);
+  for (const fn of later.splice(0)) fn();
+}
+for (const type of settleOn) addEventListener(type, readerHasIt, { capture: true, passive: true });
+
 // --- The other sheets, once the first is drawn ----------------------------------
 
 // Hand a sheet's drawing to the map, if it hasn't had it.
@@ -191,10 +208,11 @@ function warm() {
   if (!sample) return;
   const [Tile, TileID] = [sample.constructor, sample.tileID.constructor];
   // A step passes through every whole zoom between two sheets, and at each one the sheet whose
-  // band it is in shows, drawn from that zoom's tiles. All of them, nearest the map's first.
+  // band it is in shows, drawn from that zoom's tiles. Those of a step to either neighbouring
+  // sheet, nearest the map's first: on reaching one, the map rests again and its neighbours'
+  // come then. (Every zoom at once was about twice the work, all on the phone's main thread.)
   const here = map.getZoom();
-  const levels = [];
-  for (let t = Math.floor(zooms[0]); t <= zooms.at(-1); t++) levels.push(t);
+  const levels = stepLevels();
   levels.sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
   for (const t of levels) {
     const s = SHEETS.findLast((sh, i) => !i || edge(i - 1) <= t);
@@ -219,6 +237,12 @@ function warm() {
     }
   }
 }
+// The whole zooms a step from this sheet to either neighbour passes through.
+function stepLevels() {
+  const levels = [];
+  for (let t = Math.floor(rests[Math.max(0, sheet - 1)]); t <= rests[Math.min(rests.length - 1, sheet + 1)]; t++) levels.push(t);
+  return levels;
+}
 // The tiles a source draws a view at `zoom` from, about the map's centre, as MapLibre picks
 // them for a map that is never tilted or turned: [overscaled zoom, zoom, x, y].
 function cover(source, zoom) {
@@ -237,7 +261,7 @@ function cover(source, zoom) {
   }
   return tiles;
 }
-map.on('idle', warm);
+map.on('idle', () => { if (settled) warm(); });
 
 // --- Resting only on a sheet -------------------------------------------------
 
@@ -733,13 +757,18 @@ for (const button of document.querySelectorAll('#steps button')) button.addEvent
 // A pinch, drag or double tap reaches the map through the picture (index.html), and moves it.
 map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 
-// The opening view is drawn: then the other sheets (sheetsAll once they all have).
-map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });
+// The opening view is drawn. What the page does for later (the other sheets, the other zooms'
+// tiles, the offline copy) waits until the reader first touches the page, or until the opening
+// has been on the screen for SETTLE_MS, so none of it competes with the opening view on a slow
+// phone or a slow connection (DESIGN.md, "Quality floor"). A step to another sheet before then
+// asks for that sheet itself (show). sheetsAll is set once every sheet is in.
+map.once('idle', () => { window.sheetsReady = true; reveal(); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
+whenSettled(() => { fillIn(); warm(); });
 
 // --- Offline (sw.js) ------------------------------------------------------------------
-// Asked for only once the opening view is drawn, so it never slows it (DESIGN.md, "Quality
-// floor"). On the first visit the files already fetched are handed to it to keep; from then on
-// it sees every request itself.
+// Asked for only once the opening view is drawn and the reader has it (whenSettled), so it
+// never slows it (DESIGN.md, "Quality floor"). On the first visit the files already fetched
+// are handed to it to keep; from then on it sees every request itself.
 //
 // Not quite every request on that first visit: the map's drawing worker was started before the
 // service worker existed, so what it fetches (each sheet's drawing and the basemap's tiles) never
@@ -758,11 +787,11 @@ function groundTiles() {
     const c = map.style.tileManagers.ground.getTileByID(key)?.tileID?.canonical;
     if (c) add(c.z, c.x, c.y);
   }
-  for (let t = Math.floor(zooms[0]); t <= zooms.at(-1); t++) for (const [, z, x, y] of cover(source, t)) add(z, x, y);
+  for (const t of stepLevels()) for (const [, z, x, y] of cover(source, t)) add(z, x, y);
   return [...urls];
 }
 if ('serviceWorker' in navigator) {
-  map.once('idle', async () => {
+  whenSettled(async () => {
     try {
       await navigator.serviceWorker.register(new URL('../../sw.js', import.meta.url), { scope: new URL('../../', import.meta.url).pathname });
       const reg = await navigator.serviceWorker.ready;
@@ -802,7 +831,8 @@ function groupImage(id) {
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(w * ratio);
   canvas.height = Math.round(h * ratio);
-  const ctx = canvas.getContext('2d');
+  // Drawn on the CPU: its pixels are read straight back, which from the GPU stalls the map's drawing.
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.scale(ratio, ratio);
   ctx.beginPath();
   if (m[1] === 'plate') {
@@ -840,7 +870,7 @@ function markImage(id) {
   const [w, h] = kind === 'express-shield' ? [18, 10] : [13, 13];
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(w * ratio); canvas.height = Math.round(h * ratio);
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true }); // read back at once (groupImage)
   ctx.scale(ratio, ratio);
   if (kind === 'express-shield') {
     const lozenge = (inset) => {
