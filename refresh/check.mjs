@@ -2,7 +2,7 @@
 // maintenance", Rule 2.) The live site's meta.json records the version of
 // every source its build used; this asks RTD for each one's current version
 // and reports what differs. Pure: the fetching is passed in, so it runs in
-// the refresh Worker and in tests alike.
+// the hourly check (watch.mjs) and in tests alike.
 
 const itemUrl = (portal, id) => `${portal.replace(/\/$/, '')}/sharing/rest/content/items/${id}?f=json`;
 

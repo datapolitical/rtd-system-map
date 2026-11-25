@@ -6,7 +6,9 @@
   "license": "Apache-2.0",
   "scripts": {
     "postinstall": "node scripts/vendor.mjs",
-    "build": "node scripts/vendor.mjs && node scripts/build-data.mjs && node scripts/poster-build.mjs",
+    "build": "node scripts/vendor.mjs && node scripts/publish-check.mjs",
+    "build:data": "node scripts/vendor.mjs && node scripts/build-data.mjs && node scripts/poster-build.mjs",
+    "build:sheets": "node scripts/sheets.mjs && node scripts/poster-build.mjs",
     "sheets": "node scripts/sheets.mjs",
     "dev": "NODE_OPTIONS=--max-old-space-size=4096 wrangler pages dev public --port 8788",
     "dev:live": "wrangler dev --config live/wrangler.toml --port 8789",
@@ -24,7 +26,8 @@
     "check:recall": "node qa/recall/recall.mjs",
     "check:accuracy": "node qa/accuracy.mjs",
     "check:evidence": "node qa/evaluation/run.mjs",
-    "sweep:classic": "node qa/sweep/sweep.mjs"
+    "sweep:classic": "node qa/sweep/sweep.mjs",
+    "watch:rtd": "node refresh/watch.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.0",

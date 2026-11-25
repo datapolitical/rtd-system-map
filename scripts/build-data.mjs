@@ -24,6 +24,7 @@ import { extendLineToPlatforms, hallRoofs, platformsToMarks, stationStructures }
 import { clipAtHalls, shortenAtHall, stopsOfHalls } from './lib/halls.mjs';
 import { countProblems } from './lib/counts.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
+import { dataCode } from './lib/fingerprint.mjs';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
 const EXPERIENCE = { portal: 'https://www.arcgis.com', id: '4a812ebf793646be945b7d58dcfbb794' };
@@ -126,7 +127,7 @@ function assignRoles(layers) {
 async function main() {
   const started = Date.now();
   // The last good build's counts, for the checks (DESIGN.md, "Rule 3"): this
-  // folder's, or on a fresh checkout (every Cloudflare build) the published
+  // folder's (the committed data), or on a checkout without it the published
   // site's, which is the last build that passed them.
   const previous =
     JSON.parse(await readFile(path.join(OUT, 'meta.json'), 'utf8').catch(() => 'null')) ??
@@ -819,6 +820,8 @@ async function main() {
   for (const [role, features] of Object.entries(geo)) {
     await writeFile(path.join(next, `${role}.geojson`), JSON.stringify({ type: 'FeatureCollection', features }));
   }
+  // The code that built this data, so publishing can tell it is current (scripts/publish-check.mjs).
+  meta.code = await dataCode();
   await writeFile(path.join(next, 'meta.json'), JSON.stringify(meta, null, 2));
   await writeFile(path.join(next, 'directory.json'), JSON.stringify(index));
   // The four sheets are drawn from the files just written (DESIGN.md, "Four sheets").

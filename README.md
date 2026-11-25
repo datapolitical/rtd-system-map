@@ -37,7 +37,8 @@ You need Node 22 and Cloudflare's Wrangler CLI (`npm install -g wrangler`).
 
 ```sh
 npm install        # also copies MapLibre and the font into public/vendor/
-npm run build      # downloads RTD's public data into public/data/
+npm run build:data # downloads RTD's public data into public/data/ (committed)
+npm run build      # what Cloudflare runs: checks the committed site, builds nothing
 npm run dev        # serves the site at http://127.0.0.1:8788
 npm run dev:live   # the Live relay, on 8789; the site finds it on its own
 npm test           # unit tests, plain Node, no browser
@@ -60,12 +61,14 @@ network is written into the code; the build derives it from RTD's data.
 ## Layout
 
 - `public/`: the static site (plain ES modules in `js/`, no framework).
-  `public/data/` and `public/vendor/` are generated and not committed.
+  `public/data/` is built with `npm run build:data` and committed;
+  `public/vendor/` is generated and not committed.
 - `scripts/`: the build, which fetches, checks and writes the data.
 - `live/`: the Live relay, a Cloudflare Durable Object that polls RTD's
   realtime feeds and pushes changes to every open page.
-- `refresh/`: a Worker that runs hourly and triggers a rebuild when RTD's
-  data has changed.
+- `refresh/`: the hourly check, run by a timer on our machine
+  (`refresh/systemd/`), that sends a phone alert when RTD's data has changed.
+  It rebuilds nothing.
 - `functions/`: Pages Functions that connect the site to the relay.
 - `test/`: unit tests, run with `npm test`.
 - `qa/`: the QA brief and findings ([qa/BRIEF.md](qa/BRIEF.md)) and the
