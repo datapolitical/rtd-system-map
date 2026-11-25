@@ -2874,8 +2874,11 @@ dark theme, the rail lines fanning out from Union Station past Ball Arena and
 Empower Field, with the buttons and credit hidden. A link to the classic map
 shows its own (`public/classic/og.png`): central Denver at zoom 11 in the
 light theme, with the interface and route letters hidden.
-`node scripts/og-image.mjs` makes either again from the live site (`sheets`
-or `classic`); run it when that map's look changes. The browser tab says
+The build retakes the sheets' picture each time, from the site it just built
+(`scripts/poster-build.mjs` runs `scripts/og-image.mjs`), and gives the
+`og:image` link the picture's hash as `?v=`, so apps that keep a preview by
+its address fetch the new one. `node scripts/og-image.mjs` makes it again by
+hand from the live site. The browser tab says
 "RTD system map" on the front page and "RTD system map: classic" on the
 classic map; the classic map's key still says the map is unofficial, and so
 does the sheets' credit line.
@@ -2966,6 +2969,13 @@ the browser, and because Android and older iPhones still need one.
   gray. Both themes, following "Dark mode".
 - An `apple-touch-icon` beside the manifest's icons, because it is how iOS
   picks an icon rather than photographing the page.
+- The icon is the map itself: a square of the map as drawn, nothing hidden
+  but the page's buttons, centred on the hub (sheets.json `hub`, Union
+  Station) on sheet 2 in the dark theme, with Union Station, its line letters,
+  Auraria and downtown's streets. `scripts/icons.mjs` crops it in the build,
+  after the loading pictures, so a redrawn map redraws its icon. The maskable
+  icon is a wider square shrunk to fit, so a launcher's circle keeps the
+  station. The favicon is the same square at 32 pixels.
 - `theme-color` per theme, and a translucent status bar, so the map runs under
   it.
 
@@ -5387,6 +5397,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   three times a year, so building those by hand costs little, and each
   Cloudflare build no longer takes about 12 minutes. This replaces the
   2026-11-01 entry's automatic rebuild and the refresh Worker.
+- 2026-11-24: The site has a favicon, a Home Screen icon and a manifest
+  (#177), and the build retakes the link preview. The icon is a square of the
+  real map at Union Station, exactly as drawn. Reason: Chris turned down an
+  icon drawn for the purpose ("There is no station that looks like your fake
+  example!") and then the same map with its streets and names hidden ("You
+  hide too much and it's a meaningless image"), and picked the middle of three
+  real squares.
 
 ## Sources
 
