@@ -249,16 +249,11 @@ export const SIZES = {
   sourceTile: 1024,
   // A line letter's disc, out to its edge (public/js/sheets/style.js, the letter layer's radius and stroke).
   letterDisc: { 0: 8.5, 1: 8.9, 2: 9.7, 3: 10.9, 4: 12.1 },
-  // RTD's stop groups (stopGroups): from this sheet a small table says which routes stop at which
-  // lettered stop. Its type in px (title, rows, a badge's letter) with letter spacing in ems, its
-  // badge, padding, the gap after a badge, the rows' pitch and its corner. Capitals and figures in
-  // Overpass stand 0.71 em (17 of 24 px in the glyph files). public/js/sheets/style.js draws with these.
+  // RTD's stop groups (stopGroups): from this sheet the page shows a key on the screen saying which
+  // routes stop at which lettered stop (main.js, placeKey). A letter's square is `badge` wide
+  // (public/js/sheets/style.js, GROUP.badge).
   groupSheet: 2,
-  group: { title: 9, titleSpacing: 0.12, row: 10.5, rowSpacing: 0.02, letter: 8.5, badge: 12, pad: 5, gap: 5, titleGap: 5, pitch: 15, corner: 5, cap: 0.71 },
-  // The table keeps this far off lines and lettering, with its middle at most this far from the
-  // middle of its lettered stops.
-  groupClear: 3,
-  groupReach: 180,
+  group: { badge: 12 },
   // From this sheet until stops are drawn, each lettered stop's letter sits on its street in the
   // table's square, with a rim of ground this wide (public/js/sheets/style.js, GROUP.streetRim).
   // Squares keep this far apart, and move at most this far along their street, within their
@@ -267,14 +262,6 @@ export const SIZES = {
   groupStreetRim: 1.5,
   groupStreetApart: 1,
   groupStreetNudge: 24,
-  // Before that sheet the lettered streets are too small for a table beside them (on sheet 2
-  // about 45 px each way), so a small box stands for it (groupBoxLayout): the title, the letters
-  // in their squares and "Tap", which opens the full table in the card. A hairline leads from it
-  // to the middle of the lettered stops, since no letters on the streets tie it to them. The
-  // badges sit `boxGap` apart; the leader stops `leaderOff` short of the plate.
-  // It stays within `reach` of the stops' middle, so a phone shows it beside downtown, and each
-  // pixel of street under it weighs as much as `nearer` pixels further away.
-  groupBox: { boxGap: 3, hint: 'Tap', leader: 1, leaderOff: 1, reach: 130, nearer: 1 },
 };
 
 // --- Screen pixels at a zoom (512-pixel tiles, as MapLibre draws) -----------
@@ -3434,49 +3421,6 @@ export function groupStretches(table, bus, sheet, chains = through(bus)) {
   return { streets, covered };
 }
 
-/**
- * A table's lettering, in pixels from its plate's top-left: the title, then a row for each
- * letter, its badge in one column and its routes, a third of an em apart, from one tab. `measure`
- * is how wide the page sets a text (glyphs.mjs, textWidth). Returns `{ w, h, title, rows }`.
- */
-export function groupLayout(table, measure) {
-  const g = SIZES.group;
-  const title = table.title.toUpperCase();
-  const rows = table.rows.map((r) => ({ letter: r.letter, text: r.routes.join('\u2004') }));
-  const tab = g.pad + g.badge + g.gap;
-  const wide = Math.max(g.pad + measure(title, 'Overpass Bold', g.title, g.titleSpacing),
-    ...rows.map((r) => tab + measure(r.text, 'Overpass SemiBold', g.row, g.rowSpacing)));
-  const titleY = Math.round(g.pad + (g.cap * g.title) / 2);
-  const first = Math.round(g.pad + g.cap * g.title + g.titleGap + g.badge / 2);
-  return {
-    w: Math.ceil(wide + g.pad), h: Math.ceil(first + (rows.length - 1) * g.pitch + g.badge / 2 + g.pad),
-    title: { text: title, at: [g.pad, titleY] },
-    rows: rows.map((r, k) => ({ ...r, badge: [g.pad + g.badge / 2, first + k * g.pitch], at: [tab, first + k * g.pitch] })),
-  };
-}
-
-/**
- * A small box standing for a table on a sheet before `groupStreetSheet` (SIZES.groupBox): the
- * title, then the letters in their squares in a row and "Tap" after them, laid out like
- * groupLayout's. Returns `{ w, h, title, rows, hint }`, each row `{ letter, badge }`.
- */
-export function groupBoxLayout(table, measure) {
-  const g = SIZES.group;
-  const b = SIZES.groupBox;
-  const title = table.title.toUpperCase();
-  const titleY = Math.round(g.pad + (g.cap * g.title) / 2);
-  const rowY = Math.round(g.pad + g.cap * g.title + g.titleGap + g.badge / 2);
-  const rows = table.rows.map((r, k) => ({ letter: r.letter, badge: [g.pad + g.badge / 2 + k * (g.badge + b.boxGap), rowY] }));
-  const hintX = g.pad + rows.length * g.badge + (rows.length - 1) * b.boxGap + g.gap;
-  const wide = Math.max(g.pad + measure(title, 'Overpass Bold', g.title, g.titleSpacing), hintX + measure(b.hint, 'Overpass SemiBold', g.title, g.titleSpacing));
-  return {
-    w: Math.ceil(wide + g.pad), h: Math.ceil(rowY + g.badge / 2 + g.pad),
-    title: { text: title, at: [g.pad, titleY] },
-    rows,
-    hint: { text: b.hint, at: [hintX, rowY] },
-  };
-}
-
 // A bus street's ink as the page draws it (public/js/sheets/style.js, BUS_WIDTH): the busiest step as wide as
 // rail, the middle step rail over 1.4, the quiet step rail over 1.6 twice (a hairline on the opening sheet).
 const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
@@ -3549,32 +3493,6 @@ export class Raster {
     const [i1, j1] = [Math.min(this.w, x - this.x0 + w), Math.min(this.h, y - this.y0 + h)];
     return i1 > i0 && j1 > j0 ? this.#sum(i0, j0, i1, j1) : 0;
   }
-}
-
-/**
- * Where a stop-group table goes on a sheet: a level plate `w` by `h` near its streets, clear of
- * everything `solid` (lines, lettering and the letters on the streets, each grown by the table's
- * margin), nearest the middle of its lettered stops and at most `groupReach` from it. The letters
- * on the streets, in the table's squares, tie it to them. Where `over` is given (a small box,
- * SIZES.groupBox), it may lie over what `over` holds, the least it can. Returns `{ box: [x, y, w,
- * h], at, target }` in the sheet's pixels (`at` the plate's middle, `target` the stops' middle), or
- * null where it doesn't fit.
- */
-export function placeGroup(stretches, { w, h }, solid, over = null) {
-  const all = stretches.flatMap((s) => s.stops.map((x) => x.at));
-  const target = [all.reduce((s, p) => s + p[0], 0) / all.length, all.reduce((s, p) => s + p[1], 0) / all.length];
-  let best = null;
-  for (let y = solid.y0; y + h <= solid.y0 + solid.h; y += 2) for (let x = solid.x0; x + w <= solid.x0 + solid.w; x += 2) {
-    if (!solid.clear(x, y, w, h)) continue;
-    const at = [x + w / 2, y + h / 2];
-    const d = dist(at, target);
-    if (d > (over ? SIZES.groupBox.reach : SIZES.groupReach)) continue;
-    // Where the box may lie over streets (`over`), each pixel of street it covers counts against
-    // a place as much as `nearer` pixels further from the stops.
-    const cost = over ? over.count(x, y, w, h) / SIZES.groupBox.nearer + d : d;
-    if (!best || cost < best.cost) best = { cost, d, box: [x, y, w, h], at };
-  }
-  return best && { box: best.box, at: best.at, target };
 }
 
 /** Where other lines cross a path (or end on it), in pixels along it, in order. */
@@ -3858,9 +3776,6 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     features.push(feature({ kind: 'bus-stack', cls: run.cls, label: stacked(run.routes).join('\n'), n: run.n, angle: Math.round((Math.atan2(b[1] - a[1], b[0] - a[0]) * 1800) / Math.PI) / 10, ...below },
       { type: 'Point', coordinates: back(pointAlong(run.path, length(run.path) / 2)) }));
   }
-  // Each stop-group table, placed after the route lists and clear of them, of rail, of the bus
-  // streets and of station names and line letters; the page sets district and street names after
-  // it, so they give way (placeGroup).
   // A list's lettering, on the side of its street the page sets it (labelSide's `up`, or below):
   // a band `reach` either side of `band`, and its street's half width.
   const listInk = (q) => {
@@ -3883,78 +3798,19 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     c.base = placeStreetLetters(c.s, c.stops, c.solid, c.across);
   }
   if (letterings.length) squares = letterings.flatMap((c) => c.base);
-  const plates = [];
+  // Each stop-group table is a key the page sets on the screen, not on the ground (main.js,
+  // placeKey): on each sheet that draws its streets, the build says where its lettered stops are,
+  // and the page shows the key whenever one of them is in view. scripts/sheets.mjs moves these
+  // into sheets.json.
   for (const [ti, g] of grouped.entries()) {
-    if (!g.streets.length) continue;
-    // Before the letters sit on the streets, a small box stands for the table (groupBoxLayout).
-    const small = sheet.id < SIZES.groupStreetSheet;
-    const layout = (small ? groupBoxLayout : groupLayout)(g.table, textWidth);
-    const { w, h } = layout;
-    // Open ground round the streets, out as far as a plate near enough to its stops could reach.
-    const pad = SIZES.groupReach / 2 + Math.max(w, h) + 8;
-    const area = g.streets.flatMap((s) => s.path);
-    const window = [Math.min(...area.map((p) => p[0])) - pad, Math.min(...area.map((p) => p[1])) - pad, Math.max(...area.map((p) => p[0])) + pad, Math.max(...area.map((p) => p[1])) + pad];
-    const near = (path, r) => path.some((p) => p[0] > window[0] - r && p[0] < window[2] + r && p[1] > window[1] - r && p[1] < window[3] + r);
-    const solid = new Raster(window);
-    // A small box may lie over other bus streets, as little as it can (`over`): downtown's
-    // blocks are smaller than it on sheet 2. It keeps off its own streets and all the rest.
-    const over = small ? new Raster(window) : null;
-    // Things the plate keeps `clear` off.
-    const clear = SIZES.groupClear;
-    for (const s of bus) if (near(s.path, 12)) (over && groupOf.get(s)?.g !== g ? over : solid).line(s.path, busWide(s.cls, sheet) / 2 + 0.8 + clear);
-    for (const l of lines) for (const path of l.paths) if (near(path, 12)) solid.line(path, SIZES.rail[sheet.id] / 2 + SIZES.gap[sheet.id] + clear);
-    for (const m of marks) for (const bar of [m.ends, ...(m.more ?? [])]) if (near(bar, 20)) solid.line(bar, SIZES.rail[sheet.id] + 2 + clear);
-    for (const d of discs) solid.dot(d.at, SIZES.letterDisc[sheet.id] + clear);
-    for (const n of stationNames) {
-      solid.box(n.box, clear);
-      for (const b of n.letters) solid.dot(b.at, SIZES.nameLetter[sheet.id] + 1.5 + clear);
-    }
-    for (const q of numbered) if (near(q.path, 30)) {
-      const { half, reach, band } = listInk(q);
-      solid.line(q.path, half + clear);
-      solid.line(band, reach + clear);
-    }
-    for (const e of ends) solid.dot(e.at, busWide(e.cls, sheet) / 2 + 2.3 + clear);
-    for (const r0 of rings) solid.dot(r0.at, SIZES.stopRing + clear);
-    for (const hall of walls) solid.room(hall.ring, clear);
-    for (const p of plates) solid.box([p[0], p[1], p[0] + p[2], p[1] + p[3]], clear + 6);
-    for (const q of squares) solid.box(q.box, clear);
-    const place = placeGroup(g.streets, layout, solid, over);
-    if (!place) continue;
-    plates.push(place.box);
-    const [x, y] = place.box;
-    const at = place.at;
-    const off = (p, em = 1) => [Math.round(((p[0] + x - at[0]) / em) * 1000) / 1000, Math.round(((p[1] + y - at[1]) / em) * 1000) / 1000];
-    const G = SIZES.group;
-    const here = { type: 'Point', coordinates: back(at) };
-    const common = { group: ti, title: g.table.title, rows: groupRows(g.table.rows) };
-    features.push(feature({ kind: 'group-plate', ...common, w, h, off: off([0, 0]) }, here));
-    // Where a tap finds the table: the plate's own ground (the page sets the plate from one point and offsets).
-    features.push(feature({ kind: 'group-area', ...common }, { type: 'Polygon', coordinates: [[[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]].map(back)] }));
-    features.push(feature({ kind: 'group-text', ...common, role: 'title', text: layout.title.text, off: off(layout.title.at, G.title) }, here));
-    for (const row of layout.rows) {
-      const routes = g.table.rows.find((r) => r.letter === row.letter).routes.join(', ');
-      features.push(feature({ kind: 'group-badge', ...common, routes, letter: row.letter, li: letterIndex(g.table, row.letter), off: off(row.badge), toff: off(row.badge, G.letter) }, here));
-      if (!small) features.push(feature({ kind: 'group-text', ...common, routes, role: 'row', text: row.text, off: off(row.at, G.row) }, here));
-    }
-    if (small) {
-      features.push(feature({ kind: 'group-text', ...common, role: 'hint', text: layout.hint.text, off: off(layout.hint.at, G.title) }, here));
-      // The hairline from the middle of the lettered stops to the nearest point of the plate's edge.
-      const t = place.target;
-      const edge = [Math.min(Math.max(t[0], x), x + w), Math.min(Math.max(t[1], y), y + h)];
-      const len = dist(t, edge);
-      if (len > SIZES.groupBox.leaderOff + 2) {
-        const k = (len - SIZES.groupBox.leaderOff) / len;
-        features.push(feature({ kind: 'group-leader', group: ti }, { type: 'LineString', coordinates: [t, [t[0] + (edge[0] - t[0]) * k, t[1] + (edge[1] - t[1]) * k]].map(back) }));
-      }
-    }
+    const at = g.streets.flatMap((s) => s.stops.map((q) => q.at));
+    if (at.length) features.push(feature({ kind: 'group-key', group: ti, title: g.table.title, rows: groupRows(g.table.rows) }, { type: 'MultiPoint', coordinates: at.map(back) }));
   }
   // Each lettered stop's square on its street: its letter, and for a tap its name and routes.
   for (const q of squares) {
     const p = q.feature.properties;
     features.push(feature({ kind: 'group-stop', group: q.group, letter: q.letter, li: letterIndex(grouped[q.group].table, q.letter), name: stopName(p.name), heading: p.heading ?? '', routes: inOrder(q.routes).join(', ') }, { type: 'Point', coordinates: back(q.at) }));
   }
-  const onPlate = (path) => plates.some(([x, y, w, h]) => resample(path, 2).some((p) => p[0] > x - size / 2 && p[0] < x + w + size / 2 && p[1] > y - size / 2 && p[1] < y + h + size / 2));
   // From sheet 3 the bus streets are named, from their stops (runStreet): each piece takes the name its
   // stops give, and pieces that carry straight on under one name are one run, labelled like route lists.
   // The page sets these after the route numbers, so a name takes only room the numbers left.
@@ -3978,7 +3834,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     // A street named at the head of a list nearby is not named again there.
     const again = (name, path) => { const m = pointAlong(path, length(path) / 2); return named.some((o) => o.name === name && dist(o.at, m) < SIZES.streetEvery[sheet.id]); };
     // Nor on a stop: a name slides along its street to a stretch between stops.
-    for (const run of labelRuns(byName, SIZES.streetEvery[sheet.id], wide, (path) => oneTile(path) && side(path, 1) !== 0 && !listedOn(path) && !onStop(path) && !onPlate(path) && !onSquare(path, 1), { slide: true })) {
+    for (const run of labelRuns(byName, SIZES.streetEvery[sheet.id], wide, (path) => oneTile(path) && side(path, 1) !== 0 && !listedOn(path) && !onStop(path) && !onSquare(path, 1), { slide: true })) {
       if (run.rows !== 1 || run.routes === NONE || run.routes.includes(' ')) continue;
       const label = run.routes.replace(/ /g, ' ');
       if (again(label, run.path)) continue;

@@ -2583,30 +2583,32 @@ How it is built:
   letter's own colour, then its routes, spaced, no commas. The colours go by
   row (slate, rust and green, `GROUP_INK`; a fourth row takes the first
   again), the same on the streets, on the stops and in the card, so a
-  stop is matched to its row by colour as well as by its small letter. The table is a level plate in the ground's
-  colour with a hairline edge, which the build places on open ground
-  nearest the middle of the lettered stops, clear of rail, bus streets,
-  station names, route lists and the letters on the streets; place and
-  street names give way to it. No bracket or leader ties it to the
-  streets: the letters on them, in the table's squares, do that. On sheet 3
-  the table replaces the lists along those streets, and each lettered stop
+  stop is matched to its row by colour as well as by its small letter. The
+  table is a key on the screen, not a plate on the map (#198): from sheet 2,
+  whenever one of the lettered stops is on the screen, it sits in a corner of
+  the screen, a small card in the controls' style with the title in capitals
+  and a row for each letter. Of the four corners (top left and right under
+  the top edge, bottom left and right above the sheet and theme buttons) it
+  takes one clear of the lettered stops and of the open card, keeps it while
+  it stays clear, and otherwise moves to the clear corner covering the least
+  of the network. While the map moves it stays where it is and fades out if
+  its corner comes over a stop or the stops leave the screen; once the map
+  stops it fades in again, moved if need be. A tap opens the full table on
+  the card, and the key goes while that card is open. A picked route is
+  marked in its row: its number as the card's pressed chip, its letter's
+  square ringed. The build gives each sheet's lettered stops' places in
+  sheets.json (`groups`). On sheet 3
+  the route lists along those streets are gone, and each lettered stop
   shows its letter on its street, in the table's square in its colour with a
   thin rim of ground, centred on the line at the stop's place as a rail
   line's letter sits on its line, so the street reads X Y Z block by block
-  and matches the table. A square keeps off cross streets, rail, route
+  and matches the key. A square keeps off cross streets, rail, route
   numbers and names, moving along its street within its block as little as
   it must, and two that would touch both stay, moved apart: none is
-  dropped. On sheet 2, where the lettered streets are too small for a
-  table beside them, a small box stands for it: the title, the letters in
-  their squares in a row, and "Tap", which opens the full table in the
-  card. A hairline in the numbers' ink runs from the middle of the lettered
-  stops to the box's nearest edge. The box keeps off rail, stations, names,
-  route lists and its own streets; it may lie over other bus streets, as few
-  as it can while staying near downtown (within 130 px, so a phone shows
-  it beside the streets). The streets carry no numbers. On sheet 4 each lettered stop shows
-  its letter in a small square in its colour in place of its ring,
-  and the table is set once where it fits. A tap on these streets, a
-  lettered stop or the table lists the routes by letter. Routes on those
+  dropped. On sheet 2 the lettered streets carry no letters and no numbers;
+  the key says what they are. On sheet 4 each lettered stop shows
+  its letter in a small square in its colour in place of its ring. A tap on these streets, a
+  lettered stop or the key lists the routes by letter. Routes on those
   streets that stop at no lettered stop are still listed along the street.
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
@@ -5440,6 +5442,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   the tiles were ready and the opening view was drawn. Reason: a visit took
   about six seconds on Chris's phone, while the test copy opened in under a
   second there; only the live address on his phone can show the difference.
+- 2026-11-25: The 15th & 17th table is a key on the screen, not a plate or
+  a small box on the map (#198, replacing the box of 2026-11-24 and the
+  plate placed on open ground): it shows in a free corner whenever a
+  lettered stop is in view, and fades out and in, moving corner if need be,
+  as the map moves. Reason: the weekly round found the table hard to read
+  at Union Station, and Chris: "it should always be on screen when it is
+  supposed to be on screen, and so we can move it to different locations on
+  the page that we have and fade it in and out once you scroll around".
 
 ## Sources
 
