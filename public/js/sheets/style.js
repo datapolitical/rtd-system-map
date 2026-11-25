@@ -175,8 +175,10 @@ export const STOP_ROOM = 2 * (STOP_RING.radius + STOP_RING.stroke / 2) + 2;
 // a rim of ground `streetRim` wide, as a line's letter sits on its line (SIZES.groupStreetRim).
 // On sheet 4 a lettered stop shows its letter in a square `stopBadge` wide in the stops' grey,
 // with a rim of ground `stopRim` wide so it stands off its street as a stop's ring does.
+// On sheet 2 a small box stands for the table (SIZES.groupBox): its "Tap" set like the title in
+// the row's weight, and a hairline `leader` wide in the numbers' ink at `leaderInk` to downtown.
 export const GROUP = { title: 9, titleSpacing: 0.12, titleInk: 0.7, row: 10.5, rowSpacing: 0.02, letter: 8.5, badge: 12, badgeCorner: 3, pickedBadge: 1.15,
-  corner: 5, edge: 0.35, streetRim: 1.5, stopBadge: 11, stopRim: 1, stopLetter: 8 };
+  corner: 5, edge: 0.35, streetRim: 1.5, stopBadge: 11, stopRim: 1, stopLetter: 8, leader: 1, leaderInk: 0.9 };
 const GROUP_FONT = { title: ['Overpass Bold'], row: ['Overpass SemiBold'] };
 // Each letter of a table its own colour, by its row (the build's `li`), the same in the table, on
 // the streets, on the stops and in the card (index.html, --g0...), so a rider matches a stop to its
@@ -400,6 +402,8 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
 
     // Where a tap finds a stop-group table: its plate's ground, unseen (the plate itself is lettering, below).
     if (n >= 2) layer('group-area', 'fill', { filter: kind('group-area'), paint: { 'fill-color': c.ground, 'fill-opacity': 0 } });
+    // A small box's hairline to the streets it stands for (sheet 2).
+    if (n >= 2) layer('group-leader', 'line', { filter: kind('group-leader'), layout: ROUND, paint: { 'line-color': c.number, 'line-width': GROUP.leader, 'line-opacity': GROUP.leaderInk } });
 
     // Lettering, least important first (MapLibre places the last layer first).
     if (n <= 2) layers.push({ id: `freeway-${n}`, type: 'symbol', source: 'ground', 'source-layer': 'transportation_name', ...band, filter: ['all', ['==', ['get', 'class'], 'motorway'], ['has', 'ref'], ['==', ['geometry-type'], 'LineString']],
@@ -575,9 +579,9 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
       layer('group-text', 'symbol', { filter: kind('group-text'),
         layout: { ...fixed, 'text-field': ['get', 'text'], 'text-offset': ['get', 'off'],
           'text-font': ['case', ['any', ['==', ['get', 'role'], 'title'], onBus()], ['literal', GROUP_FONT.title], ['literal', GROUP_FONT.row]],
-          'text-size': ['case', ['==', ['get', 'role'], 'title'], GROUP.title, GROUP.row],
-          'text-letter-spacing': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleSpacing, GROUP.rowSpacing] },
-        paint: { 'text-color': ['case', onBus(), c.pick, c.number], 'text-opacity': ['case', ['==', ['get', 'role'], 'title'], GROUP.titleInk, 1] } });
+          'text-size': ['case', ['==', ['get', 'role'], 'row'], GROUP.row, GROUP.title],
+          'text-letter-spacing': ['case', ['==', ['get', 'role'], 'row'], GROUP.rowSpacing, GROUP.titleSpacing] },
+        paint: { 'text-color': ['case', onBus(), c.pick, c.number], 'text-opacity': ['case', ['==', ['get', 'role'], 'row'], 1, GROUP.titleInk] } });
       // A lettered stop's letter on its street, in the table's square: placed first of all, so
       // nothing is set over it (the build kept route numbers and names off it).
       layer('group-stop', 'symbol', { filter: kind('group-stop'),
