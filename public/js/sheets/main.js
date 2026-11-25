@@ -418,10 +418,12 @@ function waiting(on) {
 }
 let held = null; // { to, around, since }: the sheet a step waits for
 let givenUp = -1; // the sheet on which a wait ran out: no more waits there
+// ?hold=off steps at once, as the page did before, to compare the two (js/steptest.js).
+const NO_HOLD = new URLSearchParams(location.search).get('hold') === 'off';
 function step(index, around) {
   const to = Math.max(0, Math.min(zooms.length - 1, index));
   if (to === sheet) return show(to, around); // back to the sheet shown: a wait goes on
-  if (givenUp === sheet || stepReady(to)) {
+  if (NO_HOLD || givenUp === sheet || stepReady(to)) {
     held = null;
     waiting(false);
     return show(to, around);
@@ -460,7 +462,7 @@ map.getContainer().addEventListener('keydown', (e) => {
 // once the next sheet is ready; out, there is nothing to show past the sheet's own zoom.
 function limits() {
   const r = rests[sheet];
-  const loose = givenUp === sheet;
+  const loose = NO_HOLD || givenUp === sheet;
   const max = loose || stepReady(sheet + 1) ? HIGHEST : Math.min(edge(sheet), Math.floor(r) + 1) - 0.001;
   const min = loose || stepReady(sheet - 1) ? LOWEST : Math.max(edge(sheet - 1), Math.floor(r));
   // Drawn in only at rest on the sheet, so the map never jumps; let out at once.
@@ -1071,3 +1073,4 @@ map.setMissingStyleImageResolver((id) => {
   if (image) map.addImage(id, image, { pixelRatio: ratio });
 });
 window.sheetsMap = map;
+window.sheetsZooms = { zooms, rests, ids: SHEETS.map((s) => s.id) }; // for js/steptest.js
