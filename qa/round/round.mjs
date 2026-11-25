@@ -186,7 +186,7 @@ function look(dir, evidence, left) {
     if (prev) { prev.files.push(...files); continue; }
     const [lon, lat] = c.actual?.center ?? c.requested.center;
     out.set(key, { key, kind: f.kind, title: `${names[c.stationId] ?? `Station ${c.stationId}`}, zoom ${c.requested.zoom}: ${KIND_NAME[f.kind]}`,
-      text: [`${f.where}.`, f.wrong, f.rider, f.sure === 'medium' ? 'Likely, not certain.' : ''].filter(Boolean).join(' '),
+      text: [`${f.where.charAt(0).toUpperCase()}${f.where.slice(1).replace(/\.$/, '')}.`, f.wrong, f.rider, f.sure === 'medium' ? 'Likely, not certain.' : ''].filter(Boolean).join(' '),
       files, place: { zoom: c.requested.zoom, lat: +lat.toFixed(5), lon: +lon.toFixed(5) } });
   }
   // Show the first capture named and the same view in the other theme.
