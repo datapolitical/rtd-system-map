@@ -3099,7 +3099,8 @@ are deferred, not ruled out. See "Open questions".
   same world positions before and after pans on all four sheets.
 - **A picked route looks right:** `qa/pickcheck.mjs` picks every bus and
   rail route on every sheet and counts gaps in the picked line, stubs under
-  a stub's length, self-overlap, turns sharper than a set angle over a
+  a stub's length beside the rest of the line (a route drawn whole as one
+  short part is listed as small, not counted), self-overlap, turns sharper than a set angle over a
   short run, station names over the picked line, and a pick link that does
   not frame the whole route. Each fault count is 0, or each remaining case
   is explained in #117. The browser report also records cropped names as
@@ -5497,6 +5498,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   at Union Station, and Chris: "it should always be on screen when it is
   supposed to be on screen, and so we can move it to different locations on
   the page that we have and fade it in and out once you scroll around".
+- 2026-11-25: The pick check counts a stub only beside the rest of a
+  route's line. A route drawn whole as one part shorter than a stub is
+  listed as small, for information. Reason: the only two stubs it found
+  were the FreeRide and the MetroRide on the whole-district sheet, each
+  drawn whole as one 8 px dash, with nothing for it to be left over from.
+  Chris said go.
 
 ## Sources
 
