@@ -1497,6 +1497,33 @@ test('on sheet 3 a lettered pair gets one table in place of its route lists, tie
   assert.ok(w > 40 && h > 40);
 });
 
+test('on sheet 2 a lettered pair gets a small box with its letters and a hairline to its stops, in place of the table; a tap gives the full table', () => {
+  const city = SHEETS.find((s) => s.id === 2);
+  const origin = toPx([-105, 39.75], city.zoom);
+  const at = (x, y) => toLonLat([origin[0] + x, origin[1] + y], city.zoom);
+  const routes = '1 2 3 4 5 6';
+  const street = (y) => line({ mode: 'bus', cls: 'c10', routes, n: 6, hw: 5, zoom: 'far' }, [at(0, y), at(240, y)]);
+  const lettered = ['Oak', 'Elm'].flatMap((name, k) => [0, 1, 2, 3, 4, 5].map((i) => {
+    const letter = 'XYZ'[i % 3];
+    return point({ id: `${name}${i}`, name: `${name} St & ${i + 1}th Ave [ ${letter} Stop ]`, lines: ['1 2', '3 4', '5 6'][i % 3] }, at(90 + i * 12, k * 12));
+  }));
+  const features = drawSheet({ routes: all([]), stations: all([]), terminals: null, streets: all([street(0), street(12)]), stops: all(lettered) }, city).features;
+  const kinds = (kind) => features.filter((f) => f.properties.kind === kind);
+  assert.equal(kinds('group-plate').length, 1, 'one box for the pair');
+  assert.deepEqual(kinds('group-badge').map((f) => f.properties.letter), ['X', 'Y', 'Z']);
+  assert.deepEqual(kinds('group-text').map((f) => f.properties.role).sort(), ['hint', 'title'], 'no route rows in the box');
+  assert.equal(kinds('group-text').find((f) => f.properties.role === 'hint').properties.text, 'Tap');
+  assert.equal(kinds('group-stop').length, 0, 'no letters on the streets on sheet 2');
+  assert.equal(kinds('group-area')[0].properties.rows, 'X 1 2 | Y 3 4 | Z 5 6', 'a tap on the box gives the full table');
+  const plate = kinds('group-plate')[0];
+  assert.ok(plate.properties.h < 40, 'smaller than a table');
+  // The hairline runs from the middle of the lettered stops to the box.
+  const leader = kinds('group-leader');
+  assert.equal(leader.length, 1, 'a hairline ties the box to its stops');
+  const [a] = leader[0].geometry.coordinates.map((p) => toPx(p, city.zoom));
+  assert.ok(Math.hypot(a[0] - origin[0] - 120, a[1] - origin[1] - 6) < 3, 'from the middle of the stops');
+});
+
 // Two one-way streets 50 px apart on sheet 3 carrying the same six routes, each lettered stop
 // serving two of them, with cross streets (`across`, x in pixels) and stops at `xs` on each.
 const lettered3 = ({ across = [], xs = [150, 260, 370, 480, 590, 700], extra = [] } = {}, sheet3 = near) => {

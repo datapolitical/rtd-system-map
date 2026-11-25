@@ -2590,8 +2590,14 @@ How it is built:
   and matches the table. A square keeps off cross streets, rail, route
   numbers and names, moving along its street within its block as little as
   it must, and two that would touch both stay, moved apart: none is
-  dropped. On sheet 2 the table is set where it fits, and the streets
-  carry no numbers where it doesn't. On sheet 4 each lettered stop shows
+  dropped. On sheet 2, where the lettered streets are too small for a
+  table beside them, a small box stands for it: the title, the letters in
+  their squares in a row, and "Tap", which opens the full table in the
+  card. A hairline in the numbers' ink runs from the middle of the lettered
+  stops to the box's nearest edge. The box keeps off rail, stations, names,
+  route lists and its own streets; it may lie over other bus streets, as few
+  as it can while staying near downtown (within 130 px, so a phone shows
+  it beside the streets). The streets carry no numbers. On sheet 4 each lettered stop shows
   its letter in a small square in its colour in place of its ring,
   and the table is set once where it fits. A tap on these streets, a
   lettered stop or the table lists the routes by letter. Routes on those
@@ -5404,6 +5410,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   example!") and then the same map with its streets and names hidden ("You
   hide too much and it's a meaningless image"), and picked the middle of three
   real squares.
+- 2026-11-24: On sheet 2 a small box stands for the 15th & 17th table: its
+  title, its letters and "Tap", tied to downtown by a hairline; a tap opens
+  the full table (#170). It may lie over quiet bus streets, since no place
+  clear of them is near enough. Reason: Chris asked for "a downtown table or
+  some kind of box that represents downtown" on the city sheet, where the
+  table didn't fit, and picked the small box from three mocks.
 
 ## Sources
 
