@@ -42,6 +42,10 @@ let done = false;
 try {
   if (!(await run('npx', ['playwright', 'install', 'chromium', '--only-shell']))) console.log('poster: the browser did not install');
   else done = await run(process.execPath, [fileURLToPath(new URL('poster.mjs', import.meta.url)), site]);
+  // The sharing image, from the same build (scripts/og-image.mjs).
+  if (done && !(await run(process.execPath, [fileURLToPath(new URL('og-image.mjs', import.meta.url)), site]))) console.log('poster: the sharing image was not taken; public/og.png is as it was');
+  // The icons, cropped from the same build (scripts/icons.mjs).
+  if (done && !(await run(process.execPath, [fileURLToPath(new URL('icons.mjs', import.meta.url)), site]))) console.log('poster: the icons were not taken; public/icons is as it was');
 } finally {
   server.close();
 }
