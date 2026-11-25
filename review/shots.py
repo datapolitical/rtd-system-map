@@ -466,18 +466,23 @@ def list_reviews(home: Path = HOME, by_target: dict | None = None) -> list[dict]
         if not m:
             continue
         n_comments = 0
+        unanswered = 0  # items offering choices that have neither a pick nor a comment
         sections = []
         for sec in m.get("sections", []):
             items = []
             for it in sec.get("items", []):
                 cs = by_target.get(f"item:{d.name}/{it.get('id')}", [])
                 n_comments += len(cs)
+                unanswered += bool(it.get("choices")) and not cs
                 items.append({**it, "comments": cs, "choices": it.get("choices") or [],
                               "picked": _picked(cs)})
             sections.append({**sec, "items": items})
         overall = by_target.get(f"review:{d.name}", [])
         status = m.get("status", "open")
-        if status == "open" and (n_comments or overall):
+        unanswered += bool(m.get("choices")) and not overall
+        # A review stays waiting while anything that offers choices is unanswered,
+        # so one comment doesn't move the rest of it to "You've answered".
+        if status == "open" and (n_comments or overall) and not unanswered:
             status = "commented"
         out.append({
             "id": d.name, "title": m.get("title", ""), "ask": m.get("ask", ""), "intro": m.get("intro", ""),
