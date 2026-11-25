@@ -224,6 +224,9 @@ export const SIZES = {
   // Two stops named for one crossing, on one street with the same routes, this many metres apart
   // or less are one ring at the crossing (stopRings): a stop each way, either side of it.
   stopPair: 50,
+  // A stop moves onto a street of its routes up to this many metres away (stopRings): a stop in a
+  // bay or set back from the road, which the drawn street passes by (#168).
+  stopReach: 100,
   // The page keeps lettering this far off a ring's middle (public/js/sheets/style.js, STOP_ROOM and its padding).
   stopRoom: 7.25,
   // A street's name that would sit on a stop is tried this many pixels at a time along its street.
@@ -1075,7 +1078,9 @@ export function names(marks, lines, discs, sheet, streets = []) {
   const lineFrame = lines.flatMap((l) => l.paths);
   const keepIn = sheet.whole ? wholeFrame(streets.map((st) => ({ cls: st.cls, path: st.path })), [...lineFrame, ...marks.flatMap((m) => [m.ends, ...m.more])]) : null;
   const spill = (box) => (keepIn ? Math.max(0, keepIn[0] - box[0]) + Math.max(0, box[2] - keepIn[2]) + Math.max(0, keepIn[1] - box[1]) + Math.max(0, box[3] - keepIn[3]) : 0);
-  const farLines = (m) => new Set([...farOf].filter(([, x]) => x.m === m && x.named).map(([route]) => route));
+  // A far end too near the hub to be named on its own is left to the hub's name, so the hub's row
+  // carries that line's letter (the B, whose far end at Westminster is a few px out, #168).
+  const farLines = (m) => new Set([...farOf].filter(([, x]) => (x.m === m && x.named) || (m.hub && !x.named)).map(([route]) => route));
   for (const m of [...marks].sort((a, b) => rank(a) - rank(b) || a.id - b.id)) for (const [bi, bar] of (m.bars ?? [{ ends: m.ends, ending: [] }]).entries()) {
     const mid = lerp(bar.ends[0], bar.ends[1], 0.5);
     const again = (b) => dist(lerp(b.ends[0], b.ends[1], 0.5), lerp(m.ends[0], m.ends[1], 0.5)) >= SIZES.nameAgain;
@@ -3122,7 +3127,9 @@ export function inOrder(routes) {
 /**
  * Where each stop's ring goes: on the street its buses are drawn on. The streets are drawn,
  * not traced, so a stop at its true place can sit off its line, or between two. Each is moved
- * to the nearest point of the nearest street within `reach` that carries one of its routes.
+ * to the nearest point of the nearest street within `reach` pixels that carries one of its
+ * routes, by default twice the sheet's merge distance or SIZES.stopReach metres, whichever is
+ * farther, so a stop in a bay or set back from the road still lands on its line (#168).
  * Stops that land ring on ring (the two sides of one street) are one ring with the routes of all.
  * So is a pair either side of a crossing on a free route: two stops RTD names for the same
  * crossing, on the same street, with the same routes, all of them in `paired`, within
@@ -3139,7 +3146,7 @@ export function stopCrossing(name) {
   const parts = String(name ?? '').replace(/\s*\[[^\]]*\]/g, '').split(' & ').map((s) => s.trim().replace(/^[NSEW] /, ''));
   return parts.length === 2 && parts.every(Boolean) ? parts.join(' & ') : null;
 }
-export function stopRings(stops, streets, sheet, reach = 2 * SIZES.busMerge[sheet.id], paired = new Set()) {
+export function stopRings(stops, streets, sheet, reach = null, paired = new Set()) {
   const cell = 64;
   const grid = new Map();
   const key = (p) => `${Math.floor(p[0] / cell)},${Math.floor(p[1] / cell)}`;
@@ -3157,21 +3164,24 @@ export function stopRings(stops, streets, sheet, reach = 2 * SIZES.busMerge[shee
     const q = f.properties;
     const p = toPx(f.geometry.coordinates, sheet.zoom);
     const mine = String(q.lines ?? q.routes ?? '').split(/[ ,]+/).filter(Boolean);
+    // Metres to the sheet's pixels where the stop is.
+    const perMetre = world(sheet.zoom) / (40075016.7 * Math.cos((f.geometry.coordinates[1] * Math.PI) / 180));
+    const far = reach ?? Math.max(2 * SIZES.busMerge[sheet.id], SIZES.stopReach * perMetre);
+    const span = Math.ceil(far / cell);
     let best = null;
     const tried = new Set();
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -span; dx <= span; dx++) for (let dy = -span; dy <= span; dy++) {
       for (const i of grid.get(key([p[0] + dx * cell, p[1] + dy * cell])) ?? []) {
         if (tried.has(i) || !mine.some((r) => sets[i].has(r))) continue;
         tried.add(i);
         const h = nearest(streets[i].path, p);
-        if (h.d <= reach && (!best || h.d < best.d)) best = h;
+        if (h.d <= far && (!best || h.d < best.d)) best = h;
       }
     }
     const at = best ? best.at : p;
     const crossing = mine.length && mine.every((r) => paired.has(r)) ? stopCrossing(q.name) : null;
     const served = inOrder(mine).join(' ');
-    // Metres to the sheet's pixels where the stop is.
-    const pairPx = (SIZES.stopPair * world(sheet.zoom)) / (40075016.7 * Math.cos((f.geometry.coordinates[1] * Math.PI) / 180));
+    const pairPx = SIZES.stopPair * perMetre;
     const pair = crossing && rings.find((r) => !r.paired && r.crossing === crossing && r.served === served && dist(r.at, at) <= pairPx);
     if (pair) {
       pair.at = lerp(pair.at, at, 0.5);

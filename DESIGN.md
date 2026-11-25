@@ -2135,7 +2135,8 @@ tables:
   at, the one farthest from the hub (`nameFar`). A far end within
   `nameHubClear` (60 px) of the hub is left unnamed: the B and G lines end
   so near Union Station that their names stacked against its own, and one
-  step in names them. Every far end's name carries its lines' letters in a
+  step in names them. Such a line's letter goes on the hub's name, since
+  it ends there too (the B). Every far end's name carries its lines' letters in a
   row, since no letter fits on the lines at this scale; a line's letter is
   set on the line only where its far end goes unnamed. A name costs
   `nameSpill` for each pixel it reaches past the rail network's lines and
@@ -2490,13 +2491,21 @@ How it is built:
 - **A stop's ring sits on its street.** The streets are drawn, not traced,
   so a stop at its true place can sit beside its line or between two. Each
   ring is moved to the nearest point of the nearest street, within two
-  merge-widths, that carries one of its routes; stops that land ring on ring
+  merge-widths or 100 m (`stopReach`), whichever is farther, that carries
+  one of its routes, so a stop in a station's bay or set back from the road
+  still sits on its line; stops that land ring on ring
   (the two sides of one street) are one ring with the routes of both. On a
   free route (one RTD names free: the FreeRide and the MetroRide), a stop
   each way either side of a crossing (two stops RTD names for the same
   crossing, on the same street with the same routes, 50 m apart or less)
   is one ring between them, at the crossing: the FreeRide's pair at every
   block. Other routes keep both rings.
+- **A stop no trip calls at is not drawn.** RTD's stops layer can still
+  name a route that no longer serves a stop (Ward Rd & W 61st Ave names the
+  52). A stop the GTFS feed knows but no trip on the build's typical days
+  calls at is left out of the build; one the feed doesn't know is kept. If
+  the layer and the feed stop sharing ids, nothing is dropped and the build
+  says so.
 - **A line's curve into its last bar starts from the station**, fourteen
   pitches back along the line, not from the end of any tail track.
 - **A hall is drawn over the streets that end on it**, so each ends flat on
@@ -5304,6 +5313,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
 - 2026-11-23: The pair rule above is for free routes only, the ones RTD names
   free (the FreeRide and the MetroRide). Reason: shown the same
   rule on route 65 at Monaco & Mansfield, Chris picked "FreeRide only".
+
+- 2026-11-24: Stops snap to their line from up to 100 m, stops no trip calls
+  at are dropped, and the hub's name carries the letter of a line whose far
+  end is too near to name (#168). Reason: the evaluation found 22 stops off
+  their lines on the street sheet (station bays and set-back stops the drawn
+  street passes, and six Ward Rd stops for a 52 that no longer runs there)
+  and no B letter on the whole district.
 
 ## Sources
 

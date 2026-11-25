@@ -1049,6 +1049,18 @@ test("a stop's ring sits on the street its buses are drawn on, and the two sides
   assert.deepEqual(rel(rings[2]), [200, 5], 'a stop with no street of its own drawn near stays where it is');
 });
 
+test('a stop in a bay or set back from the road still lands on its line, up to SIZES.stopReach metres off (#168)', () => {
+  const s4 = SHEETS.find((s) => s.id === 4);
+  const o = toPx([-105, 39.75], s4.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
+  const m = 512 * 2 ** s4.zoom / (40075016.7 * Math.cos((39.75 * Math.PI) / 180)); // one metre in px
+  const stop = (id, y) => point({ id, name: `Stop ${id}`, lines: '65' }, ll(100 * Number(id), y));
+  const streets = [{ routes: '65', cls: 'c30', path: [[o[0], o[1]], [o[0] + 800, o[1]]] }];
+  const rings = stopRings([stop('1', 70 * m), stop('2', (SIZES.stopReach - 5) * m), stop('3', (SIZES.stopReach + 20) * m)], streets, s4);
+  const rel = (r) => Math.round(r.at[1] - o[1]);
+  assert.deepEqual(rings.map(rel), [0, 0, Math.round((SIZES.stopReach + 20) * m)], 'a bay stop 70 m off and one just inside the reach land on the line; one past it stays');
+});
+
 test('a stop each way either side of a crossing is one ring at the crossing (Chris, 2026-11-20)', () => {
   const s4 = SHEETS.find((s) => s.id === 4);
   const o = toPx([-105, 39.75], s4.zoom);
@@ -1502,7 +1514,7 @@ test('the whole district names only the hub and each line\'s far end, inward, wi
   const set = names(marks, lines, [], whole);
   assert.deepEqual(set.map((n) => n.mark.name).sort(), ['Airport', 'Hub', 'South', 'West'], 'Mid is only R\'s near end; Near is within the hub\'s reach');
   assert.equal(set.find((n) => n.mark.name === 'South').letters.map((l) => l.route).join(''), 'ER');
-  assert.equal(set.find((n) => n.mark.name === 'Hub').letters.length, 0, 'no line\'s far end is the hub');
+  assert.equal(set.find((n) => n.mark.name === 'Hub').letters.map((l) => l.route).join(''), 'L', 'L\'s far end is left to the hub\'s name, so the hub carries its letter (#168)');
   assert.equal(set.find((n) => n.mark.name === 'West').letters.map((l) => l.route).join(''), 'B', 'one line\'s far end carries its letter too');
   const airport = set.find((n) => n.mark.name === 'Airport');
   assert.ok(airport.box[2] <= 901, `the airport's name turns in from the network's east end (${airport.box})`);
