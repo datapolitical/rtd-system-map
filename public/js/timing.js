@@ -93,6 +93,12 @@
       const kb = hit.reduce((s, e) => s + (e.transferSize || 0), 0) / 1024;
       rows.push([`${label}: ${hit.length} in by`, `${ms(Math.max(...hit.map((e) => e.responseEnd)))}  (from ${ms(Math.min(...hit.map((e) => e.startTime)))}, ${Math.round(kb)} KB)`]);
     }
+    // Each glyph file: when it was asked for and when it was in, and how (fetch = the page's head,
+    // index.html; other = the map). Two lines for one file means it was fetched twice.
+    for (const e of res.filter((x) => /\/glyphs\//.test(x.name))) {
+      const name = decodeURIComponent(e.name.replace(/^.*\/glyphs\/Overpass /, '')).replace('.pbf', '');
+      rows.push([`  glyphs ${name}`, `${ms(e.startTime)}–${ms(e.responseEnd)} (${e.initiatorType}, ${Math.round((e.transferSize || 0) / 1024)} KB)`]);
+    }
     const allIn = Math.max(...res.map((e) => e.responseEnd), ...Object.values(ev.tiles));
     rows.push(['downloads in + tiles ready', ms(allIn)]);
     rows.push(['map style loaded', ms(ev.load)]);

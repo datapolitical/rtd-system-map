@@ -2,6 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- The opening view's glyphs are fetched here and handed to the map (main.js, "early"), not
+     preloaded: on an iPhone Safari appeared to fetch the preloads again when the map asked, and
+     the opening view waited for them more than for anything else (DESIGN.md, 2026-11-25). -->
+<script>
+  window.earlyGlyphs = Object.fromEntries(['Overpass Medium', 'Overpass SemiBold', 'Overpass ExtraBold'].map((font) => {
+    const path = `/vendor/glyphs/${encodeURIComponent(font)}/0-255.pbf`;
+    return [path, fetch(path).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)];
+  }));
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>RTD system map</title>
@@ -19,7 +28,7 @@
 <meta property="og:title" content="RTD system map">
 <meta property="og:description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs.">
 <meta property="og:url" content="https://map.chrisfnicholson.com/">
-<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=10dafd9ad1">
+<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=c5047cefbd">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -52,8 +61,8 @@
 <!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the loading picture. -->
 <link rel="stylesheet" href="/vendor/maplibre-gl.css" media="print" onload="this.media='all'">
 <!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
-     for the one that names it (DESIGN.md, "Quality floor"). The sheet and the glyphs are fetched
-     by the map's worker, which finds them in the browser's cache. -->
+     for the one that names it (DESIGN.md, "Quality floor"). The sheet is fetched by the map's
+     worker, which finds it in the browser's cache. -->
 <link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
 <link rel="modulepreload" href="/js/sheets/style.js">
 <link rel="modulepreload" href="/js/sheets/settle.js">
@@ -66,9 +75,6 @@
 <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
 <link rel="preload" href="https://tiles.openfreemap.org/planet" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="/data/sheet-1.geojson" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="/vendor/glyphs/Overpass%20Medium/0-255.pbf" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="/vendor/glyphs/Overpass%20SemiBold/0-255.pbf" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="/vendor/glyphs/Overpass%20ExtraBold/0-255.pbf" as="fetch" crossorigin="anonymous">
 <!-- The font early too: the loading line is set in it, and a block-display font shows nothing until it arrives. -->
 <link rel="preload" href="/vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
@@ -196,7 +202,7 @@
 <button id="key" type="button" class="off" aria-hidden="true" tabindex="-1"></button>
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
-<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="f211870470f869716c933ff1e24b804c0b72c6914ed8872daf3f9a96f0a9c8c1" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="a3a463af68c5703099d0a4278097417febcfaaca4331f500b20ba7fd3bbcaa24" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
   <picture>
     <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
     <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">

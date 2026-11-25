@@ -23,6 +23,15 @@ export const STACKS = {
 
 // Latin, Latin Extended-A, and general punctuation (dashes and curly quotes).
 const RANGES = [0, 256, 8192];
+// Of general punctuation, only what a label can use: spaces, dashes, quotes, daggers, the bullet,
+// the ellipsis, primes, the fraction slash and the euro. The rest are characters Overpass doesn't
+// have, which the canvas would draw from another font; leaving them out cuts each file from
+// about 10 KB sent to about 2 KB.
+const PUNCTUATION = new Set([
+  0x2002, 0x2003, 0x2009, 0x200a, 0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2018, 0x2019, 0x201a,
+  0x201c, 0x201d, 0x201e, 0x2020, 0x2021, 0x2022, 0x2026, 0x2030, 0x2032, 0x2033, 0x2039, 0x203a,
+  0x2044, 0x20ac,
+]);
 
 // MapLibre's glyph format: 24 px, with a 3 px buffer around each glyph.
 const SIZE = 24;
@@ -84,6 +93,7 @@ function rangeFile(name, { weight, italic }, start) {
   for (let id = start; id < start + 256; id++) {
     // Control characters have no glyph.
     if (id < 32 || (id >= 127 && id < 160)) continue;
+    if (start === 8192 && !PUNCTUATION.has(id)) continue;
     const g = sdf.draw(String.fromCharCode(id));
     const ink = g.glyphWidth > 0 && g.glyphHeight > 0;
     glyphs.push({
