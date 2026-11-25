@@ -8,6 +8,9 @@ import fs from 'node:fs';
 import { createExpression } from '@maplibre/maplibre-gl-style-spec';
 
 const layer = (style, id) => style.layers.find((l) => l.id === id);
+// style.js gives some paint values per feature with the same value either way (SAME), so MapLibre
+// shares GL programs; this reads the value inside.
+const plain = (v) => (Array.isArray(v) && v[0] === 'case' && JSON.stringify(v[1]) === '["==",["geometry-type"],"Nothing"]' && JSON.stringify(v[2]) === JSON.stringify(v[3]) ? v[2] : v);
 const none = { bus: '', rail: '' };
 
 test("a drawn route list reads as its routes, a stacked one too, and a tap names what is under it", () => {
@@ -40,8 +43,8 @@ test('a picked route holds on every sheet: its pieces are drawn on top, the rest
       assert.equal(evaluate(pick.filter, { props: on15, state: { ...none, bus: '15' } }), false, 'the street pieces are not drawn again');
       assert.equal(evaluate(pick.filter, { props: line15, state: none }), false, 'nothing picked, nothing drawn on top');
       // One ink and one weight from end to end, whatever street the route is on.
-      assert.equal(pick.paint['line-color'], c.pick);
-      assert.equal(typeof pick.paint['line-width'], 'number');
+      assert.equal(plain(pick.paint['line-color']), c.pick);
+      assert.equal(typeof plain(pick.paint['line-width']), 'number');
       // The bus streets underneath: whole with nothing picked, faded with anything picked.
       const bus = layer(style, `bus-${n}`).paint['line-color'];
       const full = evaluate(bus, { props: on15, state: none });
@@ -79,21 +82,19 @@ test('a tap names the actual rail lines, including shared track', () => {
   assert.equal(pickFrom({ rail: [{ route: 'A' }, { route: 'B' }, { route: 'C' }] }).title, 'A, B and C Lines');
 });
 
-test('the stop-group table stays readable and distinguishes only the selected route row', () => {
+test('the stop-group table is a key on the screen, not layers on the map, and marks only the picked route (#198)', () => {
   for (const theme of ['light', 'dark']) {
-    const style = sheetStyle(theme, [], ['#57C1E9']);
-    const state = { ...none, bus: '15L' };
-    assert.equal(layer(style, 'group-plate-3').paint['icon-opacity'], 1);
-    assert.equal(layer(style, 'group-badge-3').paint['text-opacity'], 1);
-    const text = layer(style, 'group-text-3');
-    const selected = { role: 'row', routes: '1, 15, 15L, 20' };
-    const other = { role: 'row', routes: '10, 28, 32' };
-    assert.equal(evaluate(text.paint['text-opacity'], { props: selected, state }), 1);
-    assert.equal(evaluate(text.paint['text-opacity'], { props: other, state }), 1);
-    assert.notEqual(evaluate(text.paint['text-color'], { props: selected, state }), evaluate(text.paint['text-color'], { props: other, state }));
-    assert.deepEqual(evaluate(text.layout['text-font'], { props: selected, state: { ...none, bus: '15' } }), evaluate(text.layout['text-font'], { props: selected, state }));
-    assert.notDeepEqual(evaluate(text.layout['text-font'], { props: selected, state: { ...none, bus: '5' } }), evaluate(text.layout['text-font'], { props: selected, state }), 'not a substring of a route number');
+    const ids = sheetStyle(theme, [], ['#57C1E9']).layers.map((l) => l.id);
+    for (const gone of ['group-plate', 'group-area', 'group-badge', 'group-text', 'group-leader']) assert.ok(!ids.some((id) => id.startsWith(`${gone}-`)), `no ${gone} layer`);
+    assert.ok(ids.includes('group-stop-3'), 'the letters on the streets stay');
   }
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<button id="key" type="button" class="off" aria-hidden="true" tabindex="-1">/, 'the key starts unseen and out of the tab order');
+  assert.match(html, /#key\.off \{[^}]*opacity: 0;[^}]*pointer-events: none/, 'it fades, and an unseen key takes no taps');
+  assert.match(html, /prefers-reduced-motion: reduce\) \{[^}]*#key \{ transition: none/, 'no fade for a reader who asks for less motion');
+  assert.match(html, /#key \.routes span\.picked \{/, 'a picked route is marked in its row');
+  const main = fs.readFileSync(new URL('../public/js/sheets/main.js', import.meta.url), 'utf8');
+  assert.match(main, /picked\?\.mode === 'bus' && picked\.route === r\.dataset\.route/, 'a whole route number, never part of one (5 is not 15)');
 });
 
 test('street names accept number-only roads and shorten ordinary names without null warnings', () => {
@@ -166,4 +167,27 @@ test('a picked route\'s card says what the route is, from RTD\'s directory, in t
   assert.equal(rail.line, 'Union Station – Jeffco · Every 15 min');
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.match(html, /#card\.route \{[^}]*padding: 6px/, 'the route card is compact');
+});
+
+test("a picked route keeps its own numbers and its stops' letters (v1.0 check)", () => {
+  for (const theme of ['light', 'dark']) {
+    const style = sheetStyle(theme, [], ['#57C1E9']);
+    const at = (id) => style.layers.findIndex((l) => l.id === id);
+    const picked = { ...none, bus: '15L' };
+    for (const n of [2, 3, 4]) {
+      // Its numbers are set after the marks that keep other lettering off it, so they are not kept off too.
+      assert.ok(at(`picked-number-${n}`) > at(`keep-off-pick-${n}`), `sheet ${n}: the picked numbers come after keep-off-pick`);
+      assert.ok(at(`picked-stack-${n}`) > at(`keep-off-pick-${n}`));
+      const label = { kind: 'bus-label', label: '15, 15L' };
+      assert.equal(evaluate(layer(style, `picked-number-${n}`).filter, { props: label, state: picked }), true);
+      assert.equal(evaluate(layer(style, `bus-number-${n}`).filter, { props: label, state: picked }), false, 'drawn once, by picked-number');
+      assert.equal(evaluate(layer(style, `bus-number-${n}`).filter, { props: label, state: none }), true);
+    }
+    // A lettered stop on the picked route is set again over the picked line and its rings.
+    assert.ok(at('pick-letter-4') > at('pick-stop-4'));
+    const x = { kind: 'stop', routes: '1, 15, 15L, 20', letter: 'X' };
+    assert.equal(evaluate(layer(style, 'pick-letter-4').filter, { props: x, state: picked }), true);
+    assert.equal(evaluate(layer(style, 'pick-letter-4').filter, { props: x, state: { ...none, bus: '28' } }), false);
+    assert.equal(evaluate(layer(style, 'pick-letter-4').filter, { props: { kind: 'stop', routes: '15L' }, state: picked }), false);
+  }
 });

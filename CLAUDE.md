@@ -10,8 +10,14 @@ colors, station IDs, corridor assignments, or service dates. Derive them from
 RTD's data at build time so RTD's changes flow through with no code change
 (DESIGN.md, "Zero maintenance").
 
-- `npm run build` downloads RTD's public ArcGIS layers and GTFS into
-  `public/data/` (generated, not committed).
+- `npm run build:data` downloads RTD's public ArcGIS layers and GTFS into
+  `public/data/` and takes the loading pictures. It runs on our own machine,
+  by hand, and its output is committed: Cloudflare only publishes (DESIGN.md,
+  Rule 2).
+  `npm run build:sheets` redraws the sheets and pictures from the committed
+  data, for a drawing change without RTD's newer data. `npm run build` is
+  Cloudflare's: it fails if the committed data wasn't made by the code
+  beside it. `refresh/watch.mjs` sends the phone alert when RTD changes.
 - `npm run dev` serves the site locally with `wrangler pages dev` on port 8788;
   `npm run dev:live` runs the Live relay (a Durable Object in `live/`) beside
   it on 8789, which the site finds on its own.
@@ -48,6 +54,10 @@ we are" section from them (closed issues show as done).
   no personal details.
 
 ## How to work here
+
+- Drawing work goes in the order [docs/refining.md](docs/refining.md) sets
+  out, with a work log kept as it happens. Rebuilding for RTD's new data and
+  what watches the live site are in [docs/upkeep.md](docs/upkeep.md).
 
 The consolidated fix register is `qa/fixes/register.json`. It links specific
 image findings and verification gaps to the canonical GitHub issues. Update it

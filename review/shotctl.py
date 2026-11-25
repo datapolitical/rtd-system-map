@@ -7,8 +7,10 @@
   shotctl.py ask --title T --ask Q [--text X] IMG...   post a one-item review request from images
   shotctl.py close REVIEW_ID [--note TEXT] close a review request
   shotctl.py release ID                    drop a session's claim so the hook announces it again
+  shotctl.py picks REVIEW_ID               the review's picks as JSON: {"review": ..., "items": {ITEM_ID: ...}}
 """
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -52,6 +54,17 @@ def cmd_list(home: Path) -> None:
                 print(f"        {label} choices: {' / '.join(choices)}; {now}")
 
 
+def cmd_picks(home: Path, rid: str) -> None:
+    by_target = shots.comments_by_target(home)
+    found = [r for r in shots.list_reviews(home, by_target) if r["id"] == rid]
+    if not found:
+        raise shots.ShotsError(f"No such review request: {rid}")
+    r = found[0]
+    pick = lambda p: {"choice": p["choice"], "text": p.get("text", "")} if p else None  # noqa: E731
+    print(json.dumps({"review": pick(r["picked"]), "status": r["status"],
+                      "items": {i["id"]: pick(i["picked"]) for s in r["sections"] for i in s["items"]}}))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -71,6 +84,8 @@ def main() -> None:
     cl.add_argument("--note", default="")
     rl = sub.add_parser("release")
     rl.add_argument("ids", nargs="+")
+    pk = sub.add_parser("picks")
+    pk.add_argument("review")
     args = ap.parse_args()
     home = shots.HOME
     session = os.environ.get("CLAUDE_SESSION_ID", "")
@@ -86,6 +101,8 @@ def main() -> None:
         elif args.cmd == "ask":
             rid = shots.quick_review(home, args.title, args.text, [Path(p) for p in args.images], session, args.ask)
             print(f"published {rid}: {PAGE}")
+        elif args.cmd == "picks":
+            cmd_picks(home, args.review)
         elif args.cmd == "close":
             shots.close_review(home, args.review, args.note)
             print(f"closed {args.review}")

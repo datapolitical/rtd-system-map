@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { busNames, pillRow, pillsText, rowText } from '../scripts/lib/busnames.mjs';
-import { heading, stopLines } from '../scripts/lib/stops.mjs';
+import { heading, stopLines, unservedStops } from '../scripts/lib/stops.mjs';
 
 // Made-up routes near (0, 0), in km (a kilometer east is 1/111.32 degree).
 const KM = 1 / 111.32;
@@ -105,6 +105,15 @@ test('a stop names the drawn lines, families as their map route', () => {
   assert.equal(stopLines('101T, E, D', lineOf), 'E T');
   assert.equal(stopLines('PLFX', lineOf), '');
   assert.equal(stopLines(null, lineOf), '');
+});
+
+test('a stop no trip calls at is dropped; one the feed does not know is kept; ids out of step drop nothing (#168)', () => {
+  const stop = (id) => ({ properties: { id } });
+  const stops = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'].map(stop);
+  const known = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
+  const called = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9']);
+  assert.deepEqual([...unservedStops(stops, known, called)], ['10'], 'known, never called at: dropped; 11 is unknown to the feed: kept');
+  assert.equal(unservedStops(stops, new Set(['1']), called), null, 'the layer and the feed no longer share ids: nothing dropped');
 });
 
 test('stop directions read as words', () => {

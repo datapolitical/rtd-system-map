@@ -181,6 +181,16 @@ class ChoiceTests(unittest.TestCase):
                 shots.create_review(self.home, make_manifest(self.src, choices=bad))
         self.assertEqual(list((self.home / "reviews").iterdir()), [])
 
+    def test_unpicked_items_keep_review_waiting(self):
+        rid = shots.create_review(self.home, with_choices(self.src))
+        shots.add_comment(self.home, f"review:{rid}", "", LOGIN, choice="Ink")
+        shots.add_comment(self.home, f"item:{rid}/union-15", "looks fine", LOGIN)
+        r = shots.list_reviews(self.home, shots.comments_by_target(self.home))[0]
+        self.assertEqual(r["status"], "open")  # "blob" offers choices and has no answer
+        shots.add_comment(self.home, f"item:{rid}/blob", "not sure yet", LOGIN)
+        r = shots.list_reviews(self.home, shots.comments_by_target(self.home))[0]
+        self.assertEqual(r["status"], "commented")  # a comment answers it, as a pick does
+
     def test_pick_change_and_reply(self):
         rid = shots.create_review(self.home, with_choices(self.src))
         target = f"review:{rid}"
@@ -196,13 +206,15 @@ class ChoiceTests(unittest.TestCase):
         old = shots.read_json(self.home / "comments" / "done" / (first["id"] + ".json"))
         self.assertEqual(old["superseded_by"], second["id"])
         r = shots.list_reviews(self.home, shots.comments_by_target(self.home))[0]
-        self.assertEqual((r["picked"]["choice"], r["picked"]["text"], r["status"]), ("Blue", "a touch darker", "commented"))
+        # The item "blob" offers choices and has no answer yet, so the review still waits.
+        self.assertEqual((r["picked"]["choice"], r["picked"]["text"], r["status"]), ("Blue", "a touch darker", "open"))
         self.assertEqual([c.get("status") for c in r["comments"]], ["changed", "new"])
         shots.mark_done(self.home, second["id"], "using Blue")
         item = shots.add_comment(self.home, f"item:{rid}/blob", "", LOGIN, choice="Drop")
         self.assertNotIn("previous_choice", item)
         r = shots.list_reviews(self.home, shots.comments_by_target(self.home))[0]
         self.assertEqual((r["picked"]["status"], r["picked"]["reply"]), ("done", "using Blue"))
+        self.assertEqual(r["status"], "commented")
         self.assertEqual(r["sections"][1]["items"][0]["picked"]["choice"], "Drop")
         # Changing a handled pick keeps the handled one and says what it was.
         third = shots.add_comment(self.home, target, "", LOGIN, choice="Tint")

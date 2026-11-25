@@ -1,15 +1,25 @@
 # RTD system map
 
-A map of Denver's transit that opens on the whole network and shows how often
-each line comes, not just where it goes. It is for people finding out what
-transit they can use at a place, riders on the move, and anyone who needs a
-clear picture of where Denver has useful service. It is built for phones first.
-Live vehicles and the earlier map's other features are planned for the smooth-zoom replacement.
+<p align="center">
+  <img src="docs/screenshot-light.jpg" width="300" alt="The map on a phone: Denver's rail lines and bus routes around Union Station, light theme">
+  &nbsp;
+  <img src="docs/screenshot-dark.jpg" width="300" alt="The same view in the dark theme">
+</p>
 
-**Open it: [rtd-system-map.pages.dev](https://rtd-system-map.pages.dev)**
+A map of every RTD bus and train line in the Denver region that shows how
+often each one comes, not just where it goes. It is built for phones and keeps
+working offline after one visit.
 
-The front page is five sheets, each drawn for one scale. The earlier Classic
-application is preserved on the
+**Open it: [map.chrisfnicholson.com](https://map.chrisfnicholson.com)**
+
+This is unofficial. It is built only from RTD's public data and is not
+affiliated with RTD.
+
+## Development
+
+The front page is five sheets, each drawn for one scale. Live vehicles and the
+earlier map's other features are planned for the smooth-zoom replacement. The
+earlier Classic application is preserved on the
 [`classic-archive` branch](https://github.com/datapolitical/rtd-system-map/tree/classic-archive).
 Old `/classic/` links redirect to the current map.
 
@@ -22,22 +32,14 @@ wiki](https://github.com/datapolitical/rtd-system-map/wiki), one page per
 section. Every part of the map follows it: what it shows, how it looks and
 behaves, and how it's checked.
 
-This is unofficial. It is built only from RTD's public data and is not
-affiliated with RTD.
-
-<p align="center">
-  <img src="docs/screenshot-light.jpg" width="300" alt="The map's opening view on a phone: Denver's rail lines and frequent bus corridors, light theme">
-  &nbsp;
-  <img src="docs/screenshot-dark.jpg" width="300" alt="The same view in the dark theme">
-</p>
-
-## Run it
+### Run it
 
 You need Node 22 and Cloudflare's Wrangler CLI (`npm install -g wrangler`).
 
 ```sh
 npm install        # also copies MapLibre and the font into public/vendor/
-npm run build      # downloads RTD's public data into public/data/
+npm run build:data # downloads RTD's public data into public/data/ (committed)
+npm run build      # what Cloudflare runs: checks the committed site, builds nothing
 npm run dev        # serves the site at http://127.0.0.1:8788
 npm run dev:live   # the Live relay, on 8789; the site finds it on its own
 npm test           # unit tests, plain Node, no browser
@@ -49,7 +51,7 @@ npm run check:sheets # the longer sheet-map regression checks
 (`npx playwright install chromium`). The current map's checks need no Live relay.
 `CHECK_URL` selects a preview instead. See [the checks guide](qa/checks/README.md).
 
-## Design
+### Design
 
 [DESIGN.md](DESIGN.md) is the source of truth for the objective, audience,
 data, map design, interface and milestones. Read it before changing the map,
@@ -57,15 +59,17 @@ the interface or the data pipeline (CLAUDE.md says the same). When a decision
 changes, update it and add a line to its decision log. Nothing about RTD's
 network is written into the code; the build derives it from RTD's data.
 
-## Layout
+### Layout
 
 - `public/`: the static site (plain ES modules in `js/`, no framework).
-  `public/data/` and `public/vendor/` are generated and not committed.
+  `public/data/` is built with `npm run build:data` and committed;
+  `public/vendor/` is generated and not committed.
 - `scripts/`: the build, which fetches, checks and writes the data.
 - `live/`: the Live relay, a Cloudflare Durable Object that polls RTD's
   realtime feeds and pushes changes to every open page.
-- `refresh/`: a Worker that runs hourly and triggers a rebuild when RTD's
-  data has changed.
+- `refresh/`: the hourly check, run by a timer on our machine
+  (`refresh/systemd/`), that sends a phone alert when RTD's data has changed.
+  It rebuilds nothing.
 - `functions/`: Pages Functions that connect the site to the relay.
 - `test/`: unit tests, run with `npm test`.
 - `qa/`: the QA brief and findings ([qa/BRIEF.md](qa/BRIEF.md)) and the

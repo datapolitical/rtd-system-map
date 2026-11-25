@@ -177,8 +177,12 @@ export function streetGraph(features, project, { tolerance = NODE_METERS, close 
       const from = graph;
       const again = from.parts.map((part) => ({ stretch: part.stretch, coords: part.ids.map((id) => moved.get(id) ?? from.nodes[id]), moved: part.ids.map((id) => moved.has(id)) }));
       graph = nodeParts(again, stretches, tolerance, MERGE_NODE_METERS);
+      // Tidied before the next pass looks for carriageways: the graph is
+      // joined again from RTD's own lines, so a terminal loop comes back,
+      // and the two sides of a small one (the 120's at Eastlake / 124th,
+      // #102) would read as a divided road and fold into a spike.
+      tidy(graph);
     }
-    if (graph !== plain) tidy(graph);
   }
   graph.plain = plain;
   graph.merged = merged;

@@ -1,10 +1,12 @@
 // Draws the four sheets from the build's output: public/data/sheet-<n>.geojson.
-// `npm run build` runs this last; run it alone to redraw from the data on disk.
+// `npm run build:data` runs this last; `npm run build:sheets` runs it alone to
+// redraw from the data on disk, then retakes the loading pictures.
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SHEETS, drawSheet, districtShape, sheetExtent } from './lib/sheets.mjs';
+import { sheetsCode } from './lib/fingerprint.mjs';
 
 // The picture must match both the built transit drawing and the code that inks it.
 export async function drawingFingerprint(sheet) {
@@ -27,9 +29,24 @@ export async function writeSheets(dir) {
   const colors = new Set();
   // What the whole-district sheet draws, end to end: stepping out to it frames this (#152).
   let frame = null;
+  // RTD's stop groups (15th & 17th downtown): the page shows each one's key on the screen while
+  // one of its lettered stops is in view on a sheet that draws them (public/js/sheets/main.js).
+  const groups = [];
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
+    drawn.features = drawn.features.filter((f) => {
+      if (f.properties.kind !== 'group-key') return true;
+      const { group, title, rows } = f.properties;
+      groups[group] ??= { title, rows, at: {} };
+      groups[group].at[sheet.id] = f.geometry.coordinates;
+      return false;
+    });
     if (sheet.whole) frame = sheetExtent(drawn, sheet);
+    // Each route's whole line is drawn only for a picked route, so it is a file of its own that the
+    // page asks for at the first pick (#193): about 40% of each sheet's bytes otherwise.
+    const routeLines = drawn.features.filter((f) => f.properties.kind === 'route-line');
+    drawn.features = drawn.features.filter((f) => f.properties.kind !== 'route-line');
+    await writeFile(path.join(dir, `sheet-${sheet.id}-routes.geojson`), JSON.stringify({ type: 'FeatureCollection', features: routeLines }));
     if (sheet.opens) { hub = drawn.hub; opening = drawn; }
     for (const f of drawn.features) if (f.properties.shape === 'name') named.add(f.properties.name);
     for (const f of drawn.features) if (f.properties.kind === 'rail') colors.add(f.properties.color);
@@ -39,7 +56,7 @@ export async function writeSheets(dir) {
   }
   // RTD's district, for the towns the whole-district sheet names (#152). A build without it names every town.
   const district = districtShape(await read('boundary').catch(() => null));
-  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), hub, stations: [...named], colors: [...colors], district, frame }));
+  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), code: await sheetsCode(), hub, stations: [...named], colors: [...colors], district, frame, groups: groups.filter(Boolean) }));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

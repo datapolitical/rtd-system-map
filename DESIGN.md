@@ -213,11 +213,13 @@ Links are in [Sources](#sources).
 
 ## Zero maintenance: RTD's changes flow through automatically
 
-When RTD edits its map or publishes a new schedule, the site picks it up on
-its own within about an hour. Nobody should have to touch the code, the data,
-or a deploy button for routine changes: new or retired routes, a new rail
-line, recolored lines, moved stops, new Park-n-Rides, a new runboard, or RTD
-pointing its map at different services.
+When RTD edits its map or publishes a new schedule, nobody should have to
+touch the code for routine changes: new or retired routes, a new rail line,
+recolored lines, moved stops, new Park-n-Rides, a new runboard, or RTD
+pointing its map at different services. The build draws them all from RTD's
+data as it is. Since 2026-11-24 a person starts that build and looks at the
+result before it goes live (Rule 2): a new map from RTD's data is where a
+drawing fault first shows, and it is ours to fix before riders see it.
 
 ### Rule 1: nothing about the network is hardcoded
 
@@ -273,31 +275,51 @@ meant writing an algorithm for any network to tidy a single station).
 Not built yet: neither the file nor the build's reading of it exists (#64).
 Until it does, every cleanup is still a rule in the build.
 
-### Rule 2: the site refreshes itself
+### Rule 2: we rebuild; Cloudflare only publishes
 
 ```
-every hour   Cloudflare Worker (cron)
+every hour   timer on our machine (refresh/watch.mjs)
                │  ask RTD: has anything changed?
-               │  (Experience, web map and layer edit dates; GTFS file hash)
+               │  (Experience, web map and layer edit dates; GTFS file hash;
+               │   the basemap's tile build)
                │  compare with /data/meta.json on the live site
                ▼
-   changed?  ──yes──> Cloudflare Pages deploy hook
-                         └─> fresh build: npm run build, checks, deploy
+   changed?  ──yes──> one phone alert; nothing is rebuilt
+
+when we choose   npm run build:data on our machine (download, checks, sheets,
+                 loading pictures) ─> look at it ─> commit public/data
+                   └─> push ─> Cloudflare Pages: npm run build checks the
+                                committed site is whole and current, publishes
 ```
+
+- RTD changes its schedules three times a year (January, May, and late
+  August or September), and republishes a feed or edits its map now and then
+  in between. Each new map is built here, its pictures checked, and anything
+  the new data draws badly fixed before it is committed. The alert says what
+  changed and is sent once per change.
+- The data is committed (`public/data/`, with the loading pictures in
+  `public/poster/` and `public/index.html`). Cloudflare's build
+  (`npm run build`, `scripts/publish-check.mjs`) downloads nothing. It fails,
+  and the live site stays as it is, when a file is missing or the committed
+  data was not made by the code going live: each build records a hash of the
+  modules that made it (`scripts/lib/fingerprint.mjs`), the data build's in
+  `meta.json` and the sheets' in `sheets.json`, and the loading pictures must
+  show the current drawing. A change to the sheets or the page's drawing code
+  needs only `npm run build:sheets` (redraw from the committed data, new
+  pictures), so a drawing fix doesn't bring in RTD's newer data with it.
 
 - ArcGIS reports change dates directly: the Experience and web map items have
   `modified`, and each feature service has `editingInfo.lastEditDate`.
 - RTD's GTFS download sends no `Last-Modified` or `ETag` header, but its bytes
   are identical between downloads. The checker downloads the file (about
   11 MB) and compares its SHA-256 hash with the last build's.
-- A full build runs only when something has actually changed.
 - `meta.json`, published with each build, records the version of every source
-  the build used. The checker compares against it, so it needs no stored
-  state of its own.
-- This runs on Cloudflare, not as a scheduled GitHub Action, because GitHub
-  turns off scheduled workflows in public repos after 60 days without
-  commits. That would silently stop updates.
+  the build used. The checker compares against it; the only state it keeps
+  is which change it last alerted on.
 - Live vehicle data needs none of this. It is always current.
+- Until 2026-11-24 a Cloudflare Worker ran this check and called a Pages
+  deploy hook, so Cloudflare rebuilt the whole map from RTD's data on every
+  change and on every push (about 12 minutes each). See the decision log.
 
 ### Rule 3: a bad update never breaks the site
 
@@ -313,8 +335,8 @@ The build checks the data before it deploys:
 
 OpenStreetMap's shapes are checked the same way (#69). A station or hall whose
 box OSM doesn't answer for (an error or a timeout) keeps the last good build's
-shapes, roofs included: this folder's, or on a fresh checkout (every
-Cloudflare build) the published site's. The count checks compare with the
+shapes, roofs included: the committed data's, or on a checkout without it
+the published site's. The count checks compare with the
 same last good build. So OSM being down costs nothing, and a build fails when:
 
 - OSM answers with much less than before: the stations' shapes (platforms,
@@ -327,14 +349,13 @@ is taken as a change in the place and drawn. The drills are in
 `qa/drills/mock-fetch.mjs` (`DRILL=osm-down`, `osm-empty`, `osm-half`,
 `osm-down-cold`).
 
-If any check fails, the build fails, and Cloudflare keeps serving the last good
-version. The live `meta.json` still shows the old versions, so the next hourly
-check tries again. A temporary outage at RTD therefore fixes itself.
+If any check fails, the build fails and writes nothing, so there is nothing to
+commit and the live site keeps the last good version. A temporary outage at
+RTD means building again later. A failure that lasts means RTD changed
+something structural, such as renaming fields or retiring the map.
 
-Cloudflare's deployment-failure notification emails the owner. That email is
-the only time a person needs to look, and it should be rare: a failure that
-lasts means RTD changed something structural, such as renaming fields or
-retiring the map.
+Cloudflare's deployment-failure notification emails the owner when the
+publish check refuses a push.
 
 The footer shows when the map data was last updated ("Map data from RTD,
 updated Oct 30"), so a stale map is visible to everyone.
@@ -1647,7 +1668,11 @@ streets that no longer met):
   ended, and the street beyond it taken for a loop's stem and dropped.
 - Gaps are closed before loops are tidied (a terminal loop RTD draws open
   is one), and again after, onto a line ahead only (a ramp whose circle
-  went stops short of the road it led onto).
+  went stops short of the road it led onto). Each pass that merges a divided
+  road's two ways into one centre builds the graph again from RTD's pieces,
+  so the graph is tidied again after every pass: a terminal loop a pass
+  brings back is made a short end too (#102; the 120's loop at Eastlake /
+  124th had come back as a spike).
 - A street with only part-time routes is drawn from the graph too, as their
   dashed or dotted line (`n: 0`, `tier`), so it meets the streets it joins
   and moves with a divided road.
@@ -2135,7 +2160,8 @@ tables:
   at, the one farthest from the hub (`nameFar`). A far end within
   `nameHubClear` (60 px) of the hub is left unnamed: the B and G lines end
   so near Union Station that their names stacked against its own, and one
-  step in names them. Every far end's name carries its lines' letters in a
+  step in names them. Such a line's letter goes on the hub's name, since
+  it ends there too (the B). Every far end's name carries its lines' letters in a
   row, since no letter fits on the lines at this scale; a line's letter is
   set on the line only where its far end goes unnamed. A name costs
   `nameSpill` for each pixel it reaches past the rail network's lines and
@@ -2253,7 +2279,10 @@ How it is built:
   its own lines, and a near one puts its letters on the first name. A hall
   long enough is lettered down its length with what it is ("Bus concourse"
   where the data says underground, "Bus station" otherwise), and street
-  names give way to it. A place the ground map names the same as a station
+  names give way to it. From sheet 3 a bus station that is not a rail
+  station's (Civic Center, Downtown Boulder) is named beside its hall, as a
+  station is, on whichever side has room once the route numbers are
+  placed. A place the ground map names the same as a station
   is not lettered twice. Places are named by rank: cities and towns on
   sheets 1 and 2, a city's neighbourhoods on 3 and 4 (its own statistical
   neighbourhoods before smaller ones), the most important first. A place's
@@ -2264,7 +2293,9 @@ How it is built:
   ("... Historic District") is not a place name and is not set.
   From sheet 3 a bus street is named from its stops: the street most of
   the stops its routes serve along it give (RTD names a stop "Colfax Ave &
-  Hudson St"), set beside the street like its route list, in a quieter
+  Hudson St"; a stop that leaves the kind off, "Colfax & Elati", counts for
+  the same street, and the name is set in its full form, so a sheet names a
+  street one way), set beside the street like its route list, in a quieter
   grey, on a stretch no list is on, about once a screen (on sheet 4 a little
   more often than a phone is wide, so a street across the screen is named
   on it). Where a list's block holds both, the street's name leads the list
@@ -2275,7 +2306,9 @@ How it is built:
   across a tile's edge). Route lists are placed first, and a list a name
   leads stays in its block, so a name never costs one. The streets between bus streets
   keep the ground map's names, shortened ("W 13th Ave"), on the centreline,
-  at about 3:1. Lines that end over a bus station's hall end at the
+  at about 3:1. A ground-map name for a street one of our labels names on
+  the screen (a bus street's name, a list it leads, a picked route's label)
+  is hidden while that label shows, so a street is not named twice. Lines that end over a bus station's hall end at the
   wall they come in through, with their bar on it, not at a point inside the
   room. A corner of bus streets beside a hall's wall sits on the wall. A
   street's weight is its own buses'. Where streets gather into one (a
@@ -2313,6 +2346,11 @@ How it is built:
   station's mark, heading for it, is led on to the mark: a route that turns
   round at a station ends at the station, not in the open beside it.
   An end at a bus station's hall is not led on: that is where its buses go.
+  A last stop behind a line's end (more than 100° round from the way the
+  line ends, where the line ran on past it round a loop drawn simpler) is
+  not led back to, which would double the line back on itself: the line is
+  cut to end level with the stop, and an end already on its mark is not led
+  on to the next stop.
   A station name written "A/B" or "A @ B" is set as "A / B" on two lines.
   Where a full name would sit on lines or stand off from its mark, common
   words take their usual short forms ("Stn", "Ave", "Ctr", "Jct") if the
@@ -2486,17 +2524,34 @@ How it is built:
   station's bar it is drawn tighter, down to half its reach, until it stands
   a line's width clear. The curve only smooths the street: it is drawn only
   where it stays within a street's width of it all the way, both ways. A
-  loop round blocks is not a bow and keeps its own path.
+  loop round blocks is not a bow and keeps its own path, unless its own path
+  runs against rail: rail is drawn wider than its track, so a turnaround
+  beside a station is covered by it. Then the loop is drawn as the widest
+  sweep that stands clear of the rail, or the one that stands clearest, as
+  long as it stays within that clearance of the street. Its stops follow it.
+  At Union Station's light rail this draws the 15 and FreeRide loop beside the
+  E Line on sheet 4 and slims it to the concourse on sheet 3.
 - **A stop's ring sits on its street.** The streets are drawn, not traced,
   so a stop at its true place can sit beside its line or between two. Each
   ring is moved to the nearest point of the nearest street, within two
-  merge-widths, that carries one of its routes; stops that land ring on ring
-  (the two sides of one street) are one ring with the routes of both. On a
+  merge-widths or 100 m (`stopReach`), whichever is farther, that carries
+  one of its routes, so a stop in a station's bay or set back from the road
+  still sits on its line; stops that land ring on ring
+  (the two sides of one street) are one ring with the routes of both. Two
+  stops the same way round that land ring on ring but are not one stop (a
+  station's Gate A and Gate B) are rings in a row along their street, each
+  with its own name and routes. On a
   free route (one RTD names free: the FreeRide and the MetroRide), a stop
   each way either side of a crossing (two stops RTD names for the same
   crossing, on the same street with the same routes, 50 m apart or less)
   is one ring between them, at the crossing: the FreeRide's pair at every
   block. Other routes keep both rings.
+- **A stop no trip calls at is not drawn.** RTD's stops layer can still
+  name a route that no longer serves a stop (Ward Rd & W 61st Ave names the
+  52). A stop the GTFS feed knows but no trip on the build's typical days
+  calls at is left out of the build; one the feed doesn't know is kept. If
+  the layer and the feed stop sharing ids, nothing is dropped and the build
+  says so.
 - **A line's curve into its last bar starts from the station**, fourteen
   pitches back along the line, not from the end of any tail track.
 - **A hall is drawn over the streets that end on it**, so each ends flat on
@@ -2528,24 +2583,32 @@ How it is built:
   letter's own colour, then its routes, spaced, no commas. The colours go by
   row (slate, rust and green, `GROUP_INK`; a fourth row takes the first
   again), the same on the streets, on the stops and in the card, so a
-  stop is matched to its row by colour as well as by its small letter. The table is a level plate in the ground's
-  colour with a hairline edge, which the build places on open ground
-  nearest the middle of the lettered stops, clear of rail, bus streets,
-  station names, route lists and the letters on the streets; place and
-  street names give way to it. No bracket or leader ties it to the
-  streets: the letters on them, in the table's squares, do that. On sheet 3
-  the table replaces the lists along those streets, and each lettered stop
+  stop is matched to its row by colour as well as by its small letter. The
+  table is a key on the screen, not a plate on the map (#198): from sheet 2,
+  whenever one of the lettered stops is on the screen, it sits in a corner of
+  the screen, a small card in the controls' style with the title in capitals
+  and a row for each letter. Of the four corners (top left and right under
+  the top edge, bottom left and right above the sheet and theme buttons) it
+  takes one clear of the lettered stops and of the open card, keeps it while
+  it stays clear, and otherwise moves to the clear corner covering the least
+  of the network. While the map moves it stays where it is and fades out if
+  its corner comes over a stop or the stops leave the screen; once the map
+  stops it fades in again, moved if need be. A tap opens the full table on
+  the card, and the key goes while that card is open. A picked route is
+  marked in its row: its number as the card's pressed chip, its letter's
+  square ringed. The build gives each sheet's lettered stops' places in
+  sheets.json (`groups`). On sheet 3
+  the route lists along those streets are gone, and each lettered stop
   shows its letter on its street, in the table's square in its colour with a
   thin rim of ground, centred on the line at the stop's place as a rail
   line's letter sits on its line, so the street reads X Y Z block by block
-  and matches the table. A square keeps off cross streets, rail, route
+  and matches the key. A square keeps off cross streets, rail, route
   numbers and names, moving along its street within its block as little as
   it must, and two that would touch both stay, moved apart: none is
-  dropped. On sheet 2 the table is set where it fits, and the streets
-  carry no numbers where it doesn't. On sheet 4 each lettered stop shows
-  its letter in a small square in its colour in place of its ring,
-  and the table is set once where it fits. A tap on these streets, a
-  lettered stop or the table lists the routes by letter. Routes on those
+  dropped. On sheet 2 the lettered streets carry no letters and no numbers;
+  the key says what they are. On sheet 4 each lettered stop shows
+  its letter in a small square in its colour in place of its ring. A tap on these streets, a
+  lettered stop or the key lists the routes by letter. Routes on those
   streets that stop at no lettered stop are still listed along the street.
   The numbers are set just beside their street, a pixel and a half clear of
   its ink, never on it: on the line, the street shows between the figures
@@ -2838,8 +2901,11 @@ dark theme, the rail lines fanning out from Union Station past Ball Arena and
 Empower Field, with the buttons and credit hidden. A link to the classic map
 shows its own (`public/classic/og.png`): central Denver at zoom 11 in the
 light theme, with the interface and route letters hidden.
-`node scripts/og-image.mjs` makes either again from the live site (`sheets`
-or `classic`); run it when that map's look changes. The browser tab says
+The build retakes the sheets' picture each time, from the site it just built
+(`scripts/poster-build.mjs` runs `scripts/og-image.mjs`), and gives the
+`og:image` link the picture's hash as `?v=`, so apps that keep a preview by
+its address fetch the new one. `node scripts/og-image.mjs` makes it again by
+hand from the live site. The browser tab says
 "RTD system map" on the front page and "RTD system map: classic" on the
 classic map; the classic map's key still says the map is unofficial, and so
 does the sheets' credit line.
@@ -2930,6 +2996,13 @@ the browser, and because Android and older iPhones still need one.
   gray. Both themes, following "Dark mode".
 - An `apple-touch-icon` beside the manifest's icons, because it is how iOS
   picks an icon rather than photographing the page.
+- The icon is the map itself: a square of the map as drawn, nothing hidden
+  but the page's buttons, centred on the hub (sheets.json `hub`, Union
+  Station) on sheet 2 in the dark theme, with Union Station, its line letters,
+  Auraria and downtown's streets. `scripts/icons.mjs` crops it in the build,
+  after the loading pictures, so a redrawn map redraws its icon. The maskable
+  icon is a wider square shrunk to fit, so a launcher's circle keeps the
+  station. The favicon is the same square at 32 pixels.
 - `theme-color` per theme, and a translucent status bar, so the map runs under
   it.
 
@@ -3039,7 +3112,8 @@ are deferred, not ruled out. See "Open questions".
   same world positions before and after pans on all four sheets.
 - **A picked route looks right:** `qa/pickcheck.mjs` picks every bus and
   rail route on every sheet and counts gaps in the picked line, stubs under
-  a stub's length, self-overlap, turns sharper than a set angle over a
+  a stub's length beside the rest of the line (a route drawn whole as one
+  short part is listed as small, not counted), self-overlap, turns sharper than a set angle over a
   short run, station names over the picked line, and a pick link that does
   not frame the whole route. Each fault count is 0, or each remaining case
   is explained in #117. The browser report also records cropped names as
@@ -3067,25 +3141,53 @@ are deferred, not ruled out. See "Open questions".
     timetable only when its panel opens. Live feeds are fetched only while
     Live is on (or a stop panel is open) and the tab is visible.
   - The sheets page (the front page) loads only the sheet it opens on. The
-    other three, about half its weight, follow one at a time once that view
-    is drawn, nearest first, and a zoom asks for its sheet straight away.
+    two next to it follow as soon as that view is drawn (the map's worker
+    reads them, off the main thread), and the rest one at a time, nearest
+    first, once a step either way from that view is ready (below), or 10
+    seconds after the reader first touches the page or that view has been
+    drawn for 5 seconds; a zoom asks for its sheet straight away.
     Its HTML asks at once for the modules, `meta.json`, `sheets.json`, the
     opening sheet, the tile index and the glyphs the opening view letters
     with; the glyphs are served as protobuf so Cloudflare compresses them
     (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
     CPU): drawn at 5.9 s, was 8.9 s; opening view settled at 6.5 s, was 12 s.
-  - Once a sheets view is at rest, the page loads every other sheet's tiles
-    for that view, and the tiles of each whole zoom between the sheets, into
-    MapLibre's cache (nearest zoom first, again after each move), so the
-    first step to a sheet draws at once instead of showing bare ground.
+  - Once a sheets view is at rest (from the opening on), the page loads the neighbouring sheets' tiles for that view, and the
+    tiles of each whole zoom between them, into MapLibre's cache (nearest
+    zoom first, again after each move), so the first step to a sheet draws
+    at once instead of showing bare ground. Every zoom at once was about
+    twice the work, all of it handled on the phone's main thread.
+  - No step goes to a sheet before its drawing and those tiles are in. A
+    tap on + or −, or a double tap, waits for them with a "Loading…" line
+    at the top of the screen, then steps; a pinch or a scroll stops at the
+    edge of the sheet shown (in, short of the next whole zoom; out, at the
+    sheet's own zoom), shows the same line, and steps on once they are in.
+    While a step waits, its own tiles are the only ones asked for. After 8
+    seconds (a dropped connection) the step goes ahead anyway, and on that
+    sheet no step waits again. Measured on a 9 Mbps connection (local copy,
+    412 px phone): a step 0.3 s after the opening waited 1.2 to 1.5 s and
+    drew no blank frame, where the page before drew 9 or 10 blank frames.
+    Those tiles start loading at the opening, not at the first touch, so
+    the next sheet is finished as soon as on the page before.
+  - MapLibre builds a GL program for each kind of layer and each mix of
+    paint values that are fixed for the layer or vary by feature, and
+    building them holds up the first drawing. Every line, circle and symbol
+    layer gives its colour, width and opacity per feature, with the same
+    values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
+  - MapLibre's stylesheet doesn't hold up the first paint: the page uses
+    none of its controls, and the picture covers the map until it is drawn.
+  - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are a
+    file of their own, `sheet-N-routes.geojson`, asked for at the first pick, or at the opening when
+    the address picks a bus route (#193). They were about 40% of every sheet's bytes: the opening
+    sheet went from about 92 to 51 KB sent, sheet 4 from about 1.09 MB to 0.68 MB. The offline copy
+    still keeps them, so a pick works with no signal.
   - While it loads, the sheets page shows a picture of the view it opens on,
     with a "Loading…" line over it, and fades to the map once the map has
     drawn that view (or at once, if a button is pressed first). The pictures
     (`public/poster/`, one per theme for a phone and for a wider screen, about
     60 to 150 KB each) are taken by `scripts/poster.mjs` at the end of every
     build, from the site just built (`scripts/poster-build.mjs`), so they go
-    live with the drawing they show. The hourly refresh Worker rebuilds the
-    site when the basemap has a new tile build. A fingerprint of the opening drawing
+    live with the drawing they show. The hourly check alerts when the basemap
+    has a new tile build; `npm run build:sheets` then takes new pictures. A fingerprint of the opening drawing
     and its rendering code is captured with the pictures, along with the
     basemap tile version. The picture stays
     hidden unless its fingerprint matches the current `sheets.json`; a stale
@@ -3114,7 +3216,8 @@ are deferred, not ruled out. See "Open questions".
   name every file, and would show the old version once after each deploy).
   Basemap tiles are cache-first, since their addresses name the tile build,
   up to 3000 tiles, oldest dropped first. The worker is registered only after
-  the opening view is drawn, so it never slows the first load; the files that
+  the opening view is drawn and the reader has it (the first touch, or 5
+  seconds), so it never slows the first load; the files that
   load fetched are handed to it then. Navigation preload keeps it from
   delaying later loads. The Live relay and other pages are never touched.
 - **Accessibility:** WCAG AA contrast for text, visible keyboard focus, every
@@ -3404,9 +3507,10 @@ and failure states have words.
 ## Architecture
 
 ```
-refresh Worker (hourly cron) ── RTD changed? ──> Pages deploy hook
-                                                      │
-build (npm run build)              Cloudflare Pages site
+hourly check (refresh/watch.mjs) ── RTD changed? ──> phone alert
+
+build (npm run build:data,         Cloudflare Pages site
+ on our machine, committed)        (npm run build only checks and publishes)
 ───────────────────────            ─────────────────────────────
 RTD Experience item                /              static map app, service worker
  └─> web map ─> ArcGIS layers ─┐   /data/*        GeoJSON, frequency, lookups
@@ -3420,7 +3524,7 @@ RTD GTFS ──────────────────────┼�
                                     anyone is connected, pushes each change
 ```
 
-- Static site with no backend beyond the Live relay and the refresh Worker.
+- Static site with no backend beyond the Live relay.
   Live tiers are computed in the page from the schedule summary and the
   clock, so the server never does per-visitor work. The relay is one Durable
   Object that polls RTD while anyone has Live on and pushes to every page
@@ -3435,10 +3539,14 @@ RTD GTFS ──────────────────────┼�
   file and a worker, about 360 KB with brotli). Older versions are smaller
   but carry an unpatched attribution XSS (fixed in 6.4.1) and get no fixes.
   The page preloads the main module and starts the worker early.
-- `npm run build` discovers, fetches, checks, and writes the data; `npm run
+- `npm run build:data` discovers, fetches, checks, and writes the data and
+  takes the loading pictures; `npm run build:sheets` redraws the sheets and
+  pictures from the data on disk; `npm run build` (what Cloudflare runs)
+  only checks the committed site and publishes it; `npm run
   dev` runs the site locally with `wrangler pages dev`, and `npm run
   dev:live` the relay beside it, which the site finds on its own.
-- Updates are automatic (see "Zero maintenance").
+- Updates are built by hand when the hourly check alerts (see "Zero
+  maintenance", Rule 2).
 
 The deployed page uses plain ES modules under `public/js/sheets/`:
 
@@ -3715,7 +3823,8 @@ work against the real structure before asking for evaluation.
    builds `main` with `npm run build` on Node 22, output `public`; a deploy
    hook named `daily-refresh` exists; the refresh Worker is written in
    `refresh/` (`check.mjs` with tests, `worker.mjs`, `wrangler.toml`, hourly
-   at :23, no page of its own). Live since 2026-11-06: the first production
+   at :23, no page of its own; retired 2026-11-24 for the hourly alert,
+   Rule 2). Live since 2026-11-06: the first production
    build succeeded and the site answers at rtd-system-map.pages.dev; the
    Worker is deployed with its `DEPLOY_HOOK` secret and cron. Not yet done:
    the deployment-failure email (Cloudflare dashboard, Notifications),
@@ -5330,6 +5439,97 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   bars. The reported geometry is pinned on ce882eb; new checks measure
   adjacent spacing along the approach at fractional zooms and rail ends
   against station bars. The production drawing and v2 sign-off are separate.
+
+- 2026-11-24: Stops snap to their line from up to 100 m, stops no trip calls
+  at are dropped, and the hub's name carries the letter of a line whose far
+  end is too near to name (#168). Reason: the evaluation found 22 stops off
+  their lines on the street sheet (station bays and set-back stops the drawn
+  street passes, and six Ward Rd stops for a 52 that no longer runs there)
+  and no B letter on the whole district.
+- 2026-11-24: The street graph is tidied after each merge pass, and a line
+  whose last stop is behind its end ends level with the stop (#102). A sheet
+  names a street one way, the ground map's name for a street our labels
+  name on screen is hidden, and a bus station that isn't a rail station's is
+  named beside its hall from sheet 3 (#174). Reason: the v1.0 check found a
+  spike and a hook at Eastlake / 124th, "Colfax" beside "Colfax Ave", the
+  same street named twice, and Civic Center's hall with no name. The line
+  is cut level with the stop only where it ran on 40 m or less; farther is
+  the bus's way round to turn, drawn to its tip (the 323 on Olympia Ave).
+  Stops the same way round that land ring on ring keep a ring each (the
+  120L's Gate B had become part of Gate A's ring). The picked route's own
+  street names stay on the screen while it is picked.
+- 2026-11-24: The map is built on our machine and committed; Cloudflare only
+  publishes (Rule 2). The hourly check sends a phone alert instead of
+  rebuilding, and `npm run build` on Cloudflare checks that the committed
+  data was made by the code going live. Reason: Chris: "I don't actually want
+  it to check RTD data and rebuild, because there's probably things we're
+  gonna need to tweak when there's new map data." RTD's schedules change
+  three times a year, so building those by hand costs little, and each
+  Cloudflare build no longer takes about 12 minutes. This replaces the
+  2026-11-01 entry's automatic rebuild and the refresh Worker.
+- 2026-11-24: The site has a favicon, a Home Screen icon and a manifest
+  (#177), and the build retakes the link preview. The icon is a square of the
+  real map at Union Station, exactly as drawn. Reason: Chris turned down an
+  icon drawn for the purpose ("There is no station that looks like your fake
+  example!") and then the same map with its streets and names hidden ("You
+  hide too much and it's a meaningless image"), and picked the middle of three
+  real squares.
+- 2026-11-24: On sheet 2 a small box stands for the 15th & 17th table: its
+  title, its letters and "Tap", tied to downtown by a hairline; a tap opens
+  the full table (#170). It may lie over quiet bus streets, since no place
+  clear of them is near enough. Reason: Chris asked for "a downtown table or
+  some kind of box that represents downtown" on the city sheet, where the
+  table didn't fit, and picked the small box from three mocks.
+- 2026-11-24: A turnaround whose own path runs against rail is drawn as a
+  sweep clear of it, even where the sweep strays further from the street
+  than the rule for smoothing allows (#97). Reason: Chris, of Union Station:
+  the light rail "overlaps the bus routes in a way that a hand drawn map
+  wouldn't". The 15 and FreeRide loop's own path ran against the E Line and
+  its stop ring sat on it; the street was right, the rail drawn wider.
+- 2026-11-25: Map work follows one written method (docs/refining.md) and
+  keeps a work log as it happens, shown under its step on the roadmap;
+  docs/upkeep.md says how the map is kept working. A weekly round
+  (qa/round/) sweeps the map and proposes fixes on the review page, and only
+  what Chris picks is fixed. Reason: Chris: "this type of process is what we want to have going
+  on regularly to refine the map", and once it is finished "it should be
+  clear how we're doing what we're doing to keep it working".
+- 2026-11-25: The live page shows a timing readout when its address has
+  ?timing (public/js/timing.js, loaded only then): when the files arrived,
+  the tiles were ready and the opening view was drawn. Reason: a visit took
+  about six seconds on Chris's phone, while the test copy opened in under a
+  second there; only the live address on his phone can show the difference.
+- 2026-11-25: The opening does less on the phone's main thread (PageSpeed
+  Insights' mobile score, which counts each long task the page makes the
+  phone wait through): the farther sheets, the warmed tiles and the offline
+  copy start at the reader's first touch or 5 seconds after the opening
+  (the two neighbouring sheets still load at once, so an early step finds
+  its drawing);
+  the warmed tiles are the neighbouring sheets' only; layers share GL
+  programs (17 to 10, the drawing unchanged to the pixel); MapLibre's
+  stylesheet no longer blocks the first paint; and the stop tables' plates
+  are drawn on CPU canvases, which the sheets page had missed (#105).
+- 2026-11-25: Sheets: no step before the next sheet is ready. Chris: an
+  early step still flashed bare ground, so the map should not zoom until it
+  can, and say it is loading. A tap or double tap waits with a "Loading…"
+  line and then steps; a pinch or a scroll stops at the sheet's edge with
+  the same line and steps on once the tiles are in; 8 seconds at most. The
+  farther sheets now wait until a step either way is ready, so they never
+  hold one up. Chris: the wait made a step slower than before; the tiles a
+  step needs now load from the opening, not the first touch.
+- 2026-11-25: The 15th & 17th table is a key on the screen, not a plate or
+  a small box on the map (#198, replacing the box of 2026-11-24 and the
+  plate placed on open ground): it shows in a free corner whenever a
+  lettered stop is in view, and fades out and in, moving corner if need be,
+  as the map moves. Reason: the weekly round found the table hard to read
+  at Union Station, and Chris: "it should always be on screen when it is
+  supposed to be on screen, and so we can move it to different locations on
+  the page that we have and fade it in and out once you scroll around".
+- 2026-11-25: The pick check counts a stub only beside the rest of a
+  route's line. A route drawn whole as one part shorter than a stub is
+  listed as small, for information. Reason: the only two stubs it found
+  were the FreeRide and the MetroRide on the whole-district sheet, each
+  drawn whole as one 8 px dash, with nothing for it to be left over from.
+  Chris said go.
 
 ## Sources
 

@@ -1,6 +1,9 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+// style.js gives some paint values per feature with the same value either way (SAME), so MapLibre
+// shares GL programs; this reads the value inside.
+const plain = (v) => (Array.isArray(v) && v[0] === 'case' && JSON.stringify(v[1]) === '["==",["geometry-type"],"Nothing"]' && JSON.stringify(v[2]) === JSON.stringify(v[3]) ? v[2] : v);
 import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, freeRoutes, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent, wholeFrame, crossingX } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
@@ -597,7 +600,7 @@ test('a route number never sits on a stop: each stop holds its ground, placed be
       assert.ok(isStop(k) && k.source === ring.source);
       assert.ok(k.layout['text-allow-overlap'] && !k.layout['text-ignore-placement'], 'the mark is always there and keeps others off');
       assert.ok(k.layout['text-size'] >= 2 * (STOP_RING.radius + STOP_RING.stroke / 2), 'the mark covers the whole ring');
-      assert.equal(ring.paint['circle-radius'], STOP_RING.radius);
+      assert.equal(plain(ring.paint['circle-radius']), STOP_RING.radius);
     }
     assert.ok(rings.length && STOP_ROOM > 0);
   }
@@ -1049,6 +1052,34 @@ test("a stop's ring sits on the street its buses are drawn on, and the two sides
   assert.deepEqual(rel(rings[2]), [200, 5], 'a stop with no street of its own drawn near stays where it is');
 });
 
+test("a station's two gates one way round that land ring on ring are rings in a row, each its own (#102)", () => {
+  const s4 = SHEETS.find((s) => s.id === 4);
+  const o = toPx([-105, 39.75], s4.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
+  const stop = (id, name, routes, x, y, heading) => point({ id, name, lines: routes, heading }, ll(x, y));
+  // The line ends level with Gate A; Gate B is past its end, so both would land at the end.
+  const streets = [{ routes: '120 120L', cls: 'c30', path: [[o[0], o[1]], [o[0] + 100, o[1]]] }];
+  const rings = stopRings([stop('a', 'Eastlake & 124th Station Gate A', '120', 100, 6, 'Northbound'), stop('b', 'Eastlake & 124th Station Gate B', '120L', 106, 10, 'Northbound')], streets, s4);
+  assert.deepEqual(rings.map((r) => r.routes), [['120'], ['120L']], 'each gate keeps its own routes');
+  assert.ok(Math.hypot(rings[0].at[0] - rings[1].at[0], rings[0].at[1] - rings[1].at[1]) >= 2 * SIZES.stopRing + 1.5, 'clear of each other');
+  assert.ok(rings.every((r) => Math.abs(r.at[1] - o[1]) < 0.01), 'both on the line');
+  // A second call at one stop ("{2nd Pass}") is the same stop: one ring.
+  const again = stopRings([stop('c', '21st Ave & Terry St', '120', 50, 4, 'Northbound'), stop('d', '21st Ave & Terry St  {2nd Pass}', '120', 51, 4, 'Northbound')], streets, s4);
+  assert.equal(again.length, 1);
+});
+
+test('a stop in a bay or set back from the road still lands on its line, up to SIZES.stopReach metres off (#168)', () => {
+  const s4 = SHEETS.find((s) => s.id === 4);
+  const o = toPx([-105, 39.75], s4.zoom);
+  const ll = (x, y) => toLonLat([o[0] + x, o[1] + y], s4.zoom);
+  const m = 512 * 2 ** s4.zoom / (40075016.7 * Math.cos((39.75 * Math.PI) / 180)); // one metre in px
+  const stop = (id, y) => point({ id, name: `Stop ${id}`, lines: '65' }, ll(100 * Number(id), y));
+  const streets = [{ routes: '65', cls: 'c30', path: [[o[0], o[1]], [o[0] + 800, o[1]]] }];
+  const rings = stopRings([stop('1', 70 * m), stop('2', (SIZES.stopReach - 5) * m), stop('3', (SIZES.stopReach + 20) * m)], streets, s4);
+  const rel = (r) => Math.round(r.at[1] - o[1]);
+  assert.deepEqual(rings.map(rel), [0, 0, Math.round((SIZES.stopReach + 20) * m)], 'a bay stop 70 m off and one just inside the reach land on the line; one past it stays');
+});
+
 test('a stop each way either side of a crossing is one ring at the crossing (Chris, 2026-11-20)', () => {
   const s4 = SHEETS.find((s) => s.id === 4);
   const o = toPx([-105, 39.75], s4.zoom);
@@ -1078,6 +1109,22 @@ test('a loop round blocks keeps its own path: a sweep is drawn only where it sta
   const bow = [[0, 0], [-10, -20], [5, -45], [-5, -60], [20, -80], [60, -85], [100, 0]];
   const [smooth] = arced([st(bow), st([[0, 0], [100, 0]])], () => Infinity, 0, 30);
   assert.notDeepEqual(smooth.path, bow, 'a wandering bow is still drawn in one sweep');
+});
+
+test('a turnaround whose own path runs against rail is drawn as a sweep beside it, and keeps its path where rail is far', () => {
+  // A loop out west of the corners (0,0) and (0,100), its far side 8 px from rail down x = -108:
+  // too far from a sweep to be smoothed (along 3), but the rail drawn wider than its track covers it.
+  const bow = [[0, 0], [-60, -5], [-95, 20], [-100, 50], [-95, 80], [-60, 105], [0, 100]];
+  const pair = () => [st(bow), st([[0, 0], [0, 100]])];
+  const rail = (p) => Math.abs(p[0] + 108);
+  const [free] = arced(pair(), () => Infinity, 20, 3);
+  assert.deepEqual(free.path, bow, 'with no rail near, the loop keeps its own path');
+  const [held] = arced(pair(), rail, 20, 3);
+  const clearOf = Math.min(...held.path.map(rail));
+  const off = Math.max(...held.path.map((p) => nearest(bow, p).d));
+  assert.ok(clearOf >= 20, `stands ${clearOf.toFixed(1)} px from rail`);
+  assert.ok(off <= 20, `drawn within ${off.toFixed(1)} px of where it runs`);
+  assert.deepEqual([held.path[0], held.path.at(-1)], [bow[0], bow.at(-1)], 'its corners stay put');
 });
 
 test("a turnaround's bow is drawn tighter where it would run against rail, and a line's lead-in starts from its station, not its tail track's end", () => {
@@ -1365,6 +1412,11 @@ test('a label run takes its street from the names of the stops its routes serve 
   assert.equal(runStreet(run, [stop(10, 'Colfax Ave'), stop(100, 'Colfax Ave'), stop(150, 'Broadway', ['0']), stop(200, 'Broadway', ['0'])], 8), 'Colfax Ave', "another route's stops don't vote");
   assert.equal(runStreet(run, [stop(10, 'Colfax Ave'), stop(100, 'Colfax Ave'), stop(150, 'Broadway'), stop(200, 'Broadway')], 8), null, 'no clear majority, no name');
   assert.equal(runStreet(run, [stop(10, 'Colfax Ave', ['15']), { at: [100, 40], routes: ['15'], street: 'Colfax Ave' }], 8), null, 'a stop off the run does not count');
+  // RTD's stop names sometimes leave off the street's kind ("Colfax & Elati"): one sheet names it one way (#174).
+  assert.equal(runStreet(run, [stop(10, 'Colfax'), stop(100, 'Colfax'), stop(200, 'Colfax Ave')], 8), 'Colfax Ave', 'the name with its kind, though fewer stops give it');
+  const sheetStops = [stop(10, 'Colfax'), stop(100, 'Colfax'), { at: [900, 900], routes: ['15'], street: 'Colfax Ave' }];
+  assert.equal(runStreet(run, sheetStops, 8), 'Colfax Ave', 'a run whose stops all leave it off takes the form the sheet\'s other stops give');
+  assert.equal(runStreet(run, [stop(10, 'Broadway'), stop(100, 'Broadway')], 8), 'Broadway', 'a street with no kind keeps its name');
 });
 
 test('a bus line ends on a mark: led on to the stop its route ends at, lines ending at one stop share it; a spur near none of its stops goes', () => {
@@ -1383,6 +1435,24 @@ test('a bus line ends on a mark: led on to the stop its route ends at, lines end
   assert.deepEqual(twoTwoEight.path.at(-1), [108, 4], '228 is led on to it');
   assert.ok(String(mark.routes).includes('228') && String(mark.routes).includes('AB'));
   assert.equal(ends.length, 3, 'each end of the line along the street is on its stop');
+});
+
+test('a line whose last stop is behind its end ends level with the stop, not doubled back to it (#102)', () => {
+  const line = { cls: 'c30', routes: '120', path: [[0, 0], [100, 0]] };
+  const { streets, ends } = termini([line], [{ at: [90, 8], routes: ['120'] }, { at: [0, 0], routes: ['120'] }], 1);
+  assert.deepEqual(streets[0].path.at(-1).map(Math.round), [90, 0], 'the line stops level with its stop');
+  assert.ok(streets[0].path.every((p) => p[0] <= 90.01), 'nothing runs on past it and back');
+  assert.ok(ends.some((e) => Math.round(e.at[0]) === 90 && Math.round(e.at[1]) === 0), 'its mark is on the line, level with the stop');
+  // Two gates, one behind the end and one beside the line short of it: ended level with the first, it isn't led on to the second.
+  const two = { cls: 'c30', routes: '120 120L', path: [[0, 0], [100, 0]] };
+  const done = termini([two], [{ at: [92, 6], routes: ['120L'] }, { at: [91, -9], routes: ['120'] }, { at: [0, 0], routes: ['120'] }], 1);
+  assert.ok(done.streets[0].path.every((p) => Math.abs(p[1]) < 0.01), 'no hook off the line to the other gate');
+  // A long way on past the last stop is the bus's way round to turn (the 323 on Olympia Ave): drawn to its tip, not cut or led back.
+  const on = { cls: 'c30', routes: '323', path: [[0, 0], [300, 0]] };
+  const far = termini([on], [{ at: [60, 4], routes: ['323'] }, { at: [0, 0], routes: ['323'] }], 1);
+  assert.deepEqual(far.streets[0].path.at(-1).map(Math.round), [300, 0], 'the line runs on to where the bus turns');
+  assert.ok(far.streets[0].path.every((p) => Math.abs(p[1]) < 0.01), 'and is not led back to the stop');
+  assert.ok(far.ends.some((e) => Math.round(e.at[0]) === 300), 'its mark is at the tip');
 });
 
 test("RTD's stop groups: a stop's letter from its name, and a pair of streets that share letters and routes is one table", async () => {
@@ -1410,7 +1480,7 @@ test("RTD's stop groups: a stop's letter from its name, and a pair of streets th
   assert.deepEqual(stopGroups(all([stop('Oak St & 1st Ave', '5')])), [], 'no letters: no tables');
 });
 
-test('on sheet 3 a lettered pair gets one table in place of its route lists, tied to its streets by their letters, with no bracket; with no letters, the lists stay', () => {
+test('on sheet 3 a lettered pair gets one key in place of its route lists, its letters on its streets; with no letters, the lists stay', () => {
   // Two one-way streets 50 px apart carrying the same six routes, each stop serving two of them.
   const routes = '1 2 3 4 5 6';
   const street = (y) => line({ mode: 'bus', cls: 'c10', routes, n: 6, hw: 5, zoom: 'near' }, [at3(0, y), at3(900, y)]);
@@ -1422,28 +1492,41 @@ test('on sheet 3 a lettered pair gets one table in place of its route lists, tie
   const kinds = (features, kind) => features.filter((f) => f.properties.kind === kind);
 
   const plain = draw(false);
-  assert.equal(plain.filter((f) => String(f.properties.kind).startsWith('group')).length, 0, 'no letters: no table');
+  assert.equal(plain.filter((f) => String(f.properties.kind).startsWith('group')).length, 0, 'no letters: no key');
   assert.ok(kinds(plain, 'bus-label').some((f) => f.properties.label === '1, 2, 3, 4, 5, 6'), "no letters: today's lists");
 
   const grouped = draw(true);
-  assert.equal(kinds(grouped, 'group-plate').length, 1, 'one table for the pair');
-  assert.equal(kinds(grouped, 'group-bracket').length, 0, 'no bracket: the letters on the streets tie the table to them');
+  // The table is a key on the screen (main.js, placeKey), not a plate on the map (#198).
+  for (const gone of ['group-plate', 'group-area', 'group-badge', 'group-text', 'group-leader', 'group-bracket']) assert.equal(kinds(grouped, gone).length, 0, `no ${gone} on the map`);
+  const [key, ...more] = kinds(grouped, 'group-key');
+  assert.equal(more.length, 0, 'one key for the pair');
+  assert.equal(key.properties.title, 'Elm & Oak St');
+  assert.equal(key.properties.rows, 'X 1 2 | Y 3 4 | Z 5 6');
+  // Where its lettered stops are, so the page shows the key when one is on the screen.
+  assert.equal(key.geometry.type, 'MultiPoint');
+  assert.equal(key.geometry.coordinates.length, 12);
   assert.equal(kinds(grouped, 'group-stop').length, 12, 'each lettered stop shows its letter on its street');
-  assert.equal(kinds(grouped, 'group-area').length, 1, 'a tap on the plate finds the table');
-  assert.deepEqual(kinds(grouped, 'group-badge').map((f) => f.properties.letter), ['X', 'Y', 'Z']);
-  const rows = kinds(grouped, 'group-text').filter((f) => f.properties.role === 'row').map((f) => f.properties.text);
-  assert.deepEqual(rows, ['1 2', '3 4', '5 6'], 'routes spaced, no commas');
-  assert.equal(kinds(grouped, 'group-text').find((f) => f.properties.role === 'title').properties.text, 'ELM & OAK ST');
   assert.equal(kinds(grouped, 'bus-label').length, 0, 'the long lists are gone');
   assert.ok(kinds(grouped, 'bus').every((f) => f.properties.groups === 'X 1 2 | Y 3 4 | Z 5 6'), 'a tap on either street gives its routes by letter');
-  // The plate is level, clear of both streets, and near its stops.
-  const plate = kinds(grouped, 'group-plate')[0];
-  const at = toPx(plate.geometry.coordinates, near.zoom);
-  const box = [at[0] + plate.properties.off[0] - origin3[0], at[1] + plate.properties.off[1] - origin3[1]];
-  const [w, h] = [plate.properties.w, plate.properties.h];
-  assert.ok(box[1] + h < -2 || box[1] > 52 || (box[1] > 2 && box[1] + h < 48), 'the plate keeps off both streets');
-  assert.ok(Math.hypot(box[0] + w / 2 - 425, box[1] + h / 2 - 25) <= SIZES.groupReach, 'near the middle of its stops');
-  assert.ok(w > 40 && h > 40);
+});
+
+test('on sheet 2 a lettered pair gets the key too, with no box or hairline on the map and no letters on its streets', () => {
+  const city = SHEETS.find((s) => s.id === 2);
+  const origin = toPx([-105, 39.75], city.zoom);
+  const at = (x, y) => toLonLat([origin[0] + x, origin[1] + y], city.zoom);
+  const routes = '1 2 3 4 5 6';
+  const street = (y) => line({ mode: 'bus', cls: 'c10', routes, n: 6, hw: 5, zoom: 'far' }, [at(0, y), at(240, y)]);
+  const lettered = ['Oak', 'Elm'].flatMap((name, k) => [0, 1, 2, 3, 4, 5].map((i) => {
+    const letter = 'XYZ'[i % 3];
+    return point({ id: `${name}${i}`, name: `${name} St & ${i + 1}th Ave [ ${letter} Stop ]`, lines: ['1 2', '3 4', '5 6'][i % 3] }, at(90 + i * 12, k * 12));
+  }));
+  const features = drawSheet({ routes: all([]), stations: all([]), terminals: null, streets: all([street(0), street(12)]), stops: all(lettered) }, city).features;
+  const kinds = (kind) => features.filter((f) => f.properties.kind === kind);
+  for (const gone of ['group-plate', 'group-area', 'group-badge', 'group-text', 'group-leader']) assert.equal(kinds(gone).length, 0, `no ${gone} on the map`);
+  assert.equal(kinds('group-key').length, 1, 'one key for the pair');
+  assert.equal(kinds('group-key')[0].properties.rows, 'X 1 2 | Y 3 4 | Z 5 6', 'the key gives the full table');
+  assert.equal(kinds('group-key')[0].geometry.coordinates.length, 12);
+  assert.equal(kinds('group-stop').length, 0, 'no letters on the streets on sheet 2');
 });
 
 // Two one-way streets 50 px apart on sheet 3 carrying the same six routes, each lettered stop
@@ -1502,7 +1585,7 @@ test('the whole district names only the hub and each line\'s far end, inward, wi
   const set = names(marks, lines, [], whole);
   assert.deepEqual(set.map((n) => n.mark.name).sort(), ['Airport', 'Hub', 'South', 'West'], 'Mid is only R\'s near end; Near is within the hub\'s reach');
   assert.equal(set.find((n) => n.mark.name === 'South').letters.map((l) => l.route).join(''), 'ER');
-  assert.equal(set.find((n) => n.mark.name === 'Hub').letters.length, 0, 'no line\'s far end is the hub');
+  assert.equal(set.find((n) => n.mark.name === 'Hub').letters.map((l) => l.route).join(''), 'L', 'L\'s far end is left to the hub\'s name, so the hub carries its letter (#168)');
   assert.equal(set.find((n) => n.mark.name === 'West').letters.map((l) => l.route).join(''), 'B', 'one line\'s far end carries its letter too');
   const airport = set.find((n) => n.mark.name === 'Airport');
   assert.ok(airport.box[2] <= 901, `the airport's name turns in from the network's east end (${airport.box})`);

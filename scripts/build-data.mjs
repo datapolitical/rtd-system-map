@@ -12,7 +12,7 @@ import { coreBounds } from './lib/core.mjs';
 import { directory } from './lib/directory.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { busNames } from './lib/busnames.mjs';
-import { heading, stopLines } from './lib/stops.mjs';
+import { heading, stopLines, unservedStops } from './lib/stops.mjs';
 import { endAtMarks, nearestOnTrack, sharedTrack, trackAt, trimToEnds } from './lib/sharedtrack.mjs';
 import { stationService } from './lib/stations.mjs';
 import { stationMarks } from './lib/stationmarks.mjs';
@@ -24,6 +24,7 @@ import { extendLineToPlatforms, hallRoofs, platformsToMarks, stationStructures }
 import { clipAtHalls, shortenAtHall, stopsOfHalls } from './lib/halls.mjs';
 import { countProblems } from './lib/counts.mjs';
 import { STREET_CLASSES } from '../public/js/frequency.js';
+import { dataCode } from './lib/fingerprint.mjs';
 
 // The two fixed inputs: RTD's official system map and its published GTFS feed.
 const EXPERIENCE = { portal: 'https://www.arcgis.com', id: '4a812ebf793646be945b7d58dcfbb794' };
@@ -126,7 +127,7 @@ function assignRoles(layers) {
 async function main() {
   const started = Date.now();
   // The last good build's counts, for the checks (DESIGN.md, "Rule 3"): this
-  // folder's, or on a fresh checkout (every Cloudflare build) the published
+  // folder's (the committed data), or on a checkout without it the published
   // site's, which is the last build that passed them.
   const previous =
     JSON.parse(await readFile(path.join(OUT, 'meta.json'), 'utf8').catch(() => 'null')) ??
@@ -195,6 +196,18 @@ async function main() {
     keep: (t) => Boolean(t.shape_id && groupOf.has(t.route_id)),
   });
   for (const [kind, d] of Object.entries(dates)) console.log(`  typical ${kind}: ${d.date} (${d.services.join(', ')})`);
+  // A stop no trip calls at on the typical days isn't drawn or listed: RTD's stops
+  // layer can still list a route that no longer serves it (#168).
+  {
+    const called = new Set([...stopTimes.values()].flatMap((t) => t.stops));
+    const known = new Set(readCsv(gtfs.text['stops.txt']).map((s) => s.stop_id));
+    const unserved = unservedStops(geo.stops, known, called);
+    if (unserved === null) console.log('  STOPS NOT CHECKED FOR SERVICE: the stops layer and GTFS no longer share stop ids');
+    else {
+      geo.stops = geo.stops.filter((f) => !unserved.has(String(f.properties.id)));
+      console.log(`  stops no trip calls at on the typical days (not drawn): ${unserved.size}`);
+    }
+  }
 
   for (const { properties: p } of geo.routes) {
     const found = members.get(p.route);
@@ -807,6 +820,8 @@ async function main() {
   for (const [role, features] of Object.entries(geo)) {
     await writeFile(path.join(next, `${role}.geojson`), JSON.stringify({ type: 'FeatureCollection', features }));
   }
+  // The code that built this data, so publishing can tell it is current (scripts/publish-check.mjs).
+  meta.code = await dataCode();
   await writeFile(path.join(next, 'meta.json'), JSON.stringify(meta, null, 2));
   await writeFile(path.join(next, 'directory.json'), JSON.stringify(index));
   // The four sheets are drawn from the files just written (DESIGN.md, "Four sheets").

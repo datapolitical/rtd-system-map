@@ -1,2 +1,4 @@
 /classic / 302
 /classic/* / 302
+# Browsers that ask for /favicon.ico get the icon (scripts/icons.mjs).
+/favicon.ico /icons/favicon-32.png 200

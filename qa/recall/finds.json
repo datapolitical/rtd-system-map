@@ -2047,6 +2047,102 @@
       "confidence": "clear"
     },
     {
+      "id": "118-picked-route-unlabelled",
+      "issue": 118,
+      "place": "The 15L along Colfax Ave by Aurora, sheet 3, the 15L picked",
+      "said": "a picked route loses its own route numbers and its street's name along its line, because the marks that keep other lettering off the picked line keep its own off too",
+      "kind": "pick-unlabelled",
+      "caught_by": [
+        "pick-unlabelled"
+      ],
+      "theme": "light",
+      "zoom": 14,
+      "points": [
+        [
+          -104.882644,
+          39.740404
+        ]
+      ],
+      "radius_px": 40,
+      "capture": {
+        "view": "14/39.74019/-104.88582",
+        "size": [
+          402,
+          655
+        ]
+      },
+      "seen_on": [
+        "817128a"
+      ],
+      "found_by": "Claude, the v1.0 final check of the live map (light and dark, 402x655), 2026-11-24",
+      "pinned_by": "Claude, from captures of the live build 817128a (qa/.scratch/v1-final), 2026-11-24",
+      "confidence": "clear"
+    },
+    {
+      "id": "126-picked-badge-off-letter",
+      "issue": 126,
+      "place": "15th & 17th St's stop-group table, sheet 4, the 15 picked",
+      "said": "the picked route's row has a larger square that sits off its letter (MapLibre scales icon-offset by icon-size)",
+      "kind": "badge-off-letter",
+      "caught_by": [
+        "badge-off-letter"
+      ],
+      "theme": "light",
+      "zoom": 16,
+      "points": [
+        [
+          -104.991656,
+          39.745277
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "16/39.745157/-104.989886",
+        "size": [
+          402,
+          655
+        ]
+      },
+      "seen_on": [
+        "817128a"
+      ],
+      "found_by": "Claude, the v1.0 final check of the live map (light and dark, 402x655), 2026-11-24",
+      "pinned_by": "Claude, from captures of the live build 817128a (qa/.scratch/v1-final), 2026-11-24",
+      "confidence": "clear"
+    },
+    {
+      "id": "126-picked-stop-letter-lost",
+      "issue": 126,
+      "place": "Stop X at 15th & 17th St, sheet 4, the 15 picked",
+      "said": "a lettered stop on the picked route loses its X square and shows a plain ring, though a picked route keeps its own stops' letters whole",
+      "kind": "pick-letter-lost",
+      "caught_by": [
+        "pick-letter-lost"
+      ],
+      "theme": "light",
+      "zoom": 16,
+      "points": [
+        [
+          -104.989822,
+          39.745227
+        ]
+      ],
+      "radius_px": 20,
+      "capture": {
+        "view": "16/39.745157/-104.989886",
+        "size": [
+          402,
+          655
+        ]
+      },
+      "seen_on": [
+        "817128a"
+      ],
+      "found_by": "Claude, the v1.0 final check of the live map (light and dark, 402x655), 2026-11-24",
+      "pinned_by": "Claude, from captures of the live build 817128a (qa/.scratch/v1-final), 2026-11-24",
+      "confidence": "clear"
+    },
+    {
       "id": "154-prototype-bus-over-rail",
       "issue": 154,
       "place": "Zoom preview, rail approaches to the hub",
