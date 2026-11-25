@@ -79,21 +79,19 @@ test('a tap names the actual rail lines, including shared track', () => {
   assert.equal(pickFrom({ rail: [{ route: 'A' }, { route: 'B' }, { route: 'C' }] }).title, 'A, B and C Lines');
 });
 
-test('the stop-group table stays readable and distinguishes only the selected route row', () => {
+test('the stop-group table is a key on the screen, not layers on the map, and marks only the picked route (#198)', () => {
   for (const theme of ['light', 'dark']) {
-    const style = sheetStyle(theme, [], ['#57C1E9']);
-    const state = { ...none, bus: '15L' };
-    assert.equal(layer(style, 'group-plate-3').paint['icon-opacity'], 1);
-    assert.equal(layer(style, 'group-badge-3').paint['text-opacity'], 1);
-    const text = layer(style, 'group-text-3');
-    const selected = { role: 'row', routes: '1, 15, 15L, 20' };
-    const other = { role: 'row', routes: '10, 28, 32' };
-    assert.equal(evaluate(text.paint['text-opacity'], { props: selected, state }), 1);
-    assert.equal(evaluate(text.paint['text-opacity'], { props: other, state }), 1);
-    assert.notEqual(evaluate(text.paint['text-color'], { props: selected, state }), evaluate(text.paint['text-color'], { props: other, state }));
-    assert.deepEqual(evaluate(text.layout['text-font'], { props: selected, state: { ...none, bus: '15' } }), evaluate(text.layout['text-font'], { props: selected, state }));
-    assert.notDeepEqual(evaluate(text.layout['text-font'], { props: selected, state: { ...none, bus: '5' } }), evaluate(text.layout['text-font'], { props: selected, state }), 'not a substring of a route number');
+    const ids = sheetStyle(theme, [], ['#57C1E9']).layers.map((l) => l.id);
+    for (const gone of ['group-plate', 'group-area', 'group-badge', 'group-text', 'group-leader']) assert.ok(!ids.some((id) => id.startsWith(`${gone}-`)), `no ${gone} layer`);
+    assert.ok(ids.includes('group-stop-3'), 'the letters on the streets stay');
   }
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<button id="key" type="button" class="off" aria-hidden="true" tabindex="-1">/, 'the key starts unseen and out of the tab order');
+  assert.match(html, /#key\.off \{[^}]*opacity: 0;[^}]*pointer-events: none/, 'it fades, and an unseen key takes no taps');
+  assert.match(html, /prefers-reduced-motion: reduce\) \{[^}]*#key \{ transition: none/, 'no fade for a reader who asks for less motion');
+  assert.match(html, /#key \.routes span\.picked \{/, 'a picked route is marked in its row');
+  const main = fs.readFileSync(new URL('../public/js/sheets/main.js', import.meta.url), 'utf8');
+  assert.match(main, /picked\?\.mode === 'bus' && picked\.route === r\.dataset\.route/, 'a whole route number, never part of one (5 is not 15)');
 });
 
 test('street names accept number-only roads and shorten ordinary names without null warnings', () => {
@@ -168,7 +166,7 @@ test('a picked route\'s card says what the route is, from RTD\'s directory, in t
   assert.match(html, /#card\.route \{[^}]*padding: 6px/, 'the route card is compact');
 });
 
-test("a picked route keeps its own numbers, its table square on its letter and its stops' letters (v1.0 check)", () => {
+test("a picked route keeps its own numbers and its stops' letters (v1.0 check)", () => {
   for (const theme of ['light', 'dark']) {
     const style = sheetStyle(theme, [], ['#57C1E9']);
     const at = (id) => style.layers.findIndex((l) => l.id === id);
@@ -182,10 +180,6 @@ test("a picked route keeps its own numbers, its table square on its letter and i
       assert.equal(evaluate(layer(style, `bus-number-${n}`).filter, { props: label, state: picked }), false, 'drawn once, by picked-number');
       assert.equal(evaluate(layer(style, `bus-number-${n}`).filter, { props: label, state: none }), true);
     }
-    // The picked row's square is its own larger image, not icon-size, which slides an offset icon.
-    const badge = layer(style, 'group-badge-3').layout;
-    assert.equal(badge['icon-size'], undefined);
-    assert.match(JSON.stringify(badge['icon-image']), /stopgroup-picked-/);
     // A lettered stop on the picked route is set again over the picked line and its rings.
     assert.ok(at('pick-letter-4') > at('pick-stop-4'));
     const x = { kind: 'stop', routes: '1, 15, 15L, 20', letter: 'X' };
