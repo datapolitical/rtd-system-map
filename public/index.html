@@ -19,13 +19,14 @@
 <meta property="og:title" content="RTD system map">
 <meta property="og:description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs.">
 <meta property="og:url" content="https://map.chrisfnicholson.com/">
-<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=13907e480e">
+<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=c5047cefbd">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Dark map of central Denver: the colored rail lines fanning out from Union Station past Ball Arena and Empower Field.">
 <meta name="twitter:card" content="summary_large_image">
 <script>if (new URLSearchParams(location.search).has('timing')) document.write('<script src="/js/timing.js"><\/script>');</script>
+<script>if (new URLSearchParams(location.search).has('steptest')) document.write('<script src="/js/steptest.js"><\/script>');</script>
 <script>
   // Resolve the theme before paint, including a saved choice on a returning visit.
   const scheme = matchMedia('(prefers-color-scheme: dark)');
@@ -48,7 +49,8 @@
     document.head.append(link);
   }
 </script>
-<link rel="stylesheet" href="/vendor/maplibre-gl.css">
+<!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the loading picture. -->
+<link rel="stylesheet" href="/vendor/maplibre-gl.css" media="print" onload="this.media='all'">
 <!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
      for the one that names it (DESIGN.md, "Quality floor"). The sheet and the glyphs are fetched
      by the map's worker, which finds them in the browser's cache. -->
@@ -177,11 +179,13 @@
     opacity: 0; transition: opacity 200ms ease-out; }
   #poster img.whole { opacity: 1; }
   #poster.gone { opacity: 0; pointer-events: none; }
-  #loading { position: absolute; left: 50%; top: max(16px, calc(env(safe-area-inset-top) + 10px)); transform: translateX(-50%); margin: 0; padding: 7px 15px 6px;
+  #loading, #wait { position: absolute; left: 50%; top: max(16px, calc(env(safe-area-inset-top) + 10px)); transform: translateX(-50%); margin: 0; padding: 7px 15px 6px;
     background: var(--card); color: var(--ink); border-radius: 16px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
-  #loading span { animation: breathe 1.4s ease-in-out infinite; }
+  #loading span, #wait span { animation: breathe 1.4s ease-in-out infinite; }
+  #wait { z-index: 3; pointer-events: none; }
+  #wait[hidden] { display: none; }
   @keyframes breathe { 50% { opacity: 0.45; } }
-  @media (prefers-reduced-motion: reduce) { #poster, #poster img, #key { transition: none; } #loading span { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #poster, #poster img, #key { transition: none; } #loading span, #wait span { animation: none; } }
 </style>
 </head>
 <body>
@@ -192,7 +196,7 @@
 <button id="key" type="button" class="off" aria-hidden="true" tabindex="-1"></button>
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
-<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="c30844b19619a83f57a1b35f77ab934903ce6fafe6442c5f88130aa66060cf4b" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="5db20a0b6cfb0425bf10267c7aef4436c0f95abf9643a0c1a6014ef095699ca0" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
   <picture>
     <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
     <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">
@@ -257,6 +261,8 @@
   <svg class="moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.8 13.1A9 9 0 0 1 10.9 3.2 9 9 0 1 0 20.8 13.1Z"/></svg>
   <svg class="sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
 </button>
+<!-- While a step waits for the next sheet's tiles (main.js, "No step before the next sheet is ready"). -->
+<p id="wait" role="status" hidden><span>Loading…</span></p>
 <p id="say" class="sr" role="status"></p>
 </main>
 <footer id="credit">Unofficial. Data: RTD<span class="sep" aria-hidden="true">·</span><a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a><span class="sep" aria-hidden="true">·</span><a href="https://openfreemap.org">OpenFreeMap</a></footer>

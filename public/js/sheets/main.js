@@ -89,13 +89,16 @@ function roomy() {
   return [[lon(x(w) - halfX), lat(y(s) + halfY)], [lon(x(e) + halfX), lat(y(n) - halfY)]];
 }
 
+// How far out and in the map goes; a step waiting for its tiles limits it less far (limits()).
+const LOWEST = zooms[0] - 0.6;
+const HIGHEST = zooms.at(-1) + 0.6;
 const map = new maplibregl.Map({
   container: 'map',
   style: sheetStyle(theme(), stations, colors, wanted, district),
   center: asked?.center ?? home,
   zoom: rests[start],
-  minZoom: zooms[0] - 0.6,
-  maxZoom: zooms.at(-1) + 0.6,
+  minZoom: LOWEST,
+  maxZoom: HIGHEST,
   maxBounds: SHEETS[start].whole ? roomy() : bounded,
   dragRotate: false,
   pitchWithRotate: false,
@@ -145,6 +148,23 @@ scheme.addEventListener('change', () => {
   if (!manualTheme) changeTheme(scheme.matches ? 'dark' : 'light');
 });
 
+// --- Waiting for the reader before doing what is for later ------------------------
+
+const SETTLE_MS = 5000;
+let settled = false;
+const later = [];
+function whenSettled(fn) { if (settled) fn(); else later.push(fn); }
+const settleOn = ['pointerdown', 'wheel', 'keydown'];
+let touched = false; // before the opening is drawn, a touch only brings the start forward
+function readerHasIt() {
+  if (settled) return;
+  if (!window.sheetsReady) { touched = true; return; }
+  settled = true;
+  for (const type of settleOn) removeEventListener(type, readerHasIt, true);
+  for (const fn of later.splice(0)) fn();
+}
+for (const type of settleOn) addEventListener(type, readerHasIt, { capture: true, passive: true });
+
 // --- The other sheets, once the first is drawn ----------------------------------
 
 // Hand a sheet's drawing to the map, if it hasn't had it.
@@ -185,39 +205,73 @@ map.on('sourcedata', (e) => {
 });
 let tried = new WeakMap(); // tile manager -> tiles asked for while the map has rested here
 map.on('movestart', () => { tried = new WeakMap(); });
-function warm() {
+// Any tile the map has made, for MapLibre's Tile and OverscaledTileID, which it does not export.
+function aTile() {
+  const tm = map.style?.tileManagers?.ground;
+  return tm?.getTileByID(tm.getIds()[0] ?? '');
+}
+// A step passes through every whole zoom between two sheets, and at each one the sheet whose
+// band it is in shows, drawn from that zoom's tiles: these are the tiles, the basemap's and
+// that sheet's, for each of `levels`.
+function* stepTiles(levels) {
   const managers = map.style?.tileManagers;
-  const sample = managers?.ground?.getTileByID(managers.ground.getIds()[0] ?? '');
-  if (!sample) return;
-  const [Tile, TileID] = [sample.constructor, sample.tileID.constructor];
-  // A step passes through every whole zoom between two sheets, and at each one the sheet whose
-  // band it is in shows, drawn from that zoom's tiles. All of them, nearest the map's first.
-  const here = map.getZoom();
-  const levels = [];
-  for (let t = Math.floor(zooms[0]); t <= zooms.at(-1); t++) levels.push(t);
-  levels.sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
+  const TileID = aTile()?.tileID.constructor;
+  if (!TileID) return;
   for (const t of levels) {
     const s = SHEETS.findLast((sh, i) => !i || edge(i - 1) <= t);
-    for (const id of ['ground', ...(ready.has(s.id) ? [`sheet-${s.id}`] : [])]) {
+    for (const id of ['ground', `sheet-${s.id}`]) {
       const tm = managers[id];
       const source = tm?.getSource();
       if (!source?.loadTile || !tm._outOfViewCache) continue;
-      if (!tried.has(tm)) tried.set(tm, new Set());
-      for (const [over, z, x, y] of cover(source, t)) {
-        const tileID = new TileID(over, 0, z, x, y);
-        if (tried.get(tm).has(tileID.key) || tm.getTileByID(tileID.key) || tm._outOfViewCache.has(tileID)) continue;
-        tried.get(tm).add(tileID.key);
-        // Made apart from the tiles in view, which the map's tidying would drop half-loaded,
-        // then put in the cache that a step takes its tiles from.
-        const tile = new Tile(tileID, source.tileSize * tileID.overscaleFactor());
-        Promise.resolve(source.loadTile(tile)).then(() => {
-          if (tile.hasData() && !tm.getTileByID(tileID.key) && !tm._outOfViewCache.has(tileID) && map.style?.tileManagers?.[id] === tm) {
-            tm._outOfViewCache.add(tileID, tile, tile.getExpiryTimeout());
-          } else source.unloadTile?.(tile);
-        }, () => {});
-      }
+      for (const [over, z, x, y] of cover(source, t)) yield { id, s, tm, source, tileID: new TileID(over, 0, z, x, y) };
     }
   }
+}
+// `levels`: those of a step to either neighbouring sheet, unless a step waits (held), when only
+// its own, so they come first.
+function warm(levels = held ? between(sheet, held.to) : stepLevels()) {
+  const Tile = aTile()?.constructor;
+  if (!Tile) return;
+  // Nearest the map's first: on reaching a sheet, the map rests again and its neighbours' come
+  // then. (Every zoom at once was about twice the work, all on the phone's main thread.)
+  const here = map.getZoom();
+  levels.sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
+  for (const { id, s, tm, source, tileID } of stepTiles(levels)) {
+    if (id !== 'ground' && !ready.has(s.id)) continue;
+    if (!tried.has(tm)) tried.set(tm, new Set());
+    if (tried.get(tm).has(tileID.key) || tm.getTileByID(tileID.key) || tm._outOfViewCache.has(tileID)) continue;
+    tried.get(tm).add(tileID.key);
+    // Made apart from the tiles in view, which the map's tidying would drop half-loaded,
+    // then put in the cache that a step takes its tiles from.
+    const tile = new Tile(tileID, source.tileSize * tileID.overscaleFactor());
+    Promise.resolve(source.loadTile(tile)).then(() => {
+      if (tile.hasData() && !tm.getTileByID(tileID.key) && !tm._outOfViewCache.has(tileID) && map.style?.tileManagers?.[id] === tm) {
+        tm._outOfViewCache.add(tileID, tile, tile.getExpiryTimeout());
+      } else source.unloadTile?.(tile);
+    }, () => {});
+  }
+}
+// Whether a step from this sheet to sheet `to` has every tile it passes through, so none of
+// it would show bare ground.
+function stepReady(to) {
+  if (to === sheet || !SHEETS[to]) return true;
+  if (!window.sheetsReady) return false;
+  let any = false;
+  for (const { id, s, tm, tileID } of stepTiles(between(sheet, to))) {
+    if (id !== 'ground' && !ready.has(s.id)) return false;
+    if (!tm.getTileByID(tileID.key)?.hasData() && !tm._outOfViewCache.has(tileID)) return false;
+    any = true;
+  }
+  return any;
+}
+// The whole zooms a step from sheet `a` to sheet `b` passes through, and from this sheet to either neighbour.
+function between(a, b) {
+  const levels = [];
+  for (let t = Math.floor(Math.min(rests[a], rests[b])); t <= Math.max(rests[a], rests[b]); t++) levels.push(t);
+  return levels;
+}
+function stepLevels() {
+  return between(Math.max(0, sheet - 1), Math.min(rests.length - 1, sheet + 1));
 }
 // The tiles a source draws a view at `zoom` from, about the map's centre, as MapLibre picks
 // them for a map that is never tilted or turned: [overscaled zoom, zoom, x, y].
@@ -237,7 +291,8 @@ function cover(source, zoom) {
   }
   return tiles;
 }
-map.on('idle', warm);
+// From the opening on: a step soon after it is as quick as one later (Chris, 2026-11-25).
+map.on('idle', () => { if (window.sheetsReady) warm(); });
 
 // --- Resting only on a sheet -------------------------------------------------
 
@@ -287,6 +342,8 @@ function show(index, around, keep = false) {
   dots.setAttribute('aria-label', sheetName(sheet, zooms.length));
   if (sheet !== was) say(sheetName(sheet, zooms.length));
   want(sheet);
+  // A step goes the whole way: the limits a wait put on are for the reader's own zooms.
+  if (sheet !== was) { map.setMinZoom(LOWEST); map.setMaxZoom(HIGHEST); }
   // Stepping out to the whole district shows all of it, wherever the reader was (#152).
   const whole = SHEETS[sheet].whole && frameCentre && sheet !== was && !keep;
   const back = !whole && cameFrom && SHEETS[was]?.whole && sheet === was + 1 && !around ? cameFrom : null;
@@ -324,7 +381,7 @@ map.on('zoomend', (e) => {
   began = null;
   // A scroll zooms about the pointer, and so does the rest of the way.
   const box = map.getContainer().getBoundingClientRect();
-  show(to, input.wheel ? map.unproject([input.wheel[0] - box.left, input.wheel[1] - box.top]) : undefined);
+  step(to, input.wheel ? map.unproject([input.wheel[0] - box.left, input.wheel[1] - box.top]) : undefined);
 });
 // A double tap or double click shows the next sheet, about the point tapped. MapLibre's own
 // handlers recognise it (Safari never makes a dblclick of a double tap); the one-level step
@@ -337,10 +394,112 @@ map.on('zoomstart', (e) => {
   const box = map.getContainer().getBoundingClientRect();
   const around = map.unproject([p.clientX - box.left, p.clientY - box.top]);
   began = null;
-  requestAnimationFrame(() => show(sheet + 1, around));
+  requestAnimationFrame(() => step(sheet + 1, around));
 });
-document.querySelector('#in').addEventListener('click', () => show(sheet + 1, !cameFrom && openingSteps && hub ? hub : undefined));
-document.querySelector('#out').addEventListener('click', () => show(sheet - 1));
+document.querySelector('#in').addEventListener('click', () => step(sheet + 1, !cameFrom && openingSteps && hub ? hub : undefined));
+document.querySelector('#out').addEventListener('click', () => step(sheet - 1));
+
+// --- No step before the next sheet is ready ----------------------------------------
+
+// A step to a sheet whose tiles have not all come showed bare ground for a moment (black in the
+// dark theme), most often in the first seconds of a visit. So the map waits for them (Chris,
+// 2026-11-25): a tap on + or -, or a double tap, holds the step and shows "Loading…" until
+// they are there, then steps. A pinch or a scroll stops at the edge of the sheet shown, with
+// the same line, and steps on the same way. HOLD_MS at most: if the tiles never come (the
+// connection dropped), the step goes ahead as it did before.
+const HOLD_MS = 8000;
+const waitLine = document.querySelector('#wait');
+let showing = 0;
+function waiting(on) {
+  clearTimeout(showing);
+  // Not for a wait too short to see.
+  if (on) showing = setTimeout(() => { waitLine.hidden = false; }, 120);
+  else waitLine.hidden = true;
+}
+let held = null; // { to, around, since }: the sheet a step waits for
+let givenUp = -1; // the sheet on which a wait ran out: no more waits there
+// ?hold=off steps at once, as the page did before, to compare the two (js/steptest.js).
+const NO_HOLD = new URLSearchParams(location.search).get('hold') === 'off';
+function step(index, around) {
+  const to = Math.max(0, Math.min(zooms.length - 1, index));
+  if (to === sheet) return show(to, around); // back to the sheet shown: a wait goes on
+  if (NO_HOLD || givenUp === sheet || stepReady(to)) {
+    held = null;
+    waiting(false);
+    return show(to, around);
+  }
+  if (map.isMoving()) map.stop(); // a double tap's own zoom, which would go on to the limit
+  hold({ to, around });
+}
+function hold(h) {
+  want(h.to);
+  held = { ...h, since: held?.to === h.to ? held.since : performance.now() };
+  waiting(true);
+  watch();
+}
+// Pinch, scroll or keyboard at the edge of the sheet's limits: a step like any other, which waits.
+function pushed(dir) {
+  const to = sheet + dir;
+  if (held || !SHEETS[to] || givenUp === sheet || stepReady(to)) return;
+  const z = map.getZoom();
+  if (dir > 0 ? z >= map.getMaxZoom() - 0.01 : z <= map.getMinZoom() + 0.01) hold({ to });
+}
+map.getContainer().addEventListener('wheel', (e) => { if (e.deltaY) pushed(e.deltaY < 0 ? 1 : -1); }, { passive: true });
+let spread = 0;
+const apart = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+map.getContainer().addEventListener('touchstart', (e) => { spread = e.touches.length === 2 ? apart(e.touches) : 0; }, { passive: true });
+map.getContainer().addEventListener('touchmove', (e) => {
+  if (!spread || e.touches.length !== 2) return;
+  const r = apart(e.touches) / spread;
+  if (r > 1.05 || r < 0.95) pushed(r > 1 ? 1 : -1);
+}, { passive: true });
+map.getContainer().addEventListener('keydown', (e) => {
+  if (['+', '='].includes(e.key)) pushed(1);
+  else if (['-', '_'].includes(e.key)) pushed(-1);
+});
+// The sheet's limits: no further than its own tiles reach, toward a neighbour not yet ready. A
+// pinch in can go almost to the next whole zoom (the same tiles, larger), and then steps on
+// once the next sheet is ready; out, there is nothing to show past the sheet's own zoom.
+function limits() {
+  const r = rests[sheet];
+  const loose = NO_HOLD || givenUp === sheet;
+  const max = loose || stepReady(sheet + 1) ? HIGHEST : Math.min(edge(sheet), Math.floor(r) + 1) - 0.001;
+  const min = loose || stepReady(sheet - 1) ? LOWEST : Math.max(edge(sheet - 1), Math.floor(r));
+  // Drawn in only at rest on the sheet, so the map never jumps; let out at once.
+  const still = !map.isMoving() && Math.abs(map.getZoom() - r) < 0.01;
+  if (max > map.getMaxZoom() || (max < map.getMaxZoom() && still)) map.setMaxZoom(max);
+  if (min < map.getMinZoom() || (min > map.getMinZoom() && still)) map.setMinZoom(min);
+  return map.getMaxZoom() < HIGHEST || map.getMinZoom() > LOWEST;
+}
+// While the map is limited or a step waits: make the tiles, and look for them.
+let watching = 0;
+function watch() {
+  if (watching) return;
+  watching = setInterval(() => {
+    if (!map.isMoving()) warm();
+    if (held && !map.isMoving()) { // after a pinch, once the fingers are off
+      const over = performance.now() - held.since > HOLD_MS;
+      if (over) givenUp = sheet;
+      if (over || stepReady(held.to)) {
+        const { to, around } = held;
+        held = null;
+        waiting(false);
+        show(to, around);
+      }
+    }
+    if (!limits() && !held) { clearInterval(watching); watching = 0; fill(); }
+  }, 150);
+}
+// The farther sheets (the closest is several times the size of the opening's) once a step
+// either way is ready, so they never hold one up on a slow connection; FILL_MS at the latest.
+const FILL_MS = 10000;
+let filling = false;
+function fill() {
+  if (filling) return;
+  filling = true;
+  fillIn();
+}
+map.on('idle', () => { if (window.sheetsReady && limits()) watch(); });
 map.on('movestart', (e) => { if (e.originalEvent) openingSteps = false; });
 map.on('dragstart', () => { if (SHEETS[sheet].whole) cameFrom = null; framed = false; });
 show(sheet);
@@ -874,13 +1033,20 @@ for (const button of document.querySelectorAll('#steps button')) button.addEvent
 // A pinch, drag or double tap reaches the map through the picture (index.html), and moves it.
 map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 
-// The opening view is drawn: then the other sheets (sheetsAll once they all have).
-map.once('idle', () => { window.sheetsReady = true; reveal(); fillIn(); });
+// The opening view is drawn. The sheets either side of it come at once (the map's worker reads
+// them, off the main thread), so an early step finds its drawing. The rest of what the page does
+// for later (the farther sheets (fill), the offline copy) waits until the reader first touches
+// the page, or until the opening has been on the screen for SETTLE_MS, so none of it competes
+// with the opening view on a slow phone (DESIGN.md, "Quality floor"). The tiles of a step to
+// either side (warm) come at once, with the sheets they draw. A step to another sheet before
+// then asks for that sheet itself (show). sheetsAll is set once every sheet is in.
+map.once('idle', () => { window.sheetsReady = true; reveal(); want(sheet - 1); want(sheet + 1); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
+whenSettled(() => setTimeout(fill, FILL_MS));
 
 // --- Offline (sw.js) ------------------------------------------------------------------
-// Asked for only once the opening view is drawn, so it never slows it (DESIGN.md, "Quality
-// floor"). On the first visit the files already fetched are handed to it to keep; from then on
-// it sees every request itself.
+// Asked for only once the opening view is drawn and the reader has it (whenSettled), so it
+// never slows it (DESIGN.md, "Quality floor"). On the first visit the files already fetched
+// are handed to it to keep; from then on it sees every request itself.
 //
 // Not quite every request on that first visit: the map's drawing worker was started before the
 // service worker existed, so what it fetches (each sheet's drawing and the basemap's tiles) never
@@ -899,11 +1065,11 @@ function groundTiles() {
     const c = map.style.tileManagers.ground.getTileByID(key)?.tileID?.canonical;
     if (c) add(c.z, c.x, c.y);
   }
-  for (let t = Math.floor(zooms[0]); t <= zooms.at(-1); t++) for (const [, z, x, y] of cover(source, t)) add(z, x, y);
+  for (const t of stepLevels()) for (const [, z, x, y] of cover(source, t)) add(z, x, y);
   return [...urls];
 }
 if ('serviceWorker' in navigator) {
-  map.once('idle', async () => {
+  whenSettled(async () => {
     try {
       await navigator.serviceWorker.register(new URL('../../sw.js', import.meta.url), { scope: new URL('../../', import.meta.url).pathname });
       const reg = await navigator.serviceWorker.ready;
@@ -940,7 +1106,8 @@ function groupImage(id) {
   const w = (m[1] === 'street' ? GROUP.badge : GROUP.stopBadge) + 2 * rim;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = Math.round(w * ratio);
-  const ctx = canvas.getContext('2d');
+  // Drawn on the CPU: its pixels are read straight back, which from the GPU stalls the map's drawing.
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.scale(ratio, ratio);
   ctx.beginPath();
   ctx.roundRect(0, 0, w, w, GROUP.badgeCorner + rim);
@@ -963,7 +1130,7 @@ function markImage(id) {
   const [w, h] = kind === 'express-shield' ? [18, 10] : [13, 13];
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(w * ratio); canvas.height = Math.round(h * ratio);
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true }); // read back at once (groupImage)
   ctx.scale(ratio, ratio);
   if (kind === 'express-shield') {
     const lozenge = (inset) => {
@@ -1029,3 +1196,4 @@ map.setMissingStyleImageResolver((id) => {
   if (image) map.addImage(id, image, { pixelRatio: ratio });
 });
 window.sheetsMap = map;
+window.sheetsZooms = { zooms, rests, ids: SHEETS.map((s) => s.id) }; // for js/steptest.js
