@@ -1,0 +1,11 @@
+# Starts rtd-map-round.service once a week, early Monday in Denver (see that file).
+[Unit]
+Description=RTD map: weekly round
+
+[Timer]
+OnCalendar=Mon *-*-* 04:41:00 America/Denver
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

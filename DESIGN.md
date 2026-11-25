@@ -5428,6 +5428,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   the light rail "overlaps the bus routes in a way that a hand drawn map
   wouldn't". The 15 and FreeRide loop's own path ran against the E Line and
   its stop ring sat on it; the street was right, the rail drawn wider.
+- 2026-11-25: Map work follows one written method (docs/refining.md) and
+  keeps a work log as it happens, shown under its step on the roadmap;
+  docs/upkeep.md says how the map is kept working. A weekly round
+  (qa/round/) sweeps the map and proposes fixes on the review page, and only
+  what Chris picks is fixed. Reason: Chris: "this type of process is what we want to have going
+  on regularly to refine the map", and once it is finished "it should be
+  clear how we're doing what we're doing to keep it working".
 
 ## Sources
 

@@ -55,6 +55,9 @@ we are" section from them (closed issues show as done).
 
 ## How to work here
 
+- Drawing work goes in the order [docs/refining.md](docs/refining.md) sets
+  out, with a work log kept as it happens. Rebuilding for RTD's new data and
+  what watches the live site are in [docs/upkeep.md](docs/upkeep.md).
 - Read [docs/development.md](docs/development.md) for the branch boundaries.
   `main` owns the current sheet map; `zoom-prototype-154` owns smooth-zoom
   experiments; `classic-archive` preserves the earlier application. Do not

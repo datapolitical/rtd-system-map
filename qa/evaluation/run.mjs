@@ -1,4 +1,6 @@
 // npm run check:evidence -- --url http://127.0.0.1:8788 --profile sheets
+// --seed picks the sampled stations; --count how many (default 3); --sample-zooms
+// the zooms they are captured at (default 14 for sheets, 13.37 for the trial).
 // --profile smooth-zoom requires --source-root <trial checkout> and its /zoom/ server.
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -19,6 +21,8 @@ const root = path.resolve(arg('source-root', '.'));
 const base = new URL(arg('url', 'http://127.0.0.1:8788'));
 const out = path.resolve(arg('out', `qa/.scratch/evaluation/${profile}`));
 const seed = Number(arg('seed', '21'));
+const count = Number(arg('count', '3'));
+const sampleZooms = arg('sample-zooms', null)?.split(',').map(Number);
 const trial = profile === 'smooth-zoom';
 const hash = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
 const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
@@ -26,7 +30,7 @@ const report = {
   generated: new Date().toISOString(), profile, base: base.href, sourceCommit: git('rev-parse', 'HEAD'),
   evaluatorSha256: hash(await fs.readFile(fileURLToPath(import.meta.url))),
   sourceDirty: Boolean(git('status', '--porcelain', '--untracked-files=no')), seed,
-  viewport: { width: 390, height: 844 }, renderer: 'Chromium software GL; deviceScaleFactor 1',
+  count, sampleZooms, viewport: { width: 390, height: 844 }, renderer: 'Chromium software GL; deviceScaleFactor 1',
   files: {}, audits: [], captures: [], errors: [],
   acceptance: 'INCOMPLETE: automated checks and captures are evidence, not a complete rubric pass.',
   unmeasured: ['independent GTFS truth', 'blind rider task success and completion time', 'physical-phone performance and assistive technology',
@@ -78,7 +82,8 @@ try {
   const views = [
     ...(trial ? [12, 12.99, 13.01, 14] : [8.75, 10, 12, 14, 16]).map((zoom) => ({ name: 'hub', station: hub, zoom })),
     { name: 'shared', station: shared, zoom: 14 }, { name: 'terminal', station: terminal, zoom: 14 },
-    ...sampleStations(stations, { seed }).map((station, i) => ({ name: `sample-${i}`, station, zoom: trial ? 13.37 : 14 })),
+    ...sampleStations(stations, { seed, count }).flatMap((station, i) => (sampleZooms ?? [trial ? 13.37 : 14])
+      .map((zoom) => ({ name: `sample-${i}`, station, zoom }))),
   ];
   report.sample = views.map((v) => ({ view: v.name, id: v.station.properties.id, station: v.station.properties.label || v.station.properties.name, zoom: v.zoom }));
   for (const theme of ['light', 'dark']) {
