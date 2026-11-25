@@ -2007,7 +2007,9 @@ Weights 400, 600 and 800, tabular numerals. Scale: 13, 15, 17, 22, 28 px.
 The site serves the font itself (from the `@fontsource-variable/overpass`
 package), with no request to Google. Map labels use Overpass too: the build
 generates MapLibre glyph files from the same font (`scripts/glyphs.mjs`), so
-the map and the interface share one typeface.
+the map and the interface share one typeface. Of general punctuation they
+hold only what a label can use (spaces, dashes, quotes, the bullet, the
+ellipsis and a few more); the canvas would draw the rest from another font.
 
 **Route bullets:** rail lines are a circle with the letter; bus routes are a
 pill, a rounded rectangle filled in the tier's color for routes every 30
@@ -3134,9 +3136,12 @@ are deferred, not ruled out. See "Open questions".
     seconds after the reader first touches the page or that view has been
     drawn for 5 seconds; a zoom asks for its sheet straight away.
     Its HTML asks at once for the modules, `meta.json`, `sheets.json`, the
-    opening sheet, the tile index and the glyphs the opening view letters
-    with; the glyphs are served as protobuf so Cloudflare compresses them
-    (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
+    opening sheet and the tile index. The glyphs the opening view letters
+    with are fetched by a script at the top of its head and handed to the
+    map (`addProtocol`), not preloaded: on an iPhone Safari appeared to fetch
+    the preloaded glyphs again when the map asked, so they came last and the
+    opening view waited for them. The glyphs are served as protobuf so
+    Cloudflare compresses them (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
     CPU): drawn at 5.9 s, was 8.9 s; opening view settled at 6.5 s, was 12 s.
   - Once a sheets view is at rest (from the opening on), the page loads the neighbouring sheets' tiles for that view, and the
     tiles of each whole zoom between them, into MapLibre's cache (nearest
@@ -5504,6 +5509,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   were the FreeRide and the MetroRide on the whole-district sheet, each
   drawn whole as one 8 px dash, with nothing for it to be left over from.
   Chris said go.
+- 2026-11-25: The opening view's glyphs are fetched by the page's head and
+  handed to the map, not preloaded, and the punctuation glyph files hold
+  only what a label can use (about 10 KB sent to about 2 KB each). Reason:
+  on Chris's iPhone the opening view was ready within 70 ms of the glyphs
+  arriving in each of four runs, and they arrived last: the timing readout
+  showed seven glyph and font requests where Chrome makes four, which reads
+  as Safari fetching the preloaded files again when the map asked. The drawing is
+  unchanged to the pixel (5 zooms, both themes).
 
 ## Sources
 
