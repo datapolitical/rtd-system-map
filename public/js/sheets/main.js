@@ -654,10 +654,14 @@ function slotFree(slot, stops) {
   }
   return true;
 }
-// How much of the network a corner would cover: the sheet's marks drawn in its rectangle.
+// How much of the network a corner would cover: the sheet's lines, stops and areas drawn in its
+// rectangle. Not its lettering: a query over a symbol layer evaluates the layer's layout on the
+// tile's copy of each feature, whose list-valued properties (a name's offset) are strings, and
+// MapLibre warns of each.
 function slotCovers(slot) {
   const r = slotRect(slot);
-  return map.queryRenderedFeatures([[r.left, r.top], [r.right, r.bottom]]).filter((f) => f.source?.startsWith('sheet-')).length;
+  const layers = map.getStyle().layers.filter((l) => l.source?.startsWith('sheet-') && l.type !== 'symbol').map((l) => l.id);
+  return map.queryRenderedFeatures([[r.left, r.top], [r.right, r.bottom]], { layers }).length;
 }
 function keyShown(on) {
   keyBox.classList.toggle('off', !on);
