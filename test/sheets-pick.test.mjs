@@ -8,6 +8,9 @@ import fs from 'node:fs';
 import { createExpression } from '@maplibre/maplibre-gl-style-spec';
 
 const layer = (style, id) => style.layers.find((l) => l.id === id);
+// style.js gives some paint values per feature with the same value either way (SAME), so MapLibre
+// shares GL programs; this reads the value inside.
+const plain = (v) => (Array.isArray(v) && v[0] === 'case' && JSON.stringify(v[1]) === '["==",["geometry-type"],"Nothing"]' && JSON.stringify(v[2]) === JSON.stringify(v[3]) ? v[2] : v);
 const none = { bus: '', rail: '' };
 
 test("a drawn route list reads as its routes, a stacked one too, and a tap names what is under it", () => {
@@ -40,8 +43,8 @@ test('a picked route holds on every sheet: its pieces are drawn on top, the rest
       assert.equal(evaluate(pick.filter, { props: on15, state: { ...none, bus: '15' } }), false, 'the street pieces are not drawn again');
       assert.equal(evaluate(pick.filter, { props: line15, state: none }), false, 'nothing picked, nothing drawn on top');
       // One ink and one weight from end to end, whatever street the route is on.
-      assert.equal(pick.paint['line-color'], c.pick);
-      assert.equal(typeof pick.paint['line-width'], 'number');
+      assert.equal(plain(pick.paint['line-color']), c.pick);
+      assert.equal(typeof plain(pick.paint['line-width']), 'number');
       // The bus streets underneath: whole with nothing picked, faded with anything picked.
       const bus = layer(style, `bus-${n}`).paint['line-color'];
       const full = evaluate(bus, { props: on15, state: none });
@@ -83,8 +86,8 @@ test('the stop-group table stays readable and distinguishes only the selected ro
   for (const theme of ['light', 'dark']) {
     const style = sheetStyle(theme, [], ['#57C1E9']);
     const state = { ...none, bus: '15L' };
-    assert.equal(layer(style, 'group-plate-3').paint['icon-opacity'], 1);
-    assert.equal(layer(style, 'group-badge-3').paint['text-opacity'], 1);
+    assert.equal(plain(layer(style, 'group-plate-3').paint['icon-opacity']), 1);
+    assert.equal(plain(layer(style, 'group-badge-3').paint['text-opacity']), 1);
     const text = layer(style, 'group-text-3');
     const selected = { role: 'row', routes: '1, 15, 15L, 20' };
     const other = { role: 'row', routes: '10, 28, 32' };

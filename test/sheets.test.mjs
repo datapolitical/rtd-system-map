@@ -1,6 +1,9 @@
 // The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+// style.js gives some paint values per feature with the same value either way (SAME), so MapLibre
+// shares GL programs; this reads the value inside.
+const plain = (v) => (Array.isArray(v) && v[0] === 'case' && JSON.stringify(v[1]) === '["==",["geometry-type"],"Nothing"]' && JSON.stringify(v[2]) === JSON.stringify(v[3]) ? v[2] : v);
 import { SHEETS, SIZES, toPx, toLonLat, length, resample, chained, railLines, stationMarks, letters, names, strayed, busStreets, halls,  nearest, drawSheet, inkOn, shortened, noded, pruned, unlooped, squared, unjogged, evened, straightened, labelSide, filleted, arced, labelRuns, stopRings, freeRoutes, inOrder, termini, busWide, expressRoutes, isExpress, airportRoutes, districtShape, sheetExtent, wholeFrame, crossingX } from '../scripts/lib/sheets.mjs';
 
 const line = (properties, coordinates) => ({ type: 'Feature', properties, geometry: { type: 'LineString', coordinates } });
@@ -597,7 +600,7 @@ test('a route number never sits on a stop: each stop holds its ground, placed be
       assert.ok(isStop(k) && k.source === ring.source);
       assert.ok(k.layout['text-allow-overlap'] && !k.layout['text-ignore-placement'], 'the mark is always there and keeps others off');
       assert.ok(k.layout['text-size'] >= 2 * (STOP_RING.radius + STOP_RING.stroke / 2), 'the mark covers the whole ring');
-      assert.equal(ring.paint['circle-radius'], STOP_RING.radius);
+      assert.equal(plain(ring.paint['circle-radius']), STOP_RING.radius);
     }
     assert.ok(rings.length && STOP_ROOM > 0);
   }
