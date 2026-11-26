@@ -41,8 +41,11 @@ test('the front page asks at once for what its opening view needs, and only that
   const fonts = new Set();
   const collect = (x) => (typeof x === 'string' ? x.startsWith('Overpass ') && fonts.add(x) : Array.isArray(x) && x.forEach(collect));
   for (const l of sheetStyle('light').layers) if (l.type === 'symbol' && (l.minzoom ?? 0) <= open && open < (l.maxzoom ?? 24)) collect(l.layout['text-font']);
-  const glyphs = preloads.filter((p) => p.startsWith('/vendor/glyphs/')).map((p) => p.split('/')[3]);
+  // Fetched by the head's own script and handed to the map (index.html, earlyGlyphs; main.js, "early").
+  const [, list] = read('').match(/window\.earlyGlyphs = Object\.fromEntries\(\[([^\]]*)\]/) ?? [];
+  const glyphs = [...(list ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]);
   assert.deepEqual(glyphs.sort(), [...fonts].sort(), 'the fonts the opening sheet letters with');
+  assert.ok(!preloads.some((p) => p.startsWith('/vendor/glyphs/')), 'the glyphs are fetched once, not preloaded as well');
   assert.deepEqual(preloads.filter((p) => /^\/data\/sheet-/.test(p)), [`/data/sheet-${SHEETS[OPENING].id}.geojson`], 'the opening sheet, not the others');
   // Every module the page's script imports, so none waits for the one that names it.
   const main = fs.readFileSync(path.join(PUBLIC, 'js/sheets/main.js'), 'utf8');

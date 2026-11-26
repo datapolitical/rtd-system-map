@@ -109,12 +109,33 @@ function roomy() {
   return [[lon(x(w) - halfX), lat(y(s) + halfY)], [lon(x(e) + halfX), lat(y(n) - halfY)]];
 }
 
+// The opening view's glyphs, fetched by the page's head (index.html, earlyGlyphs) as it loads, are
+// handed to the map here, so the first labels don't wait for a request the map makes only once
+// it lays them out. Any other glyph file is fetched as before.
+maplibregl.addProtocol('early', async ({ url }, abort) => {
+  const plain = url.slice('early://'.length);
+  const path = new URL(plain).pathname;
+  const early = window.earlyGlyphs?.[path];
+  if (early) {
+    delete window.earlyGlyphs[path];
+    const data = await early;
+    if (data) return { data };
+  }
+  const response = await fetch(plain, { signal: abort.signal });
+  if (!response.ok) throw new Error(`${response.status} ${plain}`);
+  return { data: await response.arrayBuffer() };
+});
+function mapStyle(t) {
+  const style = sheetStyle(t, stations, colors, wanted, district, routeLines);
+  return { ...style, glyphs: `early://${style.glyphs}` };
+}
+
 // How far out and in the map goes; a step waiting for its tiles limits it less far (limits()).
 const LOWEST = zooms[0] - 0.6;
 const HIGHEST = zooms.at(-1) + 0.6;
 const map = new maplibregl.Map({
   container: 'map',
-  style: sheetStyle(theme(), stations, colors, wanted, district, routeLines),
+  style: mapStyle(theme()),
   center: asked?.center ?? home,
   zoom: rests[start],
   minZoom: LOWEST,
@@ -147,7 +168,7 @@ function changeTheme(next) {
   document.querySelector('meta[name="theme-color"]').content = PALETTES[next].ground;
   themeButtonState();
   reveal();
-  map.setStyle(sheetStyle(next, stations, colors, wanted, district, routeLines));
+  map.setStyle(mapStyle(next));
   map.once('styledata', () => setPick(picked));
 }
 themeButtonState();
