@@ -2346,6 +2346,41 @@
       "pinned_by": "Claude, measuring ink overlap with qa/zoom-crowding-browser.mjs and freezing the style's collision settings (qa/recall/prototype-lettering.json), 2026-11-25",
       "confidence": "clear",
       "note": "Prototype only. The trial's station names and line letters skipped symbol placement, so MapLibre placed bus numbers over them; the sheets do not do this. Checked by the lettering test in test/zoom-prototype.test.mjs; measured in the browser by qa/zoom-crowding-browser.mjs. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-real-phone-jank",
+      "issue": 154,
+      "place": "Zoom preview, Union Station, opening and pinching 12 to 16 and back",
+      "said": "Chris: the trial is \"pretty rough in like six different ways\" on his phone; on a real iPhone 17 Pro he confirmed the four the video showed: the opening builds up in six visible steps, the two rail drawings show at once near 14 (doubled, striped lines and ghost line letters), names and the street grid go half-clear while zooming, and Union Station's name runs into its route chips near 13 during a pinch.",
+      "kind": "real-phone-jank",
+      "caught_by": [
+        "prototype-name-placement",
+        "prototype-rail-handover",
+        "prototype-bus-visibility"
+      ],
+      "seen_on": [
+        "4525371"
+      ],
+      "theme": "dark",
+      "zoom": 13,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "12/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris on his phone, 2026-11-25; shown on a real iPhone 17 Pro through AWS Device Farm (qa/devicefarm/zoom_run.py) and confirmed by Chris",
+      "pinned_by": "Claude, from the Device Farm session video and frame log, 2026-11-25",
+      "confidence": "clear",
+      "note": "Prototype only, and only visible in motion on a real phone: headless frames at rest looked right. The unit tests in test/zoom-prototype.test.mjs check the three causes in code (names placed on the map, rail handover at once, bus layers never hidden); the loading steps and the look in motion are checked by a Device Farm run. Classic recall fixtures do not run the /zoom/ page."
     }
   ]
 }

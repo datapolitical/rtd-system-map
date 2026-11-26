@@ -337,6 +337,41 @@ The cause is pinned at build `0c522dd` in `qa/recall/prototype-lettering.json`
 (find `154-prototype-numbers-on-lettering`); the lettering test catches it,
 passes the page as it is now and catches a planted wrong order.
 
+## On a real iPhone (2026-11-25)
+
+Chris found the 12 to 16 trial rough on his phone in ways the headless checks
+could not see. It was run on a real iPhone 17 Pro (iOS 26.3.1, Safari) through
+AWS Device Farm (`qa/devicefarm/zoom_run.py`): open cold, pinch to 16 and back
+to 12, with the session video and a log of every frame. Frames came at a steady
+60 a second (worst 21 ms while moving), so the roughness was in what was drawn.
+Chris confirmed the four faults the video showed:
+
+- **The opening built up in steps.** A white page, a cream "Loading map", a
+  dark empty screen, rail alone, streets, bus lines, then names, over about two
+  seconds. The page now sets its theme before the first paint and keeps the
+  map unseen until everything at the opening zoom has drawn, then shows it at
+  once. An unseen label in each font at the opening centre makes MapLibre fetch
+  every font then; before, three fonts arrived partway through the first pinch.
+- **Two rail drawings showed at once near 14.** They cross-faded over 260 ms
+  and lie a few pixels apart, so every line looked doubled and striped, with
+  ghost line letters. The rail drawing now hands over at once.
+- **Names went half-clear and the streets dimmed while zooming.** MapLibre's
+  own label fade (200 ms; the sheets use none) took each moved name for a new
+  one and faded it in from nothing. And the page hid and showed the bus layers
+  at each whole zoom; showing or hiding a layer makes MapLibre parse its whole
+  source again, so the new streets came late while the old faded out. The
+  label fade is off, every bus layer stays visible, lines fade by opacity
+  alone (opacity 0 is not drawn), and each drawing's labels hold exactly its
+  own zooms, since unseen labels would still take room.
+- **Union Station's name ran into its route chips near 13.** The name was
+  placed by a screen offset and the chips on the map; in a quick pinch, before
+  the page's next update, the chips spread with the zoom and ran up into the
+  name. The name's offset is now turned into its place on the map
+  (`placedName` in `public/js/zoom/model.js`), so the two move together.
+
+The page also keeps the theme last picked, here or on the sheets, under the
+sheets' saved choice.
+
 ## Line letters
 
 Letters are placed outward from 12, like the names: the letters at 12 stay

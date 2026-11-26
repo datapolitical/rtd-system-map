@@ -7,8 +7,8 @@ import { resolveImages } from './images.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-let theme = params.get('theme') ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-if (!['light', 'dark'].includes(theme)) theme = 'light';
+// Chosen before the first paint (zoom/index.html).
+let theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 let picked = readView(location.hash)?.pick ?? null;
 let map, bundle, metadata, labelFrame;
 let updatePending = false;
@@ -65,17 +65,14 @@ function update() {
   // The bus drawing for this zoom, faded in from the one before (model.js, busDrawingAt).
   const bus = busDrawingAt(zoom, busState, performance.now(), { motion: !calm.matches });
   busLayers ??= map.getStyle().layers.filter((l) => l.metadata?.busKey).map((l) => ({ id: l.id, key: l.metadata.busKey, plain: l.metadata.busPlain, set: null }));
+  // Only the bus lines fade; each drawing's labels hold their own zooms (style.js).
   for (const [set, o] of Object.entries(bus.sets)) {
-    for (const [part, value] of [['Lines', o.lines], ['Labels', o.labels]]) {
-      const key = `bus${part}${set}`;
-      if (busShown.get(key) !== value) { map.setGlobalStateProperty(key, value); busShown.set(key, value); }
-    }
+    const key = `busLines${set}`;
+    if (busShown.get(key) !== o.lines) { map.setGlobalStateProperty(key, o.lines); busShown.set(key, o.lines); }
   }
   for (const l of busLayers) {
     const value = busShown.get(l.key);
-    const visibility = value > 0 ? 'visible' : 'none';
-    if (map.getLayoutProperty(l.id, 'visibility') !== visibility) map.setLayoutProperty(l.id, 'visibility', visibility);
-    if (value > 0 && l.set !== value) { for (const [k, base] of l.plain) map.setPaintProperty(l.id, k, base * value); l.set = value; }
+    if (l.set !== value) { for (const [k, base] of l.plain) map.setPaintProperty(l.id, k, base * value); l.set = value; }
   }
   labelFrame = labels.frame.zoom;
   // A name changing side fades on a timer, so keep drawing until it has finished.
@@ -102,7 +99,7 @@ function applyStyle() {
   busShown.clear();
   const ready = () => { update(); setPick(picked); };
   map.once('style.load', ready);
-  map.setStyle(previewStyle(theme, metadata, bundle));
+  map.setStyle(previewStyle(theme, metadata, bundle, map.getCenter().toArray()));
 }
 
 try {
@@ -111,9 +108,9 @@ try {
   const center = asked?.center ?? metadata.hub;
   if (!center) throw new Error('The drawing has no opening station.');
   document.documentElement.dataset.theme = theme;
-  map = new maplibregl.Map({ container: 'map', style: previewStyle(theme, metadata, bundle),
+  map = new maplibregl.Map({ container: 'map', style: previewStyle(theme, metadata, bundle, center),
     center, zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, asked?.zoom ?? 12)), minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
-    dragRotate: false, pitchWithRotate: false, touchPitch: false, fadeDuration: 200,
+    dragRotate: false, pitchWithRotate: false, touchPitch: false, fadeDuration: 0,
     attributionControl: false, maxTileCacheZoomLevels: 3 });
   map.addControl(new maplibregl.AttributionControl({ compact: true }));
   map.touchZoomRotate.disableRotation();
@@ -127,6 +124,10 @@ try {
     update(); setPick(picked);
     for (const id of ['theme', 'zoom', 'sweep']) $(id).disabled = false;
     window.zoomReady = true;
+    // Shown once everything at the opening zoom has drawn (zoom.css), or after 10 s regardless.
+    const reveal = () => { if (window.zoomShown) return; document.documentElement.dataset.ready = ''; window.zoomShown = performance.now(); };
+    map.once('idle', reveal);
+    setTimeout(reveal, 10000);
   });
   map.on('click', (e) => {
     const hits = map.queryRenderedFeatures([[e.point.x - 7, e.point.y - 7], [e.point.x + 7, e.point.y + 7]]);
@@ -152,7 +153,13 @@ try {
   });
   $('clear').onclick = () => setPick(null);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setPick(null); });
-  $('theme').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; params.set('theme', theme); history.replaceState(null, '', `?${params}${location.hash}`); applyStyle(); };
+  $('theme').onclick = () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    // Saved as the sheets save it, so the choice holds on the next visit to either.
+    try { localStorage.setItem('rtd-sheets-theme', theme); } catch {}
+    if (params.has('theme')) { params.set('theme', theme); history.replaceState(null, '', `?${params}${location.hash}`); }
+    applyStyle();
+  };
   $('zoom').oninput = () => { moving = false; map.jumpTo({ zoom: Number($('zoom').value) }); };
   $('out').onclick = () => map.easeTo({ zoom: Math.max(MIN_ZOOM, map.getZoom() - 1), duration: 700 });
   $('in').onclick = () => map.easeTo({ zoom: Math.min(MAX_ZOOM, map.getZoom() + 1), duration: 700 });

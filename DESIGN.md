@@ -5530,6 +5530,15 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   were the FreeRide and the MetroRide on the whole-district sheet, each
   drawn whole as one 8 px dash, with nothing for it to be left over from.
   Chris said go.
+- 2026-11-25: Zoom trial (#154): the opening shows in one step, the rail
+  drawing hands over at once, MapLibre's label fade is off as on the sheets,
+  bus layers stay visible and fade their lines by opacity, and a station's
+  name is placed on the map like its chips. Reason: on a real iPhone 17 Pro
+  (AWS Device Farm) the trial loaded in six visible steps, showed doubled rail
+  near 14, faded names and streets while zooming, and ran Union Station's name
+  into its chips near 13; Chris: "Yes, those are the issues I meant". The
+  trial also keeps the theme last picked (Chris: "Just keep working" on the
+  recommendation).
 
 ## Sources
 

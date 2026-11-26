@@ -156,7 +156,20 @@ export function labelsAt(frames, zoom, sizes, state, now, { motion = true, step 
     }
     for (const f of list) features.push(opacity === 1 ? f : { ...f, properties: { ...f.properties, fade: opacity } });
   }
-  return { collection: { type: 'FeatureCollection', features }, busy, frame: a };
+  return { collection: { type: 'FeatureCollection', features: features.map((f) => placedName(f, sizes, zoom)) }, busy, frame: a };
+}
+
+// A name's offset (in ems of its text size) turned into its place on the map, so the name rides
+// the map exactly as its route chips do. Left as a screen offset, a name kept its distance in
+// pixels while the chips, placed on the map, spread with the zoom; during a quick pinch, before
+// the page's next update, the chips ran up into the name (RTD map, real iPhone run 2026-11-25).
+export function placedName(f, sizes, zoom) {
+  const offset = f.properties.offset;
+  if (f.properties.kind !== 'name' || !offset || f.geometry.type !== 'Point' || (!offset[0] && !offset[1])) return f;
+  const size = sizeAt(sizes.name, zoom);
+  const [x, y] = pixels(f.geometry.coordinates, zoom);
+  return { ...f, properties: { ...f.properties, offset: [0, 0] },
+    geometry: { type: 'Point', coordinates: coordinate([x + offset[0] * size, y + offset[1] * size], zoom) } };
 }
 
 // The bus drawings: each serves from its own zoom up to the next, so its lettering is only ever
@@ -197,8 +210,11 @@ export function drawingAt(drawings, zoom, state, now, { motion = true } = {}) {
 }
 
 export const busDrawingAt = (zoom, state, now, options) => drawingAt(BUS_DRAWINGS, zoom, state, now, options);
-// The rail drawing hands over at the same zoom and in the same way as the bus drawing there.
-export const railDrawingAt = (zoom, state, now, options) => drawingAt(RAIL_DRAWINGS, zoom, state, now, options);
+// The rail drawing hands over at the same zoom as the bus drawing there, but at once, with no
+// fade: its two drawings lie a few pixels apart, so crossing them over showed every line doubled
+// and striped, with ghost line letters beside it, for a quarter of a second at each handover
+// (real iPhone run 2026-11-25).
+export const railDrawingAt = (zoom, state, now, options) => drawingAt(RAIL_DRAWINGS, zoom, state, now, { ...options, motion: false });
 
 // The rail-attached features (station bars, line letters) of the rail drawings showing now, each
 // carrying its drawing's fade: bars cross over with the rail, letters fade out before the new in.

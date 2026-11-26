@@ -178,12 +178,16 @@ const shownAt = (frames, zoom, state, now, options) => {
   return { busy, a: by('a'), b: by('b'), chip: by('b:A') };
 };
 
-test('a name that keeps its side glides between drawings instead of stepping', () => {
+test('a name that keeps its side glides between drawings instead of stepping, placed on the map like its chips', () => {
   const frames = labelFrames(), state = { sides: new Map(), fades: new Map() };
   for (const [zoom, x] of [[12, 1], [12.0625, 1.25], [12.125, 1.5], [12.25, 2]]) {
     const { a } = shownAt(frames, zoom, state, 0);
     assert.equal(a.length, 1);
-    assert.ok(Math.abs(a[0].properties.offset[0] - x) < 1e-9, `offset at ${zoom}`);
+    // Its offset (ems of the name size) is turned into its place, so none is left on screen.
+    assert.deepEqual(a[0].properties.offset, [0, 0]);
+    const at = pixels(a[0].geometry.coordinates, zoom), station = pixels([-105, 39.75], zoom);
+    assert.ok(Math.abs(at[0] - station[0] - x * sizeAt(sizes.name, zoom)) < 1e-6, `place at ${zoom}`);
+    assert.ok(Math.abs(at[1] - station[1]) < 1e-6, `place at ${zoom}`);
     assert.equal(a[0].properties.fade, undefined);
   }
 });
@@ -299,7 +303,7 @@ test('the rail drawing hands over at 14, as the bus drawing there does, and hold
   assert.ok(BUS_DRAWINGS.some((d) => d.zoom === 14), 'a bus handover hides the rail one');
 });
 
-test('station bars cross over with their rail drawing; its letters fade out before the new fade in', () => {
+test('the rail drawing hands over at once: one set of bars and letters at every moment, never both', () => {
   const f = (kind, ref, extra = {}) => ({ type: 'Feature', properties: { kind, ref, ...extra }, geometry: { type: 'Point', coordinates: [0, 0] } });
   const all = { type: 'FeatureCollection', features: [f('station', 13), f('station', 15), f('letter', 13), f('letter', 15), f('letter', 15, { minzoom: 15 })] };
   const state = {};
@@ -308,10 +312,11 @@ test('station bars cross over with their rail drawing; its letters fade out befo
     const rail = railDrawingAt(14.05, state, 1000 + p);
     const shown = attachedFor(all, rail, 14.05).features;
     const v = (kind, ref) => { const x = shown.find((g) => g.properties.kind === kind && g.properties.ref === ref); return x ? x.properties.fade ?? 1 : 0; };
-    assert.ok(Math.max(v('station', 13), v('station', 15)) >= 1 - 1e-9, `a full set of bars at ${p} ms`);
-    assert.ok(!(v('letter', 13) > 0 && v('letter', 15) > 0), `both letter sets at ${p} ms`);
+    // Two rail drawings lie a few pixels apart; crossed over, every line showed doubled.
+    assert.equal(rail.busy, false, `still handing over at ${p} ms`);
+    assert.equal(v('station', 13) + v('letter', 13), 0, `old drawing at ${p} ms`);
+    assert.equal(v('station', 15) + v('letter', 15), 2, `new drawing at ${p} ms`);
     assert.ok(!shown.some((g) => g.properties.minzoom === 15), 'a letter waits for its zoom');
-    if (p > BUS_LINE_MS) { assert.equal(v('station', 13) + v('letter', 13), 0); assert.equal(v('station', 15) + v('letter', 15), 2); }
   }
 });
 
@@ -330,20 +335,29 @@ test('at a bus handover the lines never go pale and the two label sets never sho
   }
 });
 
-test('the preview style gives every bus layer a set, a zoom range covering its handovers, and a fade', () => {
+test('the preview style keeps every bus layer visible: lines fade by opacity over a range covering their handovers, labels hold their own zooms', () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
   const style = previewStyle('light', metadata, bundle);
   const bus = style.layers.filter((l) => /^(sheet|routes)-[234]$|^trial-bus-\d+(-routes)?$/.test(l.source ?? ''));
   const sets = BUS_DRAWINGS.map((d) => d.set);
-  for (const set of sets) assert.ok(bus.some((l) => l.metadata.busKey.endsWith(set)), `set ${set}`);
+  const setOf = (l) => l.source.match(/^trial-bus-(\d+)/)?.[1] ?? l.source.match(/-([234])$/)[1];
+  for (const set of sets) assert.ok(bus.some((l) => l.type !== 'symbol' && l.metadata.busKey === `busLines${set}`), `set ${set}`);
   for (const l of bus) {
-    assert.match(l.metadata.busKey, new RegExp(`^bus(Lines|Labels)(${sets.join('|')})$`));
-    assert.equal(l.metadata.busKey.startsWith('busLabels'), l.type === 'symbol');
-    const set = l.metadata.busKey.replace(/^bus(Lines|Labels)/, '');
-    const i = BUS_DRAWINGS.findIndex((d) => d.set === set);
+    // Showing or hiding a layer makes MapLibre parse its whole source again.
+    assert.equal(l.layout?.visibility, 'visible', `${l.id} visible`);
+    const set = setOf(l), i = BUS_DRAWINGS.findIndex((d) => d.set === set);
+    if (l.type === 'symbol') {
+      assert.equal(l.metadata?.busKey, undefined, `${l.id} labels are not faded`);
+      assert.equal(l.minzoom, i ? BUS_DRAWINGS[i].zoom : 0, `${l.id} from`);
+      assert.equal(l.maxzoom, BUS_DRAWINGS[i + 1]?.zoom ?? 24, `${l.id} to`);
+      continue;
+    }
+    assert.equal(l.metadata.busKey, `busLines${set}`);
     const from = BUS_DRAWINGS[i].zoom - (i ? BUS_HOLD : 0), to = BUS_DRAWINGS[i + 1]?.zoom ?? MAX_ZOOM;
-    assert.ok(l.minzoom <= from && l.maxzoom > to, `${l.id} range ${l.minzoom}-${l.maxzoom}`);
+    assert.ok(l.minzoom <= from - 0.5 && l.maxzoom > to, `${l.id} range ${l.minzoom}-${l.maxzoom}: loaded ahead of its handover`);
+    // Only the opening drawing starts seen; the rest wait at opacity 0, which MapLibre skips drawing.
+    for (const [k] of l.metadata.busPlain) assert.equal(l.paint[k] === 0, set !== '2', `${l.id} ${k}`);
   }
   // Each drawing between the sheets has a copy of every layer of the closer sheet, picked routes included.
   for (const [set, sheet] of [['13', '3'], ['15', '4']]) {

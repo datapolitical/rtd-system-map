@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#f5f3ef">
+  <meta name="color-scheme" content="light dark">
+  <!-- The theme is set before the first paint, so the page never flashes the other theme: the
+       address's ?theme=, else the theme last picked here or on the sheets (one saved choice for
+       both), else the phone's setting. -->
+  <script>(() => { const valid = (v) => v === 'light' || v === 'dark' ? v : null; let saved = null; try { saved = valid(localStorage.getItem('rtd-sheets-theme')); } catch {} const t = valid(new URLSearchParams(location.search).get('theme')) ?? saved ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); document.documentElement.dataset.theme = t; document.querySelector('meta[name=theme-color]').content = t === 'dark' ? '#0e141d' : '#f5f3ef'; })();</script>
   <title>Zoom preview · RTD system map</title>
   <link rel="stylesheet" href="../vendor/maplibre-gl.css">
   <link rel="stylesheet" href="../css/zoom.css">

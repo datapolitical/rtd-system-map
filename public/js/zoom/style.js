@@ -16,7 +16,23 @@ const kind = (value) => ['==', ['get', 'kind'], value];
 const round = { 'line-cap': 'round', 'line-join': 'round' };
 const empty = { type: 'FeatureCollection', features: [] };
 
-export function previewStyle(theme, metadata, bundle) {
+// Every font the style names, read from its layers' text-font (a font is a string with a space,
+// as 'Overpass SemiBold'; expression operators have none).
+function fontsOf(layers) {
+  const fonts = new Set();
+  const walk = (v) => {
+    if (!Array.isArray(v)) return;
+    if (v.length && v.every((x) => typeof x === 'string' && x.includes(' '))) v.forEach((x) => fonts.add(x));
+    else v.forEach(walk);
+  };
+  for (const l of layers) walk(l.layout?.['text-font']);
+  return [...fonts];
+}
+
+// `warmAt` is the opening centre: an unseen label there in each font, and in both character
+// ranges the names use, makes MapLibre fetch every font before the map is shown, rather than
+// partway through the first pinch (real iPhone run 2026-11-25).
+export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
   const original = sheetStyle(theme, metadata.stations, metadata.colors, new Set([2, 3, 4]), metadata.district, true);
   const c = PALETTES[theme];
   const size = (key, transform = (v) => v) => ['interpolate', ['linear'], ['zoom'], ...bundle.sizes[key].flatMap(([z, v]) => [z, transform(v)])];
@@ -55,11 +71,21 @@ export function previewStyle(theme, metadata, bundle) {
   for (const l of original.layers) {
     const set = l.source?.match(/^trial-bus-(\d+)/)?.[1] ?? busSet(l);
     if (!set) continue;
+    // Every bus layer stays visible: showing or hiding a layer makes MapLibre parse its whole
+    // source again, so at each whole zoom the new streets arrived late and the old faded out
+    // first, leaving the grid dim (real iPhone run 2026-11-25). Lines are faded by opacity
+    // alone, and their range starts a zoom early so their tiles are ready before the handover.
+    // Labels can't wait unseen (they would still take room from the labels on show), so each
+    // drawing's labels hold exactly its own zooms and change over at the whole zoom.
+    l.layout = { ...l.layout, visibility: 'visible' };
+    if (l.type === 'symbol') {
+      const i = BUS_DRAWINGS.findIndex((d) => d.set === set);
+      [l.minzoom, l.maxzoom] = [i === 0 ? 0 : BUS_DRAWINGS[i].zoom, BUS_DRAWINGS[i + 1]?.zoom ?? 24];
+      continue;
+    }
     [l.minzoom, l.maxzoom] = RANGES[set];
-    const part = l.type === 'symbol' ? 'Labels' : 'Lines';
-    const key = `bus${part}${set}`;
+    const key = `busLines${set}`;
     busState[key] = { default: set === '2' ? 1 : 0 };
-    l.layout = { ...l.layout, visibility: set === '2' ? 'visible' : 'none' };
     // A plain opacity is set directly by the page, with no transition of its own. An opacity
     // that already varies by feature is multiplied by global state instead.
     const plain = [];
@@ -71,7 +97,8 @@ export function previewStyle(theme, metadata, bundle) {
       if (k === 'text-opacity' && !l.layout['text-field']) continue;
       if (value === undefined || typeof value === 'number') {
         plain.push([k, value ?? 1]);
-        l.paint = { ...l.paint, [`${k}-transition`]: { duration: 0, delay: 0 } };
+        // Opacity 0 is a constant MapLibre skips drawing, so a drawing waiting unseen costs nothing.
+        l.paint = { ...l.paint, [k]: set === '2' ? value ?? 1 : 0, [`${k}-transition`]: { duration: 0, delay: 0 } };
       } else l.paint = { ...l.paint, [k]: ['*', value, ['global-state', key]] };
     }
     l.metadata = { ...l.metadata, busKey: key, busPlain: plain };
@@ -152,6 +179,10 @@ export function previewStyle(theme, metadata, bundle) {
   const pickedLayers = original.layers.filter((l) => /^pick-bus/.test(l.id));
   original.layers = original.layers.filter((l) => !/^pick-bus/.test(l.id));
   original.layers.push(...rails, ...pickedLayers, ...attached, ...labels);
+  const warm = fontsOf(original.layers).map((font, i) => ({ id: `trial-font-warm-${i}`, type: 'symbol', source: 'trial-font-warm',
+    layout: { 'text-field': 'a\u2013', 'text-font': [font], 'text-size': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
+    paint: { 'text-opacity': 0 } }));
+  original.layers.push(...warm);
   const busSources = Object.fromEntries(Object.entries(BETWEEN).flatMap(([set, sheet]) => [
     [`trial-bus-${set}`, { ...original.sources[`sheet-${sheet}`], data: busUrl(set) }],
     [`trial-bus-${set}-routes`, { ...original.sources[`routes-${sheet}`], data: busUrl(set, true) }]]));
@@ -160,5 +191,6 @@ export function previewStyle(theme, metadata, bundle) {
     'trial-rail': { type: 'geojson', data: bundle.rails, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-attached': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-labels': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
+    'trial-font-warm': { type: 'geojson', data: { type: 'FeatureCollection', features: warmAt ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: warmAt } }] : [] } },
   } };
 }
