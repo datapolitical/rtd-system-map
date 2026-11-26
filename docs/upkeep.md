@@ -11,7 +11,7 @@ RTD changes its schedules three times a year (January, May, and late August or
 September) and edits its map or republishes its feed now and then between.
 
 1. The hourly check on the build machine (`refresh/watch.mjs`, run by the
-   user timer in `refresh/systemd/`) asks RTD and the basemap whether anything
+   user timer in `refresh/systemd/`) asks RTD whether anything
    changed since the live site's data was built, and sends one phone alert
    naming what changed. It rebuilds nothing. `node refresh/watch.mjs --dry-run`
    shows what it would say.
@@ -30,6 +30,19 @@ September) and edits its map or republishes its feed now and then between.
    missing or the committed data was not made by the code going live. The
    live site then stays as it was.
 
+## When the basemap should be newer
+
+The basemap's tiles are the site's own (`basemap/`, DESIGN.md, "Data"),
+read out of OpenFreeMap's weekly planet build, so nothing changes under the
+live site when OpenFreeMap publishes. To bring in newer streets and places,
+in a worktree from main run `npm run build:basemap` (about 40 minutes: it
+reads the district's tiles one by one out of the planet file), then
+`npm run build:sheets` for new loading pictures. Commit `basemap/` with
+what `build:sheets` changes. A style change that draws a new ground layer,
+property or zoom needs it too: the basemap keeps only what the style draws,
+and the publish check fails when the style asks for a property the basemap
+left out.
+
 ## When the drawing code changes
 
 `npm run build:sheets` redraws the sheets, pictures and icons from the
@@ -43,7 +56,7 @@ locally gives the same answer Cloudflare's build will.
   the live map and fails on a console error, a failed request or a style
   error. A failure opens an issue labelled `found by checks`; the next pass
   closes it.
-- The hourly check above, for RTD's data and the basemap.
+- The hourly check above, for RTD's data.
 - The weekly round (refining.md, `qa/round/`), for how the map looks. Its
   files are in `~/.local/state/rtd-map-round/` of the account that runs it,
   one folder per week; `journalctl --user -u rtd-map-round` shows its runs.

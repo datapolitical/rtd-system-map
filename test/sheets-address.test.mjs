@@ -34,8 +34,8 @@ test("the address MapLibre wrote before still opens its view, and a bad one open
   assert.equal(readView('#12/39.7/-105/bus/15/0/0').pick?.route, '15', 'MapLibre bearing and pitch after it are ignored');
 });
 
-test("a route the sheet's data draws is found in its text, and one it doesn't isn't", () => {
-  const text = '{"features":[{"properties":{"kind":"rail","route":"W"}},{"properties":{"kind":"bus","routes":"0, 115, 15L"}}]}';
+test("a route the sheets draw is found, and one they don't isn't", () => {
+  const text = { rail: ['W'], bus: ['0', '115', '15L'] };
   assert.ok(drawsRoute(text, { mode: 'rail', route: 'W' }));
   assert.ok(!drawsRoute(text, { mode: 'rail', route: 'A' }));
   assert.ok(drawsRoute(text, { mode: 'bus', route: '0' }));
@@ -43,4 +43,5 @@ test("a route the sheet's data draws is found in its text, and one it doesn't is
   assert.ok(drawsRoute(text, { mode: 'bus', route: '15L' }));
   assert.ok(!drawsRoute(text, { mode: 'bus', route: '15' }), 'not part of 115 or 15L');
   assert.ok(!drawsRoute(text, { mode: 'bus', route: '1' }));
+  assert.ok(!drawsRoute(null, { mode: 'bus', route: '0' }), 'a build without the list keeps no pick');
 });

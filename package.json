@@ -5,10 +5,11 @@
   "description": "A clean, mobile-friendly map of the RTD transit system, built from RTD's public data.",
   "license": "Apache-2.0",
   "scripts": {
-    "postinstall": "node scripts/vendor.mjs",
-    "build": "node scripts/vendor.mjs && node scripts/publish-check.mjs",
-    "build:data": "node scripts/vendor.mjs && node scripts/build-data.mjs && node scripts/poster-build.mjs",
-    "build:sheets": "node scripts/vendor.mjs && node scripts/sheets.mjs && node scripts/poster-build.mjs",
+    "postinstall": "node scripts/vendor.mjs && node scripts/tiles.mjs",
+    "build": "node scripts/vendor.mjs && node scripts/tiles.mjs && node scripts/publish-check.mjs",
+    "build:data": "node scripts/vendor.mjs && node scripts/build-data.mjs && node scripts/tiles.mjs && node scripts/poster-build.mjs",
+    "build:sheets": "node scripts/vendor.mjs && node scripts/sheets.mjs && node scripts/tiles.mjs && node scripts/poster-build.mjs",
+    "build:basemap": "node scripts/basemap.mjs && node scripts/tiles.mjs",
     "sheets": "node scripts/sheets.mjs",
     "prototype:zoom": "node scripts/zoom-prototype.mjs",
     "check:zoom": "node qa/zoom-prototype.mjs",
@@ -40,7 +41,8 @@
     "@napi-rs/canvas": "1.1.0",
     "@playwright/test": "1.55.1",
     "fflate": "0.8.3",
-    "pbf": "5.1.2"
+    "pbf": "5.1.2",
+    "pmtiles": "4.5.0"
   },
   "dependencies": {
     "@fontsource-variable/overpass": "5.3.0",

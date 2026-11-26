@@ -1,14 +1,16 @@
 // The four sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
-import { SHEETS, OPENING, edge, sheetData, routesData, sheetStyle, PALETTES, GROUP, GROUP_INK, PLACE_SIZE, PLACE_MAJOR_RANK, expressInk, airportInk, shortStreet } from './style.js';
+import { SHEETS, OPENING, LOWEST, HIGHEST, edge, tilesUrl, TILE_LAYER, sheetStyle, PALETTES, GROUP, GROUP_INK, PLACE_SIZE, PLACE_MAJOR_RANK, expressInk, airportInk, shortStreet } from './style.js';
 import { pickFrom, pickCard, routeList } from './pick.js';
 import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
 import { routeName, sheetName, pickSaid, cardSaid, inkOn } from './say.js';
 import { clearPoint } from './view.js';
 
-// Start the map's worker downloading while the two small files below load.
+// Start the map's worker downloading while the two small files below load. With ?timing, the
+// worker carries a stopwatch (timing.js sets the address).
+if (window.timingWorker) maplibregl.setWorkerUrl(window.timingWorker);
 maplibregl.prewarm();
 // Room to list every file and tile the first visit fetches, for the offline cache (sw.js, below).
 performance.setResourceTimingBufferSize?.(2000);
@@ -21,7 +23,7 @@ const theme = () => root.dataset.theme ?? (scheme.matches ? 'dark' : 'light');
 const zooms = SHEETS.map((s) => s.zoom);
 
 // Both at once: neither needs the other (index.html has already asked for them).
-const [meta, { hub, stations, colors, drawing, district, frame: wholeFrame, groups: stopGroups = [] } = {}] = await Promise.all([
+const [meta, { hub, stations, colors, drawing, district, frame: wholeFrame, groups: stopGroups = [], lists = {}, routes: drawnRoutes = null } = {}] = await Promise.all([
   fetch(new URL('../../data/meta.json', import.meta.url)).then((r) => r.json()),
   fetch(new URL('../../data/sheets.json', import.meta.url)).then((r) => r.json()).catch(() => ({})),
 ]);
@@ -67,27 +69,9 @@ function stepsHeight() {
 }
 fitWhole();
 const start = nearest(asked?.zoom ?? zooms[OPENING]);
-const wanted = new Set([SHEETS[start].id]);
-// The route lines (style.js, routesData): only once a bus route is picked, or when the address picks one.
+// The picked bus route's lines (style.js, pick-bus): shown, and their tiles loaded, only once a bus
+// route is picked or the address picks one (#193).
 let routeLines = asked?.pick?.mode === 'bus';
-// Once every sheet is in, each sheet's route lines are fetched quietly, the sheet in view first, so
-// a first pick finds them on the phone. Only the bytes: the map reads a sheet's lines (the work on
-// the phone) only at a pick, from this copy. Not with Data Saver on.
-const routeCopies = new Map(); // sheet id -> object URL of its route lines
-const routesUrl = (id) => routeCopies.get(id) ?? routesData(id);
-let routesFetched = false;
-async function fetchRoutes() {
-  if (routesFetched || routeLines || !window.sheetsAll || navigator.connection?.saveData) return;
-  routesFetched = true;
-  const order = SHEETS.map((s, i) => [s.id, Math.abs(i - sheet)]).sort((a, b) => a[1] - b[1]);
-  for (const [id] of order) {
-    if (routeLines) return; // a pick has asked for them itself
-    try {
-      const r = await fetch(routesData(id), { priority: 'low' });
-      if (r.ok) routeCopies.set(id, URL.createObjectURL(await r.blob()));
-    } catch { return; } // no connection: a pick asks again
-  }
-}
 // The page opens on the hub, a little above the middle so the lines south of it show.
 const home = hub ? [hub[0], hub[1] - 0.035] : [(west + east) / 2, (south + north) / 2];
 let openingSteps = !asked;
@@ -109,12 +93,58 @@ function roomy() {
   return [[lon(x(w) - halfX), lat(y(s) + halfY)], [lon(x(e) + halfX), lat(y(n) - halfY)]];
 }
 
-// How far out and in the map goes; a step waiting for its tiles limits it less far (limits()).
-const LOWEST = zooms[0] - 0.6;
-const HIGHEST = zooms.at(-1) + 0.6;
+// The glyphs and tiles of the opening view, fetched by the page's head (index.html, early) as it
+// loads, are handed to the map here, so the first drawing doesn't wait for requests the map makes
+// only once it lays it out. Anything else is fetched here as it is asked for, by the page rather
+// than the map's worker, so the service worker sees it (sw.js). A tile the site doesn't have is
+// empty: the host answers a file it doesn't have with the front page.
+const isTile = (path) => path.startsWith('/tiles/');
+const notTile = (data) => new Uint8Array(data)[0] === 0x3c;
+maplibregl.addProtocol('early', async ({ url }, abort) => {
+  const plain = url.slice('early://'.length);
+  const path = new URL(plain).pathname;
+  const early = window.early?.[path];
+  if (early) {
+    delete window.early[path];
+    const data = await early;
+    if (data) return { data };
+  }
+  const response = await fetch(plain, { signal: abort.signal });
+  if (isTile(path) && !response.ok) return { data: new ArrayBuffer(0) };
+  if (!response.ok) throw new Error(`${response.status} ${plain}`);
+  const data = await response.arrayBuffer();
+  // The front page comes back with the tiles' own type (public/_headers): it is known by its "<".
+  return { data: isTile(path) && notTile(data) ? new ArrayBuffer(0) : data };
+});
+// `only`: the one sheet whose layers the map starts with (below, "The other sheets' layers").
+function mapStyle(t, only = null) {
+  const style = sheetStyle(t, stations, colors, { district, routeLines, lists });
+  for (const source of Object.values(style.sources)) if (source.tiles) source.tiles = source.tiles.map((u) => `early://${u}`);
+  const other = (l) => /^(sheet|routes)-\d+$/.test(l.source ?? '') && l.source.split('-')[1] !== String(only);
+  const layers = only === null ? style.layers : style.layers.filter((l) => !other(l));
+  return { ...style, layers, glyphs: `early://${style.glyphs}` };
+}
+// The other sheets' layers. The map starts with the ground's and the opening sheet's, a quarter of
+// the style's rules, which the phone reads twice before it draws (on the page and in each map
+// worker: on Chris's iPhone 66-139 ms in a worker, 2026-11-25). The rest go in when the opening
+// is drawn, in the style's own order, so every sheet is drawn as before. The tests check the style
+// against MapLibre's rules (test/pages.test.mjs), so the map doesn't check them again.
+function addOtherSheets() {
+  const all = mapStyle(theme()).layers;
+  let before;
+  for (let i = all.length - 1; i >= 0; i--) {
+    if (!map.getLayer(all[i].id)) map.style.addLayer(all[i], before, { validate: false });
+    before = all[i].id;
+  }
+  map._update(true);
+}
+
+// How far out and in the map goes (style.js, LOWEST and HIGHEST); a step waiting for its tiles
+// limits it less far (limits()).
 const map = new maplibregl.Map({
   container: 'map',
-  style: sheetStyle(theme(), stations, colors, wanted, district, routeLines),
+  style: mapStyle(theme(), SHEETS[start].id),
+  validateStyle: false,
   center: asked?.center ?? home,
   zoom: rests[start],
   minZoom: LOWEST,
@@ -131,6 +161,10 @@ const map = new maplibregl.Map({
   // Room in the cache for every sheet's tiles around the view (warm, below), as well as the
   // tiles of the places just looked at.
   maxTileCacheZoomLevels: 12,
+  // Each sheet's tiles are cut at one zoom (style.js, tileZooms) and drawn larger closer in, as the
+  // GeoJSON was. MapLibre would otherwise ask for tiles no more than 4 zooms short of the
+  // deepest zoom and cut them out of the sheet's own on the phone.
+  zoomLevelsToOverscale: undefined,
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
@@ -147,7 +181,7 @@ function changeTheme(next) {
   document.querySelector('meta[name="theme-color"]').content = PALETTES[next].ground;
   themeButtonState();
   reveal();
-  map.setStyle(sheetStyle(next, stations, colors, wanted, district, routeLines));
+  map.setStyle(mapStyle(next));
   map.once('styledata', () => setPick(picked));
 }
 themeButtonState();
@@ -185,51 +219,35 @@ function readerHasIt() {
 }
 for (const type of settleOn) addEventListener(type, readerHasIt, { capture: true, passive: true });
 
-// --- The other sheets, once the first is drawn ----------------------------------
-
-// Hand a sheet's drawing to the map, if it hasn't had it.
-function want(index) {
-  const s = SHEETS[index];
-  if (!s || wanted.has(s.id)) return;
-  wanted.add(s.id);
-  map.getSource(`sheet-${s.id}`)?.setData(sheetData(s.id));
-  if (routeLines) map.getSource(`routes-${s.id}`)?.setData(routesUrl(s.id));
-}
-// One at a time, nearest the sheet shown first, so each gets the whole connection and the one
-// the reader will reach next comes soonest. A zoom asks for its sheet straight away (show).
-function fillIn() {
-  const next = SHEETS.map((_, i) => i).filter((i) => !wanted.has(SHEETS[i].id)).sort((a, b) => Math.abs(a - sheet) - Math.abs(b - sheet))[0];
-  if (next === undefined) { window.sheetsAll = true; return; }
-  const id = `sheet-${SHEETS[next].id}`;
-  const done = (e) => {
-    if (e.sourceId !== id || !map.isSourceLoaded(id)) return;
-    map.off('sourcedata', done);
-    fillIn();
-  };
-  map.on('sourcedata', done);
-  want(next);
-}
-
 // --- The other sheets' tiles, before the reader steps ------------------------------
 
 // MapLibre makes a sheet's tiles only once the zoom reaches that sheet, so the first step to
 // each sheet showed bare ground for a moment (black in the dark theme) until they came. While
 // the map rests, every other sheet's tiles for this view are made and put in its cache, where
 // a step finds them. This reaches into MapLibre's tile managers: it has no way to ask for
-// another zoom's tiles. If they change, nothing breaks; the flash only comes back.
-const ready = new Set(wanted); // sheets whose drawing the map has, not the empty stand-in
-map.on('sourcedata', (e) => {
-  const n = Number(/^sheet-(\d+)$/.exec(e.sourceId ?? '')?.[1]);
-  if (e.sourceDataType !== 'content' || !wanted.has(n)) return;
-  ready.add(n);
-  tried.delete(map.style?.tileManagers?.[e.sourceId]); // new data empties the source's cache
-});
+// another zoom's tiles. If a MapLibre update takes away what it uses (canWarm), steps go at
+// once, as they would with plain MapLibre, and the flash comes back; without that check every
+// first step to a sheet would wait the whole HOLD_MS for tiles that never come.
+// test/maplibre-internals.test.mjs fails when an update renames them. Worth keeping: on mini,
+// 2026-11-26, a step 3 s after the map appeared showed 0 blank frames and finished in 0.79 s,
+// against about 13 of 20 frames blank and 1.02 s without it (DESIGN.md decision log).
 let tried = new WeakMap(); // tile manager -> tiles asked for while the map has rested here
 map.on('movestart', () => { tried = new WeakMap(); });
 // Any tile the map has made, for MapLibre's Tile and OverscaledTileID, which it does not export.
 function aTile() {
   const tm = map.style?.tileManagers?.ground;
-  return tm?.getTileByID(tm.getIds()[0] ?? '');
+  return tm?.getTileByID?.(tm.getIds?.()[0] ?? '');
+}
+// Whether MapLibre still has every part warm() and stepReady() reach into. Taken as yes until the
+// map has drawn, since a step waits for that anyway.
+function canWarm() {
+  if (!window.sheetsReady) return true;
+  const tm = map.style?.tileManagers?.ground;
+  const cache = tm?._outOfViewCache;
+  const tile = aTile();
+  return typeof tm?.getIds === 'function' && typeof tm.getTileByID === 'function' && typeof tm.getSource?.()?.loadTile === 'function'
+    && typeof cache?.has === 'function' && typeof cache.add === 'function'
+    && typeof tile?.tileID?.overscaleFactor === 'function' && typeof tile.hasData === 'function' && typeof tile.getExpiryTimeout === 'function';
 }
 // A step passes through every whole zoom between two sheets, and at each one the sheet whose
 // band it is in shows, drawn from that zoom's tiles: these are the tiles, the basemap's and
@@ -257,8 +275,7 @@ function warm(levels = held ? between(sheet, held.to) : stepLevels()) {
   // then. (Every zoom at once was about twice the work, all on the phone's main thread.)
   const here = map.getZoom();
   levels.sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
-  for (const { id, s, tm, source, tileID } of stepTiles(levels)) {
-    if (id !== 'ground' && !ready.has(s.id)) continue;
+  for (const { id, tm, source, tileID } of stepTiles(levels)) {
     if (!tried.has(tm)) tried.set(tm, new Set());
     if (tried.get(tm).has(tileID.key) || tm.getTileByID(tileID.key) || tm._outOfViewCache.has(tileID)) continue;
     tried.get(tm).add(tileID.key);
@@ -278,8 +295,7 @@ function stepReady(to) {
   if (to === sheet || !SHEETS[to]) return true;
   if (!window.sheetsReady) return false;
   let any = false;
-  for (const { id, s, tm, tileID } of stepTiles(between(sheet, to))) {
-    if (id !== 'ground' && !ready.has(s.id)) return false;
+  for (const { tm, tileID } of stepTiles(between(sheet, to))) {
     if (!tm.getTileByID(tileID.key)?.hasData() && !tm._outOfViewCache.has(tileID)) return false;
     any = true;
   }
@@ -318,7 +334,6 @@ map.on('idle', () => { if (window.sheetsReady) warm(); });
 // --- Resting only on a sheet -------------------------------------------------
 
 let sheet = nearest(map.getZoom());
-map.on('idle', fetchRoutes);
 function nearest(zoom) {
   return rests.reduce((best, z, i) => (Math.abs(z - zoom) < Math.abs(rests[best] - zoom) ? i : best), 0);
 }
@@ -357,13 +372,13 @@ let cameFrom = null;
 // Whether the whole district is as stepping out framed it: a turned phone frames it again.
 let framed = false;
 // `keep`: a link names this view's centre, so stepping to the whole district keeps it.
-function show(index, around, keep = false) {
+// `duration`: the move's length; none at the opening (below).
+function show(index, around, keep = false, duration = 380) {
   const was = sheet;
   sheet = Math.max(0, Math.min(zooms.length - 1, index));
   const dots = document.querySelector('#sheets');
   dots.setAttribute('aria-label', sheetName(sheet, zooms.length));
   if (sheet !== was) say(sheetName(sheet, zooms.length));
-  want(sheet);
   // A step goes the whole way: the limits a wait put on are for the reader's own zooms.
   if (sheet !== was) { map.setMinZoom(LOWEST); map.setMaxZoom(HIGHEST); }
   // Stepping out to the whole district shows all of it, wherever the reader was (#152).
@@ -376,7 +391,7 @@ function show(index, around, keep = false) {
   // The whole district's room is given before the move there, and taken back after the move off it.
   if (SHEETS[sheet].whole) map.setMaxBounds(roomy());
   else if (SHEETS[was]?.whole) map.once('moveend', () => { if (!SHEETS[sheet].whole) map.setMaxBounds(bounded); });
-  map.easeTo({ zoom: rests[sheet], ...(whole ? { center: frameCentre, offset: [0, -lift(rests[sheet])] } : back ? { center: back } : { around }), duration: 380 }, { settling: true });
+  map.easeTo({ zoom: rests[sheet], ...(whole ? { center: frameCentre, offset: [0, -lift(rests[sheet])] } : back ? { center: back } : { around }), duration }, { settling: true });
   for (const [i, dot] of [...document.querySelectorAll('#sheets i')].entries()) dot.classList.toggle('on', i === sheet);
   document.querySelector('#out').disabled = sheet === 0;
   document.querySelector('#in').disabled = sheet === zooms.length - 1;
@@ -391,9 +406,6 @@ map.getContainer().addEventListener('touchstart', () => { input = { touch: true 
 let last = map.getZoom();
 let began = null;
 map.on('zoomstart', (e) => {
-  // A pinch shows the next sheet before it ends: ask for the sheets either side now.
-  want(sheet - 1);
-  want(sheet + 1);
   if (!e.settling && began === null) began = last;
 });
 map.on('zoom', () => { last = map.getZoom(); });
@@ -445,7 +457,7 @@ const NO_HOLD = new URLSearchParams(location.search).get('hold') === 'off';
 function step(index, around) {
   const to = Math.max(0, Math.min(zooms.length - 1, index));
   if (to === sheet) return show(to, around); // back to the sheet shown: a wait goes on
-  if (NO_HOLD || givenUp === sheet || stepReady(to)) {
+  if (NO_HOLD || givenUp === sheet || !canWarm() || stepReady(to)) {
     held = null;
     waiting(false);
     return show(to, around);
@@ -454,7 +466,6 @@ function step(index, around) {
   hold({ to, around });
 }
 function hold(h) {
-  want(h.to);
   held = { ...h, since: held?.to === h.to ? held.since : performance.now() };
   waiting(true);
   watch();
@@ -462,7 +473,7 @@ function hold(h) {
 // Pinch, scroll or keyboard at the edge of the sheet's limits: a step like any other, which waits.
 function pushed(dir) {
   const to = sheet + dir;
-  if (held || !SHEETS[to] || givenUp === sheet || stepReady(to)) return;
+  if (held || !SHEETS[to] || givenUp === sheet || !canWarm() || stepReady(to)) return;
   const z = map.getZoom();
   if (dir > 0 ? z >= map.getMaxZoom() - 0.01 : z <= map.getMinZoom() + 0.01) hold({ to });
 }
@@ -484,7 +495,7 @@ map.getContainer().addEventListener('keydown', (e) => {
 // once the next sheet is ready; out, there is nothing to show past the sheet's own zoom.
 function limits() {
   const r = rests[sheet];
-  const loose = NO_HOLD || givenUp === sheet;
+  const loose = NO_HOLD || givenUp === sheet || !canWarm();
   const max = loose || stepReady(sheet + 1) ? HIGHEST : Math.min(edge(sheet), Math.floor(r) + 1) - 0.001;
   const min = loose || stepReady(sheet - 1) ? LOWEST : Math.max(edge(sheet - 1), Math.floor(r));
   // Drawn in only at rest on the sheet, so the map never jumps; let out at once.
@@ -509,22 +520,16 @@ function watch() {
         show(to, around);
       }
     }
-    if (!limits() && !held) { clearInterval(watching); watching = 0; fill(); }
+    if (!limits() && !held) { clearInterval(watching); watching = 0; }
   }, 150);
-}
-// The farther sheets (the closest is several times the size of the opening's) once a step
-// either way is ready, so they never hold one up on a slow connection; FILL_MS at the latest.
-const FILL_MS = 10000;
-let filling = false;
-function fill() {
-  if (filling) return;
-  filling = true;
-  fillIn();
 }
 map.on('idle', () => { if (window.sheetsReady && limits()) watch(); });
 map.on('movestart', (e) => { if (e.originalEvent) openingSteps = false; });
 map.on('dragstart', () => { if (SHEETS[sheet].whole) cameFrom = null; framed = false; });
-show(sheet);
+// The opening is already at its sheet's zoom: no move. A move, even to where the map is, keeps
+// MapLibre from calling the map ready until it ends, 380 ms after the page starts (on Chris's
+// iPhone, 2026-11-25, it held a reload's opening 120 ms after everything was drawn).
+show(sheet, undefined, false, 0);
 
 // --- What is this? Tap a line, a station or a stop --------------------------------
 // The card names what is under the finger; each route on it is a button, and picking one
@@ -537,14 +542,12 @@ let picked = null; // { mode: 'bus' | 'rail', route }
 let shown = null; // what the card names: { title, note, routes: [{ mode, route, color }] }
 let opener = null; // the button the card was opened from (the list, #135), where closing it returns
 let selectedAt = null;
-let pickRevision = 0;
 function setPick(p) {
-  pickRevision++;
   picked = p;
-  // A picked bus route is drawn from its sheets' route lines, asked for only now (#193).
+  // A picked bus route is drawn from its sheets' route lines, whose layers show only now (#193).
   if (p?.mode === 'bus' && !routeLines) {
     routeLines = true;
-    for (const id of wanted) map.getSource(`routes-${id}`)?.setData(routesUrl(id));
+    for (const l of map.getStyle().layers) if (l.source?.startsWith('routes-')) map.setLayoutProperty(l.id, 'visibility', 'visible');
   }
   map.setGlobalStateProperty('bus', p?.mode === 'bus' ? p.route : '');
   map.setGlobalStateProperty('rail', p?.mode === 'rail' ? p.route : '');
@@ -703,7 +706,7 @@ new ResizeObserver(keepVisible).observe(card);
 // Each line's colour, as the sheets draw it (a station lists its lines by letter only).
 const colorOf = new Map();
 map.on('idle', () => {
-  for (const f of map.querySourceFeatures(`sheet-${SHEETS[sheet].id}`, { filter: ['==', ['get', 'kind'], 'rail'] })) colorOf.set(f.properties.route, f.properties.color);
+  for (const f of map.querySourceFeatures(`sheet-${SHEETS[sheet].id}`, { sourceLayer: TILE_LAYER, filter: ['==', ['get', 'kind'], 'rail'] })) colorOf.set(f.properties.route, f.properties.color);
 });
 const rails = (list) => list.map((route) => ({ mode: 'rail', route, color: colorOf.get(route) ?? '#888888' }));
 const buses = (text) => routeList(text).map((route) => ({ mode: 'bus', route }));
@@ -1027,14 +1030,10 @@ function openCard(p, { framed = false } = {}) {
   if (p.mode === 'rail' && !colorOf.has(p.route)) map.once('idle', () => routeEntry(p).then(fill));
 }
 // A picked route the address names is set once the map has its style, and kept only if the
-// sheets still draw it: an old link to a route RTD has dropped opens on the plain map. Sheet 2
-// draws every route; its file is read as text, not parsed, from the browser's cache.
-let routeText;
-async function applyAddressPick(p) {
-  const revision = ++pickRevision;
-  const text = p ? await (routeText ??= fetch(sheetData(2)).then((r) => r.ok ? r.text() : '').catch(() => '')) : '';
-  if (revision !== pickRevision) return; // a later address or a reader's choice wins
-  if (p && drawsRoute(text, p)) {
+// sheets still draw it (sheets.json, routes): an old link to a route RTD has dropped opens on the
+// plain map.
+function applyAddressPick(p) {
+  if (p && drawsRoute(drawnRoutes, p)) {
     setPick(p);
     openCard(p, { framed: true });
   } else {
@@ -1060,41 +1059,24 @@ for (const button of document.querySelectorAll('#steps button')) button.addEvent
 // A pinch, drag or double tap reaches the map through the picture (index.html), and moves it.
 map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 
-// The opening view is drawn. The sheets either side of it come at once (the map's worker reads
-// them, off the main thread), so an early step finds its drawing. The rest of what the page does
-// for later (the farther sheets (fill), the offline copy) waits until the reader first touches
-// the page, or until the opening has been on the screen for SETTLE_MS, so none of it competes
-// with the opening view on a slow phone (DESIGN.md, "Quality floor"). The tiles of a step to
-// either side (warm) come at once, with the sheets they draw. A step to another sheet before
-// then asks for that sheet itself (show). sheetsAll is set once every sheet is in.
-map.once('idle', () => { window.sheetsReady = true; reveal(); want(sheet - 1); want(sheet + 1); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
-whenSettled(() => setTimeout(fill, FILL_MS));
+// The opening view is drawn. The tiles of a step to either side (warm) come at once: every sheet's
+// tiles are there to read, cut when the site was published, so no sheet waits to be handed to the
+// map (sheetsAll, which the checks wait for, is set with sheetsReady). The rest of what the page
+// does for later (the offline copy) waits until the reader first touches the page, or until the
+// opening has been on the screen for SETTLE_MS, so none of it competes with the opening view on a
+// slow phone (DESIGN.md, "Quality floor").
+map.once('idle', () => { addOtherSheets(); window.sheetsReady = true; window.sheetsAll = true; reveal(); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
 
 // --- Offline (sw.js) ------------------------------------------------------------------
 // Asked for only once the opening view is drawn and the reader has it (whenSettled), so it
 // never slows it (DESIGN.md, "Quality floor"). On the first visit the files already fetched
 // are handed to it to keep; from then on it sees every request itself.
 //
-// Not quite every request on that first visit: the map's drawing worker was started before the
-// service worker existed, so what it fetches (each sheet's drawing and the basemap's tiles) never
-// passes through the service worker, and the page's list of what it fetched doesn't hold it
-// either (#133). So the page names those itself: every sheet's drawing, and the basemap tiles
-// of each sheet around every view the map rests at, until the visit ends.
+// Every tile, the sheets' and the ground's, is fetched by the page itself (the "early" protocol,
+// above), so the page's list of what it fetched holds them, and once the service worker has the
+// page it sees them itself. What is kept is what was looked at: every sheet's tiles around each
+// view the map rests at (warm makes the neighbouring sheets'), as the ground's always were.
 const firstVisit = 'serviceWorker' in navigator && !navigator.serviceWorker.controller;
-// The basemap tiles every sheet draws this view from: the ones in view and the ones warm() makes.
-function groundTiles() {
-  const source = map.getSource('ground');
-  const template = source?.tiles?.[0];
-  if (!template) return [];
-  const urls = new Set();
-  const add = (z, x, y) => urls.add(template.replace('{z}', z).replace('{x}', x).replace('{y}', y));
-  for (const key of map.style?.tileManagers?.ground?.getIds() ?? []) {
-    const c = map.style.tileManagers.ground.getTileByID(key)?.tileID?.canonical;
-    if (c) add(c.z, c.x, c.y);
-  }
-  for (const t of stepLevels()) for (const [, z, x, y] of cover(source, t)) add(z, x, y);
-  return [...urls];
-}
 if ('serviceWorker' in navigator) {
   whenSettled(async () => {
     try {
@@ -1107,11 +1089,13 @@ if ('serviceWorker' in navigator) {
         sent = entries.length;
         reg.active?.postMessage({ type: 'keep', urls });
       };
-      hand(firstVisit ? [...SHEETS.flatMap((s) => [sheetData(s.id), routesData(s.id)]), new URL('../../data/directory.json', import.meta.url).href, ...groundTiles()] : []);
+      hand(firstVisit ? [new URL('../../data/directory.json', import.meta.url).href] : []);
       // What came in between, until the worker sees requests itself.
-      if (!navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', () => hand(), { once: true });
-      // The drawing worker never comes under it on this visit, so the tiles of each new view are named too.
-      if (firstVisit) map.on('idle', () => hand(groundTiles()));
+      if (!navigator.serviceWorker.controller) {
+        const more = () => hand();
+        map.on('idle', more);
+        navigator.serviceWorker.addEventListener('controllerchange', () => { map.off('idle', more); hand(); }, { once: true });
+      }
     } catch { /* no offline copy: the page works as before */ }
   });
 }

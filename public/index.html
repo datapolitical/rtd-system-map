@@ -2,6 +2,67 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- The map's drawing programs, built in a worker while the page downloads. Building them is the
+     graphics chip's work, and on a phone that had never opened the map it blocked the page about
+     600 ms when MapLibre did it at its first draw. The programs are the map's own, recorded from
+     it when the site is built (scripts/poster.mjs, data/programs.json); if they ever differ from
+     what MapLibre asks for, MapLibre builds its own as before (DESIGN.md, 2026-11-26). The worker
+     is made from this text, not a file of its own, so it starts without a round trip. -->
+<script>
+  if (typeof OffscreenCanvas === 'function') {
+    const warm = async (site) => {
+      const at = () => performance.timeOrigin + performance.now();
+      const start = at();
+      let built = 0;
+      try {
+        const { programs } = await (await fetch(`${site}/data/programs.json`)).json();
+        const gl = new OffscreenCanvas(1, 1).getContext('webgl2');
+        // In the background (KHR_parallel_shader_compile) and never waited on: waiting for each in
+        // turn kept the phone's graphics process busy, and the map's first GL call waited for all
+        // of it (iPhone 17 Pro in Device Farm, 2026-11-26).
+        const parallel = gl?.getExtension('KHR_parallel_shader_compile');
+        if (gl && parallel) {
+          const made = programs.map(({ vertex, fragment }) => {
+            const p = gl.createProgram();
+            for (const [type, text] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
+              const s = gl.createShader(type);
+              gl.shaderSource(s, text);
+              gl.compileShader(s);
+              gl.attachShader(p, s);
+            }
+            gl.linkProgram(p);
+            return p;
+          });
+          // Asked only whether each is done, which doesn't wait; the link status once all are.
+          await new Promise((done) => {
+            const poll = () => (made.every((p) => gl.getProgramParameter(p, parallel.COMPLETION_STATUS_KHR)) ? done() : setTimeout(poll, 25));
+            poll();
+          });
+          built = made.filter((p) => gl.getProgramParameter(p, gl.LINK_STATUS)).length;
+          gl.getExtension('WEBGL_lose_context')?.loseContext();
+        }
+      } catch {}
+      postMessage({ built, start, end: at() });
+    };
+    try {
+      const worker = new Worker(URL.createObjectURL(new Blob([`(${warm})(${JSON.stringify(location.origin)})`], { type: 'text/javascript' })));
+      worker.onmessage = ({ data }) => {
+        const ms = (t) => Math.round(t - performance.timeOrigin);
+        window.warmed = `${data.built} programs, ${ms(data.start)}–${ms(data.end)}`;
+        worker.terminate();
+      };
+    } catch {}
+  }
+</script>
+<!-- The opening view's glyphs are fetched here and handed to the map (main.js, "early"), not
+     preloaded: on an iPhone Safari appeared to fetch the preloads again when the map asked, and
+     the opening view waited for them more than for anything else (DESIGN.md, 2026-11-25). -->
+<script>
+  window.early = Object.fromEntries(['Overpass Medium', 'Overpass SemiBold', 'Overpass ExtraBold'].map((font) => {
+    const path = `/vendor/glyphs/${encodeURIComponent(font)}/0-255.pbf`;
+    return [path, fetch(path).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)];
+  }));
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>RTD system map</title>
@@ -19,7 +80,7 @@
 <meta property="og:title" content="RTD system map">
 <meta property="og:description" content="An easy-to-read map of RTD bus and rail service in the Denver region, showing how often each route runs.">
 <meta property="og:url" content="https://map.chrisfnicholson.com/">
-<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=10dafd9ad1">
+<meta property="og:image" content="https://map.chrisfnicholson.com/og.png?v=c5047cefbd">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -52,8 +113,8 @@
 <!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the loading picture. -->
 <link rel="stylesheet" href="/vendor/maplibre-gl.css" media="print" onload="this.media='all'">
 <!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
-     for the one that names it (DESIGN.md, "Quality floor"). The sheet and the glyphs are fetched
-     by the map's worker, which finds them in the browser's cache. -->
+     for the one that names it (DESIGN.md, "Quality floor"). Its tiles are fetched by the script
+     after the loading picture, which knows the view. -->
 <link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
 <link rel="modulepreload" href="/js/sheets/style.js">
 <link rel="modulepreload" href="/js/sheets/settle.js">
@@ -61,14 +122,11 @@
 <link rel="modulepreload" href="/js/sheets/address.js">
 <link rel="modulepreload" href="/js/sheets/say.js">
 <link rel="modulepreload" href="/js/sheets/view.js">
+<!-- Named by style.js and pick.js, so without these they waited for those files to arrive first. -->
+<link rel="modulepreload" href="/js/color.js">
+<link rel="modulepreload" href="/js/often.js">
 <link rel="preload" href="/data/meta.json" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="/data/sheets.json" as="fetch" crossorigin="anonymous">
-<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
-<link rel="preload" href="https://tiles.openfreemap.org/planet" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="/data/sheet-1.geojson" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="/vendor/glyphs/Overpass%20Medium/0-255.pbf" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="/vendor/glyphs/Overpass%20SemiBold/0-255.pbf" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="/vendor/glyphs/Overpass%20ExtraBold/0-255.pbf" as="fetch" crossorigin="anonymous">
 <!-- The font early too: the loading line is set in it, and a block-display font shows nothing until it arrives. -->
 <link rel="preload" href="/vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
@@ -196,7 +254,7 @@
 <button id="key" type="button" class="off" aria-hidden="true" tabindex="-1"></button>
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
-<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="f211870470f869716c933ff1e24b804c0b72c6914ed8872daf3f9a96f0a9c8c1" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="203e4506498fa9042c3a60fb7b0a19c9567026d3db7d7a56b5d3a2e7252fa9f9" data-ground="20261122_124456_pt" data-early="{&quot;ground&quot;:10,&quot;sheet-1&quot;:9}">
   <picture>
     <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
     <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">
@@ -240,15 +298,42 @@
     // A deployment rebuilds the drawing from current data. An older screenshot must
     // never flash before a different drawing, even if its centre is unchanged.
     const json = (url) => fetch(url).then((r) => r.ok ? r.json() : null);
-    const matches = poster.dataset.source ? Promise.all([json('/data/sheets.json'), json(poster.dataset.source)])
-      .then(([s, ground]) => Boolean(s?.drawing && s.drawing === poster.dataset.drawing &&
-        JSON.stringify(ground?.tiles) === poster.dataset.tiles)).catch(() => false) : Promise.resolve(false);
+    // The ground is the site's own, published with the drawing (publish-check: data-ground).
+    const matches = json('/data/sheets.json').then((s) => Boolean(s?.drawing && s.drawing === poster.dataset.drawing)).catch(() => false);
     const whole = async () => {
       if (await matches) img.classList.add('whole');
       else img.closest('picture')?.remove();
     };
     if (img.complete && img.naturalWidth) whole();
     else img.addEventListener('load', whole);
+  })();
+</script>
+<script>
+  // The opening view's tiles, fetched now and handed to the map as it asks for them (main.js,
+  // "early"): each tile set it draws the view from, at the zoom of its tiles there (data-early,
+  // which scripts/poster.mjs read off the map), for this screen. Not for a view a link names.
+  (() => {
+    const poster = document.getElementById('poster');
+    const [z, lat, lon] = poster.dataset.view.split('/').map(Number);
+    if (location.hash.length > 1 || !Number.isFinite(lon)) return;
+    const early = (window.early ??= {});
+    for (const [name, tz] of Object.entries(JSON.parse(poster.dataset.early || '{}'))) {
+      const n = 2 ** tz;
+      const size = (512 * 2 ** z) / n; // a tile's width on the screen
+      const cx = ((lon + 180) / 360) * n;
+      const cy = ((1 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / Math.PI) / 2) * n;
+      for (let x = Math.floor(cx - innerWidth / 2 / size); x <= Math.floor(cx + innerWidth / 2 / size); x++) {
+        for (let y = Math.floor(cy - innerHeight / 2 / size); y <= Math.floor(cy + innerHeight / 2 / size); y++) {
+          const path = `/tiles/${name}/${tz}/${x}/${y}.pbf`;
+          // A tile the site doesn't have is empty: the host answers it with the front page.
+          // It comes back with the tiles' own type (_headers), so it is known by its "<".
+          early[path] = fetch(path).then(async (r) => {
+            const data = r.ok ? await r.arrayBuffer() : new ArrayBuffer(0);
+            return new Uint8Array(data)[0] === 0x3c ? new ArrayBuffer(0) : data;
+          }, () => null);
+        }
+      }
+    }
   })();
 </script>
 <div id="steps" role="group" aria-label="Map sheet">

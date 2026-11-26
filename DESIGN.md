@@ -522,7 +522,12 @@ All data is public. The network, its schedules and its live trains come from
 RTD. Two things come from OpenStreetMap:
 
 - **The basemap** (streets, water, parks, place names), as OpenFreeMap's
-  vector tiles, read by the page ("Basemap").
+  vector tiles, served by the site itself ("Basemap"). `npm run build:basemap`
+  reads the district's tiles out of OpenFreeMap's weekly planet file (one
+  PMTiles file anyone may download, read by range requests rather than tile by
+  tile from its tile server), keeps only what the style draws at each zoom,
+  and writes them gzipped to `basemap/` (about 34 MB, committed). It runs by
+  hand, like the RTD data; every build unpacks it into `public/tiles/ground/`.
 - **The shapes of stations**, read by the build from OpenStreetMap's map API
   (`api.openstreetmap.org/api/0.6/map`, a box around each station): rail
   platforms, the canopies over them and station buildings
@@ -2007,7 +2012,9 @@ Weights 400, 600 and 800, tabular numerals. Scale: 13, 15, 17, 22, 28 px.
 The site serves the font itself (from the `@fontsource-variable/overpass`
 package), with no request to Google. Map labels use Overpass too: the build
 generates MapLibre glyph files from the same font (`scripts/glyphs.mjs`), so
-the map and the interface share one typeface.
+the map and the interface share one typeface. Of general punctuation they
+hold only what a label can use (spaces, dashes, quotes, the bullet, the
+ellipsis and a few more); the canvas would draw the rest from another font.
 
 **Route bullets:** rail lines are a circle with the letter; bus routes are a
 pill, a rounded rectangle filled in the tier's color for routes every 30
@@ -3140,16 +3147,25 @@ are deferred, not ruled out. See "Open questions".
   - The schedule summary loads after the map first draws, and a route's
     timetable only when its panel opens. Live feeds are fetched only while
     Live is on (or a stop panel is open) and the tab is visible.
-  - The sheets page (the front page) loads only the sheet it opens on. The
-    two next to it follow as soon as that view is drawn (the map's worker
-    reads them, off the main thread), and the rest one at a time, nearest
-    first, once a step either way from that view is ready (below), or 10
-    seconds after the reader first touches the page or that view has been
-    drawn for 5 seconds; a zoom asks for its sheet straight away.
-    Its HTML asks at once for the modules, `meta.json`, `sheets.json`, the
-    opening sheet, the tile index and the glyphs the opening view letters
-    with; the glyphs are served as protobuf so Cloudflare compresses them
-    (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
+  - The sheets are cut into vector tiles when the site is published
+    (`scripts/tiles.mjs`, `public/tiles/sheet-N/`), by the same library and
+    options MapLibre used to cut their GeoJSON on the phone, so the drawing
+    is the same to the pixel and the phone only reads tiles: no sheet's
+    whole file is downloaded, parsed and indexed (sheet 4's was 4.85 MB).
+    Each sheet has tiles only at the zoom it is drawn from. A list in a
+    feature (a label's offset) can't go in a tile, so it goes in as its
+    text and the style looks it up in `sheets.json` (`lists`). An address
+    naming a route checks it against the routes `sheets.json` lists.
+    Every tile, the sheets' and the ground's, comes from the site itself and
+    is fetched by the page (`addProtocol`), so the service worker sees it.
+    Its HTML asks at once for the modules, `meta.json` and `sheets.json`,
+    and a script in its head fetches the opening view's tiles, which the
+    poster names (`data-early`), before the map is made. The glyphs the opening view letters
+    with are fetched by a script at the top of its head and handed to the
+    map (`addProtocol`), not preloaded: on an iPhone Safari appeared to fetch
+    the preloaded glyphs again when the map asked, so they came last and the
+    opening view waited for them. The glyphs are served as protobuf so
+    Cloudflare compresses them (`public/_headers`). Measured 2026-11-12 on slow 4G (390 px phone, 4x
     CPU): drawn at 5.9 s, was 8.9 s; opening view settled at 6.5 s, was 12 s.
   - Once a sheets view is at rest (from the opening on), the page loads the neighbouring sheets' tiles for that view, and the
     tiles of each whole zoom between them, into MapLibre's cache (nearest
@@ -3175,21 +3191,19 @@ are deferred, not ruled out. See "Open questions".
     values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
   - MapLibre's stylesheet doesn't hold up the first paint: the page uses
     none of its controls, and the picture covers the map until it is drawn.
-  - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are a
-    file of their own, `sheet-N-routes.geojson`, asked for at the first pick, or at the opening when
-    the address picks a bus route (#193). They were about 40% of every sheet's bytes: the opening
-    sheet went from about 92 to 51 KB sent, sheet 4 from about 1.09 MB to 0.68 MB. The offline copy
-    still keeps them, so a pick works with no signal.
+  - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are tiles
+    of their own, `routes-N`, whose layers show from the first pick, or at the opening when the
+    address picks a bus route (#193). They were about 40% of every sheet's bytes.
   - While it loads, the sheets page shows a picture of the view it opens on,
     with a "Loading…" line over it, and fades to the map once the map has
     drawn that view (or at once, if a button is pressed first). The pictures
     (`public/poster/`, one per theme for a phone and for a wider screen, about
     60 to 150 KB each) are taken by `scripts/poster.mjs` at the end of every
     build, from the site just built (`scripts/poster-build.mjs`), so they go
-    live with the drawing they show. The hourly check alerts when the basemap
-    has a new tile build; `npm run build:sheets` then takes new pictures. A fingerprint of the opening drawing
+    live with the drawing they show. A fingerprint of the opening drawing
     and its rendering code is captured with the pictures, along with the
-    basemap tile version. The picture stays
+    planet build the basemap is from (`data-ground`); the publish check fails
+    if that is not the committed basemap's. The picture stays
     hidden unless its fingerprint matches the current `sheets.json`; a stale
     picture cannot jump to a different drawing. The page centres the picture as the map is centred, and shifts it as the
     map's bounds shift the view on a very wide screen. A link to another view,
@@ -3203,22 +3217,28 @@ are deferred, not ruled out. See "Open questions".
 - **Offline:** after the first visit, a service worker keeps the page, the
   map data, and the schedule, so the full map, other times, and scheduled
   departures work with no signal (underground at Union Station, say). Live
-  says it's offline. Basemap tiles already seen are kept up to a size cap.
+  says it's offline. Tiles already seen are kept up to a size cap.
   This is dependable only once the site is on the Home Screen, where
   Safari's seven-day deletion of a site's storage does not apply (see
   "Installed on a phone").
   The sheets page has this from v1.0 (`public/sw.js`, #14): its page,
-  scripts, styles, font, glyphs, route directory and the four sheets' data go
+  scripts, styles, font, glyphs, route directory and tiles go
   to the network first. A failure or 2.5-second stall uses a saved copy;
   a slow successful response still refreshes it for the next visit. A new deploy
   reaches everyone online on their next load and nobody is held on an old
   version (a cache-first copy with versioned names would need a build step to
   name every file, and would show the old version once after each deploy).
-  Basemap tiles are cache-first, since their addresses name the tile build,
-  up to 3000 tiles, oldest dropped first. The worker is registered only after
+  Tiles (each sheet's, its route lines' and the ground's) are kept up to
+  3000, oldest dropped first: offline, the map draws the places already
+  looked at, and at rest the page loads the neighbouring sheets' tiles for
+  that view, so each place looked at is kept at every sheet near it. Until
+  2026-11-25 every sheet's whole drawing was kept, so the drawing worked
+  anywhere offline over bare ground; now the drawing and the ground go
+  together. The worker is registered only after
   the opening view is drawn and the reader has it (the first touch, or 5
   seconds), so it never slows the first load; the files that
-  load fetched are handed to it then. Navigation preload keeps it from
+  load fetched are handed to it then, and those each later rest fetches
+  until it takes over. Navigation preload keeps it from
   delaying later loads. The Live relay and other pages are never touched.
 - **Accessibility:** WCAG AA contrast for text, visible keyboard focus, every
   action reachable by keyboard, motion reduced when the user prefers it, and
@@ -5530,6 +5550,59 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   were the FreeRide and the MetroRide on the whole-district sheet, each
   drawn whole as one 8 px dash, with nothing for it to be left over from.
   Chris said go.
+- 2026-11-25: The opening view's glyphs are fetched by the page's head and
+  handed to the map, not preloaded, and the punctuation glyph files hold
+  only what a label can use (about 10 KB sent to about 2 KB each). Reason:
+  on Chris's iPhone the opening view was ready within 70 ms of the glyphs
+  arriving in each of four runs, and they arrived last: the timing readout
+  showed seven glyph and font requests where Chrome makes four, which reads
+  as Safari fetching the preloaded files again when the map asked. The drawing is
+  unchanged to the pixel (5 zooms, both themes).
+- 2026-11-25: The sheets are cut into vector tiles when the site is
+  published, not sent whole for the phone to cut, and the basemap's tiles
+  are the site's own (`basemap/`, from OpenFreeMap's planet file, trimmed to
+  what the style draws), not fetched from OpenFreeMap's tile server.
+  Offline, the page keeps the tiles of places looked at instead of every
+  sheet's whole drawing. Reason: on Chris's iPhone the opening waited on
+  the phone parsing and cutting the opening sheet and on a second
+  connection for the ground, and every sheet's whole file was downloaded
+  in the background (sheet 4's 4.85 MB). Chris: "Don't we also want to
+  serve the base map ourselves?" and "Yes, let's do that."
+- 2026-11-25: The map starts with the opening sheet's layers only and adds
+  the other sheets' layers once it is first ready, and the opening sets its
+  sheet without a move. Reason: the timing readout's map-worker rows on
+  Chris's iPhone showed each worker reading the whole style, two-thirds of
+  it for sheets not in view (37 to 158 ms a worker), and the opening's
+  380 ms move to the zoom the map was already at kept MapLibre from calling
+  the map ready until it ended (a reload ready at 785 ms, drawn by 664).
+  The drawing is unchanged to the pixel at 18 views in both themes, and a
+  step through every sheet gives the same layers in the same order.
+  Chris said go.
+- 2026-11-26: The page head builds the map's drawing programs in a worker
+  (OffscreenCanvas, KHR_parallel_shader_compile) while the map downloads,
+  from the programs recorded from the map when the pictures are taken
+  (public/data/programs.json, kept in the offline copy; the publish check fails if they are from
+  another drawing or MapLibre). The head also asks at once for color.js and
+  often.js. Reason: on iPhone 17 Pros in AWS Device Farm that had never
+  opened the map, MapLibre building its ten programs at its first draw
+  blocked the page about 600 ms (Chris's own phone keeps them, so his runs
+  never showed it); with the worker, the time from the code arriving to a
+  live map fell from 864 and 941 ms to 586 to 655 ms in four runs, and
+  reloads are unchanged. Waiting on each program in the worker held up the
+  map's own first GL call and saved nothing, so the worker never waits on
+  them. Chris: find "what is causing it to be slower than it needs to be".
+- 2026-11-26: Steps keep making the other sheets' tiles ahead (main.js warm(),
+  which reaches into MapLibre's tile managers), and now go at once if a
+  MapLibre update takes away what it uses (canWarm). Reason: asked whether it
+  is worth what it costs a future maintainer, Chris had it measured. In 24
+  first visits on mini (headless, emulated 9 Mbps phone connection,
+  alternating), a step 3 s after the map appeared showed 0 blank frames and
+  finished in 0.79 s with it, against 11 to 15 of about 20 frames blank and
+  1.02 s without. A tap the moment the map appears waits about 1 s and
+  finishes later (1.75 s against 0.98 s), but with no blank frames. With the
+  internals renamed and no check, the step waited the whole 8 s cap before
+  going; test/maplibre-internals.test.mjs now fails when an update renames
+  them. Chris: "Do the second one" (measure it before deciding).
 - 2026-11-25: Zoom trial (#154): the opening shows in one step, the rail
   drawing hands over at once, MapLibre's label fade is off as on the sheets,
   bus layers stay visible and fade their lines by opacity, and a station's

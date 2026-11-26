@@ -123,7 +123,7 @@ for (const theme of ['light', 'dark']) {
   await page.waitForTimeout(3000);
   const group = await page.evaluate(async () => {
     const map = window.sheetsMap;
-    const f = map.querySourceFeatures('sheet-4', { filter: ['has', 'groups'] })[0];
+    const f = map.querySourceFeatures('sheet-4', { sourceLayer: '_geojsonTileLayer', filter: ['has', 'groups'] })[0];
     if (!f) return null;
     const g = f.geometry;
     map.jumpTo({ center: g.type === 'MultiLineString' ? g.coordinates[0][0] : g.coordinates[0] });

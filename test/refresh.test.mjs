@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { whatChanged, groundChanged } from '../refresh/check.mjs';
+import { whatChanged } from '../refresh/check.mjs';
 
 const meta = {
   built: '2026-11-06T20:00:00Z',
@@ -51,13 +51,4 @@ test('a source that cannot be read is reported, not rebuilt on', async () => {
   const out = await whatChanged(meta, rtd({ 'https://arcgis.example/FeatureServer/4?f=json': new Error('HTTP 503') }));
   assert.deepEqual(out.changes, []);
   assert.deepEqual(out.problems, ['routes layer: could not check (HTTP 503)']);
-});
-
-test('a new basemap tile build rebuilds the site, once the pictures matched their drawing', async () => {
-  const page = (drawing) => `<div id="poster" data-view="10/1/2" data-drawing="${drawing}" data-source="https://tiles.example/planet" data-tiles="[&quot;https://tiles.example/planet/old/{z}/{x}/{y}.pbf&quot;]">`;
-  const tiles = (build) => ({ getJson: async () => ({ tiles: [`https://tiles.example/planet/${build}/{z}/{x}/{y}.pbf`] }) });
-  assert.equal(await groundChanged(page('d1'), { drawing: 'd1' }, tiles('old')), null, 'same tiles: no rebuild');
-  assert.match(await groundChanged(page('d1'), { drawing: 'd1' }, tiles('new')), /^basemap: new tiles/);
-  assert.equal(await groundChanged(page('d0'), { drawing: 'd1' }, tiles('new')), null, 'pictures that failed in the last build: no hourly rebuilds');
-  assert.equal(await groundChanged(page('d1'), { drawing: 'd1' }, { getJson: async () => { throw new Error('down'); } }), null, 'tile index unreadable: no rebuild');
 });

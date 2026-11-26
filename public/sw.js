@@ -1,27 +1,26 @@
 // The sheets page offline (DESIGN.md, "Quality floor", Offline; issue #14). After one visit the
 // page opens with no connection: its own files from the last time they were fetched, and the
-// basemap tiles of the places looked at.
+// tiles (each sheet's and the ground's) of the places looked at.
 //
-// The page's own files go to the network first and to this cache only when the network fails, so
-// a new deploy reaches everyone online on their next load and nobody is held on an old version.
-// The basemap's tiles go to this cache first: their addresses name the tile build they belong to
-// (the tile index at /planet, fetched network-first, names the current one), so a cached tile is
-// never out of date. Anything else, the Live relay among it, is never touched here.
+// Everything goes to the network first and to this cache only when the network fails, so a new
+// deploy reaches everyone online on their next load and nobody is held on an old version. The
+// tiles are kept apart, so there is a limit to how many. Anything else, the Live relay among it,
+// is never touched here.
 
-const PAGE = 'sheets-page-v1';
-const TILES = 'sheets-tiles-v1';
-const TILE_CAP = 3000; // about 100 MB at the most; the oldest go first
+// v1 also held each sheet's whole drawing, which the page no longer reads: a new name lets it go.
+const PAGE = 'sheets-page-v2';
+// v1 held OpenFreeMap's tiles, before the site served its own: a new name lets it go.
+const TILES = 'sheets-tiles-v2';
+const TILE_CAP = 3000; // about 30 MB at the most; the oldest go first
 const NETWORK_WAIT_MS = 2500;
 
 // The sheets page and what it fetches. Other pages (the classic map) are left to the network.
-const OWN = /^\/(?:|index\.html|js\/.+|vendor\/.+|data\/(?:meta\.json|sheets\.json|directory\.json|sheet-\d+(?:-routes)?\.geojson)|poster\/.+)$/;
-const TILE_HOST = 'tiles.openfreemap.org';
-const TILE = /^\/planet\/[^/]+\/\d+\/\d+\/\d+\.pbf$/;
+const OWN = /^\/(?:|index\.html|js\/.+|vendor\/.+|data\/(?:meta\.json|sheets\.json|directory\.json|programs\.json)|poster\/.+)$/;
+const TILE = /^\/tiles\/[\w-]+\/\d+\/\d+\/\d+\.pbf$/;
 
 const kind = (url) => {
-  if (url.origin === location.origin) return OWN.test(url.pathname) ? 'own' : null;
-  if (url.hostname !== TILE_HOST) return null;
-  return TILE.test(url.pathname) ? 'tile' : url.pathname === '/planet' ? 'own' : null;
+  if (url.origin !== location.origin) return null;
+  return TILE.test(url.pathname) ? 'tile' : OWN.test(url.pathname) ? 'own' : null;
 };
 
 self.addEventListener('install', () => self.skipWaiting());
@@ -39,6 +38,9 @@ let puts = 0;
 async function keep(cacheName, request, response) {
   // A redirected answer can't be given to a page's own request later; an opaque one can't be checked.
   if (!response || response.status !== 200 || response.redirected || !['basic', 'cors', 'default'].includes(response.type)) return;
+  // Not the front page the host answers a tile it doesn't have with, which comes with the tiles'
+  // own type (_headers): it is known by its "<".
+  if (cacheName === TILES && new Uint8Array(await response.clone().arrayBuffer())[0] === 0x3c) return;
   const cache = await caches.open(cacheName);
   await cache.put(request, response);
   if (cacheName === TILES && ++puts % 100 === 0) {
@@ -47,10 +49,10 @@ async function keep(cacheName, request, response) {
   }
 }
 
-async function networkFirst(event, key) {
+async function networkFirst(event, key, cacheName = PAGE) {
   const refresh = (async () => {
     const response = (await event.preloadResponse) ?? (await fetch(event.request));
-    if (response.ok) await keep(PAGE, key, response.clone());
+    if (response.ok) await keep(cacheName, key, response.clone());
     return response;
   })();
   // If the saved copy wins, a slow but successful response still updates it for next time.
@@ -72,14 +74,6 @@ async function networkFirst(event, key) {
   } finally { clearTimeout(timer); }
 }
 
-async function cacheFirst(event) {
-  const cached = await caches.match(event.request);
-  if (cached) return cached;
-  const response = await fetch(event.request);
-  event.waitUntil(keep(TILES, event.request, response.clone()));
-  return response;
-}
-
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET' || request.headers.has('range')) return;
@@ -88,7 +82,7 @@ self.addEventListener('fetch', (event) => {
   if (!k) return;
   // The page is kept under its plain address: the theme a link forces is read by the page itself.
   if (request.mode === 'navigate') event.respondWith(networkFirst(event, new Request(url.origin + url.pathname)));
-  else event.respondWith(k === 'tile' ? cacheFirst(event) : networkFirst(event, request));
+  else event.respondWith(networkFirst(event, request, k === 'tile' ? TILES : PAGE));
 });
 
 // The files the first visit fetched before this worker was there to keep them: the page lists
