@@ -5565,6 +5565,18 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   reloads are unchanged. Waiting on each program in the worker held up the
   map's own first GL call and saved nothing, so the worker never waits on
   them. Chris: find "what is causing it to be slower than it needs to be".
+- 2026-11-26: Steps keep making the other sheets' tiles ahead (main.js warm(),
+  which reaches into MapLibre's tile managers), and now go at once if a
+  MapLibre update takes away what it uses (canWarm). Reason: asked whether it
+  is worth what it costs a future maintainer, Chris had it measured. In 24
+  first visits on mini (headless, emulated 9 Mbps phone connection,
+  alternating), a step 3 s after the map appeared showed 0 blank frames and
+  finished in 0.79 s with it, against 11 to 15 of about 20 frames blank and
+  1.02 s without. A tap the moment the map appears waits about 1 s and
+  finishes later (1.75 s against 0.98 s), but with no blank frames. With the
+  internals renamed and no check, the step waited the whole 8 s cap before
+  going; test/maplibre-internals.test.mjs now fails when an update renames
+  them. Chris: "Do the second one" (measure it before deciding).
 
 ## Sources
 

@@ -225,13 +225,29 @@ for (const type of settleOn) addEventListener(type, readerHasIt, { capture: true
 // each sheet showed bare ground for a moment (black in the dark theme) until they came. While
 // the map rests, every other sheet's tiles for this view are made and put in its cache, where
 // a step finds them. This reaches into MapLibre's tile managers: it has no way to ask for
-// another zoom's tiles. If they change, nothing breaks; the flash only comes back.
+// another zoom's tiles. If a MapLibre update takes away what it uses (canWarm), steps go at
+// once, as they would with plain MapLibre, and the flash comes back; without that check every
+// first step to a sheet would wait the whole HOLD_MS for tiles that never come.
+// test/maplibre-internals.test.mjs fails when an update renames them. Worth keeping: on mini,
+// 2026-11-26, a step 3 s after the map appeared showed 0 blank frames and finished in 0.79 s,
+// against about 13 of 20 frames blank and 1.02 s without it (DESIGN.md decision log).
 let tried = new WeakMap(); // tile manager -> tiles asked for while the map has rested here
 map.on('movestart', () => { tried = new WeakMap(); });
 // Any tile the map has made, for MapLibre's Tile and OverscaledTileID, which it does not export.
 function aTile() {
   const tm = map.style?.tileManagers?.ground;
-  return tm?.getTileByID(tm.getIds()[0] ?? '');
+  return tm?.getTileByID?.(tm.getIds?.()[0] ?? '');
+}
+// Whether MapLibre still has every part warm() and stepReady() reach into. Taken as yes until the
+// map has drawn, since a step waits for that anyway.
+function canWarm() {
+  if (!window.sheetsReady) return true;
+  const tm = map.style?.tileManagers?.ground;
+  const cache = tm?._outOfViewCache;
+  const tile = aTile();
+  return typeof tm?.getIds === 'function' && typeof tm.getTileByID === 'function' && typeof tm.getSource?.()?.loadTile === 'function'
+    && typeof cache?.has === 'function' && typeof cache.add === 'function'
+    && typeof tile?.tileID?.overscaleFactor === 'function' && typeof tile.hasData === 'function' && typeof tile.getExpiryTimeout === 'function';
 }
 // A step passes through every whole zoom between two sheets, and at each one the sheet whose
 // band it is in shows, drawn from that zoom's tiles: these are the tiles, the basemap's and
@@ -441,7 +457,7 @@ const NO_HOLD = new URLSearchParams(location.search).get('hold') === 'off';
 function step(index, around) {
   const to = Math.max(0, Math.min(zooms.length - 1, index));
   if (to === sheet) return show(to, around); // back to the sheet shown: a wait goes on
-  if (NO_HOLD || givenUp === sheet || stepReady(to)) {
+  if (NO_HOLD || givenUp === sheet || !canWarm() || stepReady(to)) {
     held = null;
     waiting(false);
     return show(to, around);
@@ -457,7 +473,7 @@ function hold(h) {
 // Pinch, scroll or keyboard at the edge of the sheet's limits: a step like any other, which waits.
 function pushed(dir) {
   const to = sheet + dir;
-  if (held || !SHEETS[to] || givenUp === sheet || stepReady(to)) return;
+  if (held || !SHEETS[to] || givenUp === sheet || !canWarm() || stepReady(to)) return;
   const z = map.getZoom();
   if (dir > 0 ? z >= map.getMaxZoom() - 0.01 : z <= map.getMinZoom() + 0.01) hold({ to });
 }
@@ -479,7 +495,7 @@ map.getContainer().addEventListener('keydown', (e) => {
 // once the next sheet is ready; out, there is nothing to show past the sheet's own zoom.
 function limits() {
   const r = rests[sheet];
-  const loose = NO_HOLD || givenUp === sheet;
+  const loose = NO_HOLD || givenUp === sheet || !canWarm();
   const max = loose || stepReady(sheet + 1) ? HIGHEST : Math.min(edge(sheet), Math.floor(r) + 1) - 0.001;
   const min = loose || stepReady(sheet - 1) ? LOWEST : Math.max(edge(sheet - 1), Math.floor(r));
   // Drawn in only at rest on the sheet, so the map never jumps; let out at once.
