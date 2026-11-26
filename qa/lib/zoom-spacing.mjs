@@ -1,5 +1,14 @@
-import { pixels, pitchAt, sizeAt, attachedCollection } from '../../public/js/zoom/model.js';
+import { pixels, pitchAt, sizeAt, attachedCollection, railRefAt, REFERENCE_ZOOM } from '../../public/js/zoom/model.js';
 import { nearest, offset, resample } from '../../scripts/lib/sheets.mjs';
+
+// The rail drawing the page shows at this zoom, with its own station bars (model.js, RAIL_DRAWINGS).
+// A bundle from before there were two drawings has no `ref` and is taken whole.
+export function shownAt(bundle, zoom) {
+  const ref = railRefAt(zoom);
+  const mine = (f) => (f.properties.ref ?? REFERENCE_ZOOM) === ref || !bundle.rails.features.some((g) => g.properties.ref);
+  return { ...bundle, rails: { ...bundle.rails, features: bundle.rails.features.filter(mine) },
+    attached: bundle.attached && { ...bundle.attached, features: bundle.attached.features.filter(mine) } };
+}
 
 export function renderedRailPaths(bundle, zoom) {
   const paths = {};
@@ -32,12 +41,13 @@ export function spacingReport({ paths, pairs, bounds, pitch, width, origin = [0,
 export function checkBundleSpacing(bundle, pin, zoom) {
   const factor = 2 ** (zoom - pin.zoom);
   const origin = pixels(pin.origin, zoom);
-  return spacingReport({ paths: renderedRailPaths(bundle, zoom), pairs: pin.pairs, origin,
+  return spacingReport({ paths: renderedRailPaths(shownAt(bundle, zoom), zoom), pairs: pin.pairs, origin,
     bounds: pin.bounds.map((v, i) => v * factor + origin[i % 2]),
     pitch: pitchAt(bundle.sizes, zoom), width: sizeAt(bundle.sizes.rail, zoom) });
 }
 
-export function terminalGaps(bundle, zoom) {
+export function terminalGaps(all, zoom) {
+  const bundle = shownAt(all, zoom);
   const groups = new Map();
   for (const feature of bundle.rails.features) {
     const key = feature.properties.key.split(':').slice(0, -1).join(':');

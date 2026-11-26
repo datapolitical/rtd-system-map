@@ -1,16 +1,18 @@
 # Continuous zoom trial, issue #154
 
-This branch adds an isolated `/zoom/` preview between zooms 12 and 14. The
-production entry point, five sheets, Classic map and normal data build do not
-load this experiment. Nothing from this trial is ready to merge as v2.
+This branch adds an isolated `/zoom/` preview between zooms 12 and 16
+(12 to 14 until 2026-11-25). The production entry point, five sheets,
+Classic map and normal data build do not load this experiment. Nothing from
+this trial is ready to merge as v2.
 
 ## What can be reviewed
 
 - Continuous pinch, wheel, slider and button zoom, with no sheet snapping.
-- Rail drawn once at zoom 13 and spaced by the page: each line keeps its
-  slot in its pack and the page moves it sideways by slot times the pitch
-  for the current zoom. The half-step comparison has been removed; see
-  "Rail spacing: recommendation" below.
+- Rail drawn twice, at zooms 13 and 15, and spaced by the page: each line
+  keeps its slot in its pack and the page moves it sideways by slot times
+  the pitch for the current zoom. The zoom-13 drawing serves 12 to 14 and
+  the zoom-15 drawing 14 to 16; see "Zooms 14 to 16" below. The half-step
+  comparison has been removed; see "Rail spacing: recommendation" below.
 - Station bars and line letters ride the same spacing. Letters are placed
   outward from zoom 12: a letter placed at a wider zoom stays put, and new
   ones are added only where the closer view has room.
@@ -19,8 +21,9 @@ load this experiment. Nothing from this trial is ready to merge as v2.
 - Between drawings, a name that steps nearer or farther glides with the
   zoom; a name that changes side fades out and back in; see "How a name
   moves" below.
-- Bus streets come from three drawings, at 12, 13 and 14, and hand over
-  with a short fade; see "Bus drawings" below. Bus geometry is not morphed.
+- Bus streets come from five drawings, at 12, 13, 14, 15 and 16, and hand
+  over with a short fade; see "Bus drawings" below. Bus geometry is not
+  morphed.
 - A route selection, geographic centre and fractional view URL survive
   zooming and changing theme. A play control sweeps the zoom range.
 - Controls are a small pill at the top (zoom, `?` notes, theme) and one row
@@ -35,7 +38,8 @@ map on 2026-11-20; its `meta.json` says the build is
 are hardcoded in the preview. Source hashes are included in the generated
 report.
 
-Nine drawings, sampled every quarter zoom from 12 through 14:
+Nine drawings, sampled every quarter zoom from 12 through 14 (for 12 to 16,
+see "Zooms 14 to 16" below):
 
 - Independent name placement: **138** side changes over eight transitions.
 - Placement preferring the preceding side: **39** side changes, a **72%**
@@ -254,6 +258,85 @@ fade. Captures are `qa/.scratch/names154/bus13-{light,dark}-*.png`.
 Limit: the "15, 19" label touches the Union Station platform at 13. That is
 the drawing's own placement, not the handover.
 
+## Zooms 14 to 16 (2026-11-25)
+
+Chris picked smooth zooming on his phone between 12 and 14 and asked for it
+to run on to 16. The trial now covers 12 to 16.
+
+- **Two rail drawings.** A rail drawing made at 13 does not hold at 16:
+  there its rail sits a median 23 px (about 21 m) off its track, against
+  2.8 px for the zoom-16 sheet's own rail. A drawing made at 15 is 5.8 px off
+  at 16, the same as the zoom-13 drawing at 14. So the zoom-13 drawing serves
+  12 to 14 and a zoom-15 drawing serves 14 to 16 (`RAIL_DRAWINGS` in
+  `model.js`). They hand over at 14, where the bus drawing already changes,
+  with the same quarter-second fade; the rail moves a median 2 px there.
+  Station bars and line letters belong to their rail drawing and cross over
+  with it. Every attachment is stored in the zoom-13 frame, so a letter
+  keeps its place across the swap: a test checks that every letter the build
+  places reaches the page at every quarter zoom, and catches a letter
+  planted missing from the zoom-15 drawing.
+- **Five bus drawings**, at 12, 13, 14, 15 and 16, each serving its own zoom
+  to the next, so a bus drawing is only ever enlarged by less than one zoom.
+  The zoom-15 drawing has 8,331 features and 3,380 labels.
+- **Names** are planned over 17 quarter-zoom drawings, 12 to 16. Placed fresh
+  in each drawing they would change side 271 times; planned, they change 8
+  times, and none is lost. Six are the changes listed above, between 12
+  and 14. The other two are Federal Center, at 14.25 and 15.5: its wording
+  changes at 14.25, a name keeps its place only while its wording holds, so
+  it takes the top instead of its planned place below, then moves below at
+  15.5. Each change fades as described in "How a name moves". From 14.75
+  Union Station has a name for each platform, A B G N on one and C E W on
+  the other, as sheet 4 has at 16; the chip check now compares the order of
+  each pair of routes, so the split passes and a swap is still caught.
+- **Letters**: 37 at 12, 129 at 14, 452 at 16.
+- **Spacing**: 72 pair checks over 24 zooms from 12 to 16 are within 0.25 px
+  of their target (7.6 px at 14, 10.5 px at 16), and all 432 rail ends meet
+  their station bars within 1 px.
+- **Weight.** The zoom-15 rail drawing was sampled four times as densely as
+  the zoom-13 one, which took the trial bundle to 922 KB gzipped. Each rail
+  piece is now thinned to a tenth of a pixel at the closest zoom its drawing
+  serves, which cuts the rail from about 150,000 points to 11,800 and the
+  bundle to about 130 KB; the spacing and terminal checks give the same
+  results thinned as unthinned (worst spacing error 0.11 px). The bus
+  drawings at 13 and 15 add 138 KB and 302 KB gzipped.
+
+The build now takes about 100 minutes, almost all of it placing names at the
+closer zooms (about 6 minutes for each drawing at 16).
+
+## Bus numbers keep off the station's lettering (RTD-006, 2026-11-25)
+
+Bus route numbers printed over the hub's lettering. In the trial the names,
+chips and line letters were drawn with `text-ignore-placement`, so MapLibre
+did not reserve their room and placed numbers on them. The sheets do not do
+this: their names and line letters take part in placement, above the bus
+layers, so they are placed first and the numbers keep off them.
+
+The trial now does the same for the names, the chips and the line letters.
+The platform bars are lines, which take no room, so unseen marks along each
+bar take its room, as `keep-off-bus` does for bus lines.
+
+Measured in the hub view at every quarter zoom from 12 to 16, in pixels of
+bus-number ink within 2 px of a name, chip, line letter or platform bar
+(`qa/zoom-crowding-browser.mjs`):
+
+| | 12 | 12.25 | 12.5 | 12.75 | 13 | 13.25 | 13.5 | 13.75 | 14 to 16 |
+|---|---|---|---|---|---|---|---|---|---|
+| Before (light) | 128 | 90 | 56 | 14 | 59 | 57 | 48 | 39 | 0 |
+| Names and letters only | 96 | 77 | 55 | 14 | 6 | 1 | 0 | 0 | 0 |
+| Now (light) | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
+| Now (dark) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Before, at 12 the 32 ran into Union Station's W chip and platform bar and
+"10, 23" sat on Auraria West Campus; at 13 "1, 10, 3" crossed Empower Field
+at Mile High. The one pixel left, at 13.25 in light only, is the 9 of
+"15, 19" coming within 2 px of the end of the commuter-rail platform; the
+glyphs do not touch. "15, 19" is placed on the Union Station Transit Center
+by the bus drawing itself, as noted above.
+
+The cause is pinned at build `0c522dd` in `qa/recall/prototype-lettering.json`
+(find `154-prototype-numbers-on-lettering`); the lettering test catches it,
+passes the page as it is now and catches a planted wrong order.
+
 ## Line letters
 
 Letters are placed outward from 12, like the names: the letters at 12 stay
@@ -280,7 +363,8 @@ set the space between lines in a pack as the zoom changes.
   station bars, and a planted overshoot is caught.
 - Bars, letters and names are positioned from the same model, so they move
   with the rail and never drift against it.
-- It needs one rail drawing, not five, which halves the trial bundle.
+- It needs one rail drawing for each two zooms (13 for 12 to 14, 15 for 14
+  to 16), not one for every half zoom.
 
 The half-step alternative was dropped. Finished drawings at 12, 12.5, 13,
 13.5 and 14 each have their own curves and spacing, so packs drift between
@@ -290,9 +374,9 @@ each drawing, so it could not be compared fairly.
 
 Limits of smooth spacing:
 
-- Curves and corners are the zoom-13 curves at every zoom. They are drawn to
-  look right at 13 and are only checked here from 12 to 14; zooms well
-  outside that band will need their own reference drawings (#157).
+- Curves and corners are the zoom-13 curves from 12 to 14 and the zoom-15
+  curves from 14 to 16. Wider zooms, down to 8.75, will need their own
+  reference drawings (#157).
 - Each line's slot in its pack is fixed. Where a pack's membership would
   change with the zoom, it cannot.
 - Performance on a real phone is not measured. In software-rendered
@@ -319,6 +403,7 @@ Open `http://127.0.0.1:8804/zoom/`. In another terminal in that checkout:
 npm run check:zoom -- http://127.0.0.1:8804
 npm run check:zoom-spacing
 node qa/zoom-spacing-browser.mjs http://127.0.0.1:8804
+THEMES=light,dark node qa/zoom-crowding-browser.mjs http://127.0.0.1:8804
 node scripts/package-zoom-preview.mjs qa/.scratch/zoom-prototype/site
 ```
 

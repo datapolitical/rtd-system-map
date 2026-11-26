@@ -1,0 +1,2186 @@
+{
+ "build": "0263589",
+ "preview": "rtd-zoom-prototype-154 (2026-11-20)",
+ "finding": "RTD-004",
+ "said": "Union Station route chips change order between drawings",
+ "frames": [
+  {
+   "zoom": 12,
+   "labels": {
+    "type": "FeatureCollection",
+    "features": [
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "name",
+       "id": 89,
+       "key": "89:0",
+       "name": "Union Station",
+       "lines": "A B C E G N W",
+       "text": "Union Station",
+       "anchor": "bottom-right",
+       "offset": [
+        -1.783590550984904,
+        -3.2618514205551827
+       ],
+       "justify": "right",
+       "reason": "new label"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.001797,
+        39.754254
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ]
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "A",
+       "color": "#57C1E9",
+       "ink": "#10151d",
+       "key": "89:0:A"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.020767,
+        39.758016
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -110.5112913363264,
+       -28.511291336384602
+      ],
+      "labelZoom": 12
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "B",
+       "color": "#4E9D2D",
+       "ink": "#10151d",
+       "key": "89:0:B"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.018364,
+        39.758016
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -96.5112913363264,
+       -28.511291336384602
+      ],
+      "labelZoom": 12
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "G",
+       "color": "#F6B221",
+       "ink": "#10151d",
+       "key": "89:0:G"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.015961,
+        39.758016
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -82.5112913363264,
+       -28.511291336384602
+      ],
+      "labelZoom": 12
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "N",
+       "color": "#9F26B5",
+       "ink": "#ffffff",
+       "key": "89:0:N"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.013557,
+        39.758016
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -68.5112913363264,
+       -28.511291336384602
+      ],
+      "labelZoom": 12
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "C",
+       "color": "#F79239",
+       "ink": "#10151d",
+       "key": "89:0:C"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.011154,
+        39.758016
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -54.511291336326394,
+       -28.511291336384602
+      ],
+      "labelZoom": 12
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "E",
+       "color": "#552683",
+       "ink": "#ffffff",
+       "key": "89:0:E"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.008751,
+        39.758016
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -40.511291336326394,
+       -28.511291336384602
+      ],
+      "labelZoom": 12
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "W",
+       "color": "#009DAA",
+       "ink": "#10151d",
+       "key": "89:0:W"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.006348,
+        39.758016
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -26.511291336326394,
+       -28.511291336384602
+      ],
+      "labelZoom": 12
+     }
+    ]
+   }
+  },
+  {
+   "zoom": 12.25,
+   "labels": {
+    "type": "FeatureCollection",
+    "features": [
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "name",
+       "id": 89,
+       "key": "89:0",
+       "name": "Union Station",
+       "lines": "A B C E G N W",
+       "text": "Union Station",
+       "anchor": "bottom-right",
+       "offset": [
+        -1.8006050977955528,
+        -3.26798477694193
+       ],
+       "justify": "right",
+       "reason": "line obstruction 55 exceeds 45"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.001797,
+        39.754253
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ]
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "A",
+       "color": "#57C1E9",
+       "ink": "#10151d",
+       "key": "89:0:A"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.017966,
+        39.757485
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -112.01957208046224,
+       -29.119572080555372
+      ],
+      "labelZoom": 12.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "B",
+       "color": "#4E9D2D",
+       "ink": "#10151d",
+       "key": "89:0:B"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.015924,
+        39.757485
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -97.86957208043896,
+       -29.119572080555372
+      ],
+      "labelZoom": 12.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "G",
+       "color": "#F6B221",
+       "ink": "#10151d",
+       "key": "89:0:G"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.013881,
+        39.757485
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -83.71957208047388,
+       -29.119572080555372
+      ],
+      "labelZoom": 12.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "N",
+       "color": "#9F26B5",
+       "ink": "#ffffff",
+       "key": "89:0:N"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.011839,
+        39.757485
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -69.5695720804506,
+       -29.119572080555372
+      ],
+      "labelZoom": 12.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "C",
+       "color": "#F79239",
+       "ink": "#10151d",
+       "key": "89:0:C"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.009796,
+        39.757485
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -55.41957208048552,
+       -29.119572080555372
+      ],
+      "labelZoom": 12.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "E",
+       "color": "#552683",
+       "ink": "#ffffff",
+       "key": "89:0:E"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.007754,
+        39.757485
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -41.26957208046224,
+       -29.119572080555372
+      ],
+      "labelZoom": 12.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "W",
+       "color": "#009DAA",
+       "ink": "#10151d",
+       "key": "89:0:W"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.005711,
+        39.757485
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -27.119572080438957,
+       -29.119572080555372
+      ],
+      "labelZoom": 12.25
+     }
+    ]
+   }
+  },
+  {
+   "zoom": 12.5,
+   "labels": {
+    "type": "FeatureCollection",
+    "features": [
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "name",
+       "id": 89,
+       "key": "89:0",
+       "name": "Union Station",
+       "lines": "A B C E G N W",
+       "text": "Union Station",
+       "anchor": "bottom-right",
+       "offset": [
+        -2.8216418846951505,
+        -4.278483989972033
+       ],
+       "justify": "right",
+       "reason": "line obstruction 75 exceeds 55"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.001554,
+        39.754096
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ]
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "A",
+       "color": "#57C1E9",
+       "ink": "#10151d",
+       "key": "89:0:A"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.016782,
+        39.757984
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -125.45699738070834,
+       -41.656997381011024
+      ],
+      "labelZoom": 12.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "B",
+       "color": "#4E9D2D",
+       "ink": "#10151d",
+       "key": "89:0:B"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.015047,
+        39.757984
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -111.15699738066178,
+       -41.656997381011024
+      ],
+      "labelZoom": 12.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "G",
+       "color": "#F6B221",
+       "ink": "#10151d",
+       "key": "89:0:G"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.013311,
+        39.757984
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -96.85699738073163,
+       -41.656997381011024
+      ],
+      "labelZoom": 12.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "N",
+       "color": "#9F26B5",
+       "ink": "#ffffff",
+       "key": "89:0:N"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.011575,
+        39.757984
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -82.55699738068506,
+       -41.656997381011024
+      ],
+      "labelZoom": 12.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "E",
+       "color": "#552683",
+       "ink": "#ffffff",
+       "key": "89:0:E"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.009839,
+        39.757984
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -68.25699738075491,
+       -41.656997381011024
+      ],
+      "labelZoom": 12.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "W",
+       "color": "#009DAA",
+       "ink": "#10151d",
+       "key": "89:0:W"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.008103,
+        39.757984
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -53.956997380708344,
+       -41.656997381011024
+      ],
+      "labelZoom": 12.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "C",
+       "color": "#F79239",
+       "ink": "#10151d",
+       "key": "89:0:C"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.006368,
+        39.757984
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -39.65699738066178,
+       -41.656997381011024
+      ],
+      "labelZoom": 12.5
+     }
+    ]
+   }
+  },
+  {
+   "zoom": 12.75,
+   "labels": {
+    "type": "FeatureCollection",
+    "features": [
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "name",
+       "id": 89,
+       "key": "89:0",
+       "name": "Union Station",
+       "lines": "A B C E G N W",
+       "text": "Union Station",
+       "anchor": "bottom-right",
+       "offset": [
+        -1.8274959534831305,
+        -3.2741280778316018
+       ],
+       "justify": "right",
+       "reason": "kept side; adjusted distance from the station"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.001565,
+        39.754078
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ]
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "A",
+       "color": "#57C1E9",
+       "ink": "#10151d",
+       "key": "89:0:A"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.0133,
+        39.756453
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -114.96916993893683,
+       -30.269169938750565
+      ],
+      "labelZoom": 12.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "B",
+       "color": "#4E9D2D",
+       "ink": "#10151d",
+       "key": "89:0:B"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.011825,
+        39.756453
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -100.5191699389834,
+       -30.269169938750565
+      ],
+      "labelZoom": 12.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "G",
+       "color": "#F6B221",
+       "ink": "#10151d",
+       "key": "89:0:G"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.01035,
+        39.756453
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -86.06916993891355,
+       -30.269169938750565
+      ],
+      "labelZoom": 12.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "N",
+       "color": "#9F26B5",
+       "ink": "#ffffff",
+       "key": "89:0:N"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.008875,
+        39.756453
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -71.61916993896011,
+       -30.269169938750565
+      ],
+      "labelZoom": 12.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "E",
+       "color": "#552683",
+       "ink": "#ffffff",
+       "key": "89:0:E"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.0074,
+        39.756453
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -57.16916993889026,
+       -30.269169938750565
+      ],
+      "labelZoom": 12.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "W",
+       "color": "#009DAA",
+       "ink": "#10151d",
+       "key": "89:0:W"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.005926,
+        39.756453
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -42.71916993893683,
+       -30.269169938750565
+      ],
+      "labelZoom": 12.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "C",
+       "color": "#F79239",
+       "ink": "#10151d",
+       "key": "89:0:C"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.004451,
+        39.756453
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -28.269169938983396,
+       -30.269169938750565
+      ],
+      "labelZoom": 12.75
+     }
+    ]
+   }
+  },
+  {
+   "zoom": 13,
+   "labels": {
+    "type": "FeatureCollection",
+    "features": [
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "name",
+       "id": 89,
+       "key": "89:0",
+       "name": "Union Station",
+       "lines": "A B C E G N W",
+       "text": "Union Station",
+       "anchor": "bottom-right",
+       "offset": [
+        -2.8606379843145913,
+        -4.2973726781997446
+       ],
+       "justify": "right",
+       "reason": "kept side; adjusted distance from the station"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.000505,
+        39.75373
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ]
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "A",
+       "color": "#57C1E9",
+       "ink": "#10151d",
+       "key": "89:0:A"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.011572,
+        39.75659
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -128.9428153077606,
+       -43.34281530790031
+      ],
+      "labelZoom": 13
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "B",
+       "color": "#4E9D2D",
+       "ink": "#10151d",
+       "key": "89:0:B"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.010319,
+        39.75659
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -114.3428153077839,
+       -43.34281530790031
+      ],
+      "labelZoom": 13
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "G",
+       "color": "#F6B221",
+       "ink": "#10151d",
+       "key": "89:0:G"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.009066,
+        39.75659
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -99.74281530780718,
+       -43.34281530790031
+      ],
+      "labelZoom": 13
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "N",
+       "color": "#9F26B5",
+       "ink": "#ffffff",
+       "key": "89:0:N"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.007813,
+        39.75659
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -85.14281530771405,
+       -43.34281530790031
+      ],
+      "labelZoom": 13
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "C",
+       "color": "#F79239",
+       "ink": "#10151d",
+       "key": "89:0:C"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.00656,
+        39.75659
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -70.54281530773733,
+       -43.34281530790031
+      ],
+      "labelZoom": 13
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "E",
+       "color": "#552683",
+       "ink": "#ffffff",
+       "key": "89:0:E"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.005306,
+        39.75659
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -55.94281530776061,
+       -43.34281530790031
+      ],
+      "labelZoom": 13
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "W",
+       "color": "#009DAA",
+       "ink": "#10151d",
+       "key": "89:0:W"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.004053,
+        39.75659
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -41.342815307783894,
+       -43.34281530790031
+      ],
+      "labelZoom": 13
+     }
+    ]
+   }
+  },
+  {
+   "zoom": 13.25,
+   "labels": {
+    "type": "FeatureCollection",
+    "features": [
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "name",
+       "id": 89,
+       "key": "89:0",
+       "name": "Union Station",
+       "lines": "A B C E G N W",
+       "text": "Union Station",
+       "anchor": "bottom-right",
+       "offset": [
+        -2.8772879684503057,
+        -4.304423646842265
+       ],
+       "justify": "right",
+       "reason": "kept"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.000504,
+        39.753729
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ]
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "A",
+       "color": "#57C1E9",
+       "ink": "#10151d",
+       "key": "89:0:A"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.009934,
+        39.75618
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -130.66126910760067,
+       -44.161269107600674
+      ],
+      "labelZoom": 13.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "B",
+       "color": "#4E9D2D",
+       "ink": "#10151d",
+       "key": "89:0:B"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.00887,
+        39.75618
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -115.91126910760067,
+       -44.161269107600674
+      ],
+      "labelZoom": 13.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "G",
+       "color": "#F6B221",
+       "ink": "#10151d",
+       "key": "89:0:G"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.007805,
+        39.75618
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -101.16126910760067,
+       -44.161269107600674
+      ],
+      "labelZoom": 13.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "N",
+       "color": "#9F26B5",
+       "ink": "#ffffff",
+       "key": "89:0:N"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.006741,
+        39.75618
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -86.41126910760067,
+       -44.161269107600674
+      ],
+      "labelZoom": 13.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "C",
+       "color": "#F79239",
+       "ink": "#10151d",
+       "key": "89:0:C"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.005676,
+        39.75618
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -71.66126910760067,
+       -44.161269107600674
+      ],
+      "labelZoom": 13.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "E",
+       "color": "#552683",
+       "ink": "#ffffff",
+       "key": "89:0:E"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.004612,
+        39.75618
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -56.911269107600674,
+       -44.161269107600674
+      ],
+      "labelZoom": 13.25
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "W",
+       "color": "#009DAA",
+       "ink": "#10151d",
+       "key": "89:0:W"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.003547,
+        39.75618
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -42.161269107600674,
+       -44.161269107600674
+      ],
+      "labelZoom": 13.25
+     }
+    ]
+   }
+  },
+  {
+   "zoom": 13.5,
+   "labels": {
+    "type": "FeatureCollection",
+    "features": [
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "name",
+       "id": 89,
+       "key": "89:0",
+       "name": "Union Station",
+       "lines": "A B C E G N W",
+       "text": "Union Station",
+       "anchor": "bottom-right",
+       "offset": [
+        -2.893396615668541,
+        -4.311218397857824
+       ],
+       "justify": "right",
+       "reason": "line obstruction 39 exceeds 38"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.000503,
+        39.753728
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ]
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "A",
+       "color": "#57C1E9",
+       "ink": "#10151d",
+       "key": "89:0:A"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.008537,
+        39.755827
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -132.37913227290846,
+       -44.979132272768766
+      ],
+      "labelZoom": 13.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "B",
+       "color": "#4E9D2D",
+       "ink": "#10151d",
+       "key": "89:0:B"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.007633,
+        39.755827
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -117.4791322730016,
+       -44.979132272768766
+      ],
+      "labelZoom": 13.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "G",
+       "color": "#F6B221",
+       "ink": "#10151d",
+       "key": "89:0:G"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.006728,
+        39.755827
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -102.5791322728619,
+       -44.979132272768766
+      ],
+      "labelZoom": 13.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "N",
+       "color": "#9F26B5",
+       "ink": "#ffffff",
+       "key": "89:0:N"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.005824,
+        39.755827
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -87.67913227295503,
+       -44.979132272768766
+      ],
+      "labelZoom": 13.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "C",
+       "color": "#F79239",
+       "ink": "#10151d",
+       "key": "89:0:C"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.00492,
+        39.755827
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -72.77913227281533,
+       -44.979132272768766
+      ],
+      "labelZoom": 13.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "E",
+       "color": "#552683",
+       "ink": "#ffffff",
+       "key": "89:0:E"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.004016,
+        39.755827
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -57.879132272908464,
+       -44.979132272768766
+      ],
+      "labelZoom": 13.5
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "W",
+       "color": "#009DAA",
+       "ink": "#10151d",
+       "key": "89:0:W"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.003111,
+        39.755827
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -42.979132273001596,
+       -44.979132272768766
+      ],
+      "labelZoom": 13.5
+     }
+    ]
+   }
+  },
+  {
+   "zoom": 13.75,
+   "labels": {
+    "type": "FeatureCollection",
+    "features": [
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "name",
+       "id": 89,
+       "key": "89:0",
+       "name": "Union Station",
+       "lines": "A B C E G N W",
+       "text": "Union Station",
+       "anchor": "bottom-right",
+       "offset": [
+        -2.9089995453815636,
+        -4.3177800331900755
+       ],
+       "justify": "right",
+       "reason": "line obstruction 73 exceeds 39"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.000503,
+        39.753728
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ]
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "A",
+       "color": "#57C1E9",
+       "ink": "#10151d",
+       "key": "89:0:A"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.007346,
+        39.755525
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -134.09655667538755,
+       -45.79655667534098
+      ],
+      "labelZoom": 13.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "B",
+       "color": "#4E9D2D",
+       "ink": "#10151d",
+       "key": "89:0:B"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.006578,
+        39.755525
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -119.04655667534098,
+       -45.79655667534098
+      ],
+      "labelZoom": 13.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "G",
+       "color": "#F6B221",
+       "ink": "#10151d",
+       "key": "89:0:G"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.00581,
+        39.755525
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -103.99655667529441,
+       -45.79655667534098
+      ],
+      "labelZoom": 13.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "N",
+       "color": "#9F26B5",
+       "ink": "#ffffff",
+       "key": "89:0:N"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.005042,
+        39.755525
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -88.94655667548068,
+       -45.79655667534098
+      ],
+      "labelZoom": 13.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "C",
+       "color": "#F79239",
+       "ink": "#10151d",
+       "key": "89:0:C"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.004274,
+        39.755525
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -73.89655667543411,
+       -45.79655667534098
+      ],
+      "labelZoom": 13.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "E",
+       "color": "#552683",
+       "ink": "#ffffff",
+       "key": "89:0:E"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.003506,
+        39.755525
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -58.846556675387546,
+       -45.79655667534098
+      ],
+      "labelZoom": 13.75
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "W",
+       "color": "#009DAA",
+       "ink": "#10151d",
+       "key": "89:0:W"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.002738,
+        39.755525
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -43.79655667534098,
+       -45.79655667534098
+      ],
+      "labelZoom": 13.75
+     }
+    ]
+   }
+  },
+  {
+   "zoom": 14,
+   "labels": {
+    "type": "FeatureCollection",
+    "features": [
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "name",
+       "id": 89,
+       "key": "89:0",
+       "name": "Union Station",
+       "lines": "A B C E G N W",
+       "text": "Union Station",
+       "anchor": "top",
+       "offset": [
+        0,
+        1.2224294081903422
+       ],
+       "justify": "center",
+       "reason": "line obstruction 109 exceeds 73"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.000502,
+        39.753728
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ]
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "A",
+       "color": "#57C1E9",
+       "ink": "#10151d",
+       "key": "89:0:A"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.002459,
+        39.752407
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -45.5999999998603,
+       40.05158230662346
+      ],
+      "labelZoom": 14
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "B",
+       "color": "#4E9D2D",
+       "ink": "#10151d",
+       "key": "89:0:B"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.001807,
+        39.752407
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -30.399999999906868,
+       40.05158230662346
+      ],
+      "labelZoom": 14
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "G",
+       "color": "#F6B221",
+       "ink": "#10151d",
+       "key": "89:0:G"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.001155,
+        39.752407
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       -15.199999999953434,
+       40.05158230662346
+      ],
+      "labelZoom": 14
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "N",
+       "color": "#9F26B5",
+       "ink": "#ffffff",
+       "key": "89:0:N"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -105.000502,
+        39.752407
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       2.3283064365386963e-10,
+       40.05158230662346
+      ],
+      "labelZoom": 14
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "C",
+       "color": "#F79239",
+       "ink": "#10151d",
+       "key": "89:0:C"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -104.99985,
+        39.752407
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       15.200000000186265,
+       40.05158230662346
+      ],
+      "labelZoom": 14
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "E",
+       "color": "#552683",
+       "ink": "#ffffff",
+       "key": "89:0:E"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -104.999198,
+        39.752407
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       30.4000000001397,
+       40.05158230662346
+      ],
+      "labelZoom": 14
+     },
+     {
+      "type": "Feature",
+      "properties": {
+       "kind": "letter",
+       "small": true,
+       "route": "W",
+       "color": "#009DAA",
+       "ink": "#10151d",
+       "key": "89:0:W"
+      },
+      "geometry": {
+       "type": "Point",
+       "coordinates": [
+        -104.998545,
+        39.752407
+       ]
+      },
+      "attachment": [
+       873807.4514349118,
+       1591614.894222368,
+       -0.0003802500432357192,
+       -0.0003849014174193144
+      ],
+      "labelOffset": [
+       45.60000000009313,
+       40.05158230662346
+      ],
+      "labelZoom": 14
+     }
+    ]
+   }
+  }
+ ]
+}

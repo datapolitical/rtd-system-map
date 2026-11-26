@@ -1,7 +1,7 @@
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { readView, writeView } from '../sheets/address.js';
 import { PALETTES } from '../sheets/style.js';
-import { MIN_ZOOM, MAX_ZOOM, attachedCollection, labelsAt, busDrawingAt } from './model.js';
+import { MIN_ZOOM, MAX_ZOOM, RAIL_DRAWINGS, attachedCollection, attachedFor, labelsAt, busDrawingAt, railDrawingAt } from './model.js';
 import { previewStyle } from './style.js';
 import { resolveImages } from './images.js';
 
@@ -16,6 +16,7 @@ let moving = false;
 let updatedZoom = null;
 const labelState = { sides: new Map(), fades: new Map() };
 const busState = {};
+const railState = {};
 let busLayers = null;
 const busShown = new Map();
 const calm = matchMedia('(prefers-reduced-motion: reduce)');
@@ -50,9 +51,15 @@ function update() {
   const started = performance.now();
   const zoom = map.getZoom();
   // Only the small rail-symbol sources change during a zoom; the rail and bus drawings stay cached.
-  // Line letters appear as the zoom reaches them and stay for every closer zoom.
-  const shown = { ...bundle.attached, features: bundle.attached.features.filter((f) => !(f.properties.minzoom > zoom + 1e-9)) };
-  map.getSource('trial-attached').setData(attachedCollection(shown, bundle.sizes, zoom));
+  // The rail drawing for this zoom, faded in from the one before, with its own station bars and
+  // letters (model.js, railDrawingAt). Line letters appear as the zoom reaches them and stay for
+  // every closer zoom.
+  const rail = railDrawingAt(zoom, railState, performance.now(), { motion: !calm.matches });
+  for (const d of RAIL_DRAWINGS) {
+    const value = rail.sets[d.set].lines, key = `rail${d.set}`;
+    if (busShown.get(key) !== value) { map.setGlobalStateProperty(key, value); busShown.set(key, value); }
+  }
+  map.getSource('trial-attached').setData(attachedCollection(attachedFor(bundle.attached, rail, zoom), bundle.sizes, zoom));
   const labels = labelsAt(bundle.frames, zoom, bundle.sizes, labelState, performance.now(), { motion: !calm.matches });
   map.getSource('trial-labels').setData(labels.collection);
   // The bus drawing for this zoom, faded in from the one before (model.js, busDrawingAt).
@@ -72,14 +79,14 @@ function update() {
   }
   labelFrame = labels.frame.zoom;
   // A name changing side fades on a timer, so keep drawing until it has finished.
-  if (labels.busy || bus.busy) schedule();
+  if (labels.busy || bus.busy || rail.busy) schedule();
   updatedZoom = zoom;
   $('zoom').value = String(zoom);
   $('out').disabled = zoom <= MIN_ZOOM + 0.001;
   $('in').disabled = zoom >= MAX_ZOOM - 0.001;
   $('status').textContent = `Zoom ${zoom.toFixed(2)}`;
   timings.push(performance.now() - started);
-  window.zoomState = { zoom, labelFrame, busSet: bus.set, fading: labels.busy || bus.busy, updates: timings.length, lastUpdateMs: timings.at(-1) };
+  window.zoomState = { zoom, labelFrame, busSet: bus.set, railSet: rail.set, fading: labels.busy || bus.busy || rail.busy, updates: timings.length, lastUpdateMs: timings.at(-1) };
 }
 
 function schedule() {
@@ -152,9 +159,9 @@ try {
   $('sweep').onclick = async () => {
     if (moving) { moving = false; map.stop(); $('sweep').textContent = '▶'; $('sweep').ariaLabel = 'Play zoom'; return; }
     moving = true; $('sweep').textContent = '■'; $('sweep').ariaLabel = 'Stop zoom';
-    for (const zoom of [12, 14, 12]) {
+    for (const zoom of [MAX_ZOOM, MIN_ZOOM]) {
       if (!moving) break;
-      await new Promise((resolve) => { map.once('moveend', resolve); map.easeTo({ zoom, duration: 3500, easing: (t) => t }); });
+      await new Promise((resolve) => { map.once('moveend', resolve); map.easeTo({ zoom, duration: 1750 * Math.abs(map.getZoom() - zoom), easing: (t) => t }); });
     }
     moving = false; $('sweep').textContent = '▶'; $('sweep').ariaLabel = 'Play zoom';
   };

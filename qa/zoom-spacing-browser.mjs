@@ -23,15 +23,14 @@ try {
     await page.goto(`${base}/zoom/?theme=${theme}#14/${hub.geometry.coordinates[1]}/${hub.geometry.coordinates[0]}`);
     await page.waitForFunction(() => window.zoomReady, null, { timeout: 60000 });
     for (const view of [
-      ...[12, 12.99, 13.01, 14].map((zoom) => ({ name: 'hub', zoom, center: pin.origin })),
-      { name: 'shared', zoom: 14, center: shared.geometry.coordinates },
-      { name: 'terminal', zoom: 14, center: terminal.geometry.coordinates },
+      ...[12, 12.99, 13.01, 14, 15, 16].map((zoom) => ({ name: 'hub', zoom, center: pin.origin })),
+      ...[14, 16].flatMap((zoom) => [{ name: 'shared', zoom, center: shared.geometry.coordinates }, { name: 'terminal', zoom, center: terminal.geometry.coordinates }]),
     ]) {
       await page.evaluate((view) => window.zoomMap.jumpTo(view), { zoom: view.zoom, center: view.center });
       await page.waitForFunction(() => window.zoomMap.isStyleLoaded() && window.zoomMap.areTilesLoaded() && !window.zoomMap.isMoving()
         && Math.abs(window.zoomState.zoom - window.zoomMap.getZoom()) < 1e-6, null, { timeout: 30000 });
       const counts = await page.evaluate(() => ({
-        rail: window.zoomMap.queryRenderedFeatures({ layers: ['trial-rail'] }).length,
+        rail: window.zoomMap.queryRenderedFeatures({ layers: [`trial-rail-${window.zoomState.railSet}`] }).length,
         station: window.zoomMap.queryRenderedFeatures({ layers: ['trial-station'] }).length,
       }));
       assert.ok(counts.rail && counts.station);

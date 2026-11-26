@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { railOrderErrors } from './lib/zoom-order.mjs';
 import { checkBusControls } from './lib/zoom-ui.mjs';
+import { coverInPage, MAX_COVER } from './lib/zoom-cover.mjs';
 
 const base = (process.argv[2] ?? 'http://127.0.0.1:8804').replace(/\/$/, '');
 const out = path.resolve(process.argv[3] ?? 'qa/.scratch/zoom-prototype/browser');
@@ -14,6 +15,8 @@ const stations = JSON.parse(await readFile('public/data/stations.geojson', 'utf8
 const hub = stations.find((f) => f.properties.hub);
 const shared = stations.filter((f) => !f.properties.hub).sort((a, b) => String(b.properties.lines).split(' ').length - String(a.properties.lines).split(' ').length)[0];
 const terminal = stations.find((f) => f.properties.end && !f.properties.hub);
+// Each side of every whole zoom where a drawing hands over, and the ends of the range.
+const ZOOMS = [12, 12.99, 13.01, 13.99, 14.01, 14.99, 15.01, 15.99, 16];
 const views = [{ name: 'hub', at: hub }, { name: 'shared', at: shared }, { name: 'terminal', at: terminal }];
 const results = [];
 const failures = [];
@@ -47,19 +50,30 @@ try {
         assert.deepEqual(railOrderErrors(await page.evaluate(() => ({ layers: window.zoomMap.getStyle().layers.map(({ id, type, source }) => ({ id, type, source })) }))), []);
       });
       for (const view of views) {
-        for (const zoom of [12, 12.99, 13.01, 14]) {
+        for (const zoom of ZOOMS) {
           await page.evaluate(({ center, zoom }) => window.zoomMap.jumpTo({ center, zoom }), { center: view.at.geometry.coordinates, zoom });
           await settled();
           await check(`${theme}/${mode}/${view.name}/${zoom}: rails and station marks rendered`, async () => {
             const counts = await page.evaluate(() => ({
-              rail: window.zoomMap.queryRenderedFeatures({ layers: ['trial-rail'] }).length,
+              railSet: window.zoomState.railSet, busSet: window.zoomState.busSet,
+              rail: window.zoomMap.queryRenderedFeatures({ layers: [`trial-rail-${window.zoomState.railSet}`] }).length,
               stations: window.zoomMap.queryRenderedFeatures({ layers: ['trial-station'] }).length,
               names: window.zoomMap.queryRenderedFeatures({ layers: ['trial-name'] }).length,
             }));
             assert.ok(counts.rail > 0 && counts.stations > 0 && counts.names > 0, JSON.stringify(counts));
+            // The drawings this zoom should show, once their fades are over.
+            assert.equal(counts.railSet, zoom >= 14 ? '15' : '13', 'rail drawing');
+            assert.equal(counts.busSet, { 12: '2', 13: '13', 14: '3', 15: '15', 16: '4' }[Math.floor(zoom + 1e-9)], 'bus drawing');
             return counts;
           });
-          if (view.name === 'hub' || zoom === 14) await page.screenshot({ path: path.join(out, `${theme}-${mode}-${view.name}-${zoom}.png`) });
+          // The controls leave the map clear: at most MAX_COVER of the screen. Lettering at the
+          // screen's edges can sit under them, as on any map with fixed controls; it is listed.
+          if (view.name === 'hub') await check(`${theme}/${mode}/hub/${zoom}: controls cover at most ${MAX_COVER * 100}% of the screen`, async () => {
+            const cover = await page.evaluate(coverInPage);
+            assert.ok(cover.share <= MAX_COVER, JSON.stringify(cover));
+            return cover;
+          });
+          if (view.name === 'hub' || [14, 16].includes(zoom)) await page.screenshot({ path: path.join(out, `${theme}-${mode}-${view.name}-${zoom}.png`) });
         }
       }
       await check(`${theme}/${mode}: selection survives a continuous zoom and reversal`, async () => {
@@ -70,8 +84,8 @@ try {
           const times = []; let last = performance.now(); let active = true;
           const tick = (now) => { times.push(now - last); last = now; if (active) requestAnimationFrame(tick); };
           requestAnimationFrame(tick);
-          for (const zoom of [14, 12]) await new Promise((resolve) => {
-            window.zoomMap.once('moveend', resolve); window.zoomMap.easeTo({ zoom, duration: 2500, easing: (t) => t });
+          for (const zoom of [16, 12]) await new Promise((resolve) => {
+            window.zoomMap.once('moveend', resolve); window.zoomMap.easeTo({ zoom, duration: 5000, easing: (t) => t });
           });
           active = false;
           return { times, pick: window.zoomPick, updates: window.zoomTimings.slice(), zoom: window.zoomMap.getZoom() };
@@ -109,7 +123,7 @@ try {
     dirty = Boolean(execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' }).trim()); } catch {}
   const build = JSON.parse(await readFile('public/data/zoom-prototype/report.json', 'utf8'));
   await writeFile(path.join(out, 'report.json'), JSON.stringify({ commit, uncommittedPrototype: dirty, base, views: views.map((v) => ({ name: v.name, station: v.at.properties.name, coordinates: v.at.geometry.coordinates })),
-    themes: ['light', 'dark'], screenshotsAt: [12, 12.99, 13.01, 14], build, results, failures,
+    themes: ['light', 'dark'], screenshotsAt: ZOOMS, build, results, failures,
     limitation: 'Chromium with software rendering at a phone viewport; this does not replace a physical phone review or establish a phone frame-rate budget.' }, null, 2) + '\n');
 }
 if (failures.length) process.exitCode = 1;

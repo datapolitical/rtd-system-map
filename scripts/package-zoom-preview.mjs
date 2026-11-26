@@ -11,9 +11,9 @@ await mkdir(out, { recursive: true });
 const files = ['public/zoom/index.html', 'public/css/zoom.css',
   'public/js/zoom/main.js', 'public/js/zoom/style.js', 'public/js/zoom/model.js', 'public/js/zoom/images.js',
   'public/js/sheets/style.js', 'public/js/sheets/address.js', 'public/js/color.js',
-  'public/data/sheets.json', 'public/data/sheet-2.geojson', 'public/data/sheet-3.geojson',
+  'public/data/sheets.json', ...[2, 3, 4].flatMap((n) => [`public/data/sheet-${n}.geojson`, `public/data/sheet-${n}-routes.geojson`]),
   'public/data/zoom-prototype/trial.json', 'public/data/zoom-prototype/report.json',
-  'public/data/zoom-prototype/bus-13.geojson'];
+  ...[13, 15].flatMap((z) => [`public/data/zoom-prototype/bus-${z}.geojson`, `public/data/zoom-prototype/bus-${z}-routes.geojson`])];
 const copies = [['public/vendor', 'vendor']];
 const hashes = {};
 for (const file of files) {
@@ -29,5 +29,5 @@ for (const [from, to] of copies) {
 }
 for (const file of ['LICENSE', 'NOTICE']) await cp(path.join(root, file), path.join(out, file));
 await writeFile(path.join(out, 'index.html'), '<!doctype html><html lang="en"><meta charset="utf-8"><title>RTD system map</title><meta http-equiv="refresh" content="0;url=https://rtd-system-map.pages.dev/"><a href="https://rtd-system-map.pages.dev/">Open the current RTD system map</a></html>\n');
-await writeFile(path.join(out, 'preview-manifest.json'), JSON.stringify({ kind: 'isolated zoom-12-to-14 trial', created: new Date().toISOString(), hashes }, null, 2) + '\n');
+await writeFile(path.join(out, 'preview-manifest.json'), JSON.stringify({ kind: 'isolated zoom-12-to-16 trial', created: new Date().toISOString(), hashes }, null, 2) + '\n');
 console.log(`Prepared ${out}/zoom/`);

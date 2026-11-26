@@ -7,20 +7,43 @@ import path from 'node:path';
 import { SHEETS, SIZES, drawSheet, HOLD_RAIL_SLACK, HOLD_INK_SLACK, railLines, railTracks, stationMarks, letters, names, halls, busStreets,
   nearest, resample, offset, toPx, toLonLat } from './lib/sheets.mjs';
 import { canonicalTracks, slotPieces, fitTerminalSpines } from './lib/zoom-rail.mjs';
-import { labelChanges, REFERENCE_ZOOM, pitchAt, sizeAt } from '../public/js/zoom/model.js';
+import { projection, simplify } from './lib/geom.mjs';
+import { labelChanges, REFERENCE_ZOOM, MIN_ZOOM, MAX_ZOOM, RAIL_DRAWINGS, railRefAt, pitchAt, sizeAt } from '../public/js/zoom/model.js';
 
 export const zoomStops = (table) => SHEETS.map((s) => [s.zoom, table[s.id]]);
+// The bus drawings this build adds between the sheets (model.js, BUS_DRAWINGS).
+export const BETWEEN = [13, 15];
+const PITCH_13 = pitchAt({ rail: zoomStops(SIZES.rail), gap: zoomStops(SIZES.gap) }, REFERENCE_ZOOM);
+
+// A rail piece as the page receives it. The pieces are sampled every few pixels of their own
+// drawing, so the zoom-15 drawing carries four times the points of the zoom-13 one, most of them
+// on straight track. Each is thinned to a tenth of a pixel at the closest zoom its drawing serves
+// (RAIL_DRAWINGS: one zoom past its own). Only the shipped copy is thinned: names were placed
+// against the full pieces.
+export const THIN_PX = 0.1;
+export function thinned(f, px = THIN_PX) {
+  if (f.geometry.type !== 'LineString') return f;
+  const coords = f.geometry.coordinates, { project } = projection(coords[0], 6);
+  const tolerance = px * (40075016.686 * Math.cos((coords[0][1] * Math.PI) / 180)) / (512 * 2 ** (f.properties.ref + 1));
+  return { ...f, geometry: { ...f.geometry, coordinates: simplify(coords.map((c, i) => [...project(c), i]), tolerance).map((p) => coords[p[2]]) } };
+}
 
 // The production size tables stay untouched after each synchronous experiment. This adapter
 // is intentionally local to the trial; #155 replaces sheet lookups in the production build.
+// Between two sheets a size runs straight from the wider sheet's value to the closer one's; a
+// value that is not a number (a switch) keeps the wider sheet's until the closer sheet's zoom.
 export function withZoom(zoom, run) {
-  const id = 2 + (zoom - 12) / 2;
+  const hi = SHEETS.findIndex((s) => s.zoom >= zoom - 1e-9);
+  if (hi < 1) throw new Error(`withZoom: ${zoom} is not between two sheets`);
+  const lo = SHEETS[hi - 1], up = SHEETS[hi];
+  const t = (zoom - lo.zoom) / (up.zoom - lo.zoom);
+  const id = lo.id + t * (up.id - lo.id);
   const saved = [];
   for (const table of Object.values(SIZES)) {
-    if (!table || typeof table !== 'object' || !Object.hasOwn(table, 2) || !Object.hasOwn(table, 3)) continue;
+    if (!table || typeof table !== 'object' || !Object.hasOwn(table, lo.id) || !Object.hasOwn(table, up.id)) continue;
     saved.push([table, Object.hasOwn(table, id), table[id]]);
-    const a = table[2], b = table[3];
-    table[id] = typeof a === 'number' && typeof b === 'number' ? a + (b - a) * (zoom - 12) / 2 : zoom < 14 ? a : b;
+    const a = table[lo.id], b = table[up.id];
+    table[id] = typeof a === 'number' && typeof b === 'number' ? a + (b - a) * t : t < 1 - 1e-9 ? a : b;
   }
   try { return run({ id, zoom, streets: zoom >= 13 ? 'near' : 'far' }); }
   finally { for (const [table, existed, value] of saved) { if (existed) table[id] = value; else delete table[id]; } }
@@ -33,13 +56,13 @@ const keep = (n) => ({ key: n.placement?.historyKey ?? `${n.mark.id}:0`, name: n
   anchor: n.anchor, text: n.text, offset: n.offset, reason: n.placement?.reason ?? 'independent placement',
   inkCost: n.placement?.inkCost ?? null, railCost: n.placement?.railCost ?? null, box: n.box, reach: n.placement?.reach ?? null });
 
-export function drawRail(data, sheet, history = null) {
+export function drawRail(data, sheet, history = null, { lettering: named = true } = {}) {
   const lines = railLines(data.routes, sheet);
   const walls = halls(data.terminals, sheet);
   const marks = stationMarks(data.stations, lines, sheet, walls);
   const discs = letters(lines, marks, sheet);
   const streets = busStreets(data.streets, sheet, walls, marks, lines);
-  const lettering = names(marks, lines, discs, sheet, streets, history, { alternates: false });
+  const lettering = named ? names(marks, lines, discs, sheet, streets, history, { alternates: false }) : null;
   return { lines, marks, discs, streets, lettering };
 }
 
@@ -124,13 +147,22 @@ export function offsetDrawing(data, drawing, sheet) {
     }
     return best && [...best.q.center, best.q.at[0] - best.q.center[0], best.q.at[1] - best.q.center[1]];
   };
+  // Every attachment leaves here in one frame, whichever rail drawing it rides: a point in
+  // REFERENCE_ZOOM pixels and a sideways move in REFERENCE_ZOOM pitches, so the page's
+  // attachedPoint places it the same way for every drawing (model.js, RAIL_DRAWINGS).
+  const shrink = 2 ** (sheet.zoom - REFERENCE_ZOOM), perPitch = PITCH_13 / pitch;
+  const framed = (a) => a && [a[0] / shrink, a[1] / shrink, a[2] * perPitch, a[3] * perPitch];
+  const ref = sheet.zoom;
+  for (const f of features) f.properties.ref = ref;
   // Line letters are not taken from this one drawing: the build adds them zoom by zoom (main).
   const extras = drawnFeatures(drawing, sheet).features.filter((f) => !['rail', 'letter'].includes(f.properties.kind)).map((f) => {
     const routes = String(f.properties.lines ?? f.properties.route).split(' ');
-    return { ...f, attachment: f.geometry.type === 'Point' ? attach(toPx(f.geometry.coordinates, sheet.zoom), routes)
-      : f.geometry.coordinates.map((c) => attach(toPx(c, sheet.zoom), routes)) };
+    return { ...f, properties: { ...f.properties, ref }, attachment: f.geometry.type === 'Point' ? framed(attach(toPx(f.geometry.coordinates, sheet.zoom), routes))
+      : f.geometry.coordinates.map((c) => framed(attach(toPx(c, sheet.zoom), routes))) };
   });
-  return { rails: collection(features), attached: collection(extras), attach, attachOn, drawing };
+  // Both take a point in this drawing's own pixels.
+  return { ref, rails: collection(features), attached: collection(extras), drawing,
+    attach: (p, routes) => framed(attach(p, routes)), attachOn: (p, route) => framed(attachOn(p, route)) };
 }
 
 async function main() {
@@ -147,11 +179,15 @@ async function main() {
     sources[name] = createHash('sha256').update(raw).digest('hex');
   }
   const sizes = Object.fromEntries(['rail', 'gap', 'name', 'nameLetter', 'letterDisc'].map((k) => [k, zoomStops(SIZES[k])]));
-  const base = withZoom(REFERENCE_ZOOM, (sheet) => {
+  // One rail drawing for each stretch of the band (model.js, RAIL_DRAWINGS): 13 serves 12 to 14 and
+  // 15 serves 14 to 16, so no drawing is enlarged or shrunk by more than one zoom.
+  const bases = new Map(RAIL_DRAWINGS.map((d) => [d.ref, withZoom(d.ref, (sheet) => {
     const drawing = drawRail(data, sheet);
     return { drawing, ...offsetDrawing(data, drawing, sheet) };
-  });
-  // One pass over the band, 12 to 14. `seed` is where each name starts at zoom 12.
+  })]));
+  const base = bases.get(REFERENCE_ZOOM);
+  const drawings = new Map();
+  // One pass over the band, MIN_ZOOM to MAX_ZOOM. `seed` is where each name starts at the widest zoom.
   const runBand = (seed) => {
     const history = new Map(seed);
     const frames = [];
@@ -161,20 +197,23 @@ async function main() {
     const carried = [];
     const comparisons = [];
     let before = null;
-    for (let zoom = 12, f = 0; zoom <= 14; zoom += 0.25, f++) {
+    for (let zoom = MIN_ZOOM, f = 0; zoom <= MAX_ZOOM; zoom += 0.25, f++) {
+      const ref = railRefAt(zoom), rb = bases.get(ref);
       const started = performance.now();
       // A planned change of side: the name is offered its new side as if it had held it.
       for (const [key, path] of seed.plan ?? []) if (f && path[f] !== path[f - 1] && history.has(key)) history.set(key, { ...history.get(key), anchor: path[f] });
       const frame = withZoom(zoom, (sheet) => {
-        const drawn = drawRail(data, sheet);
+        // The drawing itself does not depend on the names' history, so both passes share it.
+        if (!drawings.has(zoom)) drawings.set(zoom, drawRail(data, sheet, null, { lettering: false }));
+        const drawn = drawings.get(zoom);
         // Names keep off the line letters the page shows (carried from wider zooms, on their
         // lines' slots), not this drawing's own letters, which the page never shows.
-        const placedAt = (l) => { const [x, y, dx, dy] = l.attachment; const k = pitchAt(sizes, zoom) / pitchAt(sizes, REFERENCE_ZOOM) / 2 ** (zoom - REFERENCE_ZOOM);
+        const placedAt = (l) => { const [x, y, dx, dy] = l.attachments[ref]; const k = pitchAt(sizes, zoom) / pitchAt(sizes, REFERENCE_ZOOM) / 2 ** (zoom - REFERENCE_ZOOM);
           return toPx(toLonLat([x + dx * k, y + dy * k], REFERENCE_ZOOM), zoom); };
         // And off the rail the page shows: the reference centre lines, moved sideways by slot
         // times this zoom's pitch (style.js, line-offset), not this drawing's own packs.
         const shownLines = new Map();
-        for (const f of base.rails.features) {
+        for (const f of rb.rails.features) {
           const { route, color, slot } = f.properties;
           const centre = f.geometry.coordinates.map((c) => toPx(c, zoom));
           if (!shownLines.has(route)) shownLines.set(route, { route, color, paths: [] });
@@ -194,9 +233,10 @@ async function main() {
           // A name already showing keeps its place: a new letter goes where no name is.
           const r = sizeAt(sizes.letterDisc, zoom) + 2;
           if (lettering.some((n) => d.at[0] > n.box[0] - r && d.at[0] < n.box[2] + r && d.at[1] > n.box[1] - r && d.at[1] < n.box[3] + r)) continue;
-          const attachment = base.attachOn(toPx(toLonLat(d.at, zoom), REFERENCE_ZOOM), d.route);
-          if (!attachment) continue;
-          const letter = { route: d.route, color: d.color, ink: d.ink, minzoom: zoom, attachment };
+          // Held on its line in every rail drawing, so it stays put when the drawing changes.
+          const attachments = Object.fromEntries([...bases].map(([r, b]) => [r, b.attachOn(toPx(toLonLat(d.at, zoom), r), d.route)]));
+          if (Object.values(attachments).some((a) => !a)) continue;
+          const letter = { route: d.route, color: d.color, ink: d.ink, minzoom: zoom, attachments };
           carried.push(letter);
           shown.push({ ...letter, at: placedAt(letter) });
         }
@@ -205,9 +245,9 @@ async function main() {
         for (const n of lettering) {
           const key = n.placement.historyKey;
           const bi = Number(key.split(':').at(-1));
-          const mark = base.drawing.marks.find((m) => m.id === n.mark.id);
-          const anchor = mark ? mid([mark.ends, ...mark.more][bi] ?? mark.ends) : toPx(toLonLat(n.at, zoom), REFERENCE_ZOOM);
-          const attachment = base.attach(anchor, String(n.mark.lines).split(' '));
+          const mark = rb.drawing.marks.find((m) => m.id === n.mark.id);
+          const anchor = mark ? mid([mark.ends, ...mark.more][bi] ?? mark.ends) : toPx(toLonLat(n.at, zoom), ref);
+          const attachment = rb.attach(anchor, String(n.mark.lines).split(' '));
           const properties = { kind: 'name', id: n.mark.id, key, name: n.mark.name, lines: n.mark.lines, text: n.text,
             anchor: n.anchor, offset: n.offset, justify: n.justify, reason: n.placement.reason };
           labelFeatures.push(feature(properties, 'Point', toLonLat(n.at, zoom), { attachment }));
@@ -310,22 +350,32 @@ async function main() {
     })(),
     onRail: { independent: frames.reduce((n, f) => n + f.onRail.independent.length, 0), stable: frames.reduce((n, f) => n + f.onRail.stable.length, 0),
       byZoom: frames.map((f) => ({ zoom: f.zoom, independent: f.onRail.independent, stable: f.onRail.stable })) },
-    railPieces: base.rails.features.length,
+    railPieces: Object.fromEntries([...bases].map(([r, b]) => [r, b.rails.features.length])),
     limitation: 'Shared spines are canonical at the reference zoom; per-zoom symbol source updates and label continuity still need physical-phone review.' };
-  const letterFeatures = carried.map((l, i) => ({ ...feature({ kind: 'letter', route: l.route, color: l.color, ink: l.ink, minzoom: l.minzoom,
-    key: `${l.route}:${i}` }, 'Point', toLonLat(l.attachment.slice(0, 2), REFERENCE_ZOOM)), attachment: l.attachment }));
+  // One feature for each letter in each rail drawing; the page shows the drawing's own.
+  const letterFeatures = carried.flatMap((l, i) => [...bases.keys()].map((ref) => ({ ...feature({ kind: 'letter', route: l.route, color: l.color, ink: l.ink,
+    minzoom: l.minzoom, ref, key: `${l.route}:${i}` }, 'Point', toLonLat(l.attachments[ref].slice(0, 2), REFERENCE_ZOOM)), attachment: l.attachments[ref] })));
   report.letters = { total: carried.length, byZoom: Object.fromEntries(frames.map((f) => [f.zoom, carried.filter((l) => l.minzoom <= f.zoom).length])) };
-  const bundle = { sizes, referenceZoom: REFERENCE_ZOOM, rails: base.rails, attached: collection([...base.attached.features, ...letterFeatures]),
+  const bundle = { sizes, referenceZoom: REFERENCE_ZOOM, rails: collection([...bases.values()].flatMap((b) => b.rails.features).map((f) => thinned(f))),
+    attached: collection([...[...bases.values()].flatMap((b) => b.attached.features), ...letterFeatures]),
     frames: frames.map(({ zoom, labels }) => ({ zoom, labels })), report };
-  // The bus drawing at 13, between sheets 2 and 3, so each bus drawing is only ever enlarged
+  // The bus drawings between the sheets, at 13 and 15, so each bus drawing is only ever enlarged
   // up to the next (public/js/zoom/model.js, busDrawingAt). Rail, stations and their lettering
-  // come from the trial's own model, so they are left out.
-  const bus13 = withZoom(13, (sheet) => drawSheet(data, sheet));
-  bus13.features = bus13.features.filter((f) => !['rail', 'station', 'letter'].includes(f.properties.kind) && f.properties.shape !== 'name');
-  const busRaw = JSON.stringify(bus13);
-  await writeFile(path.join(out, 'bus-13.geojson'), busRaw);
-  report.bus13 = { features: bus13.features.length, labels: bus13.features.filter((f) => f.properties.kind === 'bus-label').length,
-    bytes: { raw: Buffer.byteLength(busRaw), gzip: gzipSync(busRaw).length } };
+  // come from the trial's own model, so they are left out. A picked route's whole line is a
+  // file of its own, as on the sheets (#193).
+  report.bus = {};
+  for (const zoom of BETWEEN) {
+    const started = performance.now();
+    const drawn = withZoom(zoom, (sheet) => drawSheet(data, sheet));
+    const kept = drawn.features.filter((f) => !['rail', 'station', 'letter', 'group-key'].includes(f.properties.kind) && f.properties.shape !== 'name');
+    const busRaw = JSON.stringify({ ...drawn, features: kept.filter((f) => f.properties.kind !== 'route-line') });
+    const routesRaw = JSON.stringify(collection(kept.filter((f) => f.properties.kind === 'route-line')));
+    await writeFile(path.join(out, `bus-${zoom}.geojson`), busRaw);
+    await writeFile(path.join(out, `bus-${zoom}-routes.geojson`), routesRaw);
+    report.bus[zoom] = { features: kept.length, labels: kept.filter((f) => f.properties.kind === 'bus-label').length,
+      bytes: { raw: Buffer.byteLength(busRaw), gzip: gzipSync(busRaw).length, routesGzip: gzipSync(routesRaw).length } };
+    console.log(`bus drawing ${zoom}: ${kept.length} features; ${(performance.now() - started).toFixed(0)} ms`);
+  }
   const raw = JSON.stringify(bundle);
   report.bytes = { raw: Buffer.byteLength(raw), gzip: gzipSync(raw).length };
   await writeFile(path.join(out, 'trial.json'), JSON.stringify(bundle));

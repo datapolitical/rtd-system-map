@@ -1,7 +1,14 @@
 // Pure geometry shared by the #154 preview, its build and its checks.
 export const MIN_ZOOM = 12;
-export const MAX_ZOOM = 14;
+export const MAX_ZOOM = 16;
+// The frame every attachment is given in (pixels and pitches at this zoom), whichever rail
+// drawing it rides.
 export const REFERENCE_ZOOM = 13;
+// The rail drawings: each is drawn at `ref` and serves from `zoom` to the next drawing's zoom, so
+// it is never enlarged or shrunk by more than one zoom. Drawn once at 13 and seen at 16, rail sat
+// a median 23 px off its track; the zoom-15 drawing is 5.8 px off at 16, as 13 is at 14.
+export const RAIL_DRAWINGS = [{ zoom: 12, ref: 13, set: '13' }, { zoom: 14, ref: 15, set: '15' }];
+export const railRefAt = (zoom) => [...RAIL_DRAWINGS].reverse().find((d) => zoom >= d.zoom - 1e-9)?.ref ?? RAIL_DRAWINGS[0].ref;
 
 export function sizeAt(stops, zoom) {
   if (zoom <= stops[0][0]) return stops[0][1];
@@ -156,13 +163,17 @@ export function labelsAt(frames, zoom, sizes, state, now, { motion = true, step 
 // enlarged, never squeezed below the size it was placed for. Zooming in, the next drawing takes
 // over at its zoom; zooming out, the closer drawing holds BUS_HOLD below its zoom before handing
 // back. At a handover the lines cross over, and the old labels fade out before the new fade in.
-export const BUS_DRAWINGS = [{ zoom: 12, set: '2' }, { zoom: 13, set: '13' }, { zoom: 14, set: '3' }];
+// Sets '2', '3' and '4' are the sheets; '13' and '15' are drawn for this trial.
+export const BUS_DRAWINGS = [{ zoom: 12, set: '2' }, { zoom: 13, set: '13' }, { zoom: 14, set: '3' }, { zoom: 15, set: '15' }, { zoom: 16, set: '4' }];
 export const BUS_HOLD = 0.05;
 export const BUS_LINE_MS = FADE_OUT_MS + FADE_IN_MS;
 
-export function busDrawingAt(zoom, state, now, { motion = true } = {}) {
-  const target = [...BUS_DRAWINGS].reverse().find((d) => zoom >= d.zoom - 1e-9) ?? BUS_DRAWINGS[0];
-  const current = BUS_DRAWINGS.find((d) => d.set === state.set) ?? target;
+// Which of a list of drawings shows at this zoom, and how far each is faded in. `lines` cross
+// over (the new come up over the first half, the old go over the second, so the streets never
+// pass through a pale middle); `labels` fade out before the new fade in.
+export function drawingAt(drawings, zoom, state, now, { motion = true } = {}) {
+  const target = [...drawings].reverse().find((d) => zoom >= d.zoom - 1e-9) ?? drawings[0];
+  const current = drawings.find((d) => d.set === state.set) ?? target;
   let next = target;
   if (current.zoom > target.zoom && zoom >= current.zoom - BUS_HOLD) next = current;
   if (state.set === undefined) state.set = next.set;
@@ -170,7 +181,7 @@ export function busDrawingAt(zoom, state, now, { motion = true } = {}) {
     state.fade = motion ? { from: state.set, to: next.set, start: now } : null;
     state.set = next.set;
   }
-  const out = Object.fromEntries(BUS_DRAWINGS.map((d) => [d.set, { lines: 0, labels: 0 }]));
+  const out = Object.fromEntries(drawings.map((d) => [d.set, { lines: 0, labels: 0 }]));
   out[state.set] = { lines: 1, labels: 1 };
   let busy = false;
   if (state.fade) {
@@ -178,11 +189,28 @@ export function busDrawingAt(zoom, state, now, { motion = true } = {}) {
     if (p < BUS_LINE_MS) {
       busy = true;
       const t = p / BUS_LINE_MS;
-      // New lines come up over the first half and old ones go over the second, so the streets
-      // never pass through a pale middle where both are half-faded.
       out[state.fade.from] = { lines: Math.min(1, 2 - 2 * t), labels: p < FADE_OUT_MS ? 1 - p / FADE_OUT_MS : 0 };
       out[state.fade.to] = { lines: Math.min(1, 2 * t), labels: p < FADE_OUT_MS ? 0 : Math.min(1, (p - FADE_OUT_MS) / FADE_IN_MS) };
     } else state.fade = null;
   }
   return { sets: out, busy, set: state.set };
+}
+
+export const busDrawingAt = (zoom, state, now, options) => drawingAt(BUS_DRAWINGS, zoom, state, now, options);
+// The rail drawing hands over at the same zoom and in the same way as the bus drawing there.
+export const railDrawingAt = (zoom, state, now, options) => drawingAt(RAIL_DRAWINGS, zoom, state, now, options);
+
+// The rail-attached features (station bars, line letters) of the rail drawings showing now, each
+// carrying its drawing's fade: bars cross over with the rail, letters fade out before the new in.
+export function attachedFor(collection, rail, zoom) {
+  const sets = Object.fromEntries(RAIL_DRAWINGS.map((d) => [d.ref, rail.sets[d.set]]));
+  const features = [];
+  for (const f of collection.features) {
+    if (f.properties.minzoom > zoom + 1e-9) continue;
+    const o = sets[f.properties.ref ?? REFERENCE_ZOOM];
+    const v = o && (f.properties.kind === 'letter' ? o.labels : o.lines);
+    if (!v) continue;
+    features.push(v === 1 ? f : { ...f, properties: { ...f.properties, fade: v } });
+  }
+  return { type: 'FeatureCollection', features };
 }

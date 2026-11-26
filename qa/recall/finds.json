@@ -2246,6 +2246,106 @@
       "pinned_by": "Claude, counting rendered bus labels at quarter zooms, 2026-11-24",
       "confidence": "clear",
       "note": "Prototype only. MapLibre lays line labels out at floor(zoom), so the zoom-14 drawing's labels did not fit from 13 to 14, and collision losers were removed with no fade. Checked by the bus-drawing tests in test/zoom-prototype.test.mjs. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-chip-order",
+      "issue": 154,
+      "place": "Zoom preview, Union Station's name",
+      "said": "Union Station's route chips read A B G N E W C in some drawings and A B G N C E W in others, so the row reshuffles while zooming.",
+      "kind": "chip-order",
+      "caught_by": [
+        "prototype-chip-order"
+      ],
+      "seen_on": [
+        "0263589"
+      ],
+      "theme": "light",
+      "zoom": 13,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 120,
+      "capture": {
+        "view": "13/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Codex, reviewing the first zoom preview, 2026-11-20 (fix register RTD-004)",
+      "pinned_by": "Claude, from the first preview's own trial.json (qa/recall/prototype-chip-order.json), 2026-11-25",
+      "confidence": "clear",
+      "note": "Prototype only. Checked by the chip-order test in test/zoom-prototype.test.mjs (qa/lib/zoom-labels.mjs), which must fail on the pinned drawings and on a planted swap. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-controls-cover",
+      "issue": 154,
+      "place": "Zoom preview, the controls over the map at Union Station",
+      "said": "The preview's two panels covered 23% of the phone screen and hid nine names and line letters at zoom 12, among them the C letter.",
+      "kind": "controls-cover",
+      "caught_by": [
+        "prototype-controls-cover"
+      ],
+      "seen_on": [
+        "0263589"
+      ],
+      "theme": "light",
+      "zoom": 12,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 400,
+      "capture": {
+        "view": "12/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris and Codex, on the first zoom preview, 2026-11-20 (fix register RTD-005)",
+      "pinned_by": "Claude, measuring the first preview's panels with qa/lib/zoom-cover.mjs (qa/recall/prototype-controls.json), 2026-11-25",
+      "confidence": "clear",
+      "note": "Prototype only. Checked by the controls test in test/zoom-prototype.test.mjs and by npm run check:zoom at the hub camera. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-numbers-on-lettering",
+      "issue": 154,
+      "place": "Zoom preview, Union Station and its neighbours, zooms 12 to 14",
+      "said": "Bus route numbers print over the hub's lettering: at 12 the 32 runs into Union Station's W chip and platform bar and 10, 23 sits on Auraria West Campus; at 13 the 1, 10, 3 crosses Empower Field at Mile High. Measured 14 to 128 pixels of number ink within 2 px of station lettering at every quarter zoom from 12 to 13.75.",
+      "kind": "numbers-on-lettering",
+      "caught_by": [
+        "prototype-lettering-order"
+      ],
+      "seen_on": [
+        "0c522dd",
+        "486bd94"
+      ],
+      "theme": "light",
+      "zoom": 12,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "12/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Fix register RTD-006, from image review of the zoom previews, 2026-11-21",
+      "pinned_by": "Claude, measuring ink overlap with qa/zoom-crowding-browser.mjs and freezing the style's collision settings (qa/recall/prototype-lettering.json), 2026-11-25",
+      "confidence": "clear",
+      "note": "Prototype only. The trial's station names and line letters skipped symbol placement, so MapLibre placed bus numbers over them; the sheets do not do this. Checked by the lettering test in test/zoom-prototype.test.mjs; measured in the browser by qa/zoom-crowding-browser.mjs. Classic recall fixtures do not run the /zoom/ page."
     }
   ]
 }

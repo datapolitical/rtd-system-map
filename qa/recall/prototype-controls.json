@@ -1,0 +1,11 @@
+{
+  "build": "0263589",
+  "preview": "rtd-zoom-prototype-154 (2026-11-20)",
+  "finding": "RTD-005",
+  "said": "The preview's panels cover map labels and too much of the view.",
+  "viewport": [402, 874],
+  "camera": "12/39.7536/-105.00067",
+  "panels": [[12, 12, 378, 65], [12, 694, 378, 150]],
+  "under": ["name Alameda", "name I-25 / Broadway", "name Pecos Junction", "name Clear Creek / Federal", "letter C", "letter E", "letter B", "letter G", "letter G"],
+  "measured_by": "qa/lib/zoom-cover.mjs on the preview copy served locally, light theme, 2026-11-25"
+}

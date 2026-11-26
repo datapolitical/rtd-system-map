@@ -7,7 +7,8 @@ const bundle = JSON.parse(await readFile(process.argv[2] ?? 'public/data/zoom-pr
 const pin = JSON.parse(await readFile(new URL('recall/prototype-spacing.json', import.meta.url), 'utf8'));
 const recall = spacingReport(pin);
 if (!recall.some((r) => !r.ok && r.minimumVisibleGap < 0)) throw new Error('Spacing detector missed the pinned overlapping rail.');
-const zooms = [...new Set([12, 12.25, 12.5, 12.75, 12.99, 13, 13.01, 13.25, 13.5, 13.75, 14])].sort((a, b) => a - b);
+// Every quarter zoom from 12 to 16, and each side of the whole zooms where drawings hand over.
+const zooms = [...new Set([...Array(17).keys()].map((i) => 12 + i / 4).concat([12.99, 13.01, 13.99, 14.01, 14.99, 15.01, 15.99]))].sort((a, b) => a - b);
 const results = zooms.map((zoom) => ({ zoom, pairs: checkBundleSpacing(bundle, pin, zoom) }));
 const failed = results.flatMap((r) => r.pairs.filter((p) => !p.ok).map((p) => ({ zoom: r.zoom, ...p })));
 const terminals = zooms.map((zoom) => ({ zoom, ends: terminalGaps(bundle, zoom) }));
@@ -17,5 +18,5 @@ await mkdir(path.dirname(out), { recursive: true });
 await writeFile(out, JSON.stringify({ tolerancePx: 0.25, pinnedBuild: pin.build, recall, results, failed, terminals, failedTerminals,
   scope: 'Perpendicular centre-line distances on the pinned shared approach, sampled from the same pixel offsets used by the renderer. Visual captures are checked separately.' }, null, 2) + '\n');
 console.log(JSON.stringify({ zooms: results.length, pairsChecked: results.length * pin.pairs.length, failed: failed.length,
-  terminalEndsChecked: terminals.reduce((n, r) => n + r.ends.length, 0), failedTerminals: failedTerminals.length, zoom14: results.at(-1).pairs }));
+  terminalEndsChecked: terminals.reduce((n, r) => n + r.ends.length, 0), failedTerminals: failedTerminals.length, zoom14: results.find((r) => r.zoom === 14).pairs, zoom16: results.at(-1).pairs }));
 if (failed.length || failedTerminals.length) process.exitCode = 1;
