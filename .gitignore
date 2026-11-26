@@ -5,6 +5,8 @@ node_modules/
 public/data.next/
 # Copied from node_modules by scripts/vendor.mjs.
 public/vendor/
+# Cut from the committed sheets and basemap/ by scripts/tiles.mjs, on every build.
+public/tiles/
 # QA scratch space (qa/BRIEF.md).
 qa/cache/
 qa/out/

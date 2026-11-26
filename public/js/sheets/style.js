@@ -19,6 +19,9 @@ export const SHEETS = [
 export const edge = (i) => (SHEETS[i].zoom + SHEETS[i + 1].zoom) / 2;
 /** The index in SHEETS of the sheet a plain visit opens on. */
 export const OPENING = SHEETS.findIndex((s) => s.opens);
+// How far out and in the map goes (main.js); the ground's tiles reach as far (scripts/basemap.mjs).
+export const LOWEST = SHEETS[0].zoom - 0.6;
+export const HIGHEST = SHEETS.at(-1).zoom + 0.6;
 
 // Must match SIZES in scripts/lib/sheets.mjs: the build places lines side by side at these widths.
 const RAIL = { 0: 3, 1: 3.6, 2: 4.4, 3: 5.6, 4: 8 };
@@ -262,18 +265,33 @@ const ROUND = { 'line-cap': 'round', 'line-join': 'round' };
 // Rail ends square, so a line stops at its last station's mark and doesn't poke past it.
 const FLAT = { 'line-cap': 'butt', 'line-join': 'round' };
 
-/** Where a sheet's drawing is; the page hands it to the map when the sheet is wanted. */
-export const sheetData = (n) => new URL(`../../data/sheet-${n}.geojson`, import.meta.url).href;
-// Each sheet's route lines, drawn only for a picked bus route: the page asks for them at the first pick (#193).
-export const routesData = (n) => new URL(`../../data/sheet-${n}-routes.geojson`, import.meta.url).href;
-const NOTHING = { type: 'FeatureCollection', features: [] };
+/**
+ * Where a tile set's tiles are: each sheet (`sheet-N`), its route lines (`routes-N`) and the ground,
+ * cut when the site is published (scripts/tiles.mjs), so the phone only reads them (DESIGN.md,
+ * "Quality floor"). The sheets are cut as MapLibre itself would cut their GeoJSON (TILING).
+ */
+export const tilesUrl = (name) => new URL(`../../tiles/${name}/{z}/{x}/{y}.pbf`, import.meta.url).href.replace(/%7B/g, '{').replace(/%7D/g, '}');
+/** How a sheet is cut: MapLibre's GeoJSON source options, which the drawing was tuned with. */
+export const TILING = { tolerance: 0.1, buffer: 256 };
+/** A sheet's tiles: from its band's first whole zoom (0 for the widest) to its last, one under its own zoom. */
+export const tileZooms = (i) => {
+  const maxzoom = Math.floor(SHEETS[i].zoom) - 1;
+  return { minzoom: i ? Math.min(maxzoom, Math.floor(edge(i - 1))) : 0, maxzoom };
+};
+/**
+ * A tile's properties can't hold a list, so a feature's list (a label's offset) goes into its
+ * tiles as this text, and the style looks the list up from the build's table of them
+ * (sheets.json, `lists`).
+ */
+export const listKey = (list) => list.join(',');
 
 /**
  * The whole style: the ground, then each sheet's layers, each shown only around its own zoom.
- * `wanted` is the sheets whose drawings load now (all of them when not given); the rest start
- * empty, so the opening view doesn't wait on sheets it can't show (DESIGN.md, "Quality floor").
+ * A sheet's tiles load only when the map is at its zoom. `routeLines`: whether the picked bus
+ * route's lines show (they load only then, #193). `lists`: the build's lists by property
+ * (sheets.json), which the tiles name by listKey.
  */
-export function sheetStyle(theme, stations = [], colors = [], wanted = null, district = null, routeLines = false) {
+export function sheetStyle(theme, stations = [], colors = [], { district = null, routeLines = false, lists = {} } = {}) {
   // A place that shares a station's name is not lettered twice: the station's own name says it.
   const named = stations.map((s) => s.toUpperCase());
   const c = PALETTES[theme];
@@ -592,14 +610,25 @@ export function sheetStyle(theme, stations = [], colors = [], wanted = null, dis
     state: STATE,
     glyphs: new URL('../../vendor/glyphs/{fontstack}/{range}.pbf', import.meta.url).href.replace(/%7B/g, '{').replace(/%7D/g, '}'),
     sources: {
-      ground: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
-      ...Object.fromEntries(SHEETS.map((s) => [`sheet-${s.id}`, { type: 'geojson', data: !wanted || wanted.has(s.id) ? sheetData(s.id) : NOTHING, tolerance: 0.1,
-        // Big tiles with a wide margin, so a label's stretch of street is whole in the tile that places it.
-        maxzoom: Math.floor(s.zoom) - 1, buffer: 256 }])),
-      ...Object.fromEntries(SHEETS.map((s) => [`routes-${s.id}`, { type: 'geojson', data: routeLines && (!wanted || wanted.has(s.id)) ? routesData(s.id) : NOTHING, tolerance: 0.1,
-        // Big tiles with a wide margin, so a label's stretch of street is whole in the tile that places it.
-        maxzoom: Math.floor(s.zoom) - 1, buffer: 256 }])),
+      ground: { type: 'vector', tiles: [tilesUrl('ground')], maxzoom: 14 },
+      ...Object.fromEntries(SHEETS.flatMap((s, i) => ['sheet', 'routes'].map((set) => [`${set}-${s.id}`, { type: 'vector', tiles: [tilesUrl(`${set}-${s.id}`)], ...tileZooms(i) }]))),
     },
-    layers,
+    // Every sheet's layers read their tiles' one layer; a list is looked up by its text (listKey).
+    // The route lines' layers show, and so load their tiles, only for a pick (routeLines).
+    layers: layers.map((l) => {
+      if (!/^(sheet|routes)-/.test(l.source ?? '')) return l;
+      const tiled = { ...withLists(l, lists), 'source-layer': TILE_LAYER };
+      return l.source.startsWith('routes-') ? { ...tiled, layout: { ...tiled.layout, visibility: routeLines ? 'visible' : 'none' } } : tiled;
+    }),
   };
+}
+/** The one layer each sheet tile holds (vt-pbf's name for a cut GeoJSON's). */
+export const TILE_LAYER = '_geojsonTileLayer';
+// ['get', 'offset'] for a list the tiles hold as its text: the list, from the build's table.
+function withLists(x, lists) {
+  if (Array.isArray(x)) {
+    if (x[0] === 'get' && x.length === 2 && lists[x[1]]) return ['match', ['get', x[1]], ...lists[x[1]].flatMap((v) => [listKey(v), ['literal', v]]), ['literal', [0, 0]]];
+    return x.map((y) => withLists(y, lists));
+  }
+  return x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, withLists(v, lists)])) : x;
 }

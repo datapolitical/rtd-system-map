@@ -8,3 +8,8 @@
 # The offline worker (sw.js): checked on every load, so a new one reaches people at once.
 /sw.js
   Cache-Control: no-cache
+
+# The map's tiles (scripts/tiles.mjs), the sheets' and the ground's: protobuf too, so Cloudflare
+# compresses them as it does the glyphs.
+/tiles/*
+  Content-Type: application/x-protobuf
