@@ -341,6 +341,22 @@ test('a street is labelled with its whole list, only where the list fits, and la
   assert.deepEqual(inOrder(['FreeRide', '15L', '120X', '9', '15', 'FF']), ['9', '15', '15L', '120X', 'FF', 'FreeRide']);
 });
 
+test('a list the drawing one zoom out set keeps its place, and new lists only fill between (zoom trial, #154)', () => {
+  const st = (x0, x1, routes = '1', y = 0) => ({ routes, cls: 'c15', n: 1, path: [[x0, y], [x1, y]] });
+  const mid = (r) => (r.path[0][0] + r.path.at(-1)[0]) / 2;
+  const streets = [st(0, 100), st(100, 220), st(220, 300), st(300, 420), st(420, 600)];
+  // Alone, the street's labels sit evenly along it; one kept a little off the street sits where it was.
+  const fresh = labelRuns(streets, 200, () => 60).map(mid);
+  const kept = labelRuns(streets, 200, () => 60, undefined, { kept: [{ at: [160, 4], routes: '1' }], reach: 12 });
+  assert.ok(!fresh.some((x) => Math.abs(x - 160) < 5), 'a place the street would not choose alone');
+  assert.ok(kept.some((r) => Math.abs(mid(r) - 160) < 1), 'is kept');
+  assert.ok(kept.every((a, i) => kept.every((b, j) => i === j || Math.abs(mid(a) - mid(b)) >= 200)), 'and new ones keep their distance from it');
+  // A kept list finds the street that runs where it was, even where that street lists more routes now;
+  // one too far from any street is dropped.
+  const more = labelRuns([st(0, 600, '1 2')], 1000, () => 60, undefined, { kept: [{ at: [450, 0], routes: '1' }, { at: [100, 40], routes: '1' }], reach: 12 });
+  assert.deepEqual(more.map((r) => [r.routes, Math.round(mid(r))]), [['1 2', 450]]);
+});
+
 const st = (path, more = {}) => ({ cls: 'c15', routes: '1', n: 1, hw: 15, path, ...more });
 const tips = (list) => list.flatMap((s) => [s.path[0], s.path.at(-1)]);
 const meets = (list, p) => tips(list).filter((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 0.1).length;

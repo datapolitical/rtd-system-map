@@ -2248,6 +2248,39 @@
       "note": "Prototype only. MapLibre lays line labels out at floor(zoom), so the zoom-14 drawing's labels did not fit from 13 to 14, and collision losers were removed with no fade. Checked by the bus-drawing tests in test/zoom-prototype.test.mjs. Classic recall fixtures do not run the /zoom/ page."
     },
     {
+      "id": "154-prototype-route-lists-reappear",
+      "issue": 154,
+      "place": "Zoom preview, bus streets around 19th St and Curtis, downtown",
+      "said": "Route lists such as \"FF, MetroRide, RX\" on 19th St appear, disappear and reappear while zooming from 14.95 to 16, because each bus drawing spaced its lists afresh and only a fifth to a third stayed through each zoom step.",
+      "kind": "label-pop",
+      "caught_by": [
+        "prototype-label-carry"
+      ],
+      "seen_on": [
+        "db9bd1d"
+      ],
+      "theme": "dark",
+      "zoom": 15.8,
+      "points": [
+        [
+          -104.9905,
+          39.7488
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "15.8/39.7488/-104.9905",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris, on iPhone screenshots of /v4/zoom/ at 16, 15.8 and 14.95, 2026-11-26",
+      "pinned_by": "Claude, sweeping rendered labels from 12 to 16 by tenths of a zoom, 2026-11-26",
+      "confidence": "clear",
+      "note": "Prototype only. Checked by the carry-over test in test/sheets.test.mjs (a list the drawing one zoom out set keeps its place). Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
       "id": "154-prototype-chip-order",
       "issue": 154,
       "place": "Zoom preview, Union Station's name",

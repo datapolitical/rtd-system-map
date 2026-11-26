@@ -5546,6 +5546,15 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   streets white and the bus lines doubled for about 0.3 s in both builds;
   Chris: "Go". The rail drawings' opacity has no transition, so they too
   change in one frame.
+- 2026-11-26: Zoom trial (#154): each bus drawing keeps the route lists and
+  street names of the drawing one zoom out, in place (sliding at most half
+  their length along the street), and places new ones only in between; a list
+  goes in only where the page will have room for it, and the trial draws all
+  five bus drawings (12 to 16) itself. Reason: Chris, on screenshots at 16,
+  15.8 and 14.95 near 19th and Curtis: "We probably shouldn't have labels that
+  appear, disappear, and reappear." Each drawing had spaced its lists afresh,
+  so only a fifth to a third of them stayed through a zoom step; now 93 to 97
+  percent do.
 
 ## Sources
 

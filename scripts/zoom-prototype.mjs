@@ -4,15 +4,18 @@ import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { SHEETS, SIZES, drawSheet, HOLD_RAIL_SLACK, HOLD_INK_SLACK, railLines, railTracks, stationMarks, letters, names, halls, busStreets,
+import { SHEETS, SIZES, drawSheet, carryOf, HOLD_RAIL_SLACK, HOLD_INK_SLACK, railLines, railTracks, stationMarks, letters, names, halls, busStreets,
   nearest, resample, offset, toPx, toLonLat } from './lib/sheets.mjs';
 import { canonicalTracks, slotPieces, fitTerminalSpines } from './lib/zoom-rail.mjs';
 import { projection, simplify } from './lib/geom.mjs';
 import { labelChanges, REFERENCE_ZOOM, MIN_ZOOM, MAX_ZOOM, RAIL_DRAWINGS, railRefAt, pitchAt, sizeAt } from '../public/js/zoom/model.js';
 
 export const zoomStops = (table) => SHEETS.map((s) => [s.zoom, table[s.id]]);
-// The bus drawings this build adds between the sheets (model.js, BUS_DRAWINGS).
+// The bus drawings this build makes (model.js, BUS_DRAWINGS): 13 and 15 between the sheets, and
+// 12, 14 and 16 drawn again so each keeps the lettering of the one before (drawSheet, carry) and
+// sets only lettering the page has room to show.
 export const BETWEEN = [13, 15];
+export const BUS_BUILT = [12, 13, 14, 15, 16];
 const PITCH_13 = pitchAt({ rail: zoomStops(SIZES.rail), gap: zoomStops(SIZES.gap) }, REFERENCE_ZOOM);
 
 // A rail piece as the page receives it. The pieces are sampled every few pixels of their own
@@ -165,8 +168,39 @@ export function offsetDrawing(data, drawing, sheet) {
     attach: (p, routes) => framed(attach(p, routes)), attachOn: (p, route) => framed(attachOn(p, route)) };
 }
 
+// The bus drawings from 12 to 16, written to `out`; returns what the report says of them.
+export async function drawBus(data, dir, out) {
+  // Each bus drawing is one of 12 to 16, so each bus drawing is only ever enlarged up to the next
+  // (public/js/zoom/model.js, busDrawingAt). Each keeps every route list and street name the one
+  // before it set, in place, and adds its own between them: zooming in, lettering is only added,
+  // and zooming out only taken away (Chris, 2026-11-26: no labels that appear, disappear and
+  // reappear). Rail, stations and their lettering come from the trial's own model, so they are
+  // left out. A picked route's whole line is a file of its own, as on the sheets (#193).
+  const bus = {};
+  // The first has nothing to keep, but is drawn with the same care for the page's room.
+  let carry = { lists: [], names: [] };
+  for (const zoom of BUS_BUILT) {
+    const started = performance.now();
+    const drawn = withZoom(zoom, (sheet) => drawSheet(data, sheet, carry));
+    const before = carry;
+    carry = carryOf(drawn);
+    bus[zoom] = { carried: { lists: before.lists.length, names: before.names.length } };
+    const kept = drawn.features.filter((f) => !['rail', 'station', 'letter', 'group-key'].includes(f.properties.kind) && f.properties.shape !== 'name');
+    const busRaw = JSON.stringify({ ...drawn, features: kept.filter((f) => f.properties.kind !== 'route-line') });
+    const routesRaw = JSON.stringify(collection(kept.filter((f) => f.properties.kind === 'route-line')));
+    await writeFile(path.join(out, `bus-${zoom}.geojson`), busRaw);
+    await writeFile(path.join(out, `bus-${zoom}-routes.geojson`), routesRaw);
+    bus[zoom] = { ...bus[zoom], features: kept.length, labels: kept.filter((f) => f.properties.kind === 'bus-label').length,
+      bytes: { raw: Buffer.byteLength(busRaw), gzip: gzipSync(busRaw).length, routesGzip: gzipSync(routesRaw).length } };
+    console.log(`bus drawing ${zoom}: ${kept.length} features; ${(performance.now() - started).toFixed(0)} ms`);
+  }
+  return bus;
+}
+
 async function main() {
-  const dir = path.resolve(process.argv[2] ?? 'public/data');
+  // `--bus` draws the bus drawings alone (a few minutes), keeping the rail drawings already built.
+  const args = process.argv.slice(2);
+  const dir = path.resolve(args.find((a) => !a.startsWith('--')) ?? 'public/data');
   const out = path.join(dir, 'zoom-prototype');
   await mkdir(out, { recursive: true });
   const sourceNames = ['routes', 'stations', 'streets', 'terminals', 'stops'];
@@ -177,6 +211,16 @@ async function main() {
     data[name] = JSON.parse(raw);
     if (data[name].type !== 'FeatureCollection') throw new Error(`${name} is not a FeatureCollection`);
     sources[name] = createHash('sha256').update(raw).digest('hex');
+  }
+  if (args.includes('--bus')) {
+    const bus = await drawBus(data, dir, out);
+    const report = JSON.parse(await readFile(path.join(out, 'report.json')));
+    const bundle = JSON.parse(await readFile(path.join(out, 'trial.json')));
+    report.bus = bus;
+    bundle.report = { ...bundle.report, bus };
+    await writeFile(path.join(out, 'trial.json'), JSON.stringify(bundle));
+    await writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+    return;
   }
   const sizes = Object.fromEntries(['rail', 'gap', 'name', 'nameLetter', 'letterDisc'].map((k) => [k, zoomStops(SIZES[k])]));
   // One rail drawing for each stretch of the band (model.js, RAIL_DRAWINGS): 13 serves 12 to 14 and
@@ -359,23 +403,7 @@ async function main() {
   const bundle = { sizes, referenceZoom: REFERENCE_ZOOM, rails: collection([...bases.values()].flatMap((b) => b.rails.features).map((f) => thinned(f))),
     attached: collection([...[...bases.values()].flatMap((b) => b.attached.features), ...letterFeatures]),
     frames: frames.map(({ zoom, labels }) => ({ zoom, labels })), report };
-  // The bus drawings between the sheets, at 13 and 15, so each bus drawing is only ever enlarged
-  // up to the next (public/js/zoom/model.js, busDrawingAt). Rail, stations and their lettering
-  // come from the trial's own model, so they are left out. A picked route's whole line is a
-  // file of its own, as on the sheets (#193).
-  report.bus = {};
-  for (const zoom of BETWEEN) {
-    const started = performance.now();
-    const drawn = withZoom(zoom, (sheet) => drawSheet(data, sheet));
-    const kept = drawn.features.filter((f) => !['rail', 'station', 'letter', 'group-key'].includes(f.properties.kind) && f.properties.shape !== 'name');
-    const busRaw = JSON.stringify({ ...drawn, features: kept.filter((f) => f.properties.kind !== 'route-line') });
-    const routesRaw = JSON.stringify(collection(kept.filter((f) => f.properties.kind === 'route-line')));
-    await writeFile(path.join(out, `bus-${zoom}.geojson`), busRaw);
-    await writeFile(path.join(out, `bus-${zoom}-routes.geojson`), routesRaw);
-    report.bus[zoom] = { features: kept.length, labels: kept.filter((f) => f.properties.kind === 'bus-label').length,
-      bytes: { raw: Buffer.byteLength(busRaw), gzip: gzipSync(busRaw).length, routesGzip: gzipSync(routesRaw).length } };
-    console.log(`bus drawing ${zoom}: ${kept.length} features; ${(performance.now() - started).toFixed(0)} ms`);
-  }
+  report.bus = await drawBus(data, dir, out);
   const raw = JSON.stringify(bundle);
   report.bytes = { raw: Buffer.byteLength(raw), gzip: gzipSync(raw).length };
   await writeFile(path.join(out, 'trial.json'), JSON.stringify(bundle));

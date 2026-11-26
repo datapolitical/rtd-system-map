@@ -3065,10 +3065,22 @@ export function through(streets) {
  * down where it would sit is moved along its run, a few pixels at a time, nearest first and
  * within a block before across one, to the first place `ok` takes.
  */
-export function labelRuns(streets, every, width = () => 0, ok = () => true, { slide = false } = {}) {
+export function labelRuns(streets, every, width = () => 0, ok = () => true, { slide = false, kept = [], reach = 12 } = {}) {
   const out = [];
   const list = (st) => inOrder(String(st.routes).split(' ')).join(' ');
-  for (const { chain, paths } of through(streets)) {
+  // `kept`: lists the drawing one zoom out set ({ at, routes }, in this drawing's pixels). Each
+  // keeps its place, ahead of every new one, where a run of this drawing within `reach` holds it
+  // (the zoom trial, #154): zooming in, lettering is only ever added, never moved or dropped.
+  const cell = 128;
+  const keptGrid = new Map();
+  for (const k of kept) { const key = `${Math.floor(k.at[0] / cell)},${Math.floor(k.at[1] / cell)}`; keptGrid.set(key, [...(keptGrid.get(key) ?? []), k]); }
+  const keptNear = (path) => {
+    const xs = path.map((p) => p[0]), ys = path.map((p) => p[1]), found = [];
+    for (let gx = Math.floor((Math.min(...xs) - reach) / cell); gx <= Math.floor((Math.max(...xs) + reach) / cell); gx++)
+      for (let gy = Math.floor((Math.min(...ys) - reach) / cell); gy <= Math.floor((Math.max(...ys) + reach) / cell); gy++) found.push(...(keptGrid.get(`${gx},${gy}`) ?? []));
+    return found;
+  };
+  const chains = through(streets).map(({ chain, paths }) => {
     // Runs of one list, each with where it starts along the street.
     const runs = [];
     let along = 0;
@@ -3080,7 +3092,7 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true, { sl
       along += len;
     });
     const set = [];
-    const place = (run) => {
+    const place = (run, wants = null) => {
       const top = run.of.reduce((a, b) => (CLASS_ORDER.indexOf(b.cls) > CLASS_ORDER.indexOf(a.cls) ? b : a));
       const label = { ...top, routes: run.list };
       // In one row where the run holds the list that way; in two, stacked, where it holds only that.
@@ -3090,17 +3102,21 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true, { sl
       const count = Math.max(1, Math.floor(run.len / every));
       // A little slack past the figures, so the page's own measure of them still fits.
       const span = Math.min(run.len, need * 1.15);
-      for (let c = 0; c < count; c++) {
-        const want = (run.len * (c + 0.5)) / count;
+      let placed = 0;
+      for (const want of wants ?? Array.from({ length: count }, (_, c) => (run.len * (c + 0.5)) / count)) {
         const blocks = run.pieces.filter((q) => q.len >= span).sort((a, b) => Math.abs(a.from + a.len / 2 - want) - Math.abs(b.from + b.len / 2 - want));
         const [lo, hi] = blocks.length ? [blocks[0].from, blocks[0].from + blocks[0].len] : [0, run.len];
         const first = Math.min(hi - span / 2, Math.max(lo + span / 2, want));
         // Where it may go: its place, then (sliding) every few pixels of each block that holds it,
         // nearest first, then anywhere along the run.
         const tries = [first];
+        const along = (from, to) => { const xs = []; for (let x = from; x <= to + 1e-6; x += SIZES.labelSlide) xs.push(x); return xs; };
+        const near = (xs) => xs.sort((x, y) => Math.abs(x - want) - Math.abs(y - want));
+        // A kept list turned down at its place (a stop the closer drawing shows, say) slides a
+        // little along its run rather than go: up to half its own length either way, so it reads
+        // as the same list nudged, not one gone and another come.
+        if (wants) tries.push(...near(along(Math.max(span / 2, want - span / 2), Math.min(run.len - span / 2, want + span / 2))));
         if (slide) {
-          const along = (from, to) => { const xs = []; for (let x = from; x <= to + 1e-6; x += SIZES.labelSlide) xs.push(x); return xs; };
-          const near = (xs) => xs.sort((x, y) => Math.abs(x - want) - Math.abs(y - want));
           tries.push(...near(blocks.flatMap((q) => along(q.from + span / 2, q.from + q.len - span / 2))), ...near(along(span / 2, run.len - span / 2)));
         }
         for (const mid of tries) {
@@ -3112,13 +3128,16 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true, { sl
           if (a[0] > b[0] + 1e-6 || (Math.abs(a[0] - b[0]) <= 1e-6 && a[1] < b[1])) path = [...path].reverse();
           // Stacked rows are set straight, so they go only where the street is.
           if (rows > 1 && path.some((q) => toSegment(q, path[0], path.at(-1)).d > 2)) continue;
-          if (!ok(path, rows)) continue;
+          if (!ok(path, rows, top.cls)) continue;
           set.push(run.at + mid);
           out.push({ path, rows, routes: run.list, cls: top.cls, n: Math.max(...run.of.map((o) => o.n ?? 0)), run: { path: run.path, pieces: run.pieces, mid } });
+          placed++;
           break;
         }
       }
+      return placed;
     };
+    const fresh = () => {
     for (const run of [...runs].sort((a, b) => b.len - a.len)) place(run);
     // Where routes join and leave a street block by block (downtown's one-way pairs), no run of
     // one list may hold it. There a label runs on across runs and lists every route on the
@@ -3150,7 +3169,33 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true, { sl
         of: part.flatMap((r) => r.of),
       });
     }
+    };
+    return { runs, place, fresh };
+  });
+  // The kept lists first, on every street before any new list: each on the run nearest its place
+  // that lists the same routes, or else the run there sharing the most of them; only a list's
+  // first place on a run is kept where two would now sit closer than `every`.
+  if (kept.length) {
+    const wants = new Map();
+    for (const c of chains) for (const run of c.runs) for (const k of keptNear(run.path)) {
+      const hit = nearest(run.path, k.at);
+      if (hit.d > reach) continue;
+      const mine = new Set(run.list.split(' ')), theirs = String(k.routes).split(' ');
+      const shared = theirs.filter((r) => mine.has(r)).length;
+      if (!shared) continue;
+      const score = (run.list === inOrder(theirs).join(' ') ? 1e6 : shared * 1e3) - hit.d;
+      const best = wants.get(k);
+      if (!best || score > best.score) wants.set(k, { c, run, along: hit.along, score });
+    }
+    const byRun = new Map();
+    for (const [k, w] of wants) byRun.set(w.run, [...(byRun.get(w.run) ?? []), [k, w]]);
+    for (const c of chains) for (const run of [...c.runs].sort((a, b) => b.len - a.len)) {
+      for (const [k, w] of (byRun.get(run) ?? []).sort((a, b) => a[1].along - b[1].along)) {
+        if (!c.place(run, [w.along])) globalThis.LABEL_TRACE?.(k, 'refused', { list: run.list, len: Math.round(run.len), along: Math.round(w.along) });
+      }
+    }
   }
+  for (const c of chains) c.fresh();
   return out;
 }
 
@@ -3664,7 +3709,26 @@ export function placeStreetLetters(stretch, stops, solid, across = []) {
 // --- One sheet, as GeoJSON -------------------------------------------------------
 
 /** Everything one sheet draws, as a FeatureCollection the page loads. */
-export function drawSheet({ routes, stations, streets, terminals, stops }, sheet) {
+/** The lettering a drawing hands the next one in (drawSheet's `carry`): each route list's and bus
+ * street name's place, as longitude and latitude, and what it says. */
+export function carryOf(drawn) {
+  const middle = (g) => {
+    if (g.type === 'Point') return g.coordinates;
+    const px = g.coordinates.map((c) => toPx(c, 16));
+    return toLonLat(pointAlong(px, length(px) / 2), 16);
+  };
+  const lists = [], names = [];
+  for (const f of drawn.features) {
+    const { kind, label } = f.properties;
+    if (kind === 'bus-label' || kind === 'bus-stack') lists.push({ at: middle(f.geometry), routes: String(label).split(/,?\s+|,/).filter(Boolean).join(' ') });
+    if (kind === 'bus-street') names.push({ at: middle(f.geometry), routes: String(label).replace(/ /g, '\u00a0') });
+  }
+  return { lists, names };
+}
+
+// `carry` (the zoom trial, #154): the lettering of the drawing one zoom out, from carryOf, which
+// this drawing keeps in place before it adds its own (labelRuns, kept).
+export function drawSheet({ routes, stations, streets, terminals, stops }, sheet, carry = null) {
   const lines = railLines(routes, sheet);
   const walls = halls(terminals, sheet);
   const marks = stationMarks(stations, lines, sheet, walls);
@@ -3828,7 +3892,45 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const listedRuns = [];
   // Every list set, as drawn: its stretch, its rows and its street's class (the tables keep off them).
   const numbered = [];
-  for (const run of labelRuns(toLabel, SIZES.busLabelEvery[sheet.id], width, (path, rows) => side(path, rows) !== 0 && !onSquare(path, rows))) {
+  const carried = (list) => (list ?? []).map((k) => ({ at: toPx(k.at, sheet.zoom), routes: k.routes }));
+  const carryReach = Math.max(12, 2 * (SIZES.busMerge[sheet.id] ?? 0));
+  // In the zoom trial, no list takes room the page gives another, or MapLibre drops one of them
+  // and it comes back a zoom later. The page reserves a list along its street as boxes the
+  // figures' height along its stretch, and a stacked list, turned the way its street runs, as
+  // the upright box around the turned rows: on downtown's diagonal grid that box reaches the next
+  // street over. Lists carried in are placed first, so a new list gives way to them.
+  const roomCell = 32;
+  const roomGrid = new Map();
+  const roomOf = (path, rows, cls) => {
+    const k = side(path, rows) < 0 ? -1 : 1;
+    const [a, b] = [path[0], path.at(-1)];
+    const run = a[0] > b[0] ? [a[0] - b[0], a[1] - b[1]] : [b[0] - a[0], b[1] - a[1]];
+    const l = Math.hypot(...run) || 1;
+    const up = [(k * run[1]) / l, (-k * run[0]) / l];
+    const off = busWide(cls, sheet) / 2 + 1.5 + 0.36 * size;
+    if (rows === 1) {
+      const half = size * 0.6 + 4;
+      return resample(path, size / 2).map(([x, y]) => { const c = [x + up[0] * off, y + up[1] * off]; return [c[0] - half, c[1] - half, c[0] + half, c[1] + half]; });
+    }
+    const mid = pointAlong(path, length(path) / 2);
+    const tall = SIZES.busRowHeight * rows * size, wide = length(path) / 1.15;
+    const c = [mid[0] + up[0] * (off + (SIZES.busRowHeight / 2) * size), mid[1] + up[1] * (off + (SIZES.busRowHeight / 2) * size)];
+    const [cos, sin] = [Math.abs(run[0] / l), Math.abs(run[1] / l)];
+    const hx = (cos * wide) / 2 + (sin * tall) / 2 + 2, hy = (sin * wide) / 2 + (cos * tall) / 2 + 2;
+    return [[c[0] - hx, c[1] - hy, c[0] + hx, c[1] + hy]];
+  };
+  const cellsOf = ([x0, y0, x1, y1]) => { const out = []; for (let gx = Math.floor(x0 / roomCell); gx <= Math.floor(x1 / roomCell); gx++) for (let gy = Math.floor(y0 / roomCell); gy <= Math.floor(y1 / roomCell); gy++) out.push(`${gx},${gy}`); return out; };
+  const roomTaken = (boxes) => boxes.some((q) => cellsOf(q).some((key) => (roomGrid.get(key) ?? []).some((o) => q[0] < o[2] && o[0] < q[2] && q[1] < o[3] && o[1] < q[3])));
+  const takeRoom = (boxes) => { for (const q of boxes) for (const key of cellsOf(q)) roomGrid.set(key, [...(roomGrid.get(key) ?? []), q]); };
+  const roomFor = (path, rows, cls) => {
+    if (!carry) return true;
+    const boxes = roomOf(path, rows, cls);
+    if (roomTaken(boxes)) return false;
+    takeRoom(boxes);
+    return true;
+  };
+  for (const run of labelRuns(toLabel, SIZES.busLabelEvery[sheet.id], width, (path, rows, cls) => { const why = side(path, rows) === 0 ? 'side' : onSquare(path, rows) ? 'square' : !roomFor(path, rows, cls) ? 'room' : null; if (why) globalThis.LABEL_WHY?.(path, why); return !why; },
+    { kept: carried(carry?.lists), reach: carryReach })) {
     listedRuns.push(run.path);
     const below = side(run.path, run.rows) < 0 ? { side: -1 } : {};
     if (run.rows === 1) {
@@ -3849,6 +3951,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
         }
       }
       if (lead) named.push({ name: lead.name, at: pointAlong(lead.path, length(lead.path) / 2) });
+      if (lead && carry) takeRoom(roomOf(lead.path, 1, run.cls));
       numbered.push({ path: lead?.path ?? run.path, rows: 1, cls: run.cls, side: below.side ?? 1 });
       features.push(feature({ kind: 'bus-label', cls: run.cls, label: listed(run.routes), n: run.n, ...below, ...(lead ? { street: lead.name } : {}) },
         { type: 'LineString', coordinates: (lead?.path ?? run.path).map(back) }));
@@ -3918,7 +4021,8 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     // A street named at the head of a list nearby is not named again there.
     const again = (name, path) => { const m = pointAlong(path, length(path) / 2); return named.some((o) => o.name === name && dist(o.at, m) < SIZES.streetEvery[sheet.id]); };
     // Nor on a stop: a name slides along its street to a stretch between stops.
-    for (const run of labelRuns(byName, SIZES.streetEvery[sheet.id], wide, (path) => oneTile(path) && side(path, 1) !== 0 && !listedOn(path) && !onStop(path) && !onSquare(path, 1), { slide: true })) {
+    for (const run of labelRuns(byName, SIZES.streetEvery[sheet.id], wide, (path) => oneTile(path) && side(path, 1) !== 0 && !listedOn(path) && !onStop(path) && !onSquare(path, 1),
+      { slide: true, kept: carried(carry?.names), reach: carryReach })) {
       if (run.rows !== 1 || run.routes === NONE || run.routes.includes(' ')) continue;
       const label = run.routes.replace(/ /g, ' ');
       if (again(label, run.path)) continue;

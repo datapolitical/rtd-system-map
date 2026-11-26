@@ -522,6 +522,23 @@
       ],
       "verification": "Union Station view: drawn labels 18/13/7/5/4 at 13–14 by quarter zoom (were 4/3/2/0/0); unit tests cover the drawing per zoom, hold and handover; check:zoom and spacing browser checks pass; light and dark handover captures inspected.",
       "fixed_commit": "a2de8b625bfb3aec82b049a1d7612fe7b833a9e8"
+    },
+    {
+      "id": "RTD-019",
+      "title": "Route lists appear, disappear and reappear while zooming",
+      "kind": "defect",
+      "status": "open",
+      "priority": "next",
+      "scope": "Zoom trial · bus labels",
+      "issues": [
+        154
+      ],
+      "observation": "Each bus drawing (12 to 16) spaced its route lists and street names afresh, so only 20 to 33 percent of lists stayed through each zoom step; zooming in, a list could show, go and come back (Chris, iPhone screenshots of /v4/zoom/ at 16, 15.8 and 14.95 near 19th and Curtis). Carry-over in the build (not yet committed) keeps 93 to 97 percent; the page still hides some for a moment after the 13 and 14 handovers, some under the base map's neighbourhood names (place-3).",
+      "next": "Find the remaining page-side hides, publish /v5, phone check with #154's other preview checks.",
+      "done_when": "Zooming in from 12 to 16 at 19th and Curtis, Union Station and Colfax, a route list or street name that has shown stays until it leaves the screen, except where a new station name or line letter takes its room.",
+      "evidence": [],
+      "verification": "Not yet verified. Sweep of rendered labels 12 to 16 by tenths (local build, uncommitted): flagged labels 12 to 6 at 19th and Curtis, 5 to 4 at Union Station, 3 to 2 at Colfax.",
+      "fixed_commit": ""
     }
   ]
 }

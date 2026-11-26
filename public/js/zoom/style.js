@@ -199,6 +199,13 @@ export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
     layout: { 'text-field': 'a\u2013', 'text-font': [font], 'text-size': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
     paint: { 'text-opacity': 0 } }));
   original.layers.push(...warm);
+  // The sheets' own bus drawings at 12, 14 and 16 are drawn again for the trial, each keeping
+  // the lettering of the one a zoom out, and none setting lettering the page has no room for
+  // (scripts/zoom-prototype.mjs).
+  for (const [n, zoom] of Object.entries(SHEET_ZOOM)) {
+    original.sources[`sheet-${n}`] = { ...original.sources[`sheet-${n}`], data: busUrl(zoom) };
+    original.sources[`routes-${n}`] = { ...original.sources[`routes-${n}`], data: busUrl(zoom, true) };
+  }
   const busSources = Object.fromEntries(Object.entries(BETWEEN).flatMap(([set, sheet]) => [
     [`trial-bus-${set}`, { ...original.sources[`sheet-${sheet}`], data: busUrl(set) }],
     [`trial-bus-${set}-routes`, { ...original.sources[`routes-${sheet}`], data: busUrl(set, true) }]]));

@@ -13,7 +13,7 @@ const files = ['public/zoom/index.html', 'public/css/zoom.css',
   'public/js/sheets/style.js', 'public/js/sheets/address.js', 'public/js/color.js',
   'public/data/sheets.json', ...[2, 3, 4].flatMap((n) => [`public/data/sheet-${n}.geojson`, `public/data/sheet-${n}-routes.geojson`]),
   'public/data/zoom-prototype/trial.json', 'public/data/zoom-prototype/report.json',
-  ...[13, 15].flatMap((z) => [`public/data/zoom-prototype/bus-${z}.geojson`, `public/data/zoom-prototype/bus-${z}-routes.geojson`])];
+  ...[12, 13, 14, 15, 16].flatMap((z) => [`public/data/zoom-prototype/bus-${z}.geojson`, `public/data/zoom-prototype/bus-${z}-routes.geojson`])];
 const copies = [['public/vendor', 'vendor']];
 const hashes = {};
 for (const file of files) {
