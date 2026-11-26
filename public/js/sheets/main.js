@@ -440,8 +440,29 @@ map.on('zoomstart', (e) => {
   began = null;
   requestAnimationFrame(() => nudge(1, around));
 });
-document.querySelector('#in').addEventListener('click', () => nudge(1, !cameFrom && openingSteps && hub ? hub : undefined));
-document.querySelector('#out').addEventListener('click', () => nudge(-1));
+// + and - step when a finger lifts off them, not on the click Safari makes of a tap: of two quick
+// taps, Safari on the iPhone makes no click of the second (it waits for a double tap; on the home
+// screen, any tap within about 300 ms of the last), so quick taps were lost (#210, Chris
+// 2026-11-25). A click that follows a counted tap is not counted again; a click with no tap
+// before it (a mouse, a key, a screen reader) steps as before.
+const stepButtons = [['#in', 1], ['#out', -1]].map(([id, dir]) => [document.querySelector(id), dir]);
+let tappedAt = -Infinity;
+const press = (dir) => nudge(dir, dir > 0 && !cameFrom && openingSteps && hub ? hub : undefined);
+for (const [button, dir] of stepButtons) {
+  button.addEventListener('pointerup', (e) => {
+    if (e.pointerType === 'mouse' || button.disabled || !e.isPrimary) return;
+    const box = button.getBoundingClientRect(); // a finger slid off the button is not a tap
+    if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) return;
+    tappedAt = performance.now();
+    reveal();
+    press(dir);
+  });
+  button.addEventListener('click', () => {
+    if (performance.now() - tappedAt < 800) return; // the click Safari makes of a tap already counted
+    press(dir);
+  });
+  button.addEventListener('dblclick', (e) => e.preventDefault());
+}
 
 // --- No step before the next sheet is ready ----------------------------------------
 

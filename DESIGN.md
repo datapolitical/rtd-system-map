@@ -3160,7 +3160,11 @@ are deferred, not ruled out. See "Open questions".
     sheet at a time, each step waiting for its sheet as above (a move of
     two sheets at once drew bare ground on the way: 2 of 8 frames, and 9
     of 14 for three); a tap on − takes one off, and back to the sheet shown
-    ends the wait. The + and − keys step as the buttons do. A pinch or a
+    ends the wait. A tap on + or − counts when the finger lifts, not on
+    the click Safari makes of it: Safari makes no click of a tap within
+    about 300 ms of the last, so quick taps were lost (#210). A double tap
+    on the map still goes one sheet on. The + and − keys step as the
+    buttons do. A pinch or a
     scroll that meets the sheet's edge just after the next sheet is ready,
     before the edge is let out, steps on too (it was lost). Measured on a 9 Mbps connection (local copy,
     412 px phone): a step 0.3 s after the opening waited 1.2 to 1.5 s and
@@ -5531,6 +5535,11 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   The + and − keys go the same way instead of through MapLibre's own
   keyboard zoom. Reason: three taps on + during a wait gave one step, since
   each asked for the same next sheet. The checks wait while a step is held.
+- 2026-11-25: Sheets: + and − step when the finger lifts (#210), and the
+  click a browser makes of that tap is not counted again; a click with no
+  touch before it (a mouse, a key, a screen reader) steps as before.
+  Reason: on Chris's iPhone quick taps were lost; Safari makes no click of
+  a tap within about 300 ms of the last one.
 
 ## Sources
 

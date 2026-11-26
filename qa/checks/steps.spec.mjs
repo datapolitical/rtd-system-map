@@ -122,3 +122,100 @@ test('taps during a wait stop at the last sheet, and at the first', async ({ she
   expect(await atRest(page, 0)).toBe(true);
   await expect(page.locator('#out')).toBeDisabled();
 });
+
+// Quick taps as Safari on the iPhone delivers them (Chris, 2026-11-25: "I have to wait a second
+// between taps for it to register"). Safari makes no click of a tap that comes within about
+// 300 ms of the last one: it takes the two as a double tap (WebKit bug 202917; on the home
+// screen, any tap). Chromium makes a click of every tap, so the checks above, which click, never
+// saw it. Here the page drops the click of every second tap in a quick burst, as Safari does.
+// The burst is marked by the check rather than timed in the page: a busy headless page receives
+// the taps late, which stretched the gap past Safari's window on a slow frame.
+async function likeSafari(page) {
+  await page.addInitScript(() => {
+    let n = 0, drop = false;
+    window.safariBurst = false;
+    window.safariDropped = 0;
+    addEventListener('touchend', () => { if (window.safariBurst) drop = ++n % 2 === 0; }, true);
+    addEventListener('click', (e) => { if (!drop) return; drop = false; window.safariDropped++; e.stopImmediatePropagation(); e.preventDefault(); }, true);
+  });
+}
+async function touchTaps(page, button, n, apart = 60) {
+  const box = await page.locator(button).boundingBox();
+  await page.evaluate(() => { window.safariBurst = true; });
+  for (let i = 0; i < n; i++) {
+    if (i) await page.waitForTimeout(apart);
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  }
+}
+
+test('two quick taps on +, as Safari delivers them, go two sheets on', async ({ sheetPage }) => {
+  const { page } = sheetPage;
+  await likeSafari(page);
+  await opened(sheetPage);
+  await stepped(page);
+  await touchTaps(page, '#in', 2);
+  expect(await page.evaluate(() => window.safariDropped), 'Safari\'s click of the second tap was dropped').toBe(1);
+  await stepped(page);
+  expect(await shown(page)).toBe(OPENING + 2);
+  expect(await atRest(page, OPENING + 2)).toBe(true);
+});
+
+test('two quick taps on -, as Safari delivers them, go two sheets back', async ({ sheetPage }) => {
+  const { page } = sheetPage;
+  await likeSafari(page);
+  await opened(sheetPage);
+  for (let i = 0; i < 2; i++) { // two sheets on, one at a time, to have two to come back
+    await stepped(page);
+    await page.locator('#in').click();
+  }
+  await stepped(page);
+  expect(await shown(page)).toBe(OPENING + 2);
+  await touchTaps(page, '#out', 2);
+  expect(await page.evaluate(() => window.safariDropped), 'Safari\'s click of the second tap was dropped').toBe(1);
+  await stepped(page);
+  expect(await shown(page)).toBe(OPENING);
+  expect(await atRest(page, OPENING)).toBe(true);
+});
+
+// A tap is counted once: on the finger lifting, and not again on the click a browser makes of it.
+test('one tap on + goes one sheet on, not two', async ({ sheetPage }) => {
+  const { page } = sheetPage;
+  await opened(sheetPage);
+  await stepped(page);
+  await touchTaps(page, '#in', 1);
+  await stepped(page);
+  await page.waitForTimeout(1000);
+  await stepped(page);
+  expect(await shown(page)).toBe(OPENING + 1);
+  expect(await atRest(page, OPENING + 1)).toBe(true);
+});
+
+// A double tap on the map still goes one sheet closer, about the point tapped: the buttons step
+// on the finger lifting, and the map's own double tap is MapLibre's, from its touches.
+test('a double tap on the map, as Safari delivers it, goes one sheet on', async ({ sheetPage }) => {
+  const { page } = sheetPage;
+  await likeSafari(page);
+  await opened(sheetPage);
+  await stepped(page);
+  // On bare ground: a tap on a line, station or stop opens its card instead (as on a phone).
+  const at = await page.evaluate(() => {
+    const map = window.sheetsMap, { clientWidth: w, clientHeight: h } = map.getContainer();
+    // Clear by 16 px: the page looks 9 px about a tap for what is under it.
+    for (let y = 0.1; y <= 0.7; y += 0.025) for (let x = 0.1; x <= 0.9; x += 0.025) {
+      const p = [x * w, y * h];
+      const near = map.queryRenderedFeatures([[p[0] - 16, p[1] - 16], [p[0] + 16, p[1] + 16]])
+        .filter((f) => /^(rail|letter|station|name|group-stop|pick-letter|stop-letter|bus|stop)-\d+$/.test(f.layer.id)); // what a tap opens (main.js)
+      if (!near.length) return p;
+    }
+    return null;
+  });
+  expect(at, 'a spot of bare ground near the middle of the map').not.toBeNull();
+  await page.touchscreen.tap(...at);
+  await page.waitForTimeout(40);
+  await page.touchscreen.tap(...at);
+  await stepped(page);
+  await page.waitForTimeout(1000);
+  await stepped(page);
+  expect(await shown(page)).toBe(OPENING + 1);
+  expect(await atRest(page, OPENING + 1)).toBe(true);
+});
