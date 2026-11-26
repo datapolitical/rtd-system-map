@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { SHEETS } from './lib/sheets.mjs';
 import { dataCode, sheetsCode } from './lib/fingerprint.mjs';
 import { drawingFingerprint } from './sheets.mjs';
+import { groundNeeds, readPack } from './lib/basemap.mjs';
+import { readdir } from 'node:fs/promises';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = path.join(ROOT, 'public', 'data');
@@ -50,6 +52,24 @@ const poster = html.match(/<div id="poster"[^>]*\sdata-drawing="([^"]*)"/)?.[1];
 if (sheets && poster !== sheets.drawing) {
   problems.push('the loading pictures were taken of another drawing: run `node scripts/poster-build.mjs` and commit public/index.html and public/poster');
 }
+
+// The ground is the site's own (scripts/basemap.mjs): there, with every property the style reads,
+// and the one the pictures show.
+const pack = await readPack();
+if (!pack) problems.push('basemap/ has no ground tiles: run `npm run build:basemap` and commit basemap/');
+else {
+  for (const [layer, fields] of Object.entries(groundNeeds())) {
+    const missing = fields.filter((f) => !pack.layers?.[layer]?.includes(f));
+    if (!pack.layers?.[layer] || missing.length) problems.push(`the style reads the ground's ${layer}${missing.length ? ` (${missing.join(', ')})` : ''}, which basemap/ left out: run \`npm run build:basemap\` and commit basemap/`);
+  }
+  const shows = html.match(/<div id="poster"[^>]*\sdata-ground="([^"]*)"/)?.[1];
+  if (shows !== pack.planet) problems.push(`the loading pictures show another ground (${shows || 'none'}, basemap/ is ${pack.planet}): run \`node scripts/poster-build.mjs\` and commit public/index.html and public/poster`);
+}
+// What Cloudflare Pages takes: 20,000 files a site on its free plan (developers.cloudflare.com/pages/platform/limits).
+const count = async (dir) => (await readdir(dir, { withFileTypes: true, recursive: true })).filter((d) => d.isFile()).length;
+const files = await count(path.join(ROOT, 'public'));
+if (files > 20000) problems.push(`public/ has ${files} files, more than the 20,000 Cloudflare Pages takes`);
+else if (!problems.length) console.log(`${files} files to publish`);
 
 if (problems.length) {
   console.error('Not publishing; the live site stays as it is:');

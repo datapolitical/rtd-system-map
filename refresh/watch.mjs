@@ -1,7 +1,7 @@
 // The hourly check (DESIGN.md, "Zero maintenance", Rule 2). It asks RTD
-// whether any source has changed since the live site's data was built, and
-// whether the basemap has a new tile build since the loading pictures were
-// taken. It rebuilds nothing: a change sends one phone alert, and we rebuild
+// whether any source has changed since the live site's data was built. The
+// basemap is the site's own (scripts/basemap.mjs), refreshed by hand, so a new
+// tile build elsewhere changes nothing here. It rebuilds nothing: a change sends one phone alert, and we rebuild
 // on our own machine with `npm run build:data`, check the result, and commit.
 // The same change alerts once; a further change alerts again.
 //
@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { whatChanged, groundChanged } from './check.mjs';
+import { whatChanged } from './check.mjs';
 
 const SITE = (process.env.RTD_SITE_URL ?? 'https://rtd-system-map.pages.dev').replace(/\/$/, '');
 const STATE = process.env.RTD_WATCH_STATE ?? path.join(homedir(), '.local', 'state', 'rtd-map-watch', 'sent.json');
@@ -60,12 +60,6 @@ if (!res.ok) {
 }
 const meta = await res.json();
 const { changes, problems } = await whatChanged(meta, { getJson, sha256 });
-const [html, sheets] = await Promise.all([
-  fetch(`${SITE}/`, fresh).then((r) => (r.ok ? r.text() : '')).catch(() => ''),
-  fetch(`${SITE}/data/sheets.json`, fresh).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-]);
-const ground = await groundChanged(html, sheets, { getJson });
-if (ground) changes.push(ground);
 for (const p of problems) console.log(p);
 if (!changes.length) {
   console.log(`unchanged since ${meta.built}`);
@@ -81,7 +75,7 @@ if (sent?.key === key) {
   process.exit(0);
 }
 
-const message = [`RTD changed its data since the map was built (${meta.built.slice(0, 10)}):`, ...changes.map((c) => `• ${c}`), '', `Nothing was rebuilt. When ready: npm run ${changes.every((c) => c.startsWith('basemap:')) ? 'build:sheets' : 'build:data'}, check it, commit.`].join('\n');
+const message = [`RTD changed its data since the map was built (${meta.built.slice(0, 10)}):`, ...changes.map((c) => `• ${c}`), '', 'Nothing was rebuilt. When ready: npm run build:data, check it, commit.'].join('\n');
 if (await alert('RTD map: new RTD data', message)) {
   await mkdir(path.dirname(STATE), { recursive: true });
   await writeFile(`${STATE}.next`, JSON.stringify({ key, at: new Date().toISOString(), built: meta.built, changes }, null, 2));
