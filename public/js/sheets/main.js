@@ -116,17 +116,35 @@ maplibregl.addProtocol('early', async ({ url }, abort) => {
   // The front page comes back with the tiles' own type (public/_headers): it is known by its "<".
   return { data: isTile(path) && notTile(data) ? new ArrayBuffer(0) : data };
 });
-function mapStyle(t) {
+// `only`: the one sheet whose layers the map starts with (below, "The other sheets' layers").
+function mapStyle(t, only = null) {
   const style = sheetStyle(t, stations, colors, { district, routeLines, lists });
   for (const source of Object.values(style.sources)) if (source.tiles) source.tiles = source.tiles.map((u) => `early://${u}`);
-  return { ...style, glyphs: `early://${style.glyphs}` };
+  const other = (l) => /^(sheet|routes)-\d+$/.test(l.source ?? '') && l.source.split('-')[1] !== String(only);
+  const layers = only === null ? style.layers : style.layers.filter((l) => !other(l));
+  return { ...style, layers, glyphs: `early://${style.glyphs}` };
+}
+// The other sheets' layers. The map starts with the ground's and the opening sheet's, a quarter of
+// the style's rules, which the phone reads twice before it draws (on the page and in each map
+// worker: on Chris's iPhone 66-139 ms in a worker, 2026-11-25). The rest go in when the opening
+// is drawn, in the style's own order, so every sheet is drawn as before. The tests check the style
+// against MapLibre's rules (test/pages.test.mjs), so the map doesn't check them again.
+function addOtherSheets() {
+  const all = mapStyle(theme()).layers;
+  let before;
+  for (let i = all.length - 1; i >= 0; i--) {
+    if (!map.getLayer(all[i].id)) map.style.addLayer(all[i], before, { validate: false });
+    before = all[i].id;
+  }
+  map._update(true);
 }
 
 // How far out and in the map goes (style.js, LOWEST and HIGHEST); a step waiting for its tiles
 // limits it less far (limits()).
 const map = new maplibregl.Map({
   container: 'map',
-  style: mapStyle(theme()),
+  style: mapStyle(theme(), SHEETS[start].id),
+  validateStyle: false,
   center: asked?.center ?? home,
   zoom: rests[start],
   minZoom: LOWEST,
@@ -338,7 +356,8 @@ let cameFrom = null;
 // Whether the whole district is as stepping out framed it: a turned phone frames it again.
 let framed = false;
 // `keep`: a link names this view's centre, so stepping to the whole district keeps it.
-function show(index, around, keep = false) {
+// `duration`: the move's length; none at the opening (below).
+function show(index, around, keep = false, duration = 380) {
   const was = sheet;
   sheet = Math.max(0, Math.min(zooms.length - 1, index));
   const dots = document.querySelector('#sheets');
@@ -356,7 +375,7 @@ function show(index, around, keep = false) {
   // The whole district's room is given before the move there, and taken back after the move off it.
   if (SHEETS[sheet].whole) map.setMaxBounds(roomy());
   else if (SHEETS[was]?.whole) map.once('moveend', () => { if (!SHEETS[sheet].whole) map.setMaxBounds(bounded); });
-  map.easeTo({ zoom: rests[sheet], ...(whole ? { center: frameCentre, offset: [0, -lift(rests[sheet])] } : back ? { center: back } : { around }), duration: 380 }, { settling: true });
+  map.easeTo({ zoom: rests[sheet], ...(whole ? { center: frameCentre, offset: [0, -lift(rests[sheet])] } : back ? { center: back } : { around }), duration }, { settling: true });
   for (const [i, dot] of [...document.querySelectorAll('#sheets i')].entries()) dot.classList.toggle('on', i === sheet);
   document.querySelector('#out').disabled = sheet === 0;
   document.querySelector('#in').disabled = sheet === zooms.length - 1;
@@ -491,7 +510,10 @@ function watch() {
 map.on('idle', () => { if (window.sheetsReady && limits()) watch(); });
 map.on('movestart', (e) => { if (e.originalEvent) openingSteps = false; });
 map.on('dragstart', () => { if (SHEETS[sheet].whole) cameFrom = null; framed = false; });
-show(sheet);
+// The opening is already at its sheet's zoom: no move. A move, even to where the map is, keeps
+// MapLibre from calling the map ready until it ends, 380 ms after the page starts (on Chris's
+// iPhone, 2026-11-25, it held a reload's opening 120 ms after everything was drawn).
+show(sheet, undefined, false, 0);
 
 // --- What is this? Tap a line, a station or a stop --------------------------------
 // The card names what is under the finger; each route on it is a button, and picking one
@@ -1027,7 +1049,7 @@ map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 // does for later (the offline copy) waits until the reader first touches the page, or until the
 // opening has been on the screen for SETTLE_MS, so none of it competes with the opening view on a
 // slow phone (DESIGN.md, "Quality floor").
-map.once('idle', () => { window.sheetsReady = true; window.sheetsAll = true; reveal(); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
+map.once('idle', () => { addOtherSheets(); window.sheetsReady = true; window.sheetsAll = true; reveal(); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
 
 // --- Offline (sw.js) ------------------------------------------------------------------
 // Asked for only once the opening view is drawn and the reader has it (whenSettled), so it
