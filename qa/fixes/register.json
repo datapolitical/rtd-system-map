@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "title": "RTD map fixes",
-  "updated_at": "2026-11-24T00:00:00.000Z",
-  "map_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4",
+  "updated_at": "2026-11-25T00:00:00.000Z",
+  "map_commit": "89ab0413167cb5e558558f56c915aeb4090d5ab1",
   "repository": "datapolitical/rtd-system-map",
   "tracking_note": "GitHub Issues remain the canonical work tracker. These linked findings supplement the imported open issues. New findings have not been written back to GitHub: the connected integration rejected issue writes with HTTP 403.",
   "priority_note": "Next and Later are a proposed order for the local findings; existing GitHub milestones and done-when criteria are preserved.",
@@ -104,6 +104,41 @@
       "path": "qa/.scratch/names154/bus13-dark-400.png",
       "commit": "9dfd5b5",
       "type": "image"
+    },
+    {
+      "id": "crowd-before-light-12",
+      "label": "Hub at zoom 12 before RTD-006, light (128 px shared)",
+      "path": "qa/.scratch/zoom16/crowding-before/light-hub-12.png",
+      "commit": "89ab041",
+      "type": "image"
+    },
+    {
+      "id": "crowd-after-light-12",
+      "label": "Hub at zoom 12 after RTD-006, light",
+      "path": "qa/.scratch/zoom16/crowding-final/light-hub-12.png",
+      "commit": "89ab041",
+      "type": "image"
+    },
+    {
+      "id": "crowd-after-light-13.25",
+      "label": "Hub at zoom 13.25 after RTD-006, light (the 1 px left)",
+      "path": "qa/.scratch/zoom16/crowding-final/light-hub-13.25.png",
+      "commit": "89ab041",
+      "type": "image"
+    },
+    {
+      "id": "crowd-after-dark-13",
+      "label": "Hub at zoom 13 after RTD-006, dark",
+      "path": "qa/.scratch/zoom16/crowding-final/dark-hub-13.png",
+      "commit": "89ab041",
+      "type": "image"
+    },
+    {
+      "id": "crowd-report",
+      "label": "Crowding measured at 17 quarter zooms, light and dark",
+      "path": "qa/.scratch/zoom16/crowding-final/report.json",
+      "commit": "89ab041",
+      "type": "data"
     }
   ],
   "findings": [
@@ -194,7 +229,7 @@
         "c233-light-hub-14",
         "c233-dark-hub-13"
       ],
-      "verification": "Build c233e0f: every chip row in all nine drawings has one order (2 names with chip rows, 0 with more than one order); captures in both themes.",
+      "verification": "Build 89ab041, 12-16: the check records every \"route before route\" pair for each station name, and no pair is seen both ways. Union Station splits into two names at 14.75 (rail and transit hall), each keeping the shared order.",
       "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
     },
     {
@@ -223,21 +258,25 @@
       "id": "RTD-006",
       "title": "Bus route lists crowd Union Station",
       "kind": "visual-quality",
-      "status": "needs-check",
+      "status": "fixed-preview",
       "priority": "next",
       "scope": "Zoom trial · hub labels",
       "issues": [
         156,
         159
       ],
-      "observation": "Diagonal bus-number lists compete with the station marks and its name/chip row. A precise text collision has not yet been measured.",
-      "next": "Measure label bounds around the hub at the comparison cameras; inspect the hierarchy and spacing in both themes.",
+      "observation": "Bus numbers printed over the Union Station name, its chips and the station bars, at 12 to 13.75 (light: 491 px of shared ink across those zooms, 128 px at 12).",
+      "next": "Phone check of the trial; recheck when the production zoom refactor (#155) lands.",
       "done_when": "Bus lists, rail letters, station marks and the station name remain readable as separate information, with no measured text collision.",
       "evidence": [
-        "hub-12-99",
-        "hub-14"
+        "crowd-before-light-12",
+        "crowd-after-light-12",
+        "crowd-after-light-13.25",
+        "crowd-after-dark-13",
+        "crowd-report"
       ],
-      "verification": "Crowding is visible; exact collision and clearance need measurement."
+      "verification": "Build 89ab041, hub view 402x874, 17 quarter zooms 12-16 (qa/zoom-crowding-browser.mjs): shared ink 1 px in light (13.25, \"15, 19\" within 2 px of a bar end), 0 in dark. Lettering-order detector pinned (154-prototype-numbers-on-lettering) and caught on 0c522dd and 486bd94.",
+      "fixed_commit": "89ab0413167cb5e558558f56c915aeb4090d5ab1"
     },
     {
       "id": "RTD-007",
@@ -352,17 +391,17 @@
         158,
         159
       ],
-      "observation": "The experiment bundles nine drawings plus offset geometry, approximately 398 KB gzipped, and loads both bus sheets. It is an experimental bundle.",
+      "observation": "The experiment bundles the trial (two rail drawings, names and attachments for 12-16) at about 167 KB gzipped, with the rails thinned to 0.1 px, and loads five bus drawings. It is an experimental bundle.",
       "next": "Implement current and neighbouring drawing loading with cancellation, caching and bounded retention for production.",
       "done_when": "Phone measurements show acceptable first display, zoom handover and retained memory; the normal sheets remain intact until the production transition is approved.",
       "evidence": [
         "trial-notes"
       ],
-      "verification": "Bundle figure belongs to the documented trial. Production loading strategy has not been implemented."
+      "verification": "Build 89ab041: trial.json 1.24 MB raw, 167 KB gzipped (report.json bytes). Production loading strategy has not been implemented."
     },
     {
       "id": "RTD-013",
-      "title": "Continuous zoom covers only 12 through 14",
+      "title": "Continuous zoom covers only 12 through 16",
       "kind": "transition-work",
       "status": "open",
       "priority": "later",
@@ -376,7 +415,7 @@
         160,
         161
       ],
-      "observation": "The isolated prototype covers 12–14. It does not complete the full-range map, intermediate whole-zoom drawings or final band-by-band review.",
+      "observation": "The isolated prototype covers 12-16. It does not complete the full-range map, the zooms below 12 or final band-by-band review.",
       "next": "Finish the #154 experiment, then follow the existing #129 order. #155 and later implementation wait for v1.0 to close under the current plan.",
       "done_when": "The corresponding GitHub issues meet their existing done-when criteria across the full supported range, with phone review and release sign-off.",
       "evidence": [
