@@ -5542,6 +5542,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   connection for the ground, and every sheet's whole file was downloaded
   in the background (sheet 4's 4.85 MB). Chris: "Don't we also want to
   serve the base map ourselves?" and "Yes, let's do that."
+- 2026-11-25: The map starts with the opening sheet's layers only and adds
+  the other sheets' layers once it is first ready, and the opening sets its
+  sheet without a move. Reason: the timing readout's map-worker rows on
+  Chris's iPhone showed each worker reading the whole style, two-thirds of
+  it for sheets not in view (37 to 158 ms a worker), and the opening's
+  380 ms move to the zoom the map was already at kept MapLibre from calling
+  the map ready until it ended (a reload ready at 785 ms, drawn by 664).
+  The drawing is unchanged to the pixel at 18 views in both themes, and a
+  step through every sheet gives the same layers in the same order.
+  Chris said go.
 
 ## Sources
 
