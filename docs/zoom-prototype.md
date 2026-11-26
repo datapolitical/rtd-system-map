@@ -394,6 +394,14 @@ causes, now fixed:
   they would still take room from the names on show, so on a fast pinch they
   can still arrive a moment late.
 
+Run again on the iPhone (2026-11-26), the streets and bus lines held through
+the fast pinch, apart from one video frame near 15. Zooming out across 14 the
+two rail drawings still showed together for about 0.1 s: the rail's opacity
+had no transition of its own, so a change of global state took the style's
+default 300 ms one. Its transition is now 0. Read frame by frame in a headless
+browser, every layer's opacity now changes in one frame at each handover (12
+to 16, both ways); the same reading on the earlier build shows the rail fade.
+
 ## Line letters
 
 Letters are placed outward from 12, like the names: the letters at 12 stay

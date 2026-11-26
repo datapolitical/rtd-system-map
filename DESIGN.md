@@ -5544,7 +5544,8 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   base map's banded roads and buildings are held, unseen, a zoom either side of
   their band. Reason: on the real iPhone a 0.6 s pinch from 14 to 16 left the
   streets white and the bus lines doubled for about 0.3 s in both builds;
-  Chris: "Go".
+  Chris: "Go". The rail drawings' opacity has no transition, so they too
+  change in one frame.
 
 ## Sources
 

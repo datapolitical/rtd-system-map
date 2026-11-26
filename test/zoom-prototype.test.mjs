@@ -437,3 +437,12 @@ test('banded ground layers load a zoom either side of their band and show only i
     if (hi < 24) { assert.equal(at(hi - 0.01), was.paint?.[key] ?? 1); assert.equal(at(hi), 0, `${l.id} unseen above its band`); }
   }
 });
+
+test('the rail drawings change over with no transition', () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
+  const rails = previewStyle('dark', metadata, bundle).layers.filter((l) => /^trial-rail/.test(l.id) && JSON.stringify(l.paint['line-opacity']).includes('global-state'));
+  assert.ok(rails.length >= 4);
+  // The style's default 300 ms transition cross-faded the two drawings (real iPhone run 2026-11-26).
+  for (const l of rails) assert.deepEqual(l.paint['line-opacity-transition'], { duration: 0, delay: 0 }, l.id);
+});

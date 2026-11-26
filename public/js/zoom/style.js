@@ -151,8 +151,11 @@ export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
   rails = RAIL_DRAWINGS.flatMap((d) => rails.map((l) => {
     const key = `rail${d.set}`;
     railState[key] = { default: d === RAIL_DRAWINGS[0] ? 1 : 0 };
+    // With no transition of its own, a change of global state here took the style's default
+    // 300 ms one, so zooming out across 14 the two rail drawings still showed together, a few
+    // pixels apart (real iPhone run 2026-11-26).
     return { ...structuredClone(l), id: `${l.id}-${d.set}`, filter: ['==', ['get', 'ref'], d.ref],
-      paint: { ...l.paint, 'line-opacity': ['*', l.paint['line-opacity'] ?? 1, ['global-state', key]] } };
+      paint: { ...l.paint, 'line-opacity': ['*', l.paint['line-opacity'] ?? 1, ['global-state', key]], 'line-opacity-transition': { duration: 0, delay: 0 } } };
   }));
   // Station bars cross over with their rail drawing (model.js, attachedFor).
   for (const l of attached) for (const k of ['line-opacity']) l.paint = { ...l.paint, [k]: ['*', l.paint[k] ?? 1, ['coalesce', ['get', 'fade'], 1]] };
