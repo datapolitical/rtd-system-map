@@ -199,6 +199,10 @@
       const name = decodeURIComponent(e.name.replace(/^.*\/glyphs\/Overpass /, '')).replace('.pbf', '');
       rows.push([`  glyphs ${name}`, `${ms(e.startTime)}–${ms(e.responseEnd)} (${e.initiatorType}, ${Math.round((e.transferSize || 0) / 1024)} KB)`]);
     }
+    // Each code file: when it was asked for and when it was in. The map can't start until the last is in.
+    for (const e of res.filter((x) => groups['page code'](x.name)).sort((a, b) => a.responseEnd - b.responseEnd)) {
+      rows.push([`  code ${e.name.replace(/^.*\/(js|vendor)\//, '')}`, `${ms(e.startTime)}–${ms(e.responseEnd)} (${Math.round((e.transferSize || 0) / 1024)} KB)`]);
+    }
     const allIn = Math.max(...res.map((e) => e.responseEnd), ...Object.values(ev.tiles));
     rows.push(['downloads in + tiles ready', ms(allIn)]);
     rows.push(['map style loaded', ms(ev.load)]);
