@@ -3155,7 +3155,9 @@ are deferred, not ruled out. See "Open questions".
     sheet at a time, each step waiting for its sheet as above (a move of
     two sheets at once drew bare ground on the way: 2 of 8 frames, and 9
     of 14 for three); a tap on − takes one off, and back to the sheet shown
-    ends the wait. The + and − keys step as the buttons do. Measured on a 9 Mbps connection (local copy,
+    ends the wait. The + and − keys step as the buttons do. A pinch or a
+    scroll that meets the sheet's edge just after the next sheet is ready,
+    before the edge is let out, steps on too (it was lost). Measured on a 9 Mbps connection (local copy,
     412 px phone): a step 0.3 s after the opening waited 1.2 to 1.5 s and
     drew no blank frame, where the page before drew 9 or 10 blank frames.
     Those tiles start loading at the opening, not at the first touch, so

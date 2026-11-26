@@ -498,12 +498,16 @@ function onward() {
 // For the checks: whether a step waits for its sheet, or more steps are to come (qa/a11y.mjs,
 // qa/wholecheck.mjs). The map rests while it waits.
 Object.defineProperty(window, 'sheetsHeld', { get: () => !!held || (aim !== null && aim !== sheet) });
-// Pinch or scroll at the edge of the sheet's limits: a step like any other, which waits.
+// Pinch or scroll at the edge of the sheet's limits: a step like any other, which waits. The
+// limits are let out a moment after the next sheet is ready (watch); a scroll that meets them
+// in that moment steps at once, and a pinch once the fingers are off, where both were lost.
 function pushed(dir) {
   const to = sheet + dir;
-  if (held || !SHEETS[to] || givenUp === sheet || stepReady(to)) return;
+  if (held || !SHEETS[to] || givenUp === sheet) return;
   const z = map.getZoom();
-  if (dir > 0 ? z >= map.getMaxZoom() - 0.01 : z <= map.getMinZoom() + 0.01) hold({ to });
+  if (!(dir > 0 ? z >= map.getMaxZoom() - 0.01 : z <= map.getMinZoom() + 0.01)) return;
+  if (stepReady(to) && !map.isMoving()) step(to);
+  else hold({ to });
 }
 map.getContainer().addEventListener('wheel', (e) => { if (e.deltaY) pushed(e.deltaY < 0 ? 1 : -1); }, { passive: true });
 let spread = 0;
