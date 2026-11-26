@@ -14,7 +14,11 @@
   try {
     const { programs } = await (await fetch('/data/programs.json')).json();
     const gl = new OffscreenCanvas(1, 1).getContext('webgl2');
-    if (gl) {
+    // Built in the background (KHR_parallel_shader_compile), never waited on: in a first try,
+    // waiting for each in turn kept the phone's graphics process busy, and the page's own first
+    // GL call (the map's) waited for all of it (iPhone 17 Pro in Device Farm, 2026-11-26).
+    const parallel = gl?.getExtension('KHR_parallel_shader_compile');
+    if (gl && parallel) {
       const made = programs.map(({ vertex, fragment }) => {
         const p = gl.createProgram();
         for (const [type, text] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
@@ -26,7 +30,11 @@
         gl.linkProgram(p);
         return p;
       });
-      // Asking for each result waits until it is built.
+      // Asked only whether each is done, which doesn't wait; the link status once all are.
+      await new Promise((done) => {
+        const poll = () => (made.every((p) => gl.getProgramParameter(p, parallel.COMPLETION_STATUS_KHR)) ? done() : setTimeout(poll, 25));
+        poll();
+      });
       built = made.filter((p) => gl.getProgramParameter(p, gl.LINK_STATUS)).length;
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     }
