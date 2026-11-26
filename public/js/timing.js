@@ -223,7 +223,7 @@
     rows.push(['first GL draw', ms(gl.firstDraw)]);
     rows.push([`GL programs built (${gl.programs})`, `compile ${ms(gl.compile)} + link ${ms(gl.link)}`]);
     for (const e of gl.each) rows.push([`  program ${e.lengths.join('+')}`, `at ${ms(e.at)}, ${ms(e.ms)} ms`]);
-    if (window.warmed) rows.push(['programs built ahead (warm.js)', window.warmed]);
+    if (window.warmed) rows.push(['programs built ahead (index.html)', window.warmed]);
     const long = gaps.filter(([t, d]) => d > 50 && t + d <= ready + 1);
     const after = long.filter(([t]) => t >= allIn);
     rows.push(['frames over 50 ms', `${long.length}, ${ms(long.reduce((s, [, d]) => s + d, 0))} ms in all`]);

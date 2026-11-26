@@ -28,7 +28,7 @@ const SIZES = [
 const QUALITY = 60;
 
 // The GL programs the opening view is drawn with (vertex and fragment source, as MapLibre links
-// them), for the page to build in a worker before the map asks (public/js/warm.js).
+// them), for the page to build in a worker before the map asks (index.html's head).
 const RECORD_PROGRAMS = () => {
   window.linkedPrograms = [];
   const proto = WebGL2RenderingContext.prototype;

@@ -46,7 +46,7 @@ if (sheets && drawn[opens.id] && sheets.drawing !== (await drawingFingerprint(dr
   problems.push('the page\'s drawing code (public/js/sheets/, color.js) changed since the sheets were drawn: run `npm run build:sheets` and commit public/data and public/poster');
 }
 
-// The drawing programs the page builds ahead (public/js/warm.js) were recorded from this drawing
+// The drawing programs the page builds ahead (index.html's head) were recorded from this drawing
 // and this MapLibre; otherwise the phone builds programs the map never asks for.
 const programs = await json('programs.json');
 const maplibre = JSON.parse(await readFile(path.join(ROOT, 'node_modules', 'maplibre-gl', 'package.json'), 'utf8')).version;
