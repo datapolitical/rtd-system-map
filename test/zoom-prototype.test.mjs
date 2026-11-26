@@ -418,7 +418,7 @@ test('every line letter the build places reaches the page at every zoom, across 
 test('banded ground layers load a zoom either side of their band and show only inside it', () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
-  const plain = sheetStyle('light', metadata.stations, metadata.colors, new Set([2, 3, 4]), metadata.district, true);
+  const plain = sheetStyle('light', metadata.stations, metadata.colors, { district: metadata.district, routeLines: true });
   const style = previewStyle('light', metadata, bundle);
   const byId = new Map(style.layers.map((l) => [l.id, l]));
   // A tile from one zoom out is what shows while a pinch outruns loading; it held none of the next
@@ -445,4 +445,28 @@ test('the rail drawings change over with no transition', () => {
   assert.ok(rails.length >= 4);
   // The style's default 300 ms transition cross-faded the two drawings (real iPhone run 2026-11-26).
   for (const l of rails) assert.deepEqual(l.paint['line-opacity-transition'], { duration: 0, delay: 0 }, l.id);
+});
+
+test('the trial reads the sheets\' style as main makes it now: whole drawings, and no tile layer named', () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
+  const style = previewStyle('light', metadata, bundle);
+  assert.deepEqual(validateStyleMin(style).map((e) => e.message), []);
+  // The sheets are vector tiles on main; the trial's bus drawings are whole GeoJSON files, cut on
+  // the phone as the sheets were (big tiles, a wide margin), and none of the sheets' own tiles.
+  const bus = Object.entries(style.sources).filter(([name]) => /^(sheet|routes)-\d$|^trial-bus-/.test(name));
+  assert.deepEqual(bus.map(([name]) => name).sort(), ['routes-2', 'routes-3', 'routes-4', 'sheet-2', 'sheet-3', 'sheet-4', 'trial-bus-13', 'trial-bus-13-routes', 'trial-bus-15', 'trial-bus-15-routes']);
+  for (const [name, s] of bus) {
+    assert.equal(s.type, 'geojson', name);
+    assert.match(s.data, /zoom-prototype\/bus-1[2-6](-routes)?\.geojson$/, name);
+    assert.equal(s.buffer, 256, name);
+    assert.equal(s.tolerance, 0.1, name);
+  }
+  assert.deepEqual([style.sources['sheet-2'].maxzoom, style.sources['trial-bus-13'].maxzoom, style.sources['sheet-3'].maxzoom, style.sources['trial-bus-15'].maxzoom, style.sources['sheet-4'].maxzoom], [11, 13, 13, 15, 15]);
+  // A layer naming a tile layer finds nothing in a GeoJSON source.
+  for (const l of style.layers) if (style.sources[l.source]?.type === 'geojson') assert.equal(l['source-layer'], undefined, l.id);
+  // A list's offset is read from the feature itself, not looked up by the text the tiles carry.
+  assert.ok(!JSON.stringify(style.layers.filter((l) => /^(sheet|routes)-|^trial-bus-/.test(l.source ?? ''))).includes('"lists"'));
+  // The ground is still OpenFreeMap's own tiles: the site's hold only what the sheets draw at each zoom.
+  assert.deepEqual(style.sources.ground, { type: 'vector', url: 'https://tiles.openfreemap.org/planet' });
 });

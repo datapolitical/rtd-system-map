@@ -1,4 +1,4 @@
-import { sheetStyle, PALETTES } from '../sheets/style.js';
+import { sheetStyle, PALETTES, TILING } from '../sheets/style.js';
 import { pitchAt, sizeAt, RAIL_DRAWINGS, BUS_DRAWINGS } from './model.js';
 
 // The bus drawings this trial adds between the sheets, and each one's picked-route lines.
@@ -10,6 +10,14 @@ const BETWEEN = Object.fromEntries(BUS_DRAWINGS.filter((d) => !SHEET_ZOOM[d.set]
 // A layer's covering range: from a zoom below its drawing's, so it has loaded before it takes
 // over, to a zoom past the next drawing's, so it lasts while that one loads.
 const RANGES = Object.fromEntries(BUS_DRAWINGS.map((d, i) => [d.set, [d.zoom - 1, BUS_DRAWINGS[i + 1] ? BUS_DRAWINGS[i + 1].zoom + 1 : 24]]));
+
+// The trial's ground still comes from OpenFreeMap's tile server, not the site's own tiles
+// (basemap/). Those hold, at each zoom, only what the sheets draw there, and the trial holds each
+// road band a zoom either side of its own (below): the site's zoom-12 tile has the primary roads
+// and freeways of sheet 2 and none of the smaller streets the next band draws from it while its
+// own tile loads, which OpenFreeMap's has. The page moves onto the site's tiles when they are cut
+// for what it draws (#158).
+const GROUND = { type: 'vector', url: 'https://tiles.openfreemap.org/planet' };
 
 const zoomValue = (values) => ['interpolate', ['linear'], ['zoom'], ...values.flatMap(([z, v]) => [z, v])];
 const kind = (value) => ['==', ['get', 'kind'], value];
@@ -33,7 +41,11 @@ function fontsOf(layers) {
 // ranges the names use, makes MapLibre fetch every font before the map is shown, rather than
 // partway through the first pinch (real iPhone run 2026-11-25).
 export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
-  const original = sheetStyle(theme, metadata.stations, metadata.colors, new Set([2, 3, 4]), metadata.district, true);
+  // The sheets' style. The sheets themselves are tiles now, cut when the site is published; the
+  // trial's drawings are still whole GeoJSON files, so their layers name no tile layer and read
+  // each list as the list itself (no `lists` to look up).
+  const original = sheetStyle(theme, metadata.stations, metadata.colors, { district: metadata.district, routeLines: true });
+  for (const l of original.layers) if (/^(sheet|routes)-/.test(l.source ?? '')) delete l['source-layer'];
   const c = PALETTES[theme];
   const size = (key, transform = (v) => v) => ['interpolate', ['linear'], ['zoom'], ...bundle.sizes[key].flatMap(([z, v]) => [z, transform(v)])];
   const curve = (value) => ['interpolate', ['linear'], ['zoom'], ...bundle.sizes.rail.flatMap(([z]) => [z, value(z)])];
@@ -199,18 +211,19 @@ export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
     layout: { 'text-field': 'a\u2013', 'text-font': [font], 'text-size': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
     paint: { 'text-opacity': 0 } }));
   original.layers.push(...warm);
-  // The sheets' own bus drawings at 12, 14 and 16 are drawn again for the trial, each keeping
-  // the lettering of the one a zoom out, and none setting lettering the page has no room for
-  // (scripts/zoom-prototype.mjs).
-  for (const [n, zoom] of Object.entries(SHEET_ZOOM)) {
-    original.sources[`sheet-${n}`] = { ...original.sources[`sheet-${n}`], data: busUrl(zoom) };
-    original.sources[`routes-${n}`] = { ...original.sources[`routes-${n}`], data: busUrl(zoom, true) };
-  }
-  const busSources = Object.fromEntries(Object.entries(BETWEEN).flatMap(([set, sheet]) => [
-    [`trial-bus-${set}`, { ...original.sources[`sheet-${sheet}`], data: busUrl(set) }],
-    [`trial-bus-${set}-routes`, { ...original.sources[`routes-${sheet}`], data: busUrl(set, true) }]]));
+  // The trial's bus drawings, each a whole GeoJSON file the phone cuts as it cut the sheets
+  // before they were tiles (sheets/style.js, TILING): big tiles with a wide margin, so a label's
+  // stretch of street is whole in the tile that places it. Those at 12, 14 and 16 take the place
+  // of sheets 2, 3 and 4's own, drawn again so each keeps the lettering of the one a zoom out and
+  // sets none the page has no room for (scripts/zoom-prototype.mjs); 13 and 15 sit between them,
+  // cut as the closer sheet is.
+  const drawing = (sheet, zoom, routes = false) => ({ type: 'geojson', data: busUrl(zoom, routes), ...TILING, maxzoom: SHEET_ZOOM[sheet] - 1 });
+  const busSources = Object.fromEntries([
+    ...Object.entries(SHEET_ZOOM).flatMap(([n, zoom]) => [[`sheet-${n}`, drawing(n, zoom)], [`routes-${n}`, drawing(n, zoom, true)]]),
+    ...Object.entries(BETWEEN).flatMap(([set, sheet]) => [[`trial-bus-${set}`, drawing(sheet, set)], [`trial-bus-${set}-routes`, drawing(sheet, set, true)]]),
+  ]);
   return { ...original, state: { ...original.state, ...busState, ...railState },
-    sources: { ...original.sources, ...busSources,
+    sources: { ground: GROUND, ...busSources,
     'trial-rail': { type: 'geojson', data: bundle.rails, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-attached': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-labels': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
