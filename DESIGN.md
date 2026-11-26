@@ -5539,6 +5539,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   into its chips near 13; Chris: "Yes, those are the issues I meant". The
   trial also keeps the theme last picked (Chris: "Just keep working" on the
   recommendation).
+- 2026-11-26: Zoom trial (#154): bus drawings also hand over at once, and only
+  when the next can be drawn; the page keeps updating while sources load; the
+  base map's banded roads and buildings are held, unseen, a zoom either side of
+  their band. Reason: on the real iPhone a 0.6 s pinch from 14 to 16 left the
+  streets white and the bus lines doubled for about 0.3 s in both builds;
+  Chris: "Go".
 
 ## Sources
 

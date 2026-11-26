@@ -5,8 +5,9 @@ import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { SIZES, names } from '../scripts/lib/sheets.mjs';
 import { withZoom, zoomStops } from '../scripts/zoom-prototype.mjs';
 import { previewStyle } from '../public/js/zoom/style.js';
+import { sheetStyle } from '../public/js/sheets/style.js';
 import { attachedPoint, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChanges,
-  labelsAt, SIDE_HOLD, FADE_OUT_MS, FADE_IN_MS, busDrawingAt, BUS_HOLD, BUS_LINE_MS, railDrawingAt, railRefAt, attachedFor,
+  labelsAt, SIDE_HOLD, FADE_OUT_MS, FADE_IN_MS, busDrawingAt, BUS_HOLD, railDrawingAt, railRefAt, attachedFor,
   MIN_ZOOM, MAX_ZOOM, BUS_DRAWINGS } from '../public/js/zoom/model.js';
 import { railOrderErrors, letteringOrderErrors } from '../qa/lib/zoom-order.mjs';
 import { canonicalTracks, fitTerminalSpines } from '../scripts/lib/zoom-rail.mjs';
@@ -274,7 +275,7 @@ test('the trial build shows every name exactly once at every zoom through a swee
 
 test('each bus drawing serves from its own zoom up to the next, holding a little when zooming out', () => {
   const state = {};
-  const at = (zoom, now = 0) => busDrawingAt(zoom, state, now, { motion: false }).set;
+  const at = (zoom) => busDrawingAt(zoom, state).set;
   assert.equal(at(12), '2');
   assert.equal(at(12.99), '2');
   assert.equal(at(13), '13', 'the closer drawing takes over at its own zoom, never squeezed below it');
@@ -295,7 +296,7 @@ test('each bus drawing serves from its own zoom up to the next, holding a little
 
 test('the rail drawing hands over at 14, as the bus drawing there does, and holds a little zooming out', () => {
   const state = {};
-  const at = (zoom) => railDrawingAt(zoom, state, 0, { motion: false }).set;
+  const at = (zoom) => railDrawingAt(zoom, state).set;
   assert.equal(at(12), '13'); assert.equal(at(13.99), '13');
   assert.equal(at(14), '15'); assert.equal(at(16), '15');
   assert.equal(at(14 - BUS_HOLD + 0.01), '15'); assert.equal(at(14 - BUS_HOLD - 0.01), '13');
@@ -307,32 +308,34 @@ test('the rail drawing hands over at once: one set of bars and letters at every 
   const f = (kind, ref, extra = {}) => ({ type: 'Feature', properties: { kind, ref, ...extra }, geometry: { type: 'Point', coordinates: [0, 0] } });
   const all = { type: 'FeatureCollection', features: [f('station', 13), f('station', 15), f('letter', 13), f('letter', 15), f('letter', 15, { minzoom: 15 })] };
   const state = {};
-  railDrawingAt(13.9, state, 0);
-  for (let p = 0; p <= BUS_LINE_MS + 20; p += 10) {
-    const rail = railDrawingAt(14.05, state, 1000 + p);
-    const shown = attachedFor(all, rail, 14.05).features;
-    const v = (kind, ref) => { const x = shown.find((g) => g.properties.kind === kind && g.properties.ref === ref); return x ? x.properties.fade ?? 1 : 0; };
-    // Two rail drawings lie a few pixels apart; crossed over, every line showed doubled.
-    assert.equal(rail.busy, false, `still handing over at ${p} ms`);
-    assert.equal(v('station', 13) + v('letter', 13), 0, `old drawing at ${p} ms`);
-    assert.equal(v('station', 15) + v('letter', 15), 2, `new drawing at ${p} ms`);
-    assert.ok(!shown.some((g) => g.properties.minzoom === 15), 'a letter waits for its zoom');
-  }
+  railDrawingAt(13.9, state);
+  const rail = railDrawingAt(14.05, state);
+  const shown = attachedFor(all, rail, 14.05).features;
+  const v = (kind, ref) => { const x = shown.find((g) => g.properties.kind === kind && g.properties.ref === ref); return x ? x.properties.fade ?? 1 : 0; };
+  // Two rail drawings lie a few pixels apart; crossed over, every line showed doubled.
+  assert.equal(rail.busy, false);
+  assert.equal(v('station', 13) + v('letter', 13), 0, 'old drawing gone');
+  assert.equal(v('station', 15) + v('letter', 15), 2, 'new drawing whole');
+  assert.ok(!shown.some((g) => g.properties.minzoom === 15), 'a letter waits for its zoom');
 });
 
-test('at a bus handover the lines never go pale and the two label sets never show together', () => {
+test('a bus handover is instant, one drawing at a time, and waits for the next drawing to load', () => {
   const state = {};
-  busDrawingAt(12.9, state, 0);
-  for (let p = 0; p <= BUS_LINE_MS + 20; p += 10) {
-    const { sets, busy } = busDrawingAt(13.05, state, 1000 + p);
-    const lines = Math.max(sets['2'].lines, sets['13'].lines);
-    assert.ok(lines >= 1 - 1e-9, `strongest lines at ${p} ms`);
-    assert.ok(!(sets['2'].labels > 0 && sets['13'].labels > 0), `both label sets at ${p} ms`);
-    if (p < FADE_OUT_MS) { assert.ok(sets['2'].labels > 0, `old labels still fading out at ${p} ms`); assert.equal(sets['13'].labels, 0); }
-    else assert.equal(sets['2'].labels, 0, `old labels gone at ${p} ms`);
-    assert.equal(sets['3'].lines + sets['3'].labels, 0);
-    if (p > BUS_LINE_MS) { assert.equal(busy, false); assert.deepEqual(sets['13'], { lines: 1, labels: 1 }); assert.deepEqual(sets['2'], { lines: 0, labels: 0 }); }
-  }
+  busDrawingAt(12.9, state);
+  const one = ({ sets }) => Object.values(sets).filter((o) => o.lines === 1).length === 1 && Object.values(sets).every((o) => o.lines === 0 || o.lines === 1);
+  // Streets two drawings apart crossed over showed doubled (real iPhone run 2026-11-25).
+  let shown = busDrawingAt(13.05, state, { ready: () => false });
+  assert.ok(one(shown));
+  assert.equal(shown.set, '2', 'holds the drawing showing while the next loads');
+  assert.equal(shown.busy, true, 'asks again next frame');
+  shown = busDrawingAt(15.5, state, { ready: (set) => set !== '15' });
+  assert.equal(shown.set, '2', 'still holds, rather than show a drawing that has not loaded');
+  shown = busDrawingAt(15.5, state, { ready: () => true });
+  assert.ok(one(shown));
+  assert.equal(shown.set, '15');
+  assert.equal(shown.busy, false);
+  assert.deepEqual(shown.sets['15'], { lines: 1, labels: 1 });
+  assert.equal(busDrawingAt(12, state).set, '2', 'with no check it hands over at once');
 });
 
 test('the preview style keeps every bus layer visible: lines fade by opacity over a range covering their handovers, labels hold their own zooms', () => {
@@ -410,4 +413,27 @@ test('every line letter the build places reaches the page at every zoom, across 
   assert.ok(i >= 0, 'a zoom-12 letter rides the zoom-15 rail drawing');
   planted.features.splice(i, 1);
   assert.ok(missing(planted).some((m) => /^1[456]/.test(m)), 'planted loss caught');
+});
+
+test('banded ground layers load a zoom either side of their band and show only inside it', () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
+  const plain = sheetStyle('light', metadata.stations, metadata.colors, new Set([2, 3, 4]), metadata.district, true);
+  const style = previewStyle('light', metadata, bundle);
+  const byId = new Map(style.layers.map((l) => [l.id, l]));
+  // A tile from one zoom out is what shows while a pinch outruns loading; it held none of the next
+  // band's roads or buildings, so the streets went blank (real iPhone run 2026-11-25).
+  // Names are left: unseen, they would still take room from the names on show.
+  const banded = plain.layers.filter((l) => l.source === 'ground' && l.type !== 'symbol' && byId.has(l.id) && ((l.minzoom ?? 0) > 0 || (l.maxzoom ?? 24) < 24));
+  assert.ok(banded.some((l) => l.id === 'roads-4') && banded.some((l) => l.id === 'buildings-4'), 'the closest band is covered');
+  for (const was of banded) {
+    const l = byId.get(was.id);
+    const [lo, hi] = [was.minzoom ?? 0, was.maxzoom ?? 24];
+    assert.equal(l.minzoom, Math.max(0, lo - 1), `${l.id} loads a zoom early`);
+    assert.equal(l.maxzoom, Math.min(24, hi + 1), `${l.id} lasts a zoom late`);
+    const key = l.type === 'fill' ? 'fill-opacity' : 'line-opacity';
+    const at = (z) => { const e = l.paint[key]; let v = e[2]; for (let i = 3; i < e.length; i += 2) if (z >= e[i]) v = e[i + 1]; return v; };
+    if (lo > 0) { assert.equal(at(lo - 0.01), 0, `${l.id} unseen below its band`); assert.equal(at(lo), was.paint?.[key] ?? 1); }
+    if (hi < 24) { assert.equal(at(hi - 0.01), was.paint?.[key] ?? 1); assert.equal(at(hi), 0, `${l.id} unseen above its band`); }
+  }
 });

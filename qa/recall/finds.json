@@ -2381,6 +2381,40 @@
       "pinned_by": "Claude, from the Device Farm session video and frame log, 2026-11-25",
       "confidence": "clear",
       "note": "Prototype only, and only visible in motion on a real phone: headless frames at rest looked right. The unit tests in test/zoom-prototype.test.mjs check the three causes in code (names placed on the map, rail handover at once, bus layers never hidden); the loading steps and the look in motion are checked by a Device Farm run. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-fast-pinch-blank",
+      "issue": 154,
+      "place": "Zoom preview, Union Station, a fast pinch from 14 to 16",
+      "said": "On a real iPhone 17 Pro, pinching from 14 to 16 in 0.6 s left the streets white and the bus lines doubled and dashed for about 0.3 s, in the build that fixed the four faults Chris confirmed and in the build before it.",
+      "kind": "real-phone-jank",
+      "caught_by": [
+        "prototype-bus-handover-waits",
+        "prototype-ground-bands"
+      ],
+      "seen_on": [
+        "8e0ed4a"
+      ],
+      "theme": "light",
+      "zoom": 15.5,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "14/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Claude, from the before/after Device Farm videos, 2026-11-25",
+      "pinned_by": "Claude, 2026-11-26",
+      "confidence": "clear",
+      "note": "Three causes, seen in a frame log of a throttled headless pinch (qa/.scratch/flicker): the page stopped updating until every source had loaded, so the zoom-14 bus drawing hung on and then cross-faded with the next, whose streets lie a few pixels apart; the base map's zoom-15 roads and buildings were missing from the zoom-14 tiles MapLibre stands in with while loading; and the zoom-16 bus drawing had nothing to draw until its tiles parsed. The unit tests check the handover (instant, waiting until the next drawing can draw) and the ground bands; the look in motion needs a Device Farm run."
     }
   ]
 }

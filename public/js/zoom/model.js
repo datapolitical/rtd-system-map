@@ -175,46 +175,31 @@ export function placedName(f, sizes, zoom) {
 // The bus drawings: each serves from its own zoom up to the next, so its lettering is only ever
 // enlarged, never squeezed below the size it was placed for. Zooming in, the next drawing takes
 // over at its zoom; zooming out, the closer drawing holds BUS_HOLD below its zoom before handing
-// back. At a handover the lines cross over, and the old labels fade out before the new fade in.
-// Sets '2', '3' and '4' are the sheets; '13' and '15' are drawn for this trial.
+// back. Sets '2', '3' and '4' are the sheets; '13' and '15' are drawn for this trial.
 export const BUS_DRAWINGS = [{ zoom: 12, set: '2' }, { zoom: 13, set: '13' }, { zoom: 14, set: '3' }, { zoom: 15, set: '15' }, { zoom: 16, set: '4' }];
 export const BUS_HOLD = 0.05;
-export const BUS_LINE_MS = FADE_OUT_MS + FADE_IN_MS;
 
-// Which of a list of drawings shows at this zoom, and how far each is faded in. `lines` cross
-// over (the new come up over the first half, the old go over the second, so the streets never
-// pass through a pale middle); `labels` fade out before the new fade in.
-export function drawingAt(drawings, zoom, state, now, { motion = true } = {}) {
+// Which of a list of drawings shows at this zoom. A drawing hands over to the next at once, with
+// no fade: two drawings of the same streets or track lie a few pixels apart, so crossing them
+// over showed every line doubled and striped, with ghost line letters beside the rail, for a
+// quarter of a second at each handover (real iPhone runs 2026-11-25).
+// `ready(set)`, when given, says whether a drawing has loaded where it is needed: the one showing
+// holds until the next has, so a pinch faster than loading never shows nothing. Waiting counts as
+// busy, so the page asks again next frame.
+export function drawingAt(drawings, zoom, state, { ready } = {}) {
   const target = [...drawings].reverse().find((d) => zoom >= d.zoom - 1e-9) ?? drawings[0];
   const current = drawings.find((d) => d.set === state.set) ?? target;
   let next = target;
   if (current.zoom > target.zoom && zoom >= current.zoom - BUS_HOLD) next = current;
-  if (state.set === undefined) state.set = next.set;
-  else if (next.set !== state.set) {
-    state.fade = motion ? { from: state.set, to: next.set, start: now } : null;
-    state.set = next.set;
-  }
-  const out = Object.fromEntries(drawings.map((d) => [d.set, { lines: 0, labels: 0 }]));
-  out[state.set] = { lines: 1, labels: 1 };
-  let busy = false;
-  if (state.fade) {
-    const p = now - state.fade.start;
-    if (p < BUS_LINE_MS) {
-      busy = true;
-      const t = p / BUS_LINE_MS;
-      out[state.fade.from] = { lines: Math.min(1, 2 - 2 * t), labels: p < FADE_OUT_MS ? 1 - p / FADE_OUT_MS : 0 };
-      out[state.fade.to] = { lines: Math.min(1, 2 * t), labels: p < FADE_OUT_MS ? 0 : Math.min(1, (p - FADE_OUT_MS) / FADE_IN_MS) };
-    } else state.fade = null;
-  }
-  return { sets: out, busy, set: state.set };
+  const busy = state.set !== undefined && next.set !== state.set && !!ready && !ready(next.set);
+  if (!busy) state.set = next.set;
+  const sets = Object.fromEntries(drawings.map((d) => [d.set, { lines: d.set === state.set ? 1 : 0, labels: d.set === state.set ? 1 : 0 }]));
+  return { sets, busy, set: state.set };
 }
 
-export const busDrawingAt = (zoom, state, now, options) => drawingAt(BUS_DRAWINGS, zoom, state, now, options);
-// The rail drawing hands over at the same zoom as the bus drawing there, but at once, with no
-// fade: its two drawings lie a few pixels apart, so crossing them over showed every line doubled
-// and striped, with ghost line letters beside it, for a quarter of a second at each handover
-// (real iPhone run 2026-11-25).
-export const railDrawingAt = (zoom, state, now, options) => drawingAt(RAIL_DRAWINGS, zoom, state, now, { ...options, motion: false });
+export const busDrawingAt = (zoom, state, options) => drawingAt(BUS_DRAWINGS, zoom, state, options);
+// The rail drawing hands over at the same zoom as the bus drawing there.
+export const railDrawingAt = (zoom, state, options) => drawingAt(RAIL_DRAWINGS, zoom, state, options);
 
 // The rail-attached features (station bars, line letters) of the rail drawings showing now, each
 // carrying its drawing's fade: bars cross over with the rail, letters fade out before the new in.

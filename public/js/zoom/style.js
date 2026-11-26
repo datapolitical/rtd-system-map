@@ -7,8 +7,8 @@ export const BUS_13_URL = busUrl(13);
 const SHEET_ZOOM = { 2: 12, 3: 14, 4: 16 };
 // A bus drawing between two sheets is drawn with the closer sheet's layers.
 const BETWEEN = Object.fromEntries(BUS_DRAWINGS.filter((d) => !SHEET_ZOOM[d.set]).map((d) => [d.set, String(Object.keys(SHEET_ZOOM).find((n) => SHEET_ZOOM[n] > d.zoom))]));
-// A layer's covering range: from a little below its drawing's zoom (zooming out holds it) to
-// past the next drawing's, so it lasts through a handover's fade.
+// A layer's covering range: from a zoom below its drawing's, so it has loaded before it takes
+// over, to a zoom past the next drawing's, so it lasts while that one loads.
 const RANGES = Object.fromEntries(BUS_DRAWINGS.map((d, i) => [d.set, [d.zoom - 1, BUS_DRAWINGS[i + 1] ? BUS_DRAWINGS[i + 1].zoom + 1 : 24]]));
 
 const zoomValue = (values) => ['interpolate', ['linear'], ['zoom'], ...values.flatMap(([z, v]) => [z, v])];
@@ -54,12 +54,25 @@ export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
       }
     }
   }
+  // The ground's roads and buildings change at the sheets' band edges (13 and 15). A map tile only
+  // holds the layers showing at its own zoom, and while a pinch outruns loading MapLibre draws the
+  // tile from one zoom out, which had none of the next band's: the streets went blank (real iPhone
+  // run 2026-11-25). So each banded ground layer is held a zoom either side of its band, unseen
+  // there (an opacity of 0 at the camera's zoom is skipped, not drawn). Street and place names are
+  // left to their bands: unseen, they would still take room from the names on show.
+  for (const l of original.layers) {
+    const [lo, hi] = [l.minzoom ?? 0, l.maxzoom ?? 24];
+    const key = { line: 'line-opacity', fill: 'fill-opacity' }[l.type];
+    const value = l.paint?.[key] ?? 1;
+    if (l.source !== 'ground' || (lo <= 0 && hi >= 24) || !key || typeof value !== 'number') continue;
+    l.paint = { ...l.paint, [key]: ['step', ['zoom'], ...(lo > 0 ? [0, lo, value] : [value]), ...(hi < 24 ? [hi, 0] : [])] };
+    [l.minzoom, l.maxzoom] = [Math.max(0, lo - 1), Math.min(24, hi + 1)];
+  }
   // Bus drawings at 12, 14 and 16 (sheets 2, 3 and 4) and at 13 and 15 (drawn for this trial).
   // Each serves from its own zoom up to the next (model.js, busDrawingAt). MapLibre lays line
   // labels out at the whole zoom below the camera, so a closer drawing's labels, cut to fit at
-  // its own zoom, cannot serve the zoom below it: they drop out. The page shows one set at a time
-  // and fades between them through global state, so the zoom ranges here only need to cover a
-  // handover.
+  // its own zoom, cannot serve the zoom below it: they drop out. The page shows one set's lines at
+  // a time, changing at once when the next has loaded (model.js, drawingAt).
   const busSet = (l) => l.source?.match(/^(?:sheet|routes)-([234])$/)?.[1] ?? null;
   const trialSource = (set, l) => `trial-bus-${set}${l.source.startsWith('routes-') ? '-routes' : ''}`;
   original.layers = original.layers.flatMap((l) => {

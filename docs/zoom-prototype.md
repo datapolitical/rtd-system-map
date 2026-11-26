@@ -372,6 +372,28 @@ Chris confirmed the four faults the video showed:
 The page also keeps the theme last picked, here or on the sheets, under the
 sheets' saved choice.
 
+The before-and-after run confirmed all four gone. One fault remained in both
+builds: a pinch from 14 to 16 in 0.6 s left the streets white and the bus
+lines doubled and dashed for about 0.3 s. A frame log of the same pinch in a
+throttled headless browser (tiles drawn per source, each frame) showed three
+causes, now fixed:
+
+- The page skipped its update until every source had loaded, so through a
+  fast pinch the zoom-14 bus drawing hung on, then cross-faded with the next,
+  whose streets lie a few pixels apart. The page now updates every frame once
+  the style has loaded, and bus drawings hand over at once, like rail.
+- A drawing could take over before it had anything to draw: the zoom-16 bus
+  drawing loads from 15, and its tiles take a moment to parse. A drawing now
+  takes over only once MapLibre can draw it, from its own tiles or the ones it
+  stands in with from a zoom out; until then the one showing holds.
+- The base map's roads and buildings change at 13 and 15. A tile holds only
+  the layers showing at its own zoom, so the zoom-14 tiles MapLibre draws while
+  a pinch outruns loading had no zoom-15 roads or buildings. Each banded road
+  and building layer is now held a zoom either side of its band, at opacity 0
+  there, which MapLibre skips. Street and place names keep their bands: unseen,
+  they would still take room from the names on show, so on a fast pinch they
+  can still arrive a moment late.
+
 ## Line letters
 
 Letters are placed outward from 12, like the names: the letters at 12 stay

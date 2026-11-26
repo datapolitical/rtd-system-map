@@ -18,6 +18,9 @@ const labelState = { sides: new Map(), fades: new Map() };
 const busState = {};
 const railState = {};
 let busLayers = null;
+let busSources = null;
+// True from the style's load until the theme changes it: the page's sources exist.
+let styleReady = false;
 const busShown = new Map();
 const calm = matchMedia('(prefers-reduced-motion: reduce)');
 const timings = [];
@@ -46,15 +49,17 @@ function setPick(pick) {
 
 function update() {
   updatePending = false;
-  // While a source is still taking the last update, try again next frame rather than drop it.
-  if (!map.isStyleLoaded()) { schedule(); return; }
+  // Only until the style has loaded. Waiting for every source to finish loading instead froze the
+  // drawings, names and bars through a fast pinch, then changed them all at once (real iPhone run
+  // 2026-11-25); a source sent new data while still busy takes the newest when it is free.
+  if (!styleReady) { schedule(); return; }
   const started = performance.now();
   const zoom = map.getZoom();
   // Only the small rail-symbol sources change during a zoom; the rail and bus drawings stay cached.
   // The rail drawing for this zoom, faded in from the one before, with its own station bars and
   // letters (model.js, railDrawingAt). Line letters appear as the zoom reaches them and stay for
   // every closer zoom.
-  const rail = railDrawingAt(zoom, railState, performance.now(), { motion: !calm.matches });
+  const rail = railDrawingAt(zoom, railState);
   for (const d of RAIL_DRAWINGS) {
     const value = rail.sets[d.set].lines, key = `rail${d.set}`;
     if (busShown.get(key) !== value) { map.setGlobalStateProperty(key, value); busShown.set(key, value); }
@@ -62,10 +67,11 @@ function update() {
   map.getSource('trial-attached').setData(attachedCollection(attachedFor(bundle.attached, rail, zoom), bundle.sizes, zoom));
   const labels = labelsAt(bundle.frames, zoom, bundle.sizes, labelState, performance.now(), { motion: !calm.matches });
   map.getSource('trial-labels').setData(labels.collection);
-  // The bus drawing for this zoom, faded in from the one before (model.js, busDrawingAt).
-  const bus = busDrawingAt(zoom, busState, performance.now(), { motion: !calm.matches });
-  busLayers ??= map.getStyle().layers.filter((l) => l.metadata?.busKey).map((l) => ({ id: l.id, key: l.metadata.busKey, plain: l.metadata.busPlain, set: null }));
-  // Only the bus lines fade; each drawing's labels hold their own zooms (style.js).
+  busLayers ??= map.getStyle().layers.filter((l) => l.metadata?.busKey).map((l) => ({ id: l.id, key: l.metadata.busKey, source: l.source, plain: l.metadata.busPlain, set: null }));
+  busSources ??= busLayers.reduce((m, l) => m.set(l.key, [...new Set([...(m.get(l.key) ?? []), l.source])]), new Map());
+  // The bus drawing for this zoom, once its streets can be drawn (model.js, busDrawingAt). Only its
+  // lines change here; each drawing's labels hold their own zooms (style.js).
+  const bus = busDrawingAt(zoom, busState, { ready: (set) => (busSources.get(`busLines${set}`) ?? []).every(drawable) });
   for (const [set, o] of Object.entries(bus.sets)) {
     const key = `busLines${set}`;
     if (busShown.get(key) !== o.lines) { map.setGlobalStateProperty(key, o.lines); busShown.set(key, o.lines); }
@@ -75,7 +81,7 @@ function update() {
     if (l.set !== value) { for (const [k, base] of l.plain) map.setPaintProperty(l.id, k, base * value); l.set = value; }
   }
   labelFrame = labels.frame.zoom;
-  // A name changing side fades on a timer, so keep drawing until it has finished.
+  // A name changing side fades on a timer, and a drawing may wait to load: ask again next frame.
   if (labels.busy || bus.busy || rail.busy) schedule();
   updatedZoom = zoom;
   $('zoom').value = String(zoom);
@@ -84,6 +90,14 @@ function update() {
   $('status').textContent = `Zoom ${zoom.toFixed(2)}`;
   timings.push(performance.now() - started);
   window.zoomState = { zoom, labelFrame, busSet: bus.set, railSet: rail.set, fading: labels.busy || bus.busy || rail.busy, updates: timings.length, lastUpdateMs: timings.at(-1) };
+}
+
+// Whether a source has something to draw on screen: its tiles for this zoom, or, while those
+// load, the ones MapLibre stands in with from a zoom out. A source with no data counts as drawable.
+function drawable(id) {
+  const tiles = map.style?.tileManagers?.[id];
+  if (!tiles) return map.isSourceLoaded(id);
+  return !tiles.used || tiles.getRenderableIds().length > 0 || tiles.loaded();
 }
 
 function schedule() {
@@ -96,8 +110,10 @@ function applyStyle() {
   $('theme').setAttribute('aria-label', `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`);
   updatedZoom = null;
   busLayers = null;
+  busSources = null;
+  styleReady = false;
   busShown.clear();
-  const ready = () => { update(); setPick(picked); };
+  const ready = () => { styleReady = true; update(); setPick(picked); };
   map.once('style.load', ready);
   map.setStyle(previewStyle(theme, metadata, bundle, map.getCenter().toArray()));
 }
@@ -121,6 +137,7 @@ try {
   map.on('idle', () => { if (updatedZoom === null || Math.abs(updatedZoom - map.getZoom()) > 1e-7) schedule(); });
   map.on('moveend', saveView);
   map.on('load', () => {
+    styleReady = true;
     update(); setPick(picked);
     for (const id of ['theme', 'zoom', 'sweep']) $(id).disabled = false;
     window.zoomReady = true;
