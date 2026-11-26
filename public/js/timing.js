@@ -182,6 +182,8 @@
     const rows = [];
     const ms = (v) => (v == null ? '–' : `${Math.round(v)}`);
     rows.push(['page arrived', ms(nav?.responseEnd)]);
+    // How the page itself got here: a first visit pays for the connection; a return visit's is 0.
+    if (nav) rows.push(['  page: connect / secure / first byte / all in / parsed', `${ms(nav.connectStart)}–${ms(nav.connectEnd)} / ${nav.secureConnectionStart ? ms(nav.secureConnectionStart) : '–'} / ${ms(nav.responseStart)} / ${ms(nav.responseEnd)} / ${ms(nav.domInteractive)}`]);
     // First paint is the first text or picture drawn: the "Loading…" line once its font is in, or the picture.
     rows.push(['first paint (loading line or picture)', ms(performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint')?.startTime)]);
     const poster = res.find((e) => /\/poster\//.test(e.name));
@@ -262,6 +264,8 @@
     rows.push(['screen', `${innerWidth}×${innerHeight} @${devicePixelRatio}x`]);
     const text = rows.map(([a, b]) => `${a}: ${b}`).join('\n') + `\n${navigator.userAgent}`;
     window.loadTiming = text;
+    // The same and every file, for a runner to save (qa/devicefarm/load_run.py).
+    window.loadTimingRaw = { ready, nav: nav?.toJSON?.(), files: performance.getEntriesByType('resource').map((e) => ({ name: e.name, s: Math.round(e.startTime), e: Math.round(e.responseEnd), kb: Math.round((e.transferSize || 0) / 1024), type: e.initiatorType })) };
     const box = document.createElement('pre');
     box.textContent = `Load timing (ms from tap)\n${text}`;
     Object.assign(box.style, {
