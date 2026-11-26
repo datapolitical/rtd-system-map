@@ -4,9 +4,19 @@
 // main.js). Shows a box with the numbers once the map is ready.
 (() => {
   const now = () => performance.now();
-  const gl = { compile: 0, link: 0, programs: 0, firstDraw: null, contexts: 0 };
+  const gl = { compile: 0, link: 0, programs: 0, firstDraw: null, contexts: 0, each: [] };
+  // Each program: its shaders' lengths (to match it with public/data/programs.json) and its link time.
+  const shaderLength = new WeakMap(), programOf = new WeakMap();
   const wrap = (proto) => {
     if (!proto) return;
+    const source = proto.shaderSource, attach = proto.attachShader;
+    proto.shaderSource = function (sh, text) { shaderLength.set(sh, text.length); return source.call(this, sh, text); };
+    proto.attachShader = function (p, sh) {
+      const e = programOf.get(p) ?? { lengths: [], ms: 0, at: null };
+      e.lengths.push(shaderLength.get(sh));
+      programOf.set(p, e);
+      return attach.call(this, p, sh);
+    };
     for (const name of ['compileShader', 'getShaderParameter', 'linkProgram', 'getProgramParameter']) {
       const orig = proto[name];
       proto[name] = function (...a) {
@@ -14,7 +24,8 @@
         const r = orig.apply(this, a);
         const d = now() - t;
         if (name === 'compileShader' || name === 'getShaderParameter') gl.compile += d; else gl.link += d;
-        if (name === 'linkProgram') gl.programs++;
+        if (name === 'linkProgram') { gl.programs++; const e = programOf.get(a[0]); if (e) { e.at = t; gl.each.push(e); } }
+        if (name === 'linkProgram' || name === 'getProgramParameter') { const e = programOf.get(a[0]); if (e) e.ms += d; }
         return r;
       };
     }
@@ -151,14 +162,14 @@
     };
   });
 
+  // When the loading picture is shown (index.html adds "whole" once its file is in and the
+  // drawing matches /data/sheets.json; it then fades in over 200 ms) and when it goes.
   let posterGone = null;
-  const watchPoster = () => {
-    const p = document.getElementById('poster');
-    if (!p) return;
-    new MutationObserver(() => { if (posterGone === null && p.classList.contains('gone')) posterGone = now(); })
-      .observe(p, { attributes: true, attributeFilter: ['class'] });
-  };
-  document.addEventListener('DOMContentLoaded', watchPoster);
+  let posterShown = null;
+  new MutationObserver(() => {
+    if (posterShown === null && document.querySelector('#poster img.whole')) posterShown = now();
+    if (posterGone === null && document.getElementById('poster')?.classList.contains('gone')) posterGone = now();
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'], subtree: true });
 
   const wait = () => {
     if (!window.sheetsReady) return setTimeout(wait, 10);
@@ -182,7 +193,13 @@
     const rows = [];
     const ms = (v) => (v == null ? '–' : `${Math.round(v)}`);
     rows.push(['page arrived', ms(nav?.responseEnd)]);
-    rows.push(['loading picture shown (first paint)', ms(performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint')?.startTime)]);
+    // How the page itself got here: a first visit pays for the connection; a return visit's is 0.
+    if (nav) rows.push(['  page: connect / secure / first byte / all in / parsed', `${ms(nav.connectStart)}–${ms(nav.connectEnd)} / ${nav.secureConnectionStart ? ms(nav.secureConnectionStart) : '–'} / ${ms(nav.responseStart)} / ${ms(nav.responseEnd)} / ${ms(nav.domInteractive)}`]);
+    // First paint is the first text or picture drawn: the "Loading…" line once its font is in, or the picture.
+    rows.push(['first paint (loading line or picture)', ms(performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint')?.startTime)]);
+    const poster = res.find((e) => /\/poster\//.test(e.name));
+    const sheets = res.find((e) => /\/data\/sheets\.json/.test(e.name));
+    rows.push(['loading picture: file in / sheets.json in / shown', `${ms(poster?.responseEnd)} / ${ms(sheets?.responseEnd)} / ${posterShown == null ? 'not shown' : ms(posterShown)}`]);
     for (const [label, test] of Object.entries(groups)) {
       const hit = res.filter((e) => test(e.name));
       if (!hit.length) continue;
@@ -195,12 +212,18 @@
       const name = decodeURIComponent(e.name.replace(/^.*\/glyphs\/Overpass /, '')).replace('.pbf', '');
       rows.push([`  glyphs ${name}`, `${ms(e.startTime)}–${ms(e.responseEnd)} (${e.initiatorType}, ${Math.round((e.transferSize || 0) / 1024)} KB)`]);
     }
+    // Each code file: when it was asked for and when it was in. The map can't start until the last is in.
+    for (const e of res.filter((x) => groups['page code'](x.name)).sort((a, b) => a.responseEnd - b.responseEnd)) {
+      rows.push([`  code ${e.name.replace(/^.*\/(js|vendor)\//, '')}`, `${ms(e.startTime)}–${ms(e.responseEnd)} (${Math.round((e.transferSize || 0) / 1024)} KB)`]);
+    }
     const allIn = Math.max(...res.map((e) => e.responseEnd), ...Object.values(ev.tiles));
     rows.push(['downloads in + tiles ready', ms(allIn)]);
     rows.push(['map style loaded', ms(ev.load)]);
     for (const [id, t] of Object.entries(ev.tiles)) rows.push([`tiles ready to draw: ${id}`, `${ms(ev.firstTile[id])}–${ms(t)}`]);
     rows.push(['first GL draw', ms(gl.firstDraw)]);
     rows.push([`GL programs built (${gl.programs})`, `compile ${ms(gl.compile)} + link ${ms(gl.link)}`]);
+    for (const e of gl.each) rows.push([`  program ${e.lengths.join('+')}`, `at ${ms(e.at)}, ${ms(e.ms)} ms`]);
+    if (window.warmed) rows.push(['programs built ahead (index.html)', window.warmed]);
     const long = gaps.filter(([t, d]) => d > 50 && t + d <= ready + 1);
     const after = long.filter(([t]) => t >= allIn);
     rows.push(['frames over 50 ms', `${long.length}, ${ms(long.reduce((s, [, d]) => s + d, 0))} ms in all`]);
@@ -254,6 +277,8 @@
     rows.push(['screen', `${innerWidth}×${innerHeight} @${devicePixelRatio}x`]);
     const text = rows.map(([a, b]) => `${a}: ${b}`).join('\n') + `\n${navigator.userAgent}`;
     window.loadTiming = text;
+    // The same and every file, for a runner to save (qa/devicefarm/load_run.py).
+    window.loadTimingRaw = { ready, nav: nav?.toJSON?.(), files: performance.getEntriesByType('resource').map((e) => ({ name: e.name, s: Math.round(e.startTime), e: Math.round(e.responseEnd), kb: Math.round((e.transferSize || 0) / 1024), type: e.initiatorType })) };
     const box = document.createElement('pre');
     box.textContent = `Load timing (ms from tap)\n${text}`;
     Object.assign(box.style, {

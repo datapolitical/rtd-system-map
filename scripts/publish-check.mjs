@@ -46,6 +46,13 @@ if (sheets && drawn[opens.id] && sheets.drawing !== (await drawingFingerprint(dr
   problems.push('the page\'s drawing code (public/js/sheets/, color.js) changed since the sheets were drawn: run `npm run build:sheets` and commit public/data and public/poster');
 }
 
+// The drawing programs the page builds ahead (index.html's head) were recorded from this drawing
+// and this MapLibre; otherwise the phone builds programs the map never asks for.
+const programs = await json('programs.json');
+const maplibre = JSON.parse(await readFile(path.join(ROOT, 'node_modules', 'maplibre-gl', 'package.json'), 'utf8')).version;
+if (sheets && programs && (programs.drawing !== sheets.drawing || programs.maplibre !== maplibre)) {
+  problems.push('public/data/programs.json was recorded from another drawing or MapLibre: run `node scripts/poster-build.mjs` and commit public/data/programs.json');
+}
 // The loading pictures were taken of this drawing; otherwise the page hides them.
 const html = await readFile(path.join(ROOT, 'public', 'index.html'), 'utf8');
 const poster = html.match(/<div id="poster"[^>]*\sdata-drawing="([^"]*)"/)?.[1];

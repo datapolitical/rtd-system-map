@@ -5552,6 +5552,19 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   The drawing is unchanged to the pixel at 18 views in both themes, and a
   step through every sheet gives the same layers in the same order.
   Chris said go.
+- 2026-11-26: The page head builds the map's drawing programs in a worker
+  (OffscreenCanvas, KHR_parallel_shader_compile) while the map downloads,
+  from the programs recorded from the map when the pictures are taken
+  (public/data/programs.json, kept in the offline copy; the publish check fails if they are from
+  another drawing or MapLibre). The head also asks at once for color.js and
+  often.js. Reason: on iPhone 17 Pros in AWS Device Farm that had never
+  opened the map, MapLibre building its ten programs at its first draw
+  blocked the page about 600 ms (Chris's own phone keeps them, so his runs
+  never showed it); with the worker, the time from the code arriving to a
+  live map fell from 864 and 941 ms to 586 to 655 ms in four runs, and
+  reloads are unchanged. Waiting on each program in the worker held up the
+  map's own first GL call and saved nothing, so the worker never waits on
+  them. Chris: find "what is causing it to be slower than it needs to be".
 
 ## Sources
 
