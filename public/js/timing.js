@@ -151,14 +151,14 @@
     };
   });
 
+  // When the loading picture is shown (index.html adds "whole" once its file is in and the
+  // drawing matches /data/sheets.json; it then fades in over 200 ms) and when it goes.
   let posterGone = null;
-  const watchPoster = () => {
-    const p = document.getElementById('poster');
-    if (!p) return;
-    new MutationObserver(() => { if (posterGone === null && p.classList.contains('gone')) posterGone = now(); })
-      .observe(p, { attributes: true, attributeFilter: ['class'] });
-  };
-  document.addEventListener('DOMContentLoaded', watchPoster);
+  let posterShown = null;
+  new MutationObserver(() => {
+    if (posterShown === null && document.querySelector('#poster img.whole')) posterShown = now();
+    if (posterGone === null && document.getElementById('poster')?.classList.contains('gone')) posterGone = now();
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'], subtree: true });
 
   const wait = () => {
     if (!window.sheetsReady) return setTimeout(wait, 10);
@@ -182,7 +182,11 @@
     const rows = [];
     const ms = (v) => (v == null ? '–' : `${Math.round(v)}`);
     rows.push(['page arrived', ms(nav?.responseEnd)]);
-    rows.push(['loading picture shown (first paint)', ms(performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint')?.startTime)]);
+    // First paint is the first text or picture drawn: the "Loading…" line once its font is in, or the picture.
+    rows.push(['first paint (loading line or picture)', ms(performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint')?.startTime)]);
+    const poster = res.find((e) => /\/poster\//.test(e.name));
+    const sheets = res.find((e) => /\/data\/sheets\.json/.test(e.name));
+    rows.push(['loading picture: file in / sheets.json in / shown', `${ms(poster?.responseEnd)} / ${ms(sheets?.responseEnd)} / ${posterShown == null ? 'not shown' : ms(posterShown)}`]);
     for (const [label, test] of Object.entries(groups)) {
       const hit = res.filter((e) => test(e.name));
       if (!hit.length) continue;
