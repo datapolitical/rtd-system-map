@@ -2,6 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- The map's drawing programs, built in a worker while the page downloads (js/warm.js). -->
+<script>
+  if (typeof OffscreenCanvas === 'function') {
+    try {
+      const warm = new Worker('/js/warm.js');
+      warm.onmessage = ({ data }) => {
+        const ms = (t) => Math.round(t - performance.timeOrigin);
+        window.warmed = `${data.built} programs, ${ms(data.start)}–${ms(data.end)}`;
+        warm.terminate();
+      };
+    } catch {}
+  }
+</script>
 <!-- The opening view's glyphs are fetched here and handed to the map (main.js, "early"), not
      preloaded: on an iPhone Safari appeared to fetch the preloads again when the map asked, and
      the opening view waited for them more than for anything else (DESIGN.md, 2026-11-25). -->

@@ -27,6 +27,24 @@ const SIZES = [
 ];
 const QUALITY = 60;
 
+// The GL programs the opening view is drawn with (vertex and fragment source, as MapLibre links
+// them), for the page to build in a worker before the map asks (public/js/warm.js).
+const RECORD_PROGRAMS = () => {
+  window.linkedPrograms = [];
+  const proto = WebGL2RenderingContext.prototype;
+  const { shaderSource, createShader, attachShader, linkProgram } = proto;
+  const shaders = new WeakMap(), attached = new WeakMap();
+  proto.createShader = function (type) { const s = createShader.call(this, type); if (s) shaders.set(s, { type }); return s; };
+  proto.shaderSource = function (s, text) { if (shaders.has(s)) shaders.get(s).text = text; return shaderSource.call(this, s, text); };
+  proto.attachShader = function (p, s) { attached.set(p, [...(attached.get(p) ?? []), shaders.get(s)]); return attachShader.call(this, p, s); };
+  proto.linkProgram = function (p) {
+    const of = (type) => (attached.get(p) ?? []).find((s) => s?.type === type)?.text;
+    window.linkedPrograms.push({ vertex: of(this.VERTEX_SHADER), fragment: of(this.FRAGMENT_SHADER) });
+    return linkProgram.call(this, p);
+  };
+};
+const programs = new Map();
+
 await mkdir(OUT, { recursive: true });
 const browser = await chromium.launch();
 const views = new Set();
@@ -38,8 +56,10 @@ try {
     for (const size of SIZES) {
       for (const scale of size.scales) {
         const page = await browser.newPage({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: scale, colorScheme: theme });
+        await page.addInitScript(RECORD_PROGRAMS);
         await page.goto(site, { timeout: 60_000 });
         await page.waitForFunction(() => window.sheetsReady && window.sheetsMap.loaded(), null, { timeout: 90_000 });
+        for (const p of await page.evaluate(() => window.linkedPrograms)) if (p.vertex && p.fragment) programs.set(`${p.vertex}\0${p.fragment}`, p);
         // The map alone: no buttons, credit, card, or an earlier picture over it.
         await page.addStyleTag({ content: 'body > :not(main):not(#map), main > :not(#map) { display: none !important }' });
         if (!await page.locator('#map').isVisible()) throw new Error('The loading picture must contain the visible map');
@@ -85,6 +105,10 @@ if (earlies.size !== 1) throw new Error(`the pictures' views were drawn from dif
 if (drawings.size !== 1) throw new Error('The pictures were captured from different drawings');
 if (views.size !== 1) throw new Error(`the pictures show different views: ${[...views].join(', ')}`);
 if (bounds.size !== 1) throw new Error(`the map's bounds differ between pictures: ${[...bounds].join(' | ')}`);
+// Recorded with the drawing and MapLibre's version, which the publish check compares.
+const maplibre = JSON.parse(await readFile(new URL('../node_modules/maplibre-gl/package.json', import.meta.url), 'utf8')).version;
+await writeFile(new URL('../public/data/programs.json', import.meta.url), JSON.stringify({ drawing: [...drawings][0], maplibre, programs: [...programs.values()] }));
+console.log(`wrote public/data/programs.json (${programs.size} programs)`);
 const [view] = views;
 const [limits] = bounds;
 const [drawing] = drawings;

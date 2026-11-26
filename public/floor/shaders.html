@@ -19,7 +19,7 @@
 <script type="module">
   const r = (v) => Math.round(v);
   const q = new URLSearchParams(location.search);
-  const programs = await (await fetch('/floor/programs.json')).json();
+  const programs = (await (await fetch('/data/programs.json')).json()).programs;
   const lines = ['FLOOR shaders'];
   // Every uniform renamed with the tag: a different program text, so nothing saved from before matches.
   const tagged = (tag) => programs.map(({ vertex, fragment }) => {

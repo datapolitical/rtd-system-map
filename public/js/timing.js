@@ -4,9 +4,19 @@
 // main.js). Shows a box with the numbers once the map is ready.
 (() => {
   const now = () => performance.now();
-  const gl = { compile: 0, link: 0, programs: 0, firstDraw: null, contexts: 0 };
+  const gl = { compile: 0, link: 0, programs: 0, firstDraw: null, contexts: 0, each: [] };
+  // Each program: its shaders' lengths (to match it with public/data/programs.json) and its link time.
+  const shaderLength = new WeakMap(), programOf = new WeakMap();
   const wrap = (proto) => {
     if (!proto) return;
+    const source = proto.shaderSource, attach = proto.attachShader;
+    proto.shaderSource = function (sh, text) { shaderLength.set(sh, text.length); return source.call(this, sh, text); };
+    proto.attachShader = function (p, sh) {
+      const e = programOf.get(p) ?? { lengths: [], ms: 0, at: null };
+      e.lengths.push(shaderLength.get(sh));
+      programOf.set(p, e);
+      return attach.call(this, p, sh);
+    };
     for (const name of ['compileShader', 'getShaderParameter', 'linkProgram', 'getProgramParameter']) {
       const orig = proto[name];
       proto[name] = function (...a) {
@@ -14,7 +24,8 @@
         const r = orig.apply(this, a);
         const d = now() - t;
         if (name === 'compileShader' || name === 'getShaderParameter') gl.compile += d; else gl.link += d;
-        if (name === 'linkProgram') gl.programs++;
+        if (name === 'linkProgram') { gl.programs++; const e = programOf.get(a[0]); if (e) { e.at = t; gl.each.push(e); } }
+        if (name === 'linkProgram' || name === 'getProgramParameter') { const e = programOf.get(a[0]); if (e) e.ms += d; }
         return r;
       };
     }
@@ -211,6 +222,8 @@
     for (const [id, t] of Object.entries(ev.tiles)) rows.push([`tiles ready to draw: ${id}`, `${ms(ev.firstTile[id])}–${ms(t)}`]);
     rows.push(['first GL draw', ms(gl.firstDraw)]);
     rows.push([`GL programs built (${gl.programs})`, `compile ${ms(gl.compile)} + link ${ms(gl.link)}`]);
+    for (const e of gl.each) rows.push([`  program ${e.lengths.join('+')}`, `at ${ms(e.at)}, ${ms(e.ms)} ms`]);
+    if (window.warmed) rows.push(['programs built ahead (warm.js)', window.warmed]);
     const long = gaps.filter(([t, d]) => d > 50 && t + d <= ready + 1);
     const after = long.filter(([t]) => t >= allIn);
     rows.push(['frames over 50 ms', `${long.length}, ${ms(long.reduce((s, [, d]) => s + d, 0))} ms in all`]);
