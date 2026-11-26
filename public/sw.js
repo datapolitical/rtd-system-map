@@ -38,8 +38,9 @@ let puts = 0;
 async function keep(cacheName, request, response) {
   // A redirected answer can't be given to a page's own request later; an opaque one can't be checked.
   if (!response || response.status !== 200 || response.redirected || !['basic', 'cors', 'default'].includes(response.type)) return;
-  // Not the front page the host answers a tile it doesn't have with.
-  if (cacheName === TILES && /text\/html/.test(response.headers.get('content-type') ?? '')) return;
+  // Not the front page the host answers a tile it doesn't have with, which comes with the tiles'
+  // own type (_headers): it is known by its "<".
+  if (cacheName === TILES && new Uint8Array(await response.clone().arrayBuffer())[0] === 0x3c) return;
   const cache = await caches.open(cacheName);
   await cache.put(request, response);
   if (cacheName === TILES && ++puts % 100 === 0) {

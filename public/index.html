@@ -199,7 +199,7 @@
 <button id="key" type="button" class="off" aria-hidden="true" tabindex="-1"></button>
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
-<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="281e164d88f7a196dbb096b01935d3b60adb77041b42c4d49ee4f5cb6749b0f9" data-ground="20261122_124456_pt" data-early="{&quot;ground&quot;:10,&quot;sheet-1&quot;:9}">
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="37da35ae22228ebf98fa962e3fab2c96f49637055e8e3ae36076b84b5f6ca9d5" data-ground="20261122_124456_pt" data-early="{&quot;ground&quot;:10,&quot;sheet-1&quot;:9}">
   <picture>
     <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
     <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">
@@ -271,7 +271,11 @@
         for (let y = Math.floor(cy - innerHeight / 2 / size); y <= Math.floor(cy + innerHeight / 2 / size); y++) {
           const path = `/tiles/${name}/${tz}/${x}/${y}.pbf`;
           // A tile the site doesn't have is empty: the host answers it with the front page.
-          early[path] = fetch(path).then((r) => (r.ok && !/text\/html/.test(r.headers.get('content-type') ?? '') ? r.arrayBuffer() : new ArrayBuffer(0)), () => null);
+          // It comes back with the tiles' own type (_headers), so it is known by its "<".
+          early[path] = fetch(path).then(async (r) => {
+            const data = r.ok ? await r.arrayBuffer() : new ArrayBuffer(0);
+            return new Uint8Array(data)[0] === 0x3c ? new ArrayBuffer(0) : data;
+          }, () => null);
         }
       }
     }

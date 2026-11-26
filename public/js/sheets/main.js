@@ -97,6 +97,7 @@ function roomy() {
 // than the map's worker, so the service worker sees it (sw.js). A tile the site doesn't have is
 // empty: the host answers a file it doesn't have with the front page.
 const isTile = (path) => path.startsWith('/tiles/');
+const notTile = (data) => new Uint8Array(data)[0] === 0x3c;
 maplibregl.addProtocol('early', async ({ url }, abort) => {
   const plain = url.slice('early://'.length);
   const path = new URL(plain).pathname;
@@ -107,9 +108,11 @@ maplibregl.addProtocol('early', async ({ url }, abort) => {
     if (data) return { data };
   }
   const response = await fetch(plain, { signal: abort.signal });
-  if (isTile(path) && (!response.ok || /text\/html/.test(response.headers.get('content-type') ?? ''))) return { data: new ArrayBuffer(0) };
+  if (isTile(path) && !response.ok) return { data: new ArrayBuffer(0) };
   if (!response.ok) throw new Error(`${response.status} ${plain}`);
-  return { data: await response.arrayBuffer() };
+  const data = await response.arrayBuffer();
+  // The front page comes back with the tiles' own type (public/_headers): it is known by its "<".
+  return { data: isTile(path) && notTile(data) ? new ArrayBuffer(0) : data };
 });
 function mapStyle(t) {
   const style = sheetStyle(t, stations, colors, { district, routeLines, lists });
