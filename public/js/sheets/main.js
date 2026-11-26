@@ -252,7 +252,11 @@ function* stepTiles(levels) {
 }
 // `levels`: those of a step to either neighbouring sheet, unless a step waits (held), when only
 // its own, so they come first.
+// Measuring only (branch mini/warm-measure): ?warm=off makes no tiles ahead and steps at once,
+// as plain MapLibre would.
+const NO_WARM = new URLSearchParams(location.search).get('warm') === 'off';
 function warm(levels = held ? between(sheet, held.to) : stepLevels()) {
+  if (NO_WARM) return;
   const Tile = aTile()?.constructor;
   if (!Tile) return;
   // Nearest the map's first: on reaching a sheet, the map rests again and its neighbours' come
@@ -437,7 +441,7 @@ function waiting(on) {
 let held = null; // { to, around, since }: the sheet a step waits for
 let givenUp = -1; // the sheet on which a wait ran out: no more waits there
 // ?hold=off steps at once, as the page did before, to compare the two (js/steptest.js).
-const NO_HOLD = new URLSearchParams(location.search).get('hold') === 'off';
+const NO_HOLD = NO_WARM || new URLSearchParams(location.search).get('hold') === 'off';
 function step(index, around) {
   const to = Math.max(0, Math.min(zooms.length - 1, index));
   if (to === sheet) return show(to, around); // back to the sheet shown: a wait goes on

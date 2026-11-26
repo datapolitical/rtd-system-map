@@ -51,6 +51,17 @@ def readout(driver, limit=60):
     return [None, None]
 
 
+def step_result(driver, limit=25):
+    # With ?steptest in the address (public/js/steptest.js): the step it takes, once it has ended.
+    t0 = time.time()
+    while time.time() - t0 < limit:
+        got = driver.execute_script('return window.stepTest || null')
+        if got:
+            return got
+        time.sleep(0.25)
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', required=True)
@@ -108,13 +119,14 @@ def main():
                     time.sleep(2)  # let the offline copy finish saving what the last load fetched
                     driver.refresh()
                 text, raw = readout(driver)
+                step = step_result(driver) if 'steptest' in url else None
                 driver.get_screenshot_as_file(os.path.join(a.out, f'{n:02d}-{kind}.png'))
-                record['loads'].append({'n': n, 'url': url, 'kind': kind, 'text': text, 'raw': raw})
+                record['loads'].append({'n': n, 'url': url, 'kind': kind, 'text': text, 'raw': raw, 'step': step})
                 if text:
                     with open(os.path.join(a.out, f'{n:02d}-{kind}.txt'), 'w') as f:
                         f.write(url + '\n' + text)
                 ready = next((l for l in (text or '').splitlines() if l.startswith('MAP READY')), 'no readout')
-                log(kind, n, url.split('.dev')[-1], ready)
+                log(kind, n, url.split('.dev')[-1], ready, *(['step', json.dumps(step)] if step else []))
                 n += 1
     except Exception as e:
         record['error'] = f'{type(e).__name__}: {e}'[:2000]

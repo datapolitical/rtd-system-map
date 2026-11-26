@@ -5,7 +5,8 @@
 (() => {
   const q = new URLSearchParams(location.search);
   const after = Number(q.get('steptest')) || 0;
-  const hold = q.get('hold') !== 'off';
+  const hold = q.get('hold') !== 'off' && q.get('warm') !== 'off';
+  const warmOn = q.get('warm') !== 'off';
   const now = () => performance.now();
   const start = () => {
     const map = window.sheetsMap;
@@ -60,7 +61,7 @@
         padding: '12px 14px', font: '14px/1.45 system-ui, sans-serif', background: 'rgba(0,0,0,.85)', color: '#fff', borderRadius: '12px',
       });
       document.body.append(box);
-      window.stepTest = { hold, after, started: moved && moved - t0, finished: done && done - t0, bare, frames };
+      window.stepTest = { warm: warmOn, hold, after, started: moved && moved - t0, finished: done && done - t0, bare, frames };
     }
   }
 })();
