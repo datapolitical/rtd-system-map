@@ -1,5 +1,5 @@
 import { sheetStyle, PALETTES, TILING } from '../sheets/style.js';
-import { pitchAt, sizeAt, RAIL_DRAWINGS, BUS_DRAWINGS } from './model.js';
+import { pitchAt, sizeAt, RAIL_DRAWINGS, BUS_DRAWINGS, LISTS_PLACED } from './model.js';
 
 // The bus drawings this trial adds between the sheets, and each one's picked-route lines.
 export const busUrl = (zoom, routes = false) => new URL(`../../data/zoom-prototype/bus-${zoom}${routes ? '-routes' : ''}.geojson`, import.meta.url).href;
@@ -92,6 +92,65 @@ export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
       .map(([set]) => ({ ...structuredClone(l), id: l.id.replace(/-\d$/, `-${set}`), source: trialSource(set, l) }));
     return [...copies, l];
   });
+  // The route lists of the drawings whose lists the build places itself (model.js, LISTS_PLACED;
+  // #156). The build has decided which lists there are and where; the page draws each one and
+  // hides none. A list on a straight stretch is a point with its street's angle (`bus-list`), set
+  // there whatever else MapLibre has placed; it takes no room itself, because a turned point takes
+  // the upright box around it, and unseen marks along its `list-room` line take the room of its
+  // lettering instead, so the names MapLibre still places (streets, neighbourhoods) keep off it.
+  // A stacked list is drawn the same way and keeps its own room. A list on a bend keeps its stretch
+  // and is set about the stretch's middle. MapLibre still refuses one that bends too sharply, so
+  // it is allowed more than the build allows (scripts/zoom-prototype.mjs, LIST_FOLLOW) and the
+  // build's rule is the one that decides.
+  const LIST_BEND = 45, LIST_MARK = '.';
+  // MapLibre fits a label to a line at the size it will have at zoom 18, so that it fits at its
+  // largest (symbol_layout.ts, textMaxSize). Against a size that grows to zoom 16, a list on a bend
+  // had to fit its stretch up to a quarter longer than it is ever drawn, and the mark of a
+  // one-figure list did not fit its room at all. A drawing's lists are seen only as far as the
+  // next drawing, so their size stops growing there.
+  const sizeUntil = (size, top) => {
+    if (top === undefined || size?.[0] !== 'interpolate' || size[1]?.[0] !== 'linear' || size[2]?.[0] !== 'zoom') return size;
+    const stops = [];
+    for (let i = 3; i < size.length; i += 2) stops.push([size[i], size[i + 1]]);
+    if (stops.some(([, value]) => typeof value !== 'number') || stops.at(-1)[0] <= top) return size;
+    return ['interpolate', ['linear'], ['zoom'], ...stops.filter(([zoom]) => zoom < top).flat(), top, sizeAt(stops, top)];
+  };
+  const setOf = (l) => l.source?.match(/^trial-bus-(\d+)/)?.[1] ?? busSet(l);
+  const placedSets = new Set(BUS_DRAWINGS.filter((d) => LISTS_PLACED.includes(d.zoom)).map((d) => d.set));
+  const ofKind = (filter, from, to) => JSON.parse(JSON.stringify(filter).replace(JSON.stringify(kind(from)), JSON.stringify(kind(to))));
+  original.layers = original.layers.flatMap((l) => {
+    const role = l.id.match(/^(bus|picked)-(number|stack)-\d+$/);
+    if (!role || !placedSets.has(setOf(l))) return [l];
+    l.layout = { ...l.layout, 'text-allow-overlap': true };
+    if (role[2] === 'stack') return [l];
+    l.layout['text-size'] = sizeUntil(l.layout['text-size'], BUS_DRAWINGS[BUS_DRAWINGS.findIndex((d) => d.set === setOf(l)) + 1]?.zoom);
+    const { 'symbol-placement': _placement, 'symbol-spacing': _spacing, 'text-max-angle': _angle, 'text-padding': padding, ...layout } = l.layout;
+    const list = { ...structuredClone(l), id: l.id.replace('-number-', '-list-'), filter: ofKind(l.filter, 'bus-label', 'bus-list'),
+      layout: { ...structuredClone(layout), 'text-rotate': ['get', 'angle'], 'text-rotation-alignment': 'map', 'text-max-width': 100, 'text-ignore-placement': true } };
+    l.layout = { ...l.layout, 'symbol-placement': 'line-center', 'text-max-angle': LIST_BEND };
+    delete l.layout['symbol-spacing'];
+    // One line of marks for every list, picked or not, since both are drawn. It goes in with the
+    // picked route's lists, above everything MapLibre still places that gives way to a list (the
+    // picked route's street names among them), so all of that is placed after the marks. The mark
+    // is the narrowest glyph there is, so that even a list of one figure is long enough for one;
+    // the room a mark takes is a circle as tall as the type, whatever the glyph.
+    const room = role[1] !== 'picked' ? [] : [{ id: l.id.replace('picked-number-', 'list-room-'), type: 'symbol', source: l.source, filter: kind('list-room'),
+      layout: { 'symbol-placement': 'line', 'symbol-spacing': 4, 'text-field': LIST_MARK, 'text-font': structuredClone(l.layout['text-font']), 'text-size': structuredClone(l.layout['text-size']),
+        'text-offset': structuredClone(l.layout['text-offset']), 'text-allow-overlap': true, 'text-padding': padding ?? 2, 'text-keep-upright': false },
+      paint: { 'text-opacity': 0 } }];
+    return [l, list, ...room];
+  });
+  // A neighbourhood's name gives way to a route list (Chris, 2026-11-26: the first list on a
+  // stretch stays and the name moves). The names are still MapLibre's to place, so here a name
+  // with a list in its way is left out; it moves when the build places names too. So where every
+  // drawing a band of place names serves has its lists placed, the names are placed after them.
+  for (const place of original.layers.filter((l) => /^place-\d$/.test(l.id))) {
+    const serves = BUS_DRAWINGS.filter((d, i) => d.zoom < (place.maxzoom ?? 24) && (BUS_DRAWINGS[i + 1]?.zoom ?? 24) > (place.minzoom ?? 0));
+    if (!serves.length || !serves.every((d) => placedSets.has(d.set))) continue;
+    original.layers.splice(original.layers.indexOf(place), 1);
+    const first = original.layers.findIndex((l) => /^(bus-number|bus-list|bus-stack)-\d+$/.test(l.id) && placedSets.has(setOf(l)));
+    original.layers.splice(first, 0, place);
+  }
   const busState = {};
   for (const l of original.layers) {
     const set = l.source?.match(/^trial-bus-(\d+)/)?.[1] ?? busSet(l);

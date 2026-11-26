@@ -8,7 +8,9 @@ import { SHEETS, SIZES, drawSheet, carryOf, HOLD_RAIL_SLACK, HOLD_INK_SLACK, rai
   nearest, resample, offset, toPx, toLonLat } from './lib/sheets.mjs';
 import { canonicalTracks, slotPieces, fitTerminalSpines } from './lib/zoom-rail.mjs';
 import { projection, simplify } from './lib/geom.mjs';
-import { labelChanges, REFERENCE_ZOOM, MIN_ZOOM, MAX_ZOOM, RAIL_DRAWINGS, railRefAt, pitchAt, sizeAt } from '../public/js/zoom/model.js';
+import { textWidth } from './glyphs.mjs';
+import { labelChanges, labelsAt, attachedCollection, REFERENCE_ZOOM, MIN_ZOOM, MAX_ZOOM, RAIL_DRAWINGS, LISTS_PLACED, railRefAt, pitchAt, sizeAt } from '../public/js/zoom/model.js';
+import { BUS_WIDTH, ROW_HEIGHT, numberOffset } from '../public/js/sheets/style.js';
 
 export const zoomStops = (table) => SHEETS.map((s) => [s.zoom, table[s.id]]);
 // The bus drawings this build makes (model.js, BUS_DRAWINGS): 13 and 15 between the sheets, and
@@ -168,8 +170,349 @@ export function offsetDrawing(data, drawing, sheet) {
     attach: (p, routes) => framed(attach(p, routes)), attachOn: (p, route) => framed(attachOn(p, route)) };
 }
 
+// Route lists the build places itself (#156; model.js, LISTS_PLACED). drawSheet gives each list
+// the stretch of street it runs along, for MapLibre to set it there, and MapLibre hides the list
+// whenever its own tests fail: the stretch too short to start a label on (it wants two more glyph
+// sizes at each end than the lettering), or turning too sharply under it. Here the build makes
+// those decisions and the page draws what it is given (style.js):
+//   - a list stands straight where its stretch is straight for the lettering's whole length
+//     (LIST_STRAIGHT), at the clear place nearest the stretch's middle: a point with the angle
+//     the street runs at, as a stacked list already is. A turned point takes room as the upright
+//     box around it, on downtown's diagonal grid several times the lettering, so the page gives
+//     these lists no room of their own, and each comes with a `list-room` line the length of its
+//     lettering, along which the page sets unseen marks that take the room instead (as
+//     keep-off-bus does for a bus line);
+//   - where no such place is, the list follows its stretch about the middle, if the stretch turns
+//     gently enough to read along (LIST_FOLLOW);
+//   - a clear place is one where the list lies on no other list and on no rail, station's mark or
+//     station's lettering at any zoom its drawing serves (fixedOver). drawSheet kept the list off
+//     its own drawing of the rail; the page shows the trial's;
+//   - a list with no clear place tries again without its street's name leading, and then, both
+//     ways, on the other side of its street, where it must be clear of the bus lines too;
+//   - and a list that still has no place is left out, and the report says which and why.
+// How far, in pixels at the drawing's zoom, a street may leave the straight line under a list that
+// stands straight (twice that by the zoom the next drawing takes over).
+export const LIST_STRAIGHT = 1.5;
+export const LIST_FOLLOW = 25;
+// Clear ground kept between a list's lettering and rail, a station's mark or other lettering.
+export const LIST_AIR = 1.5;
+const LIST_FONT = 'Overpass SemiBold', LEAD_FONT = 'Overpass Regular', NAME_FONT = 'Overpass SemiBold', LIST_SPACING = 0.02;
+// How wide the page sets a list at `size`: its figures (the longer row of a stack), and before
+// them its street's name and an em of space where the build found room for one
+// (public/js/sheets/style.js, busNumber).
+export const listWide = ({ label, street }, size) => Math.max(...String(label).split('\n').map((row) => textWidth(row, LIST_FONT, size, LIST_SPACING)))
+  + (street ? textWidth(street, LEAD_FONT, size, LIST_SPACING) + (1 + 2 * LIST_SPACING) * size : 0);
+const LIST_SIZES = SHEETS.map((s) => [s.zoom, SIZES.busLabelSize[s.id]]);
+// How far a list's middle stands off its street, in ems of its size (down the screen for a list
+// read left to right; negative is above the street): the page's own rule, for the sheet whose
+// layers draw this zoom's drawing.
+const listOff = ({ cls, side, label }, zoom) => {
+  const n = SHEETS.find((s) => s.zoom >= zoom - 1e-9).id, rows = String(label).split('\n').length;
+  const off = numberOffset(n, BUS_WIDTH[n][cls] ?? Object.values(BUS_WIDTH[n])[0]) + (rows > 1 ? -ROW_HEIGHT / 2 : 0);
+  return side === -1 ? -off : off;
+};
+const span = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+const lengthOf = (p) => p.slice(1).reduce((sum, q, i) => sum + span(p[i], q), 0);
+const pointAt = (p, d) => {
+  for (let i = 1; i < p.length; i++) {
+    const step = span(p[i - 1], p[i]);
+    if (d <= step || i === p.length - 1) { const t = step ? Math.max(0, Math.min(1, d / step)) : 0; return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * t, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * t]; }
+    d -= step;
+  }
+  return p[0];
+};
+const pieceOf = (p, from, to) => {
+  const out = [pointAt(p, from)];
+  for (let i = 1, d = 0; i < p.length - 1; i++) { d += span(p[i - 1], p[i]); if (d > from && d < to) out.push(p[i]); }
+  return [...out, pointAt(p, to)];
+};
+// Each place on the stretch `p` where lettering `wide` can stand straight, nearest `from` first
+// (a distance along the stretch; its middle unless given) and a pixel at a time either way: the
+// way the street runs under it, and the point it is set from. `toward` is the side the list
+// stands on (1: to the right of the way the street runs, which is below it on the screen). The
+// street may leave the straight line between the lettering's ends by LIST_STRAIGHT in all; the
+// point is on that line moved out to where the street comes nearest the list, so the list is
+// nowhere closer to its street than the page sets it.
+function* standings(p, wide, toward, from = null) {
+  const whole = lengthOf(p), [lo, hi] = [wide / 2 - 1e-6, whole - wide / 2 + 1e-6];
+  const start = Math.max(wide / 2, Math.min(whole - wide / 2, from ?? whole / 2));
+  for (let k = 0; start - k >= lo || start + k <= hi; k++) {
+    for (const mid of k ? [start - k, start + k] : [start]) {
+      if (mid < lo || mid > hi) continue;
+      const piece = pieceOf(p, Math.max(0, mid - wide / 2), Math.min(whole, mid + wide / 2));
+      const [a, b] = [piece[0], piece.at(-1)], l = span(a, b);
+      if (!l) continue;
+      const u = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+      const out = piece.map((q) => toward * ((q[1] - a[1]) * u[0] - (q[0] - a[0]) * u[1])), high = Math.max(...out);
+      if (high - Math.min(...out) > LIST_STRAIGHT) continue;
+      yield { at: [(a[0] + b[0]) / 2 - u[1] * toward * high, (a[1] + b[1]) / 2 + u[0] * toward * high], u };
+    }
+  }
+}
+// Whether lettering `wide` set about the middle of `p` turns gently enough to read: the turns
+// within any 3/5 of a glyph, summed, stay under LIST_FOLLOW degrees (MapLibre's own test,
+// check_max_angle; the page allows a little more, so this one decides), and the stretch reaches a
+// pixel past the lettering at each end. MapLibre asks both of the lettering at the largest size
+// the page ever sets it (`top`, the size when the next drawing takes over; style.js, sizeUntil)
+// against the stretch at the drawing's own zoom, so the lettering is measured that much longer.
+function follows(p, wide, size, top = size) {
+  const whole = lengthOf(p), corners = [], reach = (wide * top) / size;
+  if (whole < reach + 2) return false;
+  for (let i = 1, d = 0; i < p.length - 1; i++) {
+    d += span(p[i - 1], p[i]);
+    if (d < whole / 2 - reach / 2 || d > whole / 2 + reach / 2) continue;
+    const turn = Math.atan2(p[i][1] - p[i - 1][1], p[i][0] - p[i - 1][0]) - Math.atan2(p[i + 1][1] - p[i][1], p[i + 1][0] - p[i][0]);
+    corners.push({ d, turn: Math.abs(((turn + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) });
+  }
+  return corners.every((c, i) => corners.slice(i).filter((o) => o.d - c.d <= 0.6 * top).reduce((sum, o) => sum + o.turn, 0) * 180 / Math.PI <= LIST_FOLLOW);
+}
+
+// What the page sets before the lists and always shows, at the zooms the drawing at `zoom` serves:
+// the trial's rail, station marks, line letters and station names (trial.json), each in the pixels
+// of its zoom. A name glides, and changes side, between the quarter-zoom frames it was placed at,
+// so each step is read at its start, its middle and just short of its end.
+export function fixedOver(bundle, zoom) {
+  const { sizes } = bundle;
+  return [0, 0.125, 0.2499, 0.25, 0.375, 0.4999, 0.5, 0.625, 0.7499, 0.75, 0.875, 0.9999].map((t) => {
+    const z = zoom + t, ref = railRefAt(z), wide = sizeAt(sizes.rail, z), pitch = pitchAt(sizes, z);
+    const lines = [], discs = [], boxes = [];
+    for (const f of bundle.rails.features) {
+      if (f.properties.ref !== ref) continue;
+      const centre = f.geometry.coordinates.map((c) => toPx(c, z));
+      lines.push({ path: f.properties.slot ? offset(centre, f.properties.slot * pitch) : centre, half: wide / 2 + 0.6, what: 'rail' });
+    }
+    const attached = attachedCollection({ features: bundle.attached.features.filter((f) => (f.properties.ref ?? REFERENCE_ZOOM) === ref && !(f.properties.minzoom > z + 1e-9)) }, sizes, z);
+    for (const f of attached.features) {
+      if (f.properties.kind === 'letter') { discs.push({ at: toPx(f.geometry.coordinates, z), r: sizeAt(sizes.letterDisc, z), what: 'letter' }); continue; }
+      // A station's mark as the page draws it (style.js, mark, and its edge).
+      const thin = f.properties.single ? wide + 1.4 : f.properties.hub ? wide * 0.72 + 2.2 : wide * 0.72;
+      lines.push({ path: f.geometry.coordinates.map((c) => toPx(c, z)), half: ((f.properties.fat ? 1.6 * thin + 1 : thin) + 2.6) / 2, what: 'station' });
+    }
+    const size = sizeAt(sizes.name, z);
+    for (const f of labelsAt(bundle.frames, z, sizes, { sides: new Map(), fades: new Map() }, 0, { motion: false }).collection.features) {
+      const [x, y] = toPx(f.geometry.coordinates, z);
+      if (f.properties.kind === 'letter') { discs.push({ at: [x, y], r: sizeAt(sizes.nameLetter, z) + 1.5, what: 'name' }); continue; }
+      const rows = String(f.properties.text).split('\n'), anchor = f.properties.anchor ?? 'center';
+      const w = Math.max(...rows.map((row) => textWidth(row, NAME_FONT, size))), h = rows.length * 1.12 * size;
+      const ax = anchor.includes('left') ? 0 : anchor.includes('right') ? 1 : 0.5, ay = anchor.includes('top') ? 0 : anchor.includes('bottom') ? 1 : 0.5;
+      boxes.push({ box: [x - ax * w, y - ay * h, x + (1 - ax) * w, y + (1 - ay) * h], what: 'name' });
+    }
+    return { zoom: z, near: nearOf(lines, discs, boxes) };
+  });
+}
+
+// What a point is near: lines of a half width (`path`, `half`), discs (`at`, `r`) and upright
+// boxes (`box`), each with `what` it is. Returns near(q, reach): what lies within `reach` of the
+// point `q`, if anything (reach under 24 px). A coarse grid, so a list asks only what is near it.
+function nearOf(lines, discs = [], boxes = []) {
+  const CELL = 96, REACH = 24, grid = new Map();
+  const put = (x1, y1, x2, y2, item) => {
+    for (let i = Math.floor(x1 / CELL); i <= Math.floor(x2 / CELL); i++) for (let j = Math.floor(y1 / CELL); j <= Math.floor(y2 / CELL); j++) {
+      const key = `${i},${j}`;
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(item);
+    }
+  };
+  for (const l of lines) for (let i = 1; i < l.path.length; i++) {
+    const [a, b] = [l.path[i - 1], l.path[i]];
+    put(Math.min(a[0], b[0]) - REACH, Math.min(a[1], b[1]) - REACH, Math.max(a[0], b[0]) + REACH, Math.max(a[1], b[1]) + REACH, { a, b, half: l.half, what: l.what });
+  }
+  for (const d of discs) put(d.at[0] - d.r - REACH, d.at[1] - d.r - REACH, d.at[0] + d.r + REACH, d.at[1] + d.r + REACH, d);
+  for (const b of boxes) put(b.box[0] - REACH, b.box[1] - REACH, b.box[2] + REACH, b.box[3] + REACH, b);
+  return (q, reach) => {
+    for (const item of grid.get(`${Math.floor(q[0] / CELL)},${Math.floor(q[1] / CELL)}`) ?? []) {
+      let d;
+      if (item.box) d = Math.hypot(Math.max(item.box[0] - q[0], 0, q[0] - item.box[2]), Math.max(item.box[1] - q[1], 0, q[1] - item.box[3]));
+      else if (item.at) d = span(item.at, q) - item.r;
+      else {
+        const [vx, vy] = [item.b[0] - item.a[0], item.b[1] - item.a[1]], l2 = vx * vx + vy * vy;
+        const t = l2 ? Math.max(0, Math.min(1, ((q[0] - item.a[0]) * vx + (q[1] - item.a[1]) * vy) / l2)) : 0;
+        d = Math.hypot(q[0] - item.a[0] - vx * t, q[1] - item.a[1] - vy * t) - item.half;
+      }
+      if (d < reach) return item.what;
+    }
+    return null;
+  };
+}
+
+// The middle line of a list's lettering at the zoom `z`, a point every 2 px or so, and how far
+// its ink reaches either side of that line. `place` is where the list stands at its drawing's
+// zoom `zoom`: a point and direction, or the stretch it follows.
+function inkOf(properties, place, zoom, z) {
+  const size = sizeAt(LIST_SIZES, z), k = 2 ** (z - zoom), wide = listWide(properties, size), rows = String(properties.label).split('\n').length;
+  const off = listOff(properties, zoom) * size, reach = ((0.72 + ROW_HEIGHT * (rows - 1)) * size) / 2;
+  const n = Math.max(2, Math.ceil(wide / 2));
+  const points = [];
+  if (place.at) {
+    const c = [place.at[0] * k - place.u[1] * off, place.at[1] * k + place.u[0] * off];
+    for (let i = 0; i <= n; i++) { const t = -wide / 2 + (wide * i) / n; points.push([c[0] + place.u[0] * t, c[1] + place.u[1] * t]); }
+  } else {
+    const path = place.path.map((q) => [q[0] * k, q[1] * k]), middle = lengthOf(path) / 2;
+    for (let i = 0; i <= n; i++) {
+      const d = middle - wide / 2 + (wide * i) / n, [a, b] = [pointAt(path, Math.max(0, d - 1)), pointAt(path, d + 1)], l = span(a, b) || 1, q = pointAt(path, d);
+      points.push([q[0] - ((b[1] - a[1]) / l) * off, q[1] + ((b[0] - a[0]) / l) * off]);
+    }
+  }
+  return { points, reach };
+}
+
+// `fixed` (fixedOver) is what the lists must keep off; without it only other lists are. `before`
+// is the features this gave the drawing one zoom out: a list that stood there is looked for a
+// place from where it stood, on the side it stood, before the lists new to this drawing take
+// theirs, so it keeps its place when this drawing takes over.
+export function placedLists(features, zoom, fixed = null, before = null) {
+  const size = sizeAt(LIST_SIZES, zoom);
+  const counts = { placed: 0, along: 0, unnamed: 0, moved: 0, across: 0, held: 0 }, left = [];
+  const stood = (before ?? []).filter((f) => f.properties.kind === 'bus-list').map((f) => {
+    const r = (f.properties.angle * Math.PI) / 180;
+    return { label: f.properties.label, side: f.properties.side, at: toPx(f.geometry.coordinates, zoom), u: [Math.cos(r), Math.sin(r)] };
+  });
+  // Where along the stretch `p` the same list stood one zoom out, if it stood on this stretch (not
+  // past either end of it: that one belongs to the next stretch along). Each is one stretch's.
+  const HELD_NEAR = 6;
+  const stoodOn = (label, p) => {
+    const whole = lengthOf(p);
+    let best = null;
+    for (const o of stood) {
+      if (o.label !== label || o.taken) continue;
+      for (let i = 1, far = 0; i < p.length; i++) {
+        const [a, b] = [p[i - 1], p[i]], step = span(a, b), t = step ? Math.max(0, Math.min(1, ((o.at[0] - a[0]) * (b[0] - a[0]) + (o.at[1] - a[1]) * (b[1] - a[1])) / (step * step))) : 0;
+        const d = Math.hypot(o.at[0] - a[0] - (b[0] - a[0]) * t, o.at[1] - a[1] - (b[1] - a[1]) * t), from = far + step * t;
+        if (d <= HELD_NEAR && from > 0.5 && from < whole - 0.5 && (!best || d < best.d)) best = { d, from, o };
+        far += step;
+      }
+    }
+    if (!best) return null;
+    best.o.taken = true;
+    return { from: best.from, side: best.o.side, at: best.o.at, u: best.o.u };
+  };
+  // Whether lettering `wide` can stand exactly where the list stood one zoom out: within the
+  // stretch, the street no nearer the list than the page sets it (half a pixel's grace) and no
+  // further off than a street may bend under a list by the end of a drawing's zooms.
+  const holds = (p, wide, toward, was) => {
+    if (was.from - wide / 2 < -1e-6 || was.from + wide / 2 > lengthOf(p) + 1e-6) return false;
+    return pieceOf(p, Math.max(0, was.from - wide / 2), was.from + wide / 2).every((q) => {
+      const out = toward * ((q[1] - was.at[1]) * was.u[0] - (q[0] - was.at[0]) * was.u[1]);
+      return out <= 0.5 && out >= -2 * LIST_STRAIGHT - 0.5;
+    });
+  };
+  // The lists placed so far, as the points of their ink at each end of the zooms the drawing
+  // serves: lists grow more slowly than the map does, so one clear of another at both is clear of
+  // it between.
+  const ENDS = [zoom, zoom + 0.9999], CELL = 32, taken = ENDS.map(() => new Map());
+  const cell = (q) => `${Math.floor(q[0] / CELL)},${Math.floor(q[1] / CELL)}`;
+  const inks = (properties, place) => ENDS.map((z) => inkOf(properties, place, zoom, z));
+  const take = (properties, place) => inks(properties, place).forEach((ink, e) => {
+    for (const q of ink.points) { if (!taken[e].has(cell(q))) taken[e].set(cell(q), []); taken[e].get(cell(q)).push({ q, reach: ink.reach }); }
+  });
+  const blocked = (properties, place) => {
+    for (const [e, ink] of inks(properties, place).entries()) for (const q of ink.points) {
+      const [i, j] = [Math.floor(q[0] / CELL), Math.floor(q[1] / CELL)];
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) for (const o of taken[e].get(`${i + di},${j + dj}`) ?? []) {
+        if (span(o.q, q) < o.reach + ink.reach + LIST_AIR) return 'list';
+      }
+    }
+    for (const at of fixed ?? []) {
+      const ink = inkOf(properties, place, zoom, at.zoom);
+      for (const q of ink.points) { const what = at.near(q, ink.reach + LIST_AIR); if (what) return what; }
+    }
+    return null;
+  };
+  // The drawing's bus lines, their ends and the hall, for a list tried on the side of its street
+  // the sheet's build did not choose: there it must be clear of them too. (On the side it chose,
+  // the build has seen to that.) The list's own street is LIST_GAP from its ink, so less is asked.
+  const LIST_GAP = 0.4;
+  const streets = ENDS.map((z) => {
+    const n = SHEETS.find((sh) => sh.zoom >= z - 1e-9).id, lines = [], discs = [];
+    for (const f of features) {
+      if (f.properties.kind === 'bus') lines.push({ path: f.geometry.coordinates.map((c) => toPx(c, z)), half: (BUS_WIDTH[n][f.properties.cls] ?? Object.values(BUS_WIDTH[n])[0]) / 2, what: 'street' });
+      else if (f.properties.kind === 'hall') for (const ring of f.geometry.coordinates) lines.push({ path: ring.map((c) => toPx(c, z)), half: 0.5, what: 'street' });
+      else if (f.properties.kind === 'bus-end') discs.push({ at: toPx(f.geometry.coordinates, z), r: 4, what: 'street' });
+    }
+    return nearOf(lines, discs);
+  });
+  const crowded = (properties, place) => {
+    for (const [e, ink] of inks(properties, place).entries()) for (const q of ink.points) if (streets[e](q, ink.reach + LIST_GAP)) return 'street';
+    return null;
+  };
+  const words = (q) => `${q.street ? `${q.street} ` : ''}${String(q.label).replace(/\n/g, ' / ')}`;
+  // The list as the build made it, then on the other side of its street.
+  const turned = (q) => { const { side, ...rest } = q; return [q, side === -1 ? rest : { ...rest, side: -1 }]; };
+  // A stacked list is a point already, with nowhere else along its street to go, so the stacks
+  // take their places first.
+  const stacks = new Map();
+  for (const f of features) {
+    if (f.properties.kind !== 'bus-stack') continue;
+    const r = (f.properties.angle * Math.PI) / 180, place = { at: toPx(f.geometry.coordinates, zoom), u: [Math.cos(r), Math.sin(r)] };
+    let why = null, kept = null;
+    for (const [across, properties] of turned(f.properties).entries()) {
+      const on = blocked(properties, place) ?? (across ? crowded(properties, place) : null);
+      if (on) { why ??= on; continue; }
+      kept = { ...f, properties };
+      take(properties, place);
+      counts.across += across;
+      break;
+    }
+    stacks.set(f, kept);
+    if (!kept) left.push({ list: words(f.properties), why });
+  }
+  const set = (f, p, was) => {
+    // On its own side with its street's name first, then without; then the same on the other
+    // side (the side it stood on one zoom out comes first). Each time: standing straight, at the
+    // clear place nearest where it stood or else the stretch's middle; then along the bend.
+    let why = null;
+    const sides = [...turned(f.properties).entries()];
+    if (was && (was.side ?? 1) !== (f.properties.side ?? 1)) sides.reverse();
+    for (const [across, sided] of sides) for (const named of f.properties.street ? [true, false] : [false]) {
+      const { street, ...bare } = sided, properties = named ? sided : bare;
+      const on = (place) => blocked(properties, place) ?? (across ? crowded(properties, place) : null);
+      const wide = listWide(properties, size);
+      const toward = Math.sign(listOff(properties, zoom));
+      let place = null, tried = 0;
+      // Exactly where it stood, if that still serves.
+      if (was && (was.side ?? 1) === (properties.side ?? 1) && holds(p, wide, toward, was) && !on(was)) place = { at: was.at, u: was.u };
+      if (!place) for (const stand of standings(p, wide, toward, was?.from)) {
+        const what = on(stand);
+        if (!what) { place = stand; break; }
+        why ??= what;
+        tried++;
+      }
+      if (!place && follows(p, wide, size, sizeAt(LIST_SIZES, zoom + 1))) {
+        const what = on({ path: p });
+        if (what) why ??= what; else place = { path: p };
+      }
+      if (!place) continue;
+      take(properties, place);
+      counts.across += across;
+      if (street && !named) counts.unnamed++;
+      if (place.path) { counts.along++; return [{ ...f, properties }]; }
+      counts.placed++;
+      if (tried) counts.moved++;
+      if (was && (was.side ?? 1) === (properties.side ?? 1) && span(was.at, place.at) <= 2) counts.held++;
+      const { cls, side } = properties, half = wide / 2;
+      return [{ ...f, properties: { ...properties, kind: 'bus-list', angle: Math.round((Math.atan2(place.u[1], place.u[0]) * 1800) / Math.PI) / 10 },
+        geometry: { type: 'Point', coordinates: toLonLat(place.at, zoom) } },
+      feature({ kind: 'list-room', cls, ...(side === undefined ? {} : { side }) }, 'LineString',
+        [-half, half].map((t) => toLonLat([place.at[0] + place.u[0] * t, place.at[1] + place.u[1] * t], zoom)))];
+    }
+    left.push({ list: words(f.properties), why: why ?? 'bend' });
+    return [];
+  };
+  // The lists that stood one zoom out first, then the rest, each in the drawing's order.
+  const lists = features.filter((f) => f.properties.kind === 'bus-label').map((f) => {
+    let p = f.geometry.coordinates.map((c) => toPx(c, zoom));
+    // Read left to right, as MapLibre turns a label along a line that runs the other way.
+    if (p[0][0] > p.at(-1)[0]) p = p.reverse();
+    return { f, p, was: stoodOn(f.properties.label, p) };
+  });
+  const made = new Map();
+  for (const l of [...lists.filter((l) => l.was), ...lists.filter((l) => !l.was)]) made.set(l.f, set(l.f, l.p, l.was));
+  const out = features.flatMap((f) => (f.properties.kind === 'bus-stack' ? (stacks.get(f) ? [stacks.get(f)] : []) : made.get(f) ?? [f]));
+  return { features: out, ...counts, stood: lists.filter((l) => l.was).length, left };
+}
+
 // The bus drawings from 12 to 16, written to `out`; returns what the report says of them.
-export async function drawBus(data, dir, out) {
+export async function drawBus(data, dir, out, bundle) {
   // Each bus drawing is one of 12 to 16, so each bus drawing is only ever enlarged up to the next
   // (public/js/zoom/model.js, busDrawingAt). Each keeps every route list and street name the one
   // before it set, in place, and adds its own between them: zooming in, lettering is only added,
@@ -179,18 +522,25 @@ export async function drawBus(data, dir, out) {
   const bus = {};
   // The first has nothing to keep, but is drawn with the same care for the page's room.
   let carry = { lists: [], names: [] };
+  let placedBefore = null;
   for (const zoom of BUS_BUILT) {
     const started = performance.now();
     const drawn = withZoom(zoom, (sheet) => drawSheet(data, sheet, carry));
     const before = carry;
     carry = carryOf(drawn);
     bus[zoom] = { carried: { lists: before.lists.length, names: before.names.length } };
-    const kept = drawn.features.filter((f) => !['rail', 'station', 'letter', 'group-key'].includes(f.properties.kind) && f.properties.shape !== 'name');
+    const all = drawn.features.filter((f) => !['rail', 'station', 'letter', 'group-key'].includes(f.properties.kind) && f.properties.shape !== 'name');
+    // What the next drawing keeps was read from the stretches (carryOf, above); only the copy
+    // the page reads has its lists placed, against the rail and names the page shows (`bundle`).
+    const lists = LISTS_PLACED.includes(zoom) ? placedLists(all, zoom, fixedOver(bundle, zoom), placedBefore) : null;
+    placedBefore = lists?.features ?? null;
+    const kept = lists?.features ?? all;
     const busRaw = JSON.stringify({ ...drawn, features: kept.filter((f) => f.properties.kind !== 'route-line') });
     const routesRaw = JSON.stringify(collection(kept.filter((f) => f.properties.kind === 'route-line')));
     await writeFile(path.join(out, `bus-${zoom}.geojson`), busRaw);
     await writeFile(path.join(out, `bus-${zoom}-routes.geojson`), routesRaw);
-    bus[zoom] = { ...bus[zoom], features: kept.length, labels: kept.filter((f) => f.properties.kind === 'bus-label').length,
+    bus[zoom] = { ...bus[zoom], features: kept.length, labels: all.filter((f) => f.properties.kind === 'bus-label').length,
+      ...(lists ? { lists: { placed: lists.placed, along: lists.along, unnamed: lists.unnamed, moved: lists.moved, across: lists.across, stood: lists.stood, held: lists.held, left: lists.left } } : {}),
       bytes: { raw: Buffer.byteLength(busRaw), gzip: gzipSync(busRaw).length, routesGzip: gzipSync(routesRaw).length } };
     console.log(`bus drawing ${zoom}: ${kept.length} features; ${(performance.now() - started).toFixed(0)} ms`);
   }
@@ -213,9 +563,9 @@ async function main() {
     sources[name] = createHash('sha256').update(raw).digest('hex');
   }
   if (args.includes('--bus')) {
-    const bus = await drawBus(data, dir, out);
     const report = JSON.parse(await readFile(path.join(out, 'report.json')));
     const bundle = JSON.parse(await readFile(path.join(out, 'trial.json')));
+    const bus = await drawBus(data, dir, out, bundle);
     report.bus = bus;
     bundle.report = { ...bundle.report, bus };
     await writeFile(path.join(out, 'trial.json'), JSON.stringify(bundle));
@@ -403,7 +753,7 @@ async function main() {
   const bundle = { sizes, referenceZoom: REFERENCE_ZOOM, rails: collection([...bases.values()].flatMap((b) => b.rails.features).map((f) => thinned(f))),
     attached: collection([...[...bases.values()].flatMap((b) => b.attached.features), ...letterFeatures]),
     frames: frames.map(({ zoom, labels }) => ({ zoom, labels })), report };
-  report.bus = await drawBus(data, dir, out);
+  report.bus = await drawBus(data, dir, out, bundle);
   const raw = JSON.stringify(bundle);
   report.bytes = { raw: Buffer.byteLength(raw), gzip: gzipSync(raw).length };
   await writeFile(path.join(out, 'trial.json'), JSON.stringify(bundle));

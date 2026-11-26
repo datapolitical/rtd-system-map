@@ -402,6 +402,126 @@ default 300 ms one. Its transition is now 0. Read frame by frame in a headless
 browser, every layer's opacity now changes in one frame at each handover (12
 to 16, both ways); the same reading on the earlier build shows the rail fade.
 
+## Route lists the build places (#156, 2026-11-26)
+
+Between one tenth of a zoom and the next, route lists came and went. Each list
+was a stretch of street for MapLibre to set a label along, and MapLibre hides a
+label whenever its own tests fail: the stretch must reach two glyph sizes past
+the lettering at each end, and must not turn more than 25 degrees under it.
+Both answers change with the zoom. No stretch was shorter than its lettering
+(0 of 911 at 13, 0 of 1,577 at 14), so the room was there and the tests were
+the cause.
+
+At zooms 13 and 14 (`LISTS_PLACED`, `public/js/zoom/model.js`) the build now
+decides which lists there are and where each stands (`placedLists`,
+`scripts/zoom-prototype.mjs`), and the page draws every one of them at every
+zoom its drawing serves:
+
+- A list stands straight where its street is straight for the lettering's
+  whole length (within 1.5 px at the drawing's zoom), at the clear place
+  nearest the middle of its stretch. It is a point with the street's angle,
+  drawn whatever else is placed. MapLibre gives a turned point the upright box
+  around it as room, several times the lettering on downtown's diagonal grid,
+  so the list takes no room of its own; unseen marks along the lettering's
+  length take it, and the street and place names MapLibre still sets keep off
+  them.
+- Where the street bends under it, the list follows the street about the
+  middle of its stretch, if the turn is under 25 degrees.
+- MapLibre fits a label to a line at the size it will have at zoom 18, not the
+  size it is drawn. The lists' size therefore stops growing where the next
+  drawing takes over, the build measures a list on a bend at that size, and the
+  unseen mark is the narrowest glyph, so a list of one figure still has room
+  for one.
+- A clear place has no other list on it, and none of the trial's rail, station
+  marks, line letters or station names at any zoom the drawing serves. With
+  no clear place a list drops its street's name; failing that it is tried on
+  the other side of its street, where it must be clear of the bus lines too.
+- A list with no place is left out. `trial.json` names each one and says why.
+- The drawing at 14 looks for each list first where it stood at 13, on the
+  side it stood, before the lists new at 14 take their places.
+
+| | Zoom 13 | Zoom 14 |
+|---|---|---|
+| Lists the sheets' build planned | 931 | 1,592 |
+| Standing straight | 854 | 1,438 |
+| Following a bend | 9 | 98 |
+| Stacked in two rows (points already) | 17 | 14 |
+| Left out: on rail | 27 | 21 |
+| Left out: no straight or gently bending place | 21 | 16 |
+| Left out: on a station's name, a line letter or another bus line | 3 | 5 |
+
+Of the lists placed, 11 and 14 stand off the middle of their stretch, 10 and
+38 stand across their street from where the sheets' build had them, and 44 at
+zoom 14 go without their street's name. Every route on a list that was left
+out is still named on other lists of the same drawing: at least three at 13
+and seven at 14.
+
+When the drawing at 14 takes over, 756 of the 880 lists placed at 13 stand
+within 5 px of where they stood (540 within 1 px). The drawing at 14 sets bus
+lines side by side at its own widths, so a street can shift a few pixels at
+the handover and its list goes with it. The rest move further along their
+street or are grouped differently at 14 (one list at 13, two at 14).
+
+A neighbourhood's name gives way to a route list (Chris, 2026-11-26: the first
+list on a stretch stays and the name moves). The names are still MapLibre's to
+place, so for now a name with a list in its way is left out; it moves when the
+build places names too.
+
+`npm run check:zoom-lists -- <origin>` (`qa/zoom-lists.mjs`) opens the page at
+the phone's size and, at each tenth of a zoom from 13.0 to 14.9, asks for every
+list the build placed that is in view: that MapLibre drew it where the build
+put it, that the picture has its ink there, that no two lists overlap, that
+none lies on rail, a station's mark or lettering, that nothing MapLibre places
+afterwards lies on one, and that each list standing straight has its unseen
+marks. Run on this build in the light theme at 19th and Curtis, Union Station,
+Colfax and Colorado, and Nine Mile: 80 steps, 629 lists looked for (298, 190,
+91 and 50), nothing found, no page errors. The check has found what it is for.
+On the first cut of this change, which set every list at its stretch's middle
+and tested nothing against rail, it found two lists MapLibre refused on bends
+and eight lying on rail or a line letter in four steps at 19th and Curtis. On
+a later cut it found a street's name set against a one-figure list from 14.6
+to 14.9: MapLibre had refused that list's marks, and the check, asked for
+marks, then found 19 one-figure lists without them in six steps. The dark
+theme, a picked route and a real phone are not in this check.
+
+Lists that came and went were counted on the page before this change and
+after it, at each tenth of a zoom from 13.0 to 14.9. At 19th and Curtis, 8
+lists were drawn at some tenths of their drawing's range and not at others
+before; after, none, and all 41 lists the build places there are drawn at
+every tenth. At Nine Mile it was one before and none after. Union Station and
+Colfax and Colorado were not counted this way.
+
+The names MapLibre still places were compared at four views. At 19th and
+Curtis at 14.4 the list "FF, RX", which MapLibre had hidden, now stands where
+the base map's "West 21st Street" was, and that name, "Ballpark" and "Central
+Business District" are left out. At 13.7 "Curtis Street" is left out beside
+the list "48, ART" (see the limits), and "Park Avenue West" shows where a
+stacked list was left out on rail. Colfax and Colorado at 13.6 kept every
+name, and Union Station at 13.2 gained one.
+
+Limits:
+
+- A list's room is measured at its drawing's zoom, and the room grows with the
+  map while the lettering nearly keeps its size. By the last tenth before the
+  next drawing a list keeps names off about one and three-quarter times its
+  lettering's length, which is what costs "Curtis Street" at 13.7. When the
+  build places the street names too (#158) it can measure the room at each
+  zoom.
+
+- The lists left out on rail run beside rail for their whole stretch, with
+  rail or another bus line on each side. The sheets' build chooses a list's
+  side from the bus streets alone. When it knows the trial's rail it can give
+  such a list a stretch that is clear.
+- A stacked list has one place, so it is kept there or left out, and it still
+  takes MapLibre's upright box as room.
+- A list left out at 13 or 14 is still handed to the next drawing, which
+  places it by its own rule: the build's at 14, MapLibre's at 15.
+- Zooms 12, 15 and 16 set their lists MapLibre's way, as before.
+- With a route picked, the other routes' lists are drawn, dimmed, even where
+  the picked route's line passes over them. On the sheets they give way to it.
+- The room lines make the drawings 3 to 4 percent larger as sent (bus-13
+  132 to 136 kB gzipped, bus-14 202 to 210 kB).
+
 ## Line letters
 
 Letters are placed outward from 12, like the names: the letters at 12 stay
@@ -467,6 +587,7 @@ Open `http://127.0.0.1:8804/zoom/`. In another terminal in that checkout:
 ```sh
 npm run check:zoom -- http://127.0.0.1:8804
 npm run check:zoom-spacing
+npm run check:zoom-lists -- http://127.0.0.1:8804
 node qa/zoom-spacing-browser.mjs http://127.0.0.1:8804
 THEMES=light,dark node qa/zoom-crowding-browser.mjs http://127.0.0.1:8804
 node scripts/package-zoom-preview.mjs qa/.scratch/zoom-prototype/site

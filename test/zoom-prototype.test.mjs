@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
-import { SIZES, names } from '../scripts/lib/sheets.mjs';
-import { withZoom, zoomStops } from '../scripts/zoom-prototype.mjs';
+import { textWidth } from '../scripts/glyphs.mjs';
+import { SIZES, names, toPx, toLonLat } from '../scripts/lib/sheets.mjs';
+import { withZoom, zoomStops, placedLists, fixedOver, listWide, LIST_STRAIGHT, LIST_FOLLOW } from '../scripts/zoom-prototype.mjs';
 import { previewStyle } from '../public/js/zoom/style.js';
 import { sheetStyle } from '../public/js/sheets/style.js';
 import { attachedPoint, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChanges,
   labelsAt, SIDE_HOLD, FADE_OUT_MS, FADE_IN_MS, busDrawingAt, BUS_HOLD, railDrawingAt, railRefAt, attachedFor,
-  MIN_ZOOM, MAX_ZOOM, BUS_DRAWINGS } from '../public/js/zoom/model.js';
+  MIN_ZOOM, MAX_ZOOM, BUS_DRAWINGS, LISTS_PLACED } from '../public/js/zoom/model.js';
 import { railOrderErrors, letteringOrderErrors } from '../qa/lib/zoom-order.mjs';
 import { canonicalTracks, fitTerminalSpines } from '../scripts/lib/zoom-rail.mjs';
 import { spacingReport, terminalGaps } from '../qa/lib/zoom-spacing.mjs';
@@ -469,4 +470,230 @@ test('the trial reads the sheets\' style as main makes it now: whole drawings, a
   assert.ok(!JSON.stringify(style.layers.filter((l) => /^(sheet|routes)-|^trial-bus-/.test(l.source ?? ''))).includes('"lists"'));
   // The ground is still OpenFreeMap's own tiles: the site's hold only what the sheets draw at each zoom.
   assert.deepEqual(style.sources.ground, { type: 'vector', url: 'https://tiles.openfreemap.org/planet' });
+});
+
+test('the build places a list on a straight stretch as a point with its street\'s angle and a line of room; a list on a bend keeps its stretch', () => {
+  const zoom = 13, size = sizeAt(zoomStops(SIZES.busLabelSize), zoom);
+  const at = toPx([-104.99, 39.75], zoom);
+  const line = (points) => ({ type: 'LineString', coordinates: points.map(([x, y]) => toLonLat([at[0] + x, at[1] + y], zoom)) });
+  const list = (properties, points) => ({ type: 'Feature', properties: { kind: 'bus-label', cls: 'c15', n: 2, ...properties }, geometry: line(points) });
+  const wide = (label, street) => listWide({ label, street }, size);
+  const other = { type: 'Feature', properties: { kind: 'bus', cls: 'c15' }, geometry: line([[0, 0], [90, 0]]) };
+  // East along a street that comes a little nearer the list under its middle (a list stands above
+  // its street); the same stretch run the other way; down a diagonal, below its street; and one
+  // with its street's name leading.
+  const east = list({ label: '9, ART' }, [[0, 0], [30, -0.4], [60, 0]]);
+  const west = list({ label: '9, ART' }, [[60, 100], [0, 100]]);
+  const diagonal = list({ label: '38, 43', side: -1 }, [[0, 200], [40, 240]]);
+  const named = list({ label: '15, 15L', street: 'Colfax Ave' }, [[0, 300], [120, 300]]);
+  // Round a turn, each leg shorter than the lettering, so nowhere is straight: a gentle turn is
+  // followed, and a corner leaves the list no place.
+  const leg = wide('120X, FF') * 0.75;
+  const turn = (degrees, y) => [[0, y], [leg, y], [leg + leg * Math.cos((degrees * Math.PI) / 180), y + leg * Math.sin((degrees * Math.PI) / 180)]];
+  const bent = list({ label: '120X, FF' }, turn(LIST_FOLLOW - 1, 400));
+  const cornered = list({ label: '120X, FF' }, turn(60, 500));
+  // Room for the figures, not for the street's name before them.
+  const short = list({ label: '15, 15L', street: 'Colfax Ave' }, [[0, 600], [wide('15, 15L') + 6, 600]]);
+  // A gentle turn on a stretch that holds the lettering as the drawing sets it, but not at the
+  // size it has grown to when the next drawing takes over, which is the size MapLibre fits it at.
+  const grown = sizeAt(zoomStops(SIZES.busLabelSize), zoom + 1) / size;
+  assert.ok(grown > 1.05);
+  const tight = (() => {
+    const half = (wide('83L, FF') * (1 + grown)) / 4 + 1, r = ((LIST_FOLLOW - 1) * Math.PI) / 180;
+    return list({ label: '83L, FF' }, [[0, 700], [half, 700], [half + half * Math.cos(r), 700 + half * Math.sin(r)]]);
+  })();
+  const { features, left, ...counts } = placedLists([other, east, west, diagonal, named, bent, cornered, short, tight], zoom);
+  assert.deepEqual(counts, { placed: 5, along: 1, unnamed: 1, moved: 0, across: 0, held: 0, stood: 0 });
+  assert.deepEqual(left, [{ list: '120X, FF', why: 'bend' }, { list: '83L, FF', why: 'bend' }]);
+  assert.deepEqual(features.map((f) => f.properties.kind), ['bus', 'bus-list', 'list-room', 'bus-list', 'list-room', 'bus-list', 'list-room', 'bus-list', 'list-room', 'bus-label', 'bus-list', 'list-room']);
+  assert.equal(features[0], other);
+  assert.deepEqual(features[9], bent);
+  const px = (f) => (f.geometry.type === 'Point' ? [f.geometry.coordinates] : f.geometry.coordinates).map((c) => { const q = toPx(c, zoom); return [q[0] - at[0], q[1] - at[1]]; });
+  const near = (a, b, slack = 0.15) => assert.ok(Math.abs(a - b) <= slack, `${a} is not ${b}`);
+  const check = (i, { middle, angle, label, street, side }) => {
+    const [point, room] = [features[i], features[i + 1]];
+    assert.equal(point.geometry.type, 'Point');
+    const [m] = px(point);
+    near(m[0], middle[0]); near(m[1], middle[1]);
+    near(point.properties.angle, angle);
+    // The list keeps what the page reads: its figures, its street's name, its side and class.
+    assert.deepEqual([point.properties.label, point.properties.street, point.properties.side, point.properties.cls, point.properties.n], [label, street, side, 'c15', 2]);
+    // The room is the lettering's own length, centred on the point, running left to right, on
+    // the list's side of the street.
+    const [a, b] = px(room);
+    assert.ok(a[0] <= b[0], 'room runs left to right');
+    near((a[0] + b[0]) / 2, m[0]); near((a[1] + b[1]) / 2, m[1]);
+    near(Math.hypot(b[0] - a[0], b[1] - a[1]), wide(label, street), 0.3);
+    near((Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI, angle, 0.5);
+    assert.deepEqual([room.properties.cls, room.properties.side], ['c15', side]);
+  };
+  // Set from where its street comes nearest it, so it is nowhere closer to the street than the page sets it.
+  check(1, { middle: [30, -0.4], angle: 0, label: '9, ART' });
+  // Run the other way, it still reads left to right, as MapLibre turned it.
+  check(3, { middle: [30, 100], angle: 0, label: '9, ART' });
+  check(5, { middle: [20, 220], angle: 45, label: '38, 43', side: -1 });
+  check(7, { middle: [60, 300], angle: 0, label: '15, 15L', street: 'Colfax Ave' });
+  // Without its street's name where only the figures fit.
+  check(10, { middle: [(wide('15, 15L') + 6) / 2, 600], angle: 0, label: '15, 15L' });
+  // The street's name and an em of space are part of the lettering's length.
+  assert.ok(wide('15, 15L', 'Colfax Ave') > wide('15, 15L') + size);
+  assert.ok(LIST_STRAIGHT > 0.4 && LIST_STRAIGHT < 4);
+});
+
+test('a list the build places keeps off rail and other lists: it moves along its stretch, then across its street, and is left out where nowhere is clear', () => {
+  const zoom = 13, size = sizeAt(zoomStops(SIZES.busLabelSize), zoom);
+  const at = toPx([-104.99, 39.75], zoom);
+  const line = (points) => ({ type: 'LineString', coordinates: points.map(([x, y]) => toLonLat([at[0] + x, at[1] + y], zoom)) });
+  const list = (properties, points) => ({ type: 'Feature', properties: { kind: 'bus-label', cls: 'c15', n: 1, ...properties }, geometry: line(points) });
+  const bus = (points) => ({ type: 'Feature', properties: { kind: 'bus', cls: 'c15' }, geometry: line(points) });
+  const stack = (x, y) => ({ type: 'Feature', properties: { kind: 'bus-stack', cls: 'c15', label: '8,\nRX', n: 2, angle: 0 }, geometry: { type: 'Point', coordinates: toLonLat([at[0] + x, at[1] + y], zoom) } });
+  // Rail, as bands in the drawing's own pixels: one across a street, one along the upper side of
+  // two streets, one over a stacked list.
+  const bands = [[96, -40, 104, 40], [-10, 80, 210, 97], [-10, 180, 210, 197], [60, 360, 140, 440]];
+  const fixed = [{ zoom, near: ([x, y], reach) => (bands.some((b) => x > at[0] + b[0] - reach && x < at[0] + b[2] + reach && y > at[1] + b[1] - reach && y < at[1] + b[3] + reach) ? 'rail' : null) }];
+  const crossed = list({ label: '9' }, [[0, 0], [200, 0]]);
+  // Rail all along the list's side of its own bus line: the other side is clear.
+  const beside = list({ label: '9' }, [[0, 100], [200, 100]]);
+  // The same, with another bus line where the list would stand on the other side.
+  const hemmed = list({ label: '9' }, [[0, 200], [200, 200]]);
+  const twins = [list({ label: '9' }, [[0, 300], [200, 300]]), list({ label: '15' }, [[0, 300], [200, 300]])];
+  const [onRail, free] = [stack(100, 400), stack(100, 500)];
+  const all = [bus([[0, 100], [200, 100]]), bus([[0, 200], [200, 200]]), bus([[0, 206], [200, 206]]), crossed, beside, hemmed, ...twins, onRail, free];
+  const { features, left, ...counts } = placedLists(all, zoom, fixed);
+  assert.deepEqual(counts, { placed: 4, along: 0, unnamed: 0, moved: 2, across: 1, held: 0, stood: 0 });
+  assert.deepEqual(left, [{ list: '8, / RX', why: 'rail' }, { list: '9', why: 'rail' }]);
+  const points = features.filter((f) => f.properties.kind === 'bus-list').map((f) => { const q = toPx(f.geometry.coordinates, zoom); return { ...f.properties, x: q[0] - at[0], y: q[1] - at[1] }; });
+  assert.deepEqual(points.map((q) => [q.label, Math.round(q.y), q.side]), [['9', 0, undefined], ['9', 100, -1], ['9', 300, undefined], ['15', 300, undefined]]);
+  // Along its stretch to the nearest clear place, no further.
+  const clear = Math.abs(points[0].x - 100) - 4 - listWide({ label: '9' }, size) / 2;
+  assert.ok(clear > 0.72 * size / 2 && clear < 0.72 * size / 2 + 4, `the list stands ${clear} px from the rail`);
+  // Across its street it stands where it would have, and its room goes with it.
+  assert.ok(Math.abs(points[1].x - 100) < 0.2);
+  assert.deepEqual(features.filter((f) => f.properties.kind === 'list-room').map((f) => f.properties.side), [undefined, -1, undefined, undefined]);
+  // Two lists on one stretch: the first keeps the middle and the second stands clear of it.
+  assert.ok(Math.abs(points[2].x - 100) < 0.2);
+  const apart = Math.abs(points[3].x - points[2].x) - (listWide({ label: '9' }, size) + listWide({ label: '15' }, size)) / 2;
+  assert.ok(apart > 0.72 * size && apart < 0.72 * size + 4, `the lists stand ${apart} px apart`);
+  // A stacked list has one place: it stays there untouched, or is left out.
+  assert.deepEqual(features.filter((f) => f.properties.kind === 'bus-stack'), [free]);
+  // Control: with nothing to keep off, the list across the rail keeps its stretch's middle and the others their sides.
+  const plain = placedLists(all, zoom);
+  assert.deepEqual([plain.placed, plain.moved, plain.across, plain.left.length], [5, 1, 0, 0]);
+  assert.ok(Math.abs(toPx(plain.features.find((f) => f.properties.kind === 'bus-list').geometry.coordinates, zoom)[0] - at[0] - 100) < 0.2);
+});
+
+test('a list keeps the place it had one zoom out when the next drawing takes over', () => {
+  // Streets given in the pixels of zoom 13; the drawing at 14 sees them twice the size.
+  const at = toPx([-104.99, 39.75], 13);
+  const list = (label, points) => ({ type: 'Feature', properties: { kind: 'bus-label', cls: 'c15', n: 1, label },
+    geometry: { type: 'LineString', coordinates: points.map(([x, y]) => toLonLat([at[0] + x, at[1] + y], 13)) } });
+  const where = (features, label) => { const q = toPx(features.find((f) => f.properties.kind === 'bus-list' && f.properties.label === label).geometry.coordinates, 14); return [q[0] - 2 * at[0], q[1] - 2 * at[1]]; };
+  const first = placedLists([list('9, ART', [[0, 0], [100, 0]])], 13);
+  assert.deepEqual(where(first.features, '9, ART').map(Math.round), [100, 0]);
+  // At 14 its stretch runs further along the street, and a list new to this drawing is on the next street.
+  const next = [list('15', [[0, 50], [160, 50]]), list('9, ART', [[0, 0], [160, 0]])];
+  const fresh = placedLists(next, 14);
+  assert.deepEqual(where(fresh.features, '9, ART').map(Math.round), [160, 0]);
+  assert.deepEqual([fresh.stood, fresh.held], [0, 0]);
+  const kept = placedLists(next, 14, null, first.features);
+  const [x, y] = where(kept.features, '9, ART');
+  assert.ok(Math.abs(x - 100) < 0.05 && Math.abs(y) < 0.05, `the list stands at ${x}, ${y}`);
+  assert.deepEqual([kept.placed, kept.stood, kept.held, kept.moved], [2, 1, 1, 0]);
+  // The drawing's own order is kept in what it gives the page.
+  assert.deepEqual(kept.features.map((f) => `${f.properties.kind} ${f.properties.label ?? ''}`.trim()), ['bus-list 15', 'list-room', 'bus-list 9, ART', 'list-room']);
+  assert.deepEqual(where(kept.features, '15').map(Math.round), [160, 100]);
+  // With rail now where it stood, it stands at the clear place nearest that, not at the stretch's middle.
+  const rail = [{ zoom: 14, near: ([px, py], reach) => (px > 2 * at[0] + 96 - reach && px < 2 * at[0] + 104 + reach && Math.abs(py - 2 * at[1]) < 40 + reach ? 'rail' : null) }];
+  const moved = placedLists(next, 14, rail, first.features);
+  const off = 100 - where(moved.features, '9, ART')[0], wide = listWide({ label: '9, ART' }, sizeAt(zoomStops(SIZES.busLabelSize), 14));
+  assert.ok(off > wide / 2 + 4 && off < wide / 2 + 4 + 8, `the list stands ${off} px from where it stood`);
+  assert.deepEqual([moved.stood, moved.held, moved.moved], [1, 0, 1]);
+});
+
+test('what the lists keep off is the trial\'s own rail, at each step of the zooms a drawing serves', () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  for (const zoom of LISTS_PLACED) {
+    const steps = fixedOver(bundle, zoom);
+    assert.ok(steps.length >= 9);
+    assert.equal(steps[0].zoom, zoom);
+    assert.ok(steps.every((s, i) => s.zoom >= zoom && s.zoom < zoom + 1 && (!i || s.zoom > steps[i - 1].zoom)));
+    for (const step of steps) {
+      // A line with no slot is drawn on its own centre line: a point of it is on rail, and a point
+      // well off any rail is on nothing.
+      const rail = bundle.rails.features.find((f) => f.properties.ref === railRefAt(step.zoom) && f.properties.slot === 0);
+      const on = toPx(rail.geometry.coordinates[Math.floor(rail.geometry.coordinates.length / 2)], step.zoom);
+      assert.equal(step.near(on, 1), 'rail');
+      assert.equal(step.near([on[0] + 4000, on[1] - 9000], 20), null);
+    }
+  }
+});
+
+test('the page draws every list of a drawing the build placed, and a neighbourhood\'s name gives way to one', () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
+  const style = previewStyle('light', metadata, bundle);
+  assert.deepEqual(validateStyleMin(style).map((e) => e.message), []);
+  const layer = (id) => style.layers.find((l) => l.id === id);
+  const order = (id) => style.layers.findIndex((l) => l.id === id);
+  const kindOf = (l) => JSON.stringify(l.filter).match(/\["==",\["get","kind"\],"([a-z-]+)"\]/)?.[1];
+  const placed = BUS_DRAWINGS.filter((d) => LISTS_PLACED.includes(d.zoom));
+  assert.deepEqual(placed.map((d) => d.set), ['13', '3']);
+  for (const { set, zoom } of placed) {
+    for (const who of ['bus', 'picked']) {
+      // A list on a straight stretch: a point turned to its street, drawn whatever else is placed,
+      // taking no room of its own.
+      const list = layer(`${who}-list-${set}`);
+      assert.equal(kindOf(list), 'bus-list');
+      assert.equal(list.layout['symbol-placement'], undefined);
+      assert.deepEqual(list.layout['text-rotate'], ['get', 'angle']);
+      assert.equal(list.layout['text-rotation-alignment'], 'map');
+      assert.deepEqual([list.layout['text-allow-overlap'], list.layout['text-ignore-placement']], [true, true]);
+      assert.ok(list.layout['text-max-width'] >= 100, 'a list with its street\'s name stays on one row');
+      // A list on a bend: set about the middle of its stretch, where MapLibre asks no room at the ends.
+      const bend = layer(`${who}-number-${set}`);
+      assert.equal(kindOf(bend), 'bus-label');
+      // MapLibre allows it more of a bend than the build does, so the build's rule decides.
+      assert.ok(bend.layout['text-max-angle'] > LIST_FOLLOW);
+      assert.deepEqual([bend.layout['symbol-placement'], bend.layout['text-allow-overlap'], bend.layout['symbol-spacing']], ['line-center', true, undefined]);
+      // The same lettering either way, and the picked route's list still only while it is picked.
+      for (const key of ['text-field', 'text-font', 'text-size', 'text-offset', 'text-letter-spacing']) assert.deepEqual(list.layout[key], bend.layout[key], key);
+      assert.deepEqual(list.paint, bend.paint);
+      assert.equal(JSON.stringify(list.filter), JSON.stringify(bend.filter).replace('"bus-label"', '"bus-list"'));
+      const stack = layer(`${who}-stack-${set}`);
+      assert.equal(stack.layout['text-allow-overlap'], true);
+      for (const l of [list, bend, stack]) assert.deepEqual([l.minzoom, l.maxzoom], [zoom, zoom + 1], l.id);
+    }
+    // Unseen marks along each list's lettering take its room, set where the lettering is.
+    const room = layer(`list-room-${set}`), list = layer(`bus-list-${set}`);
+    assert.equal(kindOf(room), 'list-room');
+    assert.equal(room.source, list.source);
+    assert.deepEqual([room.layout['symbol-placement'], room.layout['text-allow-overlap'], room.layout['text-ignore-placement'], room.paint['text-opacity']], ['line', true, undefined, 0]);
+    assert.deepEqual(room.layout['text-size'], list.layout['text-size']);
+    assert.deepEqual(room.layout['text-offset'], list.layout['text-offset']);
+    // MapLibre fits a label to a line at the size it has at zoom 18. The lists' size stops growing
+    // where the next drawing takes over, and there the mark is still narrower than the narrowest
+    // list as its own drawing sets it, so every list has room for a mark.
+    const stops = list.layout['text-size'].slice(3), last = stops.slice(-2);
+    assert.deepEqual(last, [zoom + 1, sizeAt(zoomStops(SIZES.busLabelSize), zoom + 1)]);
+    const font = room.layout['text-font'][0];
+    assert.ok(textWidth(room.layout['text-field'], font, last[1]) + 0.5 < textWidth('1', font, sizeAt(zoomStops(SIZES.busLabelSize), zoom), 0.02), `${room.id}: the mark fits a list of one figure`);
+    assert.deepEqual([room.minzoom, room.maxzoom], [zoom, zoom + 1]);
+    // Placed before (above) everything MapLibre still places that gives way to a list.
+    for (const id of [`picked-street-${set}`, `hall-label-${set}`, `bus-street-${set}`, `airport-plane-${set}`, `express-shield-${set}`, 'place-3', 'street-name-3']) {
+      if (layer(id)) assert.ok(order(room.id) > order(id), `${room.id} is placed before ${id}`);
+    }
+    // The neighbourhood names are placed after every list, and still before the bus streets' names.
+    for (const id of [`bus-list-${set}`, `bus-number-${set}`, `bus-stack-${set}`]) assert.ok(order('place-3') < order(id), `place-3 is placed after ${id}`);
+    assert.ok(order('place-3') > order(`bus-street-${set}`));
+  }
+  // The drawings whose lists MapLibre still sets are as they were: along the stretch, hidden where it finds no room.
+  for (const { set } of BUS_DRAWINGS.filter((d) => !LISTS_PLACED.includes(d.zoom))) {
+    assert.equal(layer(`bus-list-${set}`), undefined);
+    assert.equal(layer(`list-room-${set}`), undefined);
+    assert.deepEqual([layer(`bus-number-${set}`).layout['symbol-placement'], layer(`bus-number-${set}`).layout['text-allow-overlap']], ['line', undefined]);
+    assert.equal(layer(`bus-stack-${set}`).layout['text-allow-overlap'], undefined);
+  }
+  // Towns' names on the wider drawing and the closest band keep their place before the lists.
+  assert.ok(order('place-2') > order('bus-number-2'));
+  assert.ok(order('place-4') > order('bus-number-4'));
 });

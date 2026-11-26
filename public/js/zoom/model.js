@@ -178,6 +178,11 @@ export function placedName(f, sizes, zoom) {
 // back. Sets '2', '3' and '4' are the sheets; '13' and '15' are drawn for this trial.
 export const BUS_DRAWINGS = [{ zoom: 12, set: '2' }, { zoom: 13, set: '13' }, { zoom: 14, set: '3' }, { zoom: 15, set: '15' }, { zoom: 16, set: '4' }];
 export const BUS_HOLD = 0.05;
+// The bus drawings whose route lists the build places itself, each a point with the angle of its
+// street, for the page to draw as they stand and hide none (#156, the first trial of one decider
+// for lettering: scripts/zoom-prototype.mjs, placedLists; style.js). The rest are still set along
+// their stretch by MapLibre, which hides one when its own measure finds no room.
+export const LISTS_PLACED = [13, 14];
 
 // Which of a list of drawings shows at this zoom. A drawing hands over to the next at once, with
 // no fade: two drawings of the same streets or track lie a few pixels apart, so crossing them

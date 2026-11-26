@@ -2647,6 +2647,19 @@ shared rounded spine before applying pixel offsets. Terminal curves are
 fitted to their station bars. Per-zoom symbol updates still need a phone
 performance review. Chris's review and choice remain required by #154.
 
+At zooms 13 and 14 the trial's build places every route list itself (#156):
+it chooses where each list stands, clear of the trial's rail, station marks,
+line letters, station names and the other lists at every zoom its drawing
+serves, and the page draws each one at every zoom rather than leaving
+MapLibre to hide it. A list with no clear place is left out, and the build
+says which and why. There a neighbourhood's name gives way to a route list,
+the reverse of the sheets' rule ("Four sheets", where route numbers give way
+to a place's name): the first list on a stretch stays and the name moves.
+The names are still MapLibre's to place, so until the build places them too a
+name with a list in its way is left out. The trial's ground map is still
+fetched from OpenFreeMap's server; it moves to the site's own tiles when they
+are cut for what the zoom page draws (#158).
+
 ## Interface
 
 **Clean, at the quality of the best product design,** in this site's own
@@ -5628,6 +5641,22 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   appear, disappear, and reappear." Each drawing had spaced its lists afresh,
   so only a fifth to a third of them stayed through a zoom step; now 93 to 97
   percent do.
+- 2026-11-26: Zoom trial (#156): at zooms 13 and 14 the build places every
+  route list and the page draws each one at every zoom its drawing serves; a
+  list with no clear place is left out and reported (51 of 931 at 13, 42 of
+  1,592 at 14, each of their routes still named on other lists). Reason: Chris
+  chose to start the trial "where our build places every route list". MapLibre
+  was hiding lists whose stretch had room for them: at 19th and Curtis, 8
+  lists came or went between one tenth of a zoom and the next from 13 to 15;
+  all 41 the build places there now show at every tenth.
+- 2026-11-26: Zoom trial: where the build places the lists, a neighbourhood's
+  name gives way to a route list, the reverse of the sheets' rule. Reason:
+  Chris, asked which gives way: the first list on a stretch stays and the
+  neighbourhood's name moves.
+- 2026-11-26: Zoom trial: the ground map stays on OpenFreeMap's server until
+  the site's tiles are cut for what the zoom page draws (#158). Reason: the
+  site's tiles hold at each zoom only what the sheets draw there, and the trial
+  holds each road band a zoom either side of its own.
 
 ## Sources
 

@@ -14,6 +14,7 @@
     "prototype:zoom": "node scripts/zoom-prototype.mjs",
     "check:zoom": "node qa/zoom-prototype.mjs",
     "check:zoom-spacing": "node qa/zoom-spacing.mjs",
+    "check:zoom-lists": "node qa/zoom-lists.mjs",
     "fixes:build": "node qa/fixes/build.mjs",
     "dev": "NODE_OPTIONS=--max-old-space-size=4096 wrangler pages dev public --port 8788",
     "dev:live": "wrangler dev --config live/wrangler.toml --port 8789",
