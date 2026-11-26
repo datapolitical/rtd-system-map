@@ -8,7 +8,9 @@ import { readView, writeView, drawsRoute } from './address.js';
 import { routeName, sheetName, pickSaid, cardSaid, inkOn } from './say.js';
 import { clearPoint } from './view.js';
 
-// Start the map's worker downloading while the two small files below load.
+// Start the map's worker downloading while the two small files below load. With ?timing, the
+// worker carries a stopwatch (timing.js sets the address).
+if (window.timingWorker) maplibregl.setWorkerUrl(window.timingWorker);
 maplibregl.prewarm();
 // Room to list every file and tile the first visit fetches, for the offline cache (sw.js, below).
 performance.setResourceTimingBufferSize?.(2000);
