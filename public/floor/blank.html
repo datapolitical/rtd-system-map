@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Floor: blank page</title>
+<!-- A measuring page, not part of the map (branch mini/opening-paint only): how long a page
+     with nothing in it takes on the phone, against which the map's opening is measured. -->
+<script>window.__head = performance.now();</script>
+</head>
+<body>
+<p>Blank page.</p>
+<script>
+  addEventListener('load', () => setTimeout(() => {
+    const nav = performance.getEntriesByType('navigation')[0];
+    const fcp = performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint')?.startTime;
+    const r = (v) => (v == null ? '–' : Math.round(v));
+    window.loadTiming = [`FLOOR blank`, `page arrived: ${r(nav.responseEnd)}`, `first script ran: ${r(window.__head)}`, `parsed: ${r(nav.domInteractive)}`, `first paint: ${r(fcp)}`, `MAP READY (picture goes): ${r(nav.loadEventStart)}`].join('\n');
+    window.loadTimingRaw = { nav: nav.toJSON() };
+  }, 50));
+</script>
+</body>
+</html>

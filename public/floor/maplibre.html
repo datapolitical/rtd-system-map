@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Floor: MapLibre</title>
+<!-- A measuring page, not part of the map (branch mini/opening-paint only): MapLibre on the map's
+     view and screen with the least drawn, so the phone shows what MapLibre itself costs before any
+     of the map's own drawing. ?ground adds the ground's tiles, ?sheet the opening sheet's, each
+     drawn with plain lines and fills and no names. -->
+<script>window.__head = performance.now();</script>
+<link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
+<style>html, body, #map { margin: 0; height: 100%; } body { background: #f5f3ef; }</style>
+</head>
+<body>
+<div id="map"></div>
+<script type="module">
+  const t = { head: window.__head };
+  const r = (v) => (v == null ? '–' : Math.round(v));
+  const q = new URLSearchParams(location.search);
+  const maplibregl = await import('/vendor/maplibre-gl.mjs');
+  t.code = performance.now();
+  const sources = {}, layers = [{ id: 'bg', type: 'background', paint: { 'background-color': '#f5f3ef' } }];
+  const tiles = (name) => [`${location.origin}/tiles/${name}/{z}/{x}/{y}.pbf`];
+  if (q.has('ground')) {
+    sources.ground = { type: 'vector', tiles: tiles('ground'), maxzoom: 14 };
+    layers.push({ id: 'water', type: 'fill', source: 'ground', 'source-layer': 'water', paint: { 'fill-color': '#b9d3e6' } },
+      { id: 'park', type: 'fill', source: 'ground', 'source-layer': 'park', paint: { 'fill-color': '#d6e6cf' } },
+      { id: 'roads', type: 'line', source: 'ground', 'source-layer': 'transportation', paint: { 'line-color': '#ffffff' } });
+  }
+  if (q.has('sheet')) {
+    const sheets = await (await fetch('/data/sheets.json')).json().catch(() => null);
+    sources.sheet = { type: 'vector', tiles: tiles('sheet-1'), minzoom: 0, maxzoom: 9 };
+    layers.push({ id: 'lines', type: 'line', source: 'sheet', 'source-layer': '_geojsonTileLayer', paint: { 'line-color': '#335' } },
+      { id: 'dots', type: 'circle', source: 'sheet', 'source-layer': '_geojsonTileLayer', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 2 } });
+  }
+  const map = new maplibregl.Map({ container: 'map', style: { version: 8, sources, layers }, center: [-105.001838, 39.719193], zoom: 10, attributionControl: false, fadeDuration: 0, validateStyle: false });
+  t.made = performance.now();
+  map.once('load', () => { t.load = performance.now(); });
+  map.once('idle', () => {
+    t.ready = performance.now();
+    setTimeout(() => {
+      const nav = performance.getEntriesByType('navigation')[0];
+      const fcp = performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint')?.startTime;
+      const files = performance.getEntriesByType('resource').map((e) => ({ name: e.name, s: Math.round(e.startTime), e: Math.round(e.responseEnd), kb: Math.round((e.transferSize || 0) / 1024), type: e.initiatorType }));
+      const code = files.find((f) => /maplibre-gl\.mjs/.test(f.name)), worker = files.find((f) => /worker/.test(f.name));
+      window.loadTiming = [`FLOOR maplibre ${[...q.keys()].join('+') || 'empty'}`, `page arrived: ${r(nav.responseEnd)}`, `first script ran: ${r(t.head)}`,
+        `maplibre-gl.mjs: ${code ? `${code.s}–${code.e} (${code.kb} KB)` : '–'}`, `code running: ${r(t.code)}`, `map made: ${r(t.made)}`,
+        `worker file: ${worker ? `${worker.s}–${worker.e} (${worker.kb} KB)` : 'not reported'}`, `first paint: ${r(fcp)}`, `map style loaded: ${r(t.load)}`,
+        ...files.filter((f) => /\/tiles\//.test(f.name)).map((f) => `  tile ${f.name.replace(/^.*\/tiles\//, '')}: ${f.s}–${f.e} (${f.kb} KB)`),
+        `MAP READY (picture goes): ${r(t.ready)}`].join('\n');
+      window.loadTimingRaw = { t, nav: nav.toJSON(), files };
+    }, 50);
+  });
+</script>
+</body>
+</html>

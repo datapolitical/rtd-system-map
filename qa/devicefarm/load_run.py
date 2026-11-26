@@ -7,7 +7,8 @@ it saves the page's own timing readout (public/js/timing.js: window.loadTiming, 
 the Copy button gives, and window.loadTimingRaw, the page's and every file's times) and a
 screenshot; once the session ends, the video and Device Farm's logs.
 
-A fresh session is the only true first visit: run it again for another.
+A fresh session is the only true first visit: run it again for another. With several --url,
+only the first is a clean first visit; later ones may find files the earlier ones fetched.
 
 Run as the account that holds the Device Farm profile:
   AWS_SHARED_CREDENTIALS_FILE=... python load_run.py --url URL --out DIR [--reloads 3]
@@ -53,7 +54,7 @@ def readout(driver, limit=60):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', required=True)
-    ap.add_argument('--url', required=True, help='a public address with ?timing (the phones cannot reach the tailnet)')
+    ap.add_argument('--url', required=True, action='append', help='a public address with ?timing (the phones cannot reach the tailnet); repeat for several, each opened in turn in the same session')
     ap.add_argument('--reloads', type=int, default=3)
     ap.add_argument('--device-name', default='Apple iPhone 17 Pro')
     ap.add_argument('--device-os', default=None)
@@ -97,21 +98,24 @@ def main():
         driver.set_page_load_timeout(120)
         driver.set_script_timeout(60)
 
-        for n in range(1 + a.reloads):
-            kind = 'first' if n == 0 else 'reload'
-            if n == 0:
-                driver.get(a.url)
-            else:
-                time.sleep(2)  # let the offline copy finish saving what the last load fetched
-                driver.refresh()
-            text, raw = readout(driver)
-            driver.get_screenshot_as_file(os.path.join(a.out, f'{n:02d}-{kind}.png'))
-            record['loads'].append({'n': n, 'kind': kind, 'text': text, 'raw': raw})
-            if text:
-                with open(os.path.join(a.out, f'{n:02d}-{kind}.txt'), 'w') as f:
-                    f.write(text)
-            ready = next((l for l in (text or '').splitlines() if l.startswith('MAP READY')), 'no readout')
-            log(kind, n, ready)
+        n = 0
+        for url in a.url:
+            for i in range(1 + a.reloads):
+                kind = 'first' if i == 0 else 'reload'
+                if i == 0:
+                    driver.get(url)
+                else:
+                    time.sleep(2)  # let the offline copy finish saving what the last load fetched
+                    driver.refresh()
+                text, raw = readout(driver)
+                driver.get_screenshot_as_file(os.path.join(a.out, f'{n:02d}-{kind}.png'))
+                record['loads'].append({'n': n, 'url': url, 'kind': kind, 'text': text, 'raw': raw})
+                if text:
+                    with open(os.path.join(a.out, f'{n:02d}-{kind}.txt'), 'w') as f:
+                        f.write(url + '\n' + text)
+                ready = next((l for l in (text or '').splitlines() if l.startswith('MAP READY')), 'no readout')
+                log(kind, n, url.split('.dev')[-1], ready)
+                n += 1
     except Exception as e:
         record['error'] = f'{type(e).__name__}: {e}'[:2000]
         log('ERROR', record['error'])
