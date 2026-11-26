@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Floor: drawing programs</title>
+<!-- A measuring page, not part of the map (branch mini/opening-paint only). It builds the ten GL
+     programs the map builds at its opening (programs.json, captured from the map) in three ways,
+     each on its own renamed copy so none finds another's work saved:
+       1. on the page, the way MapLibre does: how long the page is blocked;
+       2. on the page with KHR_parallel_shader_compile: whether the work leaves the page;
+       3. in a worker (OffscreenCanvas), then again on the page: whether a worker can do it
+          without blocking the page, and whether the page then finds it done.
+     ?real ends by building the map's own programs, unrenamed, in a worker, for the next page
+     (the map) to find. -->
+</head>
+<body>
+<p id="out">Measuring…</p>
+<script type="module">
+  const r = (v) => Math.round(v);
+  const q = new URLSearchParams(location.search);
+  const programs = await (await fetch('/floor/programs.json')).json();
+  const lines = ['FLOOR shaders'];
+  // Every uniform renamed with the tag: a different program text, so nothing saved from before matches.
+  const tagged = (tag) => programs.map(({ vertex, fragment }) => {
+    const names = new Set([...`${vertex}\n${fragment}`.matchAll(/uniform\s+(?:(?:highp|mediump|lowp)\s+)?\w+\s+(\w+)/g)].map((m) => m[1]));
+    const re = names.size ? new RegExp(`\\b(${[...names].join('|')})\\b`, 'g') : null;
+    const swap = (s) => (re ? s.replace(re, `$1_${tag}`) : s);
+    return { vertex: swap(vertex), fragment: swap(fragment) };
+  });
+  const build = (gl, list) => list.map(({ vertex, fragment }) => {
+    const p = gl.createProgram();
+    for (const [type, text] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
+      const s = gl.createShader(type); gl.shaderSource(s, text); gl.compileShader(s); gl.attachShader(p, s);
+    }
+    gl.linkProgram(p);
+    return p;
+  });
+  // Frames: the longest gap between two while something runs, to see whether the page was blocked.
+  let last = performance.now(), worst = 0, watching = true;
+  const tick = (t) => { worst = Math.max(worst, t - last); last = t; if (watching) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+  const frameGap = () => { const w = worst; worst = 0; return r(w); };
+
+  const canvas = document.createElement('canvas');
+  const gl = canvas.getContext('webgl2');
+  lines.push(`extensions: KHR_parallel_shader_compile ${gl.getSupportedExtensions().includes('KHR_parallel_shader_compile') ? 'yes' : 'no'}; OffscreenCanvas in workers ${typeof OffscreenCanvas !== 'undefined' ? 'yes' : 'no'}`);
+
+  // 1. On the page, as MapLibre does (it asks for the link status at once).
+  await new Promise((go) => setTimeout(go, 100)); frameGap();
+  let t = performance.now();
+  const p1 = build(gl, tagged('a'));
+  const ok1 = p1.every((p) => gl.getProgramParameter(p, gl.LINK_STATUS));
+  lines.push(`1. on the page: ${r(performance.now() - t)} ms, page blocked throughout; linked ${ok1}`);
+
+  // 2. On the page with the extension: the calls, then each frame until all are done.
+  const ext = gl.getExtension('KHR_parallel_shader_compile');
+  if (ext) {
+    await new Promise((go) => setTimeout(go, 100)); frameGap();
+    t = performance.now();
+    const p2 = build(gl, tagged('b'));
+    const calls = performance.now() - t;
+    await new Promise((go) => { const poll = () => (p2.every((p) => gl.getProgramParameter(p, ext.COMPLETION_STATUS_KHR)) ? go() : requestAnimationFrame(poll)); poll(); });
+    lines.push(`2. with the extension: calls ${r(calls)} ms, all done at ${r(performance.now() - t)} ms, longest frame meanwhile ${frameGap()} ms; linked ${p2.every((p) => gl.getProgramParameter(p, gl.LINK_STATUS))}`);
+  } else lines.push('2. with the extension: not offered');
+
+  // 3. In a worker, then the same on the page.
+  const inWorker = (list) => new Promise((go) => {
+    const w = new Worker(URL.createObjectURL(new Blob([`
+      onmessage = ({ data }) => {
+        const t0 = performance.now();
+        const gl = new OffscreenCanvas(1, 1).getContext('webgl2');
+        if (!gl) return postMessage({ error: 'no webgl2 in worker' });
+        const ps = data.map(({ vertex, fragment }) => {
+          const p = gl.createProgram();
+          for (const [type, text] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
+            const s = gl.createShader(type); gl.shaderSource(s, text); gl.compileShader(s); gl.attachShader(p, s);
+          }
+          gl.linkProgram(p);
+          return p;
+        });
+        const ok = ps.every((p) => gl.getProgramParameter(p, gl.LINK_STATUS));
+        postMessage({ ms: performance.now() - t0, ok });
+      };`], { type: 'text/javascript' })));
+    w.onmessage = ({ data }) => { w.terminate(); go(data); };
+    w.onerror = (e) => go({ error: String(e.message) });
+    w.postMessage(list);
+  });
+  await new Promise((go) => setTimeout(go, 100)); frameGap();
+  t = performance.now();
+  const w3 = await inWorker(tagged('c'));
+  lines.push(`3. in a worker: ${w3.error ?? `${r(w3.ms)} ms in the worker, ${r(performance.now() - t)} ms from asking; longest page frame meanwhile ${frameGap()} ms; linked ${w3.ok}`}`);
+  t = performance.now();
+  const p3 = build(gl, tagged('c'));
+  lines.push(`   then on the page, same programs: ${r(performance.now() - t)} ms; linked ${p3.every((p) => gl.getProgramParameter(p, gl.LINK_STATUS))}`);
+
+  // ?real: the map's own programs, in a worker, for the map to find next.
+  if (q.has('real')) {
+    t = performance.now();
+    const w4 = await inWorker(programs);
+    lines.push(`4. the map's own programs in a worker: ${w4.error ?? `${r(w4.ms)} ms; linked ${w4.ok}`}`);
+  }
+  watching = false;
+  lines.push(`MAP READY (picture goes): ${r(performance.now())}`);
+  document.getElementById('out').textContent = lines.join('\n');
+  window.loadTiming = lines.join('\n');
+</script>
+</body>
+</html>
