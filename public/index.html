@@ -6,7 +6,7 @@
      preloaded: on an iPhone Safari appeared to fetch the preloads again when the map asked, and
      the opening view waited for them more than for anything else (DESIGN.md, 2026-11-25). -->
 <script>
-  window.earlyGlyphs = Object.fromEntries(['Overpass Medium', 'Overpass SemiBold', 'Overpass ExtraBold'].map((font) => {
+  window.early = Object.fromEntries(['Overpass Medium', 'Overpass SemiBold', 'Overpass ExtraBold'].map((font) => {
     const path = `/vendor/glyphs/${encodeURIComponent(font)}/0-255.pbf`;
     return [path, fetch(path).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)];
   }));
@@ -61,8 +61,8 @@
 <!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the loading picture. -->
 <link rel="stylesheet" href="/vendor/maplibre-gl.css" media="print" onload="this.media='all'">
 <!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
-     for the one that names it (DESIGN.md, "Quality floor"). The sheet is fetched by the map's
-     worker, which finds it in the browser's cache. -->
+     for the one that names it (DESIGN.md, "Quality floor"). Its tiles are fetched by the script
+     after the loading picture, which knows the view. -->
 <link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
 <link rel="modulepreload" href="/js/sheets/style.js">
 <link rel="modulepreload" href="/js/sheets/settle.js">
@@ -72,9 +72,6 @@
 <link rel="modulepreload" href="/js/sheets/view.js">
 <link rel="preload" href="/data/meta.json" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="/data/sheets.json" as="fetch" crossorigin="anonymous">
-<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
-<link rel="preload" href="https://tiles.openfreemap.org/planet" as="fetch" crossorigin="anonymous">
-<link rel="preload" href="/data/sheet-1.geojson" as="fetch" crossorigin="anonymous">
 <!-- The font early too: the loading line is set in it, and a block-display font shows nothing until it arrives. -->
 <link rel="preload" href="/vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
@@ -202,7 +199,7 @@
 <button id="key" type="button" class="off" aria-hidden="true" tabindex="-1"></button>
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
-<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="a3a463af68c5703099d0a4278097417febcfaaca4331f500b20ba7fd3bbcaa24" data-source="https://tiles.openfreemap.org/planet" data-tiles="[&quot;https://tiles.openfreemap.org/planet/20261122_124456_pt/{z}/{x}/{y}.pbf&quot;]">
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="7f151cec4e04941c6b85a930058c2e59a72a2f652f0d538c248d6e54d019797e" data-ground="20261122_124456_pt" data-early="{&quot;ground&quot;:10,&quot;sheet-1&quot;:9}">
   <picture>
     <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
     <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">
@@ -246,15 +243,42 @@
     // A deployment rebuilds the drawing from current data. An older screenshot must
     // never flash before a different drawing, even if its centre is unchanged.
     const json = (url) => fetch(url).then((r) => r.ok ? r.json() : null);
-    const matches = poster.dataset.source ? Promise.all([json('/data/sheets.json'), json(poster.dataset.source)])
-      .then(([s, ground]) => Boolean(s?.drawing && s.drawing === poster.dataset.drawing &&
-        JSON.stringify(ground?.tiles) === poster.dataset.tiles)).catch(() => false) : Promise.resolve(false);
+    // The ground is the site's own, published with the drawing (publish-check: data-ground).
+    const matches = json('/data/sheets.json').then((s) => Boolean(s?.drawing && s.drawing === poster.dataset.drawing)).catch(() => false);
     const whole = async () => {
       if (await matches) img.classList.add('whole');
       else img.closest('picture')?.remove();
     };
     if (img.complete && img.naturalWidth) whole();
     else img.addEventListener('load', whole);
+  })();
+</script>
+<script>
+  // The opening view's tiles, fetched now and handed to the map as it asks for them (main.js,
+  // "early"): each tile set it draws the view from, at the zoom of its tiles there (data-early,
+  // which scripts/poster.mjs read off the map), for this screen. Not for a view a link names.
+  (() => {
+    const poster = document.getElementById('poster');
+    const [z, lat, lon] = poster.dataset.view.split('/').map(Number);
+    if (location.hash.length > 1 || !Number.isFinite(lon)) return;
+    const early = (window.early ??= {});
+    for (const [name, tz] of Object.entries(JSON.parse(poster.dataset.early || '{}'))) {
+      const n = 2 ** tz;
+      const size = (512 * 2 ** z) / n; // a tile's width on the screen
+      const cx = ((lon + 180) / 360) * n;
+      const cy = ((1 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / Math.PI) / 2) * n;
+      for (let x = Math.floor(cx - innerWidth / 2 / size); x <= Math.floor(cx + innerWidth / 2 / size); x++) {
+        for (let y = Math.floor(cy - innerHeight / 2 / size); y <= Math.floor(cy + innerHeight / 2 / size); y++) {
+          const path = `/tiles/${name}/${tz}/${x}/${y}.pbf`;
+          // A tile the site doesn't have is empty: the host answers it with the front page.
+          // It comes back with the tiles' own type (_headers), so it is known by its "<".
+          early[path] = fetch(path).then(async (r) => {
+            const data = r.ok ? await r.arrayBuffer() : new ArrayBuffer(0);
+            return new Uint8Array(data)[0] === 0x3c ? new ArrayBuffer(0) : data;
+          }, () => null);
+        }
+      }
+    }
   })();
 </script>
 <div id="steps" role="group" aria-label="Map sheet">

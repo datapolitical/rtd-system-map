@@ -86,8 +86,9 @@ network is written into the code; the build derives it from RTD's data.
   `google_transit.zip`.
 - Live positions come from RTD's public GTFS-realtime feeds, which need no
   key.
-- Street addresses use Photon, an OpenStreetMap geocoder. The basemap uses
-  OpenFreeMap's vector tiles.
+- Street addresses use Photon, an OpenStreetMap geocoder. The basemap is
+  OpenFreeMap's vector tiles of the district, kept in `basemap/` and served
+  by the site.
 
 All of these are public and need no key. Check each provider's terms before
 reusing their data.
@@ -138,7 +139,9 @@ Nicholson (see [NOTICE](NOTICE)). The licence covers this repository's code
 and docs. It does not cover RTD's data, which the build downloads and never
 commits, or RTD's name and marks, which belong to RTD. The QA baseline
 screenshots in `qa/checks/` show RTD's data on OpenFreeMap's basemap
-(© OpenMapTiles, © OpenStreetMap contributors).
+(© OpenMapTiles, © OpenStreetMap contributors). `basemap/` holds
+OpenStreetMap data from OpenFreeMap's tiles, under OpenStreetMap's Open
+Database License (© OpenMapTiles, © OpenStreetMap contributors).
 
 This project is unofficial and not affiliated with RTD.
 

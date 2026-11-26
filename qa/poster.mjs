@@ -1,5 +1,5 @@
-// Loading-picture regression: the captured drawing must match, and stale transit or
-// basemap data must never be shown. Save the matching picture and the live handoff.
+// Loading-picture regression: the captured drawing must match, and a stale drawing must never
+// be shown. (The basemap is the site's own, and the publish check holds the picture to it.) Save the matching picture and the live handoff.
 // node qa/poster.mjs <site> [output]
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
@@ -11,7 +11,7 @@ const browser = await chromium.launch();
 const results = [];
 try {
   for (const theme of ['light', 'dark']) {
-    for (const mode of ['matching', 'old-drawing', 'old-basemap']) {
+    for (const mode of ['matching', 'old-drawing']) {
       const page = await browser.newPage({ viewport: { width: 393, height: 760 }, deviceScaleFactor: 1, colorScheme: theme, serviceWorkers: 'block' });
       let release;
       const gate = new Promise((done) => { release = done; });
@@ -21,10 +21,6 @@ try {
         if (mode === 'old-drawing') await page.route('**/data/sheets.json', async (route) => {
           const response = await route.fetch(), json = await response.json();
           await route.fulfill({ response, json: { ...json, drawing: 'different-drawing' } });
-        });
-        if (mode === 'old-basemap') await page.route('https://tiles.openfreemap.org/planet', async (route) => {
-          const response = await route.fetch(), json = await response.json();
-          await route.fulfill({ response, json: { ...json, tiles: ['https://example.invalid/different-basemap/{z}/{x}/{y}.pbf'] } });
         });
         await page.goto(base, { waitUntil: 'commit' });
         await page.waitForFunction(() => {

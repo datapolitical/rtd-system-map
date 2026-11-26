@@ -13,6 +13,7 @@ import { chromium } from 'playwright';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { readPack } from './lib/basemap.mjs';
 
 const site = process.argv[2] ?? 'https://rtd-system-map.pages.dev/';
 const OUT = fileURLToPath(new URL('../public/poster/', import.meta.url));
@@ -31,7 +32,7 @@ const browser = await chromium.launch();
 const views = new Set();
 const bounds = new Set();
 const drawings = new Set();
-const grounds = new Set();
+const earlies = new Set();
 try {
   for (const theme of ['light', 'dark']) {
     for (const size of SIZES) {
@@ -50,8 +51,18 @@ try {
         });
         const drawing = await page.evaluate(() => window.sheetsDrawing);
         if (!drawing) throw new Error('The map has no drawing fingerprint');
-        const ground = await page.evaluate(() => ({ source: window.sheetsMap.getStyle().sources.ground.url, tiles: window.sheetsMap.getSource('ground').tiles }));
-        grounds.add(JSON.stringify(ground));
+        // Each tile set the view is drawn from and the zoom of its tiles there, for the page to
+        // fetch them as it loads (index.html, data-early).
+        const early = await page.evaluate(() => {
+          const managers = window.sheetsMap.style.tileManagers;
+          const zooms = {};
+          for (const [name, tm] of Object.entries(managers)) {
+            const z = new Set(tm.getIds().map((id) => tm.getTileByID(id)?.tileID.canonical.z));
+            if (z.size === 1 && tm.getSource().type === 'vector') zooms[name] = [...z][0];
+          }
+          return Object.fromEntries(Object.entries(zooms).sort(([a], [b]) => a.localeCompare(b)));
+        });
+        earlies.add(JSON.stringify(early));
         drawings.add(drawing);
         views.add(view);
         bounds.add(limits);
@@ -70,16 +81,18 @@ try {
 } finally {
   await browser.close();
 }
-if (grounds.size !== 1) throw new Error('The pictures were captured from different basemap versions');
+if (earlies.size !== 1) throw new Error(`the pictures' views were drawn from different tiles: ${[...earlies].join(' | ')}`);
 if (drawings.size !== 1) throw new Error('The pictures were captured from different drawings');
 if (views.size !== 1) throw new Error(`the pictures show different views: ${[...views].join(', ')}`);
 if (bounds.size !== 1) throw new Error(`the map's bounds differ between pictures: ${[...bounds].join(' | ')}`);
 const [view] = views;
 const [limits] = bounds;
 const [drawing] = drawings;
-const ground = JSON.parse([...grounds][0]);
+const [early] = earlies;
+// The ground the pictures show: the site's own, which the publish check compares with basemap/.
+const ground = (await readPack())?.planet ?? '';
 const attr = (v) => String(v).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 const html = await readFile(PAGE, 'utf8');
 if (!/<div id="poster"[^>]*>/.test(html)) throw new Error('index.html has no <div id="poster" data-view data-bounds> to write the view in');
-await writeFile(PAGE, html.replace(/<div id="poster"[^>]*>/, `<div id="poster" data-view="${view}" data-bounds="${limits}" data-drawing="${drawing}" data-source="${attr(ground.source)}" data-tiles="${attr(JSON.stringify(ground.tiles))}">`));
+await writeFile(PAGE, html.replace(/<div id="poster"[^>]*>/, `<div id="poster" data-view="${view}" data-bounds="${limits}" data-drawing="${drawing}" data-ground="${attr(ground)}" data-early="${attr(early)}">`));
 console.log(`the view: ${view}; the bounds: ${limits}`);

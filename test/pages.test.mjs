@@ -41,12 +41,18 @@ test('the front page asks at once for what its opening view needs, and only that
   const fonts = new Set();
   const collect = (x) => (typeof x === 'string' ? x.startsWith('Overpass ') && fonts.add(x) : Array.isArray(x) && x.forEach(collect));
   for (const l of sheetStyle('light').layers) if (l.type === 'symbol' && (l.minzoom ?? 0) <= open && open < (l.maxzoom ?? 24)) collect(l.layout['text-font']);
-  // Fetched by the head's own script and handed to the map (index.html, earlyGlyphs; main.js, "early").
-  const [, list] = read('').match(/window\.earlyGlyphs = Object\.fromEntries\(\[([^\]]*)\]/) ?? [];
+  // Fetched by the head's own script and handed to the map (index.html, early; main.js, "early").
+  const [, list] = read('').match(/window\.early = Object\.fromEntries\(\[([^\]]*)\]/) ?? [];
   const glyphs = [...(list ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]);
   assert.deepEqual(glyphs.sort(), [...fonts].sort(), 'the fonts the opening sheet letters with');
   assert.ok(!preloads.some((p) => p.startsWith('/vendor/glyphs/')), 'the glyphs are fetched once, not preloaded as well');
-  assert.deepEqual(preloads.filter((p) => /^\/data\/sheet-/.test(p)), [`/data/sheet-${SHEETS[OPENING].id}.geojson`], 'the opening sheet, not the others');
+  // The tiles: the page fetches those of the opening view, of the opening sheet and the ground, at the
+  // zooms the map drew it from (data-early, scripts/poster.mjs), and no sheet's whole drawing.
+  assert.ok(!preloads.some((p) => /^\/data\/sheet-/.test(p)), 'no sheet is fetched whole');
+  const early = JSON.parse((read('').match(/<div id="poster"[^>]*\sdata-early="([^"]*)"/)?.[1] ?? '{}').replaceAll('&quot;', '"'));
+  const { tileZooms } = await import('../public/js/sheets/style.js');
+  assert.deepEqual(Object.keys(early).sort(), ['ground', `sheet-${SHEETS[OPENING].id}`], 'the opening sheet and the ground');
+  assert.equal(early[`sheet-${SHEETS[OPENING].id}`], tileZooms(OPENING).maxzoom, 'the opening sheet\'s tiles');
   // Every module the page's script imports, so none waits for the one that names it.
   const main = fs.readFileSync(path.join(PUBLIC, 'js/sheets/main.js'), 'utf8');
   for (const [, from] of main.matchAll(/^import .* from '([^']+)';$/gm)) {
@@ -63,15 +69,28 @@ test('the sheets\' style is a valid MapLibre style in both themes, every sheet\'
   }
 });
 
-test('a sheet not yet wanted starts with no drawing, and its layers are there to take one', async () => {
-  const { SHEETS, OPENING, sheetStyle, sheetData } = await import('../public/js/sheets/style.js');
-  const style = sheetStyle('dark', [], [], new Set([SHEETS[OPENING].id]));
-  assert.equal(style.sources['sheet-1'].data, sheetData(1));
-  for (const s of SHEETS.filter((_, i) => i !== OPENING)) {
-    assert.deepEqual(style.sources[`sheet-${s.id}`].data, { type: 'FeatureCollection', features: [] });
-    assert.ok(style.layers.some((l) => l.source === `sheet-${s.id}`));
+test('every sheet and its route lines are tiles cut when the site is published; the route lines show only for a pick', async () => {
+  const { SHEETS, sheetStyle, tilesUrl, tileZooms, TILE_LAYER } = await import('../public/js/sheets/style.js');
+  for (const routeLines of [false, true]) {
+    const style = sheetStyle('dark', [], [], { routeLines });
+    for (const [i, s] of SHEETS.entries()) {
+      for (const set of ['sheet', 'routes']) {
+        assert.deepEqual(style.sources[`${set}-${s.id}`], { type: 'vector', tiles: [tilesUrl(`${set}-${s.id}`)], ...tileZooms(i) });
+        const layers = style.layers.filter((l) => l.source === `${set}-${s.id}`);
+        assert.ok(layers.length && layers.every((l) => l['source-layer'] === TILE_LAYER), `${set}-${s.id}'s layers read its tiles`);
+        if (set === 'routes') assert.ok(layers.every((l) => l.layout.visibility === (routeLines ? 'visible' : 'none')), `routes-${s.id} only for a pick`);
+      }
+    }
   }
-  assert.equal(sheetStyle('dark').sources['sheet-4'].data, sheetData(4), 'with nothing said, every sheet loads');
+});
+
+test('a list a feature carries is looked up from the build\'s table, as the tiles name it', async () => {
+  const { sheetStyle, listKey } = await import('../public/js/sheets/style.js');
+  const lists = { offset: [[0, -1.2], [0.5, 0]] };
+  const style = sheetStyle('light', [], [], { lists });
+  const offsets = style.layers.filter((l) => /^(sheet|routes)-/.test(l.source) && JSON.stringify(l.layout ?? {}).includes('"offset"')).map((l) => l.layout['text-offset']);
+  assert.ok(offsets.length, 'some layer sets its text off by a list');
+  for (const o of offsets) assert.deepEqual(o, ['match', ['get', 'offset'], listKey([0, -1.2]), ['literal', [0, -1.2]], listKey([0.5, 0]), ['literal', [0.5, 0]], ['literal', [0, 0]]]);
 });
 
 test('the front page shows a picture of its opening view while the map loads', async () => {

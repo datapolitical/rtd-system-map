@@ -33,8 +33,7 @@ export function writeView({ zoom, center: [lon, lat], pick }) {
   return pick && MODES.includes(pick.mode) && ROUTE.test(pick.route) ? `${at}/${pick.mode}/${encodeURIComponent(pick.route)}` : at;
 }
 
-/** Whether a sheet's data draws a route: read from its text, without parsing the whole file. */
-export function drawsRoute(text, { mode, route }) {
-  const r = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return mode === 'rail' ? new RegExp(`"route":"${r}"`).test(text) : new RegExp(`"routes":"(?:[^"]*, *)?${r}(?:,[^"]*)?"`).test(text);
+/** Whether the sheets draw a route: `drawn` is the build's list of them (sheets.json, routes). */
+export function drawsRoute(drawn, { mode, route }) {
+  return (mode === 'rail' ? drawn?.rail : drawn?.bus)?.includes(route) ?? false;
 }
