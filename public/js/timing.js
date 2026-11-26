@@ -51,17 +51,54 @@
     new BroadcastChannel('map-timing').onmessage = ({ data }) => {
       const w = (workers[data.w] ??= { busy: [], jobs: [], waits: [] });
       for (const r of data.list) {
-        if (r.kind === 'start') { w.born = fromPage(r.born); w.start = fromPage(r.at); }
-        if (r.kind === 'ready') w.ready = fromPage(r.at);
+        if (r.kind === 'start') { w.born = fromPage(r.born); w.start = fromPage(r.at); w.files = r.files?.map((f) => ({ ...f, s: fromPage(f.s), e: fromPage(f.e) })) ?? null; }
+        if (r.kind === 'ready') { w.ready = fromPage(r.at); if (r.files?.length) w.files = r.files.map((f) => ({ ...f, s: fromPage(f.s), e: fromPage(f.e) })); }
+        if (r.kind === 'sent') (asks[r.id] ??= {}).sent = fromPage(r.t);
+        if (r.kind === 'back') (asks[r.id] ??= {}).back = fromPage(r.t);
         if (r.kind === 'busy') w.busy.push([fromPage(r.s), fromPage(r.e)]);
         if (r.kind === 'job') w.jobs.push({ ...r, s: fromPage(r.s), e: fromPage(r.e) });
         if (r.kind === 'wait') w.waits.push({ ...r, s: fromPage(r.s), e: fromPage(r.e) });
       }
     };
   }
+  // The page answering the workers' requests (tile bytes, letters, icons): when each request reached
+  // the page (the worker's message), when the page started on it (MapLibre's Actor.processTask)
+  // and when the answer went back, matched by the request's id. Between arrival and start the page
+  // was busy with something else; between start and answer it was doing the work.
+  const asks = {};
+  const NativeWorker = window.Worker;
+  if (NativeWorker) {
+    let made = 0;
+    window.Worker = class extends NativeWorker {
+      constructor(...a) {
+        super(...a);
+        const n = ++made;
+        this.addEventListener('message', ({ data }) => {
+          if (data?.type && data.type !== '<response>' && data.id) Object.assign((asks[data.id] ??= {}), { n, type: data.type, at: now() });
+        });
+      }
+      postMessage(m, ...rest) {
+        if (m?.type === '<response>' && asks[m.id]) asks[m.id].reply = now();
+        return super.postMessage(m, ...rest);
+      }
+    };
+  }
+  let actorTimed = false;
+  const timeActor = (actor) => {
+    const proto = Object.getPrototypeOf(actor);
+    const run = proto.processTask;
+    if (typeof run !== 'function') return;
+    proto.processTask = function (id, task) {
+      if (asks[id] && task?.type !== '<response>') asks[id].start ??= now();
+      return run.call(this, id, task);
+    };
+  };
+  const drawsAt = [];
+
   // The page's side: reading the style (MapLibre checks every layer's rules and builds them; the
   // worker then reads them again), and each draw of the map before it is ready.
-  const page = { style: null, layers: null, draws: 0, drawMs: 0, drawMax: 0 };
+  const page = { style: null, layers: null, draws: 0, drawMs: 0, drawMax: 0, after: [] };
+  const ms = (v) => (v == null ? '–' : `${Math.round(v)}`);
   const timed = (proto, name, done) => {
     const f = proto?.[name];
     if (typeof f !== 'function') return;
@@ -72,12 +109,30 @@
   };
   let styleTimed = false;
   import('/vendor/maplibre-gl.mjs').then((m) => {
-    timed(m.Map.prototype, '_render', (d) => {
-      if (window.sheetsReady) return;
-      page.draws++; page.drawMs += d; page.drawMax = Math.max(page.drawMax, d);
-    });
+    // Each draw between the map's "load" (style and opening tiles in) and its first "idle" (the
+    // map ready): when, how long, and what MapLibre still had to do after it.
+    const render = m.Map.prototype._render;
+    m.Map.prototype._render = function (...a) {
+      const s = now();
+      try { return render.apply(this, a); } finally {
+        const d = now() - s;
+        if (!window.sheetsReady) {
+          page.draws++; page.drawMs += d; page.drawMax = Math.max(page.drawMax, d);
+          drawsAt.push([s, d]);
+          if (ev.load !== null) {
+            const left = [['sources', this._sourcesDirty], ['style', this._styleDirty], ['labels', this._placementDirty], ['moving', this.isMoving?.()], ['not loaded', !this.loaded?.()]]
+              .filter(([, on]) => on).map(([k]) => k);
+            page.after.push(`${ms(s)}+${ms(d)}${left.length ? ` (${left.join(', ')})` : ''}`);
+          }
+        }
+      }
+    };
     const fire = m.Map.prototype.fire;
     m.Map.prototype.fire = function (e, ...rest) {
+      if (!actorTimed && this.style?.dispatcher?.actors?.length) {
+        actorTimed = true;
+        timeActor(this.style.dispatcher.actors[0]);
+      }
       if (!styleTimed && this.style) {
         styleTimed = true;
         const proto = Object.getPrototypeOf(this.style);
@@ -153,12 +208,17 @@
     rows.push(['longest frame', ms(Math.max(0, ...gaps.map(([, d]) => d)))]);
     rows.push(['style read on the page', page.style ? `${ms(page.style[0])}, ${ms(page.style[1])} ms (of which layers built ${ms(page.layers)})` : '–']);
     rows.push([`map draws before ready (${page.draws})`, `${ms(page.drawMs)} ms, longest ${ms(page.drawMax)}`]);
+    rows.push(['draws after load, then still to do', page.after.join('; ') || '–']);
     const name = { SL: 'read style layers', UL: 'update style layers', LT: 'tile', RT: 'tile again', GR: 'tile bytes', GG: 'letters', GI: 'icons', GDA: 'dashes' };
     const sum = (list) => list.reduce((a, [s, e]) => a + Math.max(0, Math.min(e, ready) - s), 0);
     Object.values(workers).sort((a, b) => (a.born ?? 0) - (b.born ?? 0)).forEach((w, i) => {
       const busy = sum(w.busy.filter(([s]) => s < ready));
       const jobs = w.jobs.filter((j) => j.s < ready);
       rows.push([`WORKER ${i + 1}`, `made ${ms(w.born)}, code in ${ms(w.start)}, running ${ms(w.ready)}; busy ${ms(busy)} ms before ready`]);
+      if (!w.files?.length) rows.push(['  its files', 'not reported by this browser']);
+      for (const f of w.files ?? []) rows.push([`  file ${f.name}`, `${ms(f.s)}–${ms(f.e)} (${f.kb} KB)`]);
+      const lastFile = Math.max(...(w.files ?? []).map((f) => f.e));
+      if (Number.isFinite(lastFile)) rows.push(['  files in → code in (compiling)', `${ms(w.start - lastFile)} ms`]);
       const kinds = {};
       for (const j of jobs) {
         const k = j.type === 'LT' || j.type === 'RT' ? `${name[j.type]} ${j.source} z${j.z}` : name[j.type] ?? j.type;
@@ -176,6 +236,18 @@
       }
       for (const [k, g] of Object.entries(waits)) rows.push([`  waited on page: ${k} ×${g.n}`, `longest ${ms(g.max)} ms, last in ${ms(g.last)}`]);
     });
+    // Each request a worker made of the page before the map was ready.
+    const askName = { GR: 'tile bytes', GG: 'letters', GI: 'icons', GDA: 'dashes' };
+    const listed = Object.values(asks).filter((a) => a.type && a.at < ready).sort((a, b) => a.at - b.at);
+    // sent (worker) → page got it (+ the page busy before it) → page started → answered (+ its work)
+    // → back in the worker (+ the worker busy before it).
+    if (listed.length) rows.push(['PAGE ANSWERING THE WORKERS', 'sent; page got it +ms later; worked +ms; worker got answer +ms later']);
+    for (const a of listed) {
+      const begin = a.start ?? a.at;
+      const meanwhile = drawsAt.filter(([s, d]) => s + d > (a.sent ?? a.at) && s < a.at);
+      const drew = meanwhile.length ? `; page drew ${meanwhile.length}× ${ms(meanwhile.reduce((x, [, d]) => x + d, 0))} ms before getting it` : '';
+      rows.push([`  w${a.n} ${askName[a.type] ?? a.type}`, `${ms(a.sent)}; +${ms(a.at - a.sent)}; +${ms(a.reply - begin)}${a.start - a.at > 1 ? ` (after +${ms(a.start - a.at)} queued)` : ''}; +${ms(a.back - a.reply)}${drew}`]);
+    }
     rows.push(['MAP READY (picture goes)', ms(ready)]);
     rows.push(['picture told to go', ms(posterGone)]);
     rows.push(['repeat visit (offline copy)', String(repeat)]);

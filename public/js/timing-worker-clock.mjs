@@ -14,7 +14,11 @@ export const send = (record) => {
   flushing = true;
   later(() => { channel.postMessage({ w: id, list: queue }); queue = []; flushing = false; }, 200);
 };
-send({ kind: 'start', born: origin, at: now() });
+// The files the worker fetched for its code (MapLibre's worker program and this clock), as the
+// worker saw them arrive: with "start", when the code had arrived and been compiled, they split
+// loading from compiling.
+export const files = () => performance.getEntriesByType?.('resource')?.map((e) => ({ name: e.name.split('/').pop().split('?')[0], s: origin + e.startTime, e: origin + e.responseEnd, kb: Math.round((e.transferSize || 0) / 1024) })) ?? null;
+send({ kind: 'start', born: origin, at: now(), files: files() });
 
 // Busy runs: from a task starting after a quiet moment until the worker's queue is next empty
 // (a message posted to itself at the start comes back only after the tasks already waiting).
@@ -35,3 +39,12 @@ EventTarget.prototype.removeEventListener = function (type, fn, o) { return remo
 const onmessage = Object.getOwnPropertyDescriptor(MessagePort.prototype, 'onmessage');
 Object.defineProperty(MessagePort.prototype, 'onmessage', { ...onmessage, set(fn) { onmessage.set.call(this, wrap(fn)); } });
 self.setTimeout = (fn, ms, ...a) => later(wrap(fn), ms, ...a);
+
+// Each request the worker sends the page, and each answer coming back, by the request's id: with
+// the page's own times (timing.js) they show how long a request sat before the page got to it.
+const post = self.postMessage.bind(self);
+self.postMessage = (m, ...rest) => {
+  if (m?.type && m.type !== '<response>' && m.id) send({ kind: 'sent', id: m.id, t: now() });
+  return post(m, ...rest);
+};
+add.call(self, 'message', ({ data }) => { if (data?.type === '<response>' && data.id) send({ kind: 'back', id: data.id, t: now() }); });
