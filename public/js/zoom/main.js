@@ -128,7 +128,21 @@ try {
     center, zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, asked?.zoom ?? 12)), minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
     dragRotate: false, pitchWithRotate: false, touchPitch: false, fadeDuration: 0,
     attributionControl: false, maxTileCacheZoomLevels: 3 });
-  map.addControl(new maplibregl.AttributionControl({ compact: true }));
+  // The map's credit is an "i" in the top-right corner (zoom.css). MapLibre opens a compact
+  // credit the first time it has something to say and keeps it open until the first drag; it
+  // starts closed here instead, closed the way MapLibre's own button closes it.
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
+  const credit = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+  const closeCredit = () => {
+    if (!credit?.classList.contains('maplibregl-compact-show')) return false;
+    credit.classList.remove('maplibregl-compact-show');
+    credit.setAttribute('open', '');
+    return true;
+  };
+  if (credit && !closeCredit()) {
+    const firstOpen = new MutationObserver(() => { if (closeCredit()) firstOpen.disconnect(); });
+    firstOpen.observe(credit, { attributes: true, attributeFilter: ['class'] });
+  }
   map.touchZoomRotate.disableRotation();
   map.keyboard.disableRotation();
   map.setMissingStyleImageResolver((id) => resolveImages(map, id));

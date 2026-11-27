@@ -44,15 +44,22 @@ try {
     await check(`${theme}: fractional URL restores without snapping`, async () => {
       assert.ok(Math.abs(await page.evaluate(() => window.zoomMap.getZoom()) - 12.37) < 1e-6);
     });
-    // The map's credit: one "i", clear of the panels and on the screen, open as it loads and
-    // closed after a tap (qa/recall/prototype-credit.json pins the build that failed this).
-    await check(`${theme}: the map credit shows one "i", clear of the controls, open and closed`, async () => {
-      const open = await page.evaluate(creditInPage);
-      await page.locator('.maplibregl-ctrl-attrib-button').click();
+    // The map's credit: it starts as one "i" in the top-right corner; a tap opens it below the
+    // "i" and another closes it, clear of the panels, on the screen and in the theme's colours
+    // (qa/recall/prototype-credit.json pins the builds that failed this).
+    await check(`${theme}: the map credit starts as one "i" in the top-right corner and opens clear of the controls`, async () => {
+      const start = await page.evaluate(creditInPage);
+      assert.ok(!start.open, 'the credit starts closed');
+      const [x, y, w] = start.credit;
+      assert.ok(x + w > start.viewport[0] - 40 && y < 60, `the "i" is in the top-right corner: ${start.credit}`);
+      const button = page.locator('.maplibregl-ctrl-attrib-button');
+      await button.tap();
+      const opened = await page.evaluate(creditInPage);
+      await button.tap();
       const closed = await page.evaluate(creditInPage);
-      assert.ok(open.open && !closed.open, 'a tap closes the credit');
-      assert.deepEqual([...creditErrors(open), ...creditErrors(closed)], []);
-      return { open, closed };
+      assert.ok(opened.open && opened.text && !closed.open, 'a tap opens the credit and another closes it');
+      assert.deepEqual([...creditErrors(start), ...creditErrors(opened), ...creditErrors(closed)], []);
+      return { start, opened, closed };
     });
     for (const mode of ['offset']) {
       await settled();

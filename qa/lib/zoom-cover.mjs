@@ -41,6 +41,7 @@ export function creditInPage() {
   return { viewport: [innerWidth, innerHeight], theme: document.documentElement.dataset.theme,
     open: credit?.classList.contains('maplibregl-compact-show') ?? false,
     credit: credit ? box(credit) : null, button: button ? box(button) : null,
+    text: inner && credit.classList.contains('maplibregl-compact-show') ? box(inner) : null,
     repeat: button ? getComputedStyle(button).backgroundRepeat : null, panels,
     ground: credit ? getComputedStyle(credit).backgroundColor : null,
     ink: inner ? getComputedStyle(inner).color : null,
@@ -66,13 +67,15 @@ export function creditErrors(m) {
   const { viewport: [W, H], credit, button, repeat, panels } = m;
   if (!credit || !button) return ['the map has no credit'];
   const errors = [];
-  for (const [what, [bx, by, bw, bh]] of [['credit', credit], ['credit\'s button', button]]) {
+  const boxes = [['credit', credit], ['credit\'s button', button], ...(m.text ? [['credit\'s text', m.text]] : [])];
+  for (const [what, [bx, by, bw, bh]] of boxes) {
     if (bx < 0 || by < 0 || bx + bw > W || by + bh > H) errors.push(`the ${what} runs off the screen at ${[bx, by, bw, bh]}`);
   }
-  const [x, y, w, h] = credit;
-  for (const [px, py, pw, ph] of panels) {
-    const overlap = Math.max(0, Math.min(x + w, px + pw) - Math.max(x, px)) * Math.max(0, Math.min(y + h, py + ph) - Math.max(y, py));
-    if (overlap > 0) errors.push(`the credit ${credit} lies under the panel ${[px, py, pw, ph]}`);
+  for (const [what, [x, y, w, h]] of boxes.filter(([what]) => what !== 'credit\'s button')) {
+    for (const [px, py, pw, ph] of panels) {
+      const overlap = Math.max(0, Math.min(x + w, px + pw) - Math.max(x, px)) * Math.max(0, Math.min(y + h, py + ph) - Math.max(y, py));
+      if (overlap > 0) errors.push(`the ${what} ${[x, y, w, h]} lies under the panel ${[px, py, pw, ph]}`);
+    }
   }
   // The credit follows the theme: a dark ground on the dark map, a light one on the light map,
   // and its lettering readable on it (WCAG AA, 4.5 to 1).
