@@ -127,10 +127,11 @@
 <link rel="modulepreload" href="/js/often.js">
 <link rel="preload" href="/data/meta.json" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="/data/sheets.json" as="fetch" crossorigin="anonymous">
-<!-- The font early too: the loading line is set in it, and a block-display font shows nothing until it arrives. -->
+<!-- The font early too: the loading line is set in it. It swaps in when it arrives; until then the
+     line is in the phone's own font, not hidden (block display hid it for 8 s on a slow link). -->
 <link rel="preload" href="/vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-  @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: block; }
+  @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
   /* --note is the card's and the credit's quieter text, and --rim a route button's ring: AA on the card and the ground in both themes (#14). */
   :root { color-scheme: light; --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; --note: #656a74; --rim: #8b8f98; }
   :root[data-theme="dark"] { color-scheme: dark; --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; --note: #8592a6; --rim: #6c7890; }

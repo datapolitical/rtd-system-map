@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { textWidth } from '../scripts/glyphs.mjs';
 import { SIZES, names, toPx, toLonLat } from '../scripts/lib/sheets.mjs';
@@ -13,6 +13,12 @@ import { attachedPoint, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChang
 import { railOrderErrors, letteringOrderErrors } from '../qa/lib/zoom-order.mjs';
 import { canonicalTracks, fitTerminalSpines } from '../scripts/lib/zoom-rail.mjs';
 import { spacingReport, terminalGaps } from '../qa/lib/zoom-spacing.mjs';
+
+// public/data/ is made on our machine by npm run build:data and npm run
+// prototype:zoom and not kept in git (docs/upkeep.md, docs/zoom-prototype.md).
+// Without the trial's build these checks skip, loudly, instead of failing.
+const NO_TRIAL = ['zoom-prototype/trial.json', 'sheets.json'].every((file) => existsSync(new URL(`../public/data/${file}`, import.meta.url)))
+  ? false : 'public/data/zoom-prototype/trial.json is not built here: run npm run build:data, then npm run prototype:zoom';
 
 const sizes = Object.fromEntries(['rail', 'gap', 'name', 'nameLetter', 'letterDisc'].map((key) => [key, zoomStops(SIZES[key])]));
 test('zoom adapter preserves every original size and restores tables after a failure', () => {
@@ -264,7 +270,7 @@ test('with reduced motion a side change is immediate', () => {
   assert.equal(seen.b[0].properties.fade, undefined);
 });
 
-test('the trial build shows every name exactly once at every zoom through a sweep', () => {
+test('the trial build shows every name exactly once at every zoom through a sweep', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const state = { sides: new Map(), fades: new Map() };
   let now = 0;
@@ -346,7 +352,7 @@ test('a bus handover is instant, one drawing at a time, and waits for the next d
   assert.equal(busDrawingAt(12, state).set, '2', 'with no check it hands over at once');
 });
 
-test('the preview style keeps every bus layer visible: lines fade by opacity over a range covering their handovers, labels hold their own zooms', () => {
+test('the preview style keeps every bus layer visible: lines fade by opacity over a range covering their handovers, labels hold their own zooms', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
   const style = previewStyle('light', metadata, bundle);
@@ -379,7 +385,7 @@ test('the preview style keeps every bus layer visible: lines fade by opacity ove
   for (const set of ['13', '15']) assert.ok(style.layers.some((l) => l.id === `trial-rail-${set}` && JSON.stringify(l.paint['line-opacity']).includes(`rail${set}`)), set);
 });
 
-test('a station keeps one order of route chips at every zoom; the check catches the pinned build and a planted swap', async () => {
+test('a station keeps one order of route chips at every zoom; the check catches the pinned build and a planted swap', { skip: NO_TRIAL }, async () => {
   const { chipOrders } = await import('../qa/lib/zoom-labels.mjs');
   const pinned = JSON.parse(readFileSync(new URL('../qa/recall/prototype-chip-order.json', import.meta.url), 'utf8'));
   assert.ok(chipOrders(pinned).some((r) => !r.ok && /Union Station/.test(r.name)), `missed build ${pinned.build}`);
@@ -404,7 +410,7 @@ test('the controls check fails the first preview, whose panels covered nearly a 
   assert.ok(coverShare([[10, 10, 172, 44], [10, 800, 382, 48]], [402, 874]) <= MAX_COVER, 'today\'s pill and row');
 });
 
-test('every line letter the build places reaches the page at every zoom, across the rail handover too', () => {
+test('every line letter the build places reaches the page at every zoom, across the rail handover too', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const placed = bundle.report.letters.byZoom;
   // Letters shown by the page's own filter (model.js, attachedFor), for the drawing showing at that zoom.
@@ -423,7 +429,7 @@ test('every line letter the build places reaches the page at every zoom, across 
   assert.ok(missing(planted).some((m) => /^1[456]/.test(m)), 'planted loss caught');
 });
 
-test('banded ground layers load a zoom either side of their band and show only inside it', () => {
+test('banded ground layers load a zoom either side of their band and show only inside it', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
   const plain = sheetStyle('light', metadata.stations, metadata.colors, { district: metadata.district, routeLines: true });
@@ -446,7 +452,7 @@ test('banded ground layers load a zoom either side of their band and show only i
   }
 });
 
-test('the rail drawings change over with no transition', () => {
+test('the rail drawings change over with no transition', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
   const rails = previewStyle('dark', metadata, bundle).layers.filter((l) => /^trial-rail/.test(l.id) && JSON.stringify(l.paint['line-opacity']).includes('global-state'));
@@ -455,7 +461,7 @@ test('the rail drawings change over with no transition', () => {
   for (const l of rails) assert.deepEqual(l.paint['line-opacity-transition'], { duration: 0, delay: 0 }, l.id);
 });
 
-test('the trial reads the sheets\' style as main makes it now: whole drawings, and no tile layer named', () => {
+test('the trial reads the sheets\' style as main makes it now: whole drawings, and no tile layer named', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
   const style = previewStyle('light', metadata, bundle);
@@ -617,7 +623,7 @@ test('a list keeps the place it had one zoom out when the next drawing takes ove
   assert.deepEqual([moved.stood, moved.held, moved.moved], [1, 0, 1]);
 });
 
-test('what the lists keep off is the trial\'s own rail, at each step of the zooms a drawing serves', () => {
+test('what the lists keep off is the trial\'s own rail, at each step of the zooms a drawing serves', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   for (const zoom of LISTS_PLACED) {
     const steps = fixedOver(bundle, zoom);
@@ -635,7 +641,7 @@ test('what the lists keep off is the trial\'s own rail, at each step of the zoom
   }
 });
 
-test('the page draws every list of a drawing the build placed, and a neighbourhood\'s name gives way to one', () => {
+test('the page draws every list of a drawing the build placed, and a neighbourhood\'s name gives way to one', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
   const style = previewStyle('light', metadata, bundle);
