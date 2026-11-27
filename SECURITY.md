@@ -3,7 +3,8 @@
 ## Report a problem privately
 
 If you find a security problem, report it privately through GitHub: open
-this repository's **Security** tab and choose **Report a vulnerability**.
+this repository's **Security** tab, then **Advisories**, and choose
+**Report a vulnerability**.
 Don't open a public issue, pull request or discussion about it.
 
 This matters most for the code that runs on a server:
