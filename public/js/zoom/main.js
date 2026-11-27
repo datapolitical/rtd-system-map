@@ -128,10 +128,10 @@ try {
     center, zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, asked?.zoom ?? 12)), minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
     dragRotate: false, pitchWithRotate: false, touchPitch: false, fadeDuration: 0,
     attributionControl: false, maxTileCacheZoomLevels: 3 });
-  // The map's credit is an "i" in the top-right corner (zoom.css). MapLibre opens a compact
-  // credit the first time it has something to say and keeps it open until the first drag; it
-  // starts closed here instead, closed the way MapLibre's own button closes it.
-  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
+  // The map's credit is an "i" below the word Zoom in the top pill (zoom.css). MapLibre opens a
+  // compact credit the first time it has something to say and keeps it open until the first
+  // drag; it starts closed here instead, closed the way MapLibre's own button closes it.
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-left');
   const credit = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
   const closeCredit = () => {
     if (!credit?.classList.contains('maplibregl-compact-show')) return false;

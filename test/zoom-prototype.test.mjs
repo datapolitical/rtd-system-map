@@ -418,17 +418,18 @@ test('the map credit shows one "i", clear of the controls, open and closed: the 
     assert.ok(errors.some((e) => e.includes('under the panel')), `missed the credit under the zoom row on build ${pinned.build}, ${state}`);
     assert.ok(errors.some((e) => e.includes('shows 4 times')), `missed the four icons on build ${pinned.build}, ${state}`);
   }
-  // Today's layout at phone size, as measured on the fixed page: an "i" in the top-right corner
-  // level with the pill, and opened, the credit's text below it.
+  // Today's layout at phone size, as measured on the fixed page: an "i" below the word Zoom,
+  // and opened, the credit reading on to its right.
   const panels = [[10, 10, 172, 44], [10, 800, 382, 48]];
-  const today = { viewport: [402, 874], repeat: 'repeat', panels, credit: [368, 20, 24, 24], button: [368, 20, 24, 24] };
+  const today = { viewport: [402, 874], repeat: 'repeat', panels, credit: [22, 64, 24, 24], button: [22, 64, 24, 24] };
   assert.deepEqual(creditErrors(today), []);
-  assert.deepEqual(creditErrors({ ...today, text: [110, 62, 282, 26] }), []);
+  assert.deepEqual(creditErrors({ ...today, credit: [22, 64, 298, 24], text: [50, 66, 262, 20] }), []);
   // Planted: the "i" one pixel into the pill, the text over the pill, the "i" off the screen's
-  // edge, and no credit at all.
-  assert.equal(creditErrors({ ...today, credit: [181, 20, 24, 24], button: [181, 20, 24, 24] }).length, 1);
-  assert.ok(creditErrors({ ...today, text: [110, 40, 282, 26] }).some((e) => e.includes('text 110,40,282,26 lies under the panel')));
-  assert.equal(creditErrors({ ...today, credit: [390, 20, 24, 24], button: [390, 20, 24, 24] }).length, 2);
+  // edge, the "i" under a picked route's card, and no credit at all.
+  assert.equal(creditErrors({ ...today, credit: [22, 53, 24, 24], button: [22, 53, 24, 24] }).length, 1);
+  assert.ok(creditErrors({ ...today, text: [50, 40, 262, 20] }).some((e) => e.includes('text 50,40,262,20 lies under the panel')));
+  assert.equal(creditErrors({ ...today, credit: [-4, 64, 24, 24], button: [-4, 64, 24, 24] }).length, 2);
+  assert.ok(creditErrors({ ...today, panels: [...panels, [12, 64, 378, 64]] }).some((e) => e.includes('under the panel 12,64,378,64')));
   assert.deepEqual(creditErrors({ ...today, credit: null, button: null }), ['the map has no credit']);
 });
 
@@ -440,7 +441,7 @@ test('the map credit follows the theme: the check catches the white credit on th
   }
   // Today's colours, as measured on the fixed page: the panels' ground and the muted ink.
   const place = { viewport: [402, 874], repeat: 'repeat', panels: [[10, 10, 172, 44], [10, 800, 382, 48]], open: true,
-    credit: [368, 20, 24, 24], button: [368, 20, 24, 24], text: [110, 62, 282, 26] };
+    credit: [22, 64, 298, 24], button: [22, 64, 24, 24], text: [50, 66, 262, 20] };
   const themed = (theme, ground, ink) => ({ ...place, theme, ground, ink, links: [ink, ink, ink], icon: ink });
   assert.deepEqual(creditErrors(themed('dark', 'rgb(27, 37, 52)', 'rgb(178, 192, 209)')), []);
   assert.deepEqual(creditErrors(themed('light', 'rgb(255, 255, 255)', 'rgb(98, 110, 124)')), []);

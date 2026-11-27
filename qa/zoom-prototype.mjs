@@ -44,14 +44,14 @@ try {
     await check(`${theme}: fractional URL restores without snapping`, async () => {
       assert.ok(Math.abs(await page.evaluate(() => window.zoomMap.getZoom()) - 12.37) < 1e-6);
     });
-    // The map's credit: it starts as one "i" in the top-right corner; a tap opens it below the
-    // "i" and another closes it, clear of the panels, on the screen and in the theme's colours
+    // The map's credit: it starts as one "i" below the word Zoom in the top pill; a tap opens it
+    // and another closes it, clear of the panels, on the screen and in the theme's colours
     // (qa/recall/prototype-credit.json pins the builds that failed this).
-    await check(`${theme}: the map credit starts as one "i" in the top-right corner and opens clear of the controls`, async () => {
+    await check(`${theme}: the map credit starts as one "i" below the word Zoom and opens clear of the controls`, async () => {
       const start = await page.evaluate(creditInPage);
       assert.ok(!start.open, 'the credit starts closed');
-      const [x, y, w] = start.credit;
-      assert.ok(x + w > start.viewport[0] - 40 && y < 60, `the "i" is in the top-right corner: ${start.credit}`);
+      const [x, y] = start.credit, [px, py, , ph] = start.panels[0];
+      assert.ok(x >= px && x <= px + 20 && y >= py + ph && y <= py + ph + 16, `the "i" is below the word Zoom (pill ${start.panels[0]}): ${start.credit}`);
       const button = page.locator('.maplibregl-ctrl-attrib-button');
       await button.tap();
       const opened = await page.evaluate(creditInPage);
