@@ -1,6 +1,6 @@
 // The tiles the page reads, in public/tiles/ (git ignores it): each sheet and its route lines
 // cut into vector tiles, and the ground's tiles unpacked from basemap/ (scripts/basemap.mjs).
-// Every build runs this, Cloudflare's too: it makes them from what is committed, the same every
+// Every build runs this: it makes them from the built data and the committed basemap, the same every
 // time, so the phone only reads tiles instead of cutting a sheet's whole drawing itself
 // (DESIGN.md, "Quality floor").
 //
@@ -75,6 +75,12 @@ export async function unpackGround(out = OUT) {
 }
 
 if (import.meta.main ?? process.argv[1] === import.meta.filename) {
+  // npm install runs this (postinstall), and a fresh checkout has no built data: public/data is
+  // made on our machine by npm run build:data and is not in git. Nothing to cut yet.
+  if (!(await readFile(path.join(DATA, 'meta.json')).then(() => true, () => false))) {
+    console.log('tiles: public/data is not built here (run `npm run build:data`); nothing cut');
+    process.exit(0);
+  }
   await rm(OUT, { recursive: true, force: true });
   let sheets = 0;
   for (const [i, s] of SHEETS.entries()) {
