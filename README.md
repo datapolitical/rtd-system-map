@@ -134,8 +134,9 @@ So the map can differ from both in two ways:
   Whether to combine them is an open question in DESIGN.md.
 - **It shows midday.** A route every 15 minutes at noon is drawn as frequent
   even if it comes every 30 minutes in the evening. Its panel also shows
-  Saturday and Sunday service and the first and last weekday trips, but not
-  yet evening or rush-hour frequency.
+  weekday rush-hour frequency in RTD's own peak periods (6 to 9am and 3 to
+  6pm), weekday evening frequency (7 to 10pm), Saturday and Sunday service,
+  and the first and last weekday trips.
 
 ## Licence
 

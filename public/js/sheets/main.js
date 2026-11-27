@@ -7,6 +7,7 @@ import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
 import { routeName, sheetName, pickSaid, cardSaid, inkOn } from './say.js';
 import { clearPoint } from './view.js';
+import { routePanel, routePanelHtml, routePanelSaid } from '../panel/route.js';
 
 // Start the map's worker downloading while the two small files below load. With ?timing, the
 // worker carries a stopwatch (timing.js sets the address).
@@ -542,6 +543,8 @@ let picked = null; // { mode: 'bus' | 'rail', route }
 let shown = null; // what the card names: { title, note, routes: [{ mode, route, color }] }
 let opener = null; // the button the card was opened from (the list, #135), where closing it returns
 let selectedAt = null;
+let panelOpen = false; // the route panel's fold (tell)
+let timeWindows = {}; // the hours the build measured each frequency in (directory.json, windows)
 function setPick(p) {
   picked = p;
   // A picked bus route is drawn from its sheets' route lines, whose layers show only now (#193).
@@ -595,8 +598,15 @@ function tell(what) {
   // runs under them, and nothing else, so it covers as little of the map as it can (DESIGN.md).
   card.classList.toggle('route', what.kind === 'route');
   if (what.kind === 'route') {
+    // The route panel (js/panel/route.js): how often it runs through the week, its first and
+    // last trips and RTD's timetable, folded under the card's two lines until asked for.
+    const panel = what.entry ? routePanel(what.entry, timeWindows) : null;
+    card.classList.toggle('open', Boolean(panel) && panelOpen);
     card.innerHTML = `<div class="head"><div class="routes">${routes.map(chip).join('')}</div><b id="card-title" role="heading" aria-level="2">${esc(what.name)}</b></div>`
-      + `${what.line ? `<span>${detail(what.line)}</span>` : ''}<button type="button" class="close" aria-label="Close">\u00d7</button>`;
+      + `${what.line ? `<span class="line">${detail(what.line)}</span>` : ''}`
+      + (panel ? `<button type="button" class="more" aria-expanded="${panelOpen}" aria-controls="route-more">Times through the week<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5.5 8 4.5 4.5L14.5 8"/></svg></button>`
+        + `<div id="route-more"${panelOpen ? '' : ' hidden'}>${routePanelHtml(panel)}</div>` : '')
+      + '<button type="button" class="close" aria-label="Close">\u00d7</button>';
     card.hidden = false;
     say(cardSaid({ title: what.name, note: what.line, routes }));
     requestAnimationFrame(keepVisible);
@@ -624,6 +634,16 @@ function close({ focus = false } = {}) {
   if (focus) (opener ?? map.getCanvas()).focus({ preventScroll: true });
 }
 card.addEventListener('click', (e) => {
+  // The route panel's fold: open or shut, it stays that way for the next route too.
+  const more = e.target.closest('button.more');
+  if (more) {
+    panelOpen = !panelOpen;
+    more.setAttribute('aria-expanded', String(panelOpen));
+    card.querySelector('#route-more').hidden = !panelOpen;
+    card.classList.toggle('open', panelOpen);
+    if (panelOpen && shown?.entry) say(routePanelSaid(routePanel(shown.entry, timeWindows)));
+    return;
+  }
   if (e.target.closest('button.close')) return close({ focus: true });
   const place = e.target.closest('button[data-place]');
   if (place) return placeCard(shown.places[Number(place.dataset.place)], { focus: true });
@@ -1001,7 +1021,8 @@ addEventListener('hashchange', (event) => {
 // A picked route in the address opens its card too, as a tap on it would: closing the card
 // clears the pick, the same as after a tap. A rail line's chip takes its colour from the map.
 let directory = null;
-const routeEntry = (p) => (directory ??= fetch(new URL('../../data/directory.json', import.meta.url)).then((r) => (r.ok ? r.json() : { routes: [] })).catch(() => ({ routes: [] })))
+const routeEntry = (p) => (directory ??= fetch(new URL('../../data/directory.json', import.meta.url)).then((r) => (r.ok ? r.json() : { routes: [] })).catch(() => ({ routes: [] }))
+  .then((d) => { timeWindows = d.windows ?? {}; return d; }))
   .then((d) => d.routes.find((r) => r.route === p.route && r.mode === p.mode) ?? null);
 // A picked route framed whole in the map left clear above its card (DESIGN.md, "the address"):
 // on the link's own sheet, its middle in the middle of that clear area, where it fits there. A
@@ -1022,7 +1043,7 @@ function openCard(p, { framed = false } = {}) {
   const fill = (r = null) => {
     if (picked !== p) return;
     const what = pickCard(p, r);
-    tell({ ...what, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
+    tell({ ...what, entry: r, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
   };
   fill();
   // RTD's name for it, its ends and how often it runs come from the directory, read once.
