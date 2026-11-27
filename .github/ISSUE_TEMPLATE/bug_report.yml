@@ -1,0 +1,47 @@
+name: Bug report
+description: Something on the map is drawn wrong, missing, hard to read or broken.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What's wrong
+      description: What you saw, and what you expected to see.
+    validations:
+      required: true
+  - type: input
+    id: place
+    attributes:
+      label: Place
+      description: A station, stop, street or neighborhood. A link to the map at that view is best.
+    validations:
+      required: true
+  - type: input
+    id: zoom
+    attributes:
+      label: Zoom or sheet
+      description: How far in you were, or which sheet was showing.
+  - type: dropdown
+    id: theme
+    attributes:
+      label: Theme
+      options:
+        - Light
+        - Dark
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      description: For example, iPhone 15 with Safari, or a Pixel 8 with Chrome.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Paste or drag a screenshot here. It helps more than anything else.
+    validations:
+      required: true

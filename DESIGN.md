@@ -5680,6 +5680,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ramps: "Here's my main issue with the zoom." Express line with a second
   express line beside it fell from 39 to 17 km at 14 and from 31 to 16 km at
   15 (`qa/zoom-doubled.mjs`); at 12 it is 4 km.
+- 2026-11-26: MapLibre 6.15.0 -> 6.19.0. The version stays pinned exactly, so
+  a rebuild never changes it on its own; it moves only by a change like this
+  one, checked before and after. Reason: it had not moved since the map was
+  built, four releases behind, and 6.16 fixes two iPhone faults that hit the
+  map from the Home Screen (it stopped loading after iOS shut down its
+  workers; it shrank to one pixel on return from the background). Checked: on
+  mini 18 views and 7 steps identical to 6.15 to the pixel; on the Mac in
+  WebKit (Safari 26's engine) at iPhone size, 20 views in light and dark
+  identical, opening and steps as fast, no new errors. Chris: "Update, with
+  the Mac check".
 - 2026-11-27: The Overpass font is swap-display, not block. Reason: on
   Chris's iPhone at about 0.65 Mbit/s (the page's ?timing readout), the font
   came in at 8.3 s with everything else, and the block-display "Loading…"

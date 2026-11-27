@@ -17,6 +17,9 @@ affiliated with RTD.
 
 ## Development
 
+To report a problem or send a change, start with
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 The front page is five sheets, each drawn for one scale. Live vehicles and the
 earlier map's other features are planned for the smooth-zoom replacement. The
 earlier Classic application is preserved on the
