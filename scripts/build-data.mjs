@@ -127,7 +127,7 @@ function assignRoles(layers) {
 async function main() {
   const started = Date.now();
   // The last good build's counts, for the checks (DESIGN.md, "Rule 3"): this
-  // folder's (the data built here last), or on a checkout without it the published
+  // folder's (the committed data), or on a checkout without it the published
   // site's, which is the last build that passed them.
   const previous =
     JSON.parse(await readFile(path.join(OUT, 'meta.json'), 'utf8').catch(() => 'null')) ??
