@@ -113,6 +113,8 @@ if (mode === 'data') {
       // A row as the card reads: "Route 15 to Union Station 8:00am, 8:30am", "A Line to Denver Airport 8:05am".
       const want = (records, now, { rail, first } = {}) => upcoming(records, index, now, { first }).rows.slice(0, 6)
         .map((r) => `${rail?.has(r.route) ? `${r.name} Line` : `Route ${r.name}`} to ${r.headsign} ${r.times.map((t) => t.clock).join(', ')}`.replace(/\s+/g, ' ').trim());
+      // The page's own clock, which runs on from the time it was set to while the check works.
+      const pageNow = async () => clockIn(new Date(await page.evaluate(() => Date.now())), index.tz);
       const tap = async (at) => {
         const p = await page.evaluate((c) => { const q = window.sheetsMap.project(c); return [q.x, q.y]; }, at);
         await page.mouse.click(p[0], p[1]);
@@ -140,7 +142,7 @@ if (mode === 'data') {
         const title = await page.textContent('#card-title').catch(() => '');
         if (check(title === best.f.properties.name, `${tag} ${when}: tapped stop ${best.f.properties.id} "${best.f.properties.name}" but the card is "${title}"`)) {
           const got = await rowsOnCard();
-          const exp = want([best.rec], now, { rail });
+          const exp = want([best.rec], await pageNow(), { rail });
           check(JSON.stringify(got) === JSON.stringify(exp), `${tag} ${when}: stop ${best.f.properties.id} shows ${JSON.stringify(got)}, the timetable gives ${JSON.stringify(exp)}`);
           check((await page.textContent('#card .departures .head')) === 'Next departures, scheduled', `${tag} ${when}: the departures are not headed as scheduled`);
           check((await page.textContent('#card .departures .about') ?? '').startsWith(`Stop ${best.f.properties.id}`), `${tag} ${when}: the stop's number is not on its card`);
@@ -158,7 +160,7 @@ if (mode === 'data') {
         const stationTitle = await page.textContent('#card-title').catch(() => '');
         if (check(stationTitle === station.label, `${tag} ${when}: tapped station "${station.label}" but the card is "${stationTitle}"`)) {
           const got = await rowsOnCard();
-          const exp = want(records, now, { rail, first: (route) => rail.has(route) });
+          const exp = want(records, await pageNow(), { rail, first: (route) => rail.has(route) });
           check(JSON.stringify(got) === JSON.stringify(exp), `${tag} ${when}: ${station.label} shows ${JSON.stringify(got)}, the timetable gives ${JSON.stringify(exp)}`);
           await onScreen(station.label);
         }
@@ -169,7 +171,7 @@ if (mode === 'data') {
           await page.clock.runFor(31 * 60 * 1000);
           await page.waitForTimeout(200);
           const after = await rowsOnCard();
-          const later = want(records, { date, minutes: now.minutes + 31 }, { rail, first: (route) => rail.has(route) });
+          const later = want(records, await pageNow(), { rail, first: (route) => rail.has(route) });
           check(JSON.stringify(after) === JSON.stringify(later) && JSON.stringify(after) !== JSON.stringify(before), `${tag}: half an hour on, ${station.label} still shows ${JSON.stringify(after)} (wanted ${JSON.stringify(later)})`);
         }
         await page.keyboard.press('Escape');
