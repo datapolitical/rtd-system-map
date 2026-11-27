@@ -5,6 +5,11 @@ pipeline. It is the source of truth for the objective, audience, data sources,
 visual design, and milestones. If a decision changes, update DESIGN.md and add
 a line to its decision log in the same change.
 
+Never write a real server or tailnet address into a committed file; the repo
+is public. Read it from `RTD_REVIEW_ORIGIN` or `RTD_SITE_URL`, or write a path
+that starts at the root, like `/shots/`. `test/no-tailnet-addresses.test.mjs`
+fails on any tracked file that holds one.
+
 Never hardcode anything about RTD's network: layer URLs, route lists, rail
 colors, station IDs, corridor assignments, or service dates. Derive them from
 RTD's data at build time so RTD's changes flow through with no code change
