@@ -1,7 +1,8 @@
 // Whether the page draws the route lists as the build placed them (#156, the first trial of one
 // decider for lettering). At every tenth of a zoom the placed drawings serve, at each place:
 //   - every list the build placed in view is drawn: MapLibre reports it placed, and its ink is in
-//     the picture where the build put it;
+//     the picture where the build put it (the picture is taken twice, with the lists and with
+//     their ink off, and the list's box must differ between the two);
 //   - no list is drawn that the build did not place;
 //   - no list lies on another list;
 //   - no list lies on what is set before the lists and always shown: rail, a station's mark or
@@ -9,8 +10,14 @@
 //   - no lettering MapLibre still places (street and neighbourhood names, bus streets' names,
 //     shields and planes) lies on a list ("placed after"): the lists' unseen marks keep it off;
 //   - every list that stands straight has at least one of those marks placed under it ("no room").
+// Two controls say the check can still see a fault:
+//   - at each step with rail in view, a point on the rail's own line is asked what is under it,
+//     and the answer must be rail ("rail seen"): if not, the run stops;
+//   - with --blank the lists' ink is off in both pictures, so every list is one that is not
+//     drawn. The run reports the most any box measured and fails if one reaches the floor a drawn
+//     list must reach (INK_SHARE).
 // Start a static server over a packaged copy (scripts/package-zoom-preview.mjs), then
-//   npm run check:zoom-lists -- <origin> [outdir] [--shots] [--places=a,b] [--tenths=0,5]
+//   npm run check:zoom-lists -- <origin> [outdir] [--shots] [--blank] [--places=a,b] [--tenths=0,5]
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { appendFileSync } from 'node:fs';
@@ -18,8 +25,7 @@ import path from 'node:path';
 import { expression, latest } from '@maplibre/maplibre-gl-style-spec';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { previewStyle } from '../public/js/zoom/style.js';
-import { PALETTES } from '../public/js/sheets/style.js';
-import { BUS_DRAWINGS, LISTS_PLACED } from '../public/js/zoom/model.js';
+import { BUS_DRAWINGS, RAIL_DRAWINGS, LISTS_PLACED, pitchAt } from '../public/js/zoom/model.js';
 import { textWidth } from '../scripts/glyphs.mjs';
 
 const args = process.argv.slice(2);
@@ -29,6 +35,7 @@ const base = origin.replace(/\/$/, '');
 const out = path.resolve(outArg);
 await mkdir(out, { recursive: true });
 const shots = flags.includes('--shots');
+const blank = flags.includes('--blank');
 const only = flags.find((f) => f.startsWith('--places='))?.slice(9).split(',');
 const tenths = flags.find((f) => f.startsWith('--tenths='))?.slice(9).split(',').map(Number) ?? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 const say = (line) => { console.log(line); appendFileSync(path.join(out, 'log.txt'), `${line}\n`); };
@@ -45,10 +52,11 @@ const VIEW = { width: 402, height: 655 };
 // tile may not be one the screen asks for.
 const INSET = 24;
 const NEAR = 3;
-// A list is in the picture when this share of its figures' box is within INK_NEAR of the figures'
-// colour. Drawn lists measure 0.2 and up; a box with no lettering in it, a few hundredths.
-const INK_SHARE = 0.08, INK_NEAR = 90;
-const INK = PALETTES.light.number.match(/[0-9a-f]{2}/gi).map((h) => parseInt(h, 16));
+// A list is in the picture when this share of its figures' box differs, by INK_DIFFERS or more in
+// colour, between the picture with the lists and the one with their ink off. (Counting pixels near
+// the figures' own colour did not tell the two apart: downtown, a box with no list in it held up
+// to 0.13 of a dark bus line, and the two letters of a drawn "FF" 0.075.)
+const INK_SHARE = 0.04, INK_DIFFERS = 40;
 
 const data = (name) => readFile(path.join('public/data', name), 'utf8').then(JSON.parse);
 const metadata = await data('sheets.json');
@@ -99,11 +107,15 @@ const boxOf = (list, screen, zoom, set, pathScreen) => {
   return { c: [screen[0] + uy[0] * offEm * size, screen[1] + uy[1] * offEm * size], hw: wide / 2, hh: tall / 2, ux, uy, size, lead,
     gap: rows.length > 1 ? ((1.15 - 0.72) * size) / 2 : 0 };
 };
-// The share of each box's figures (not its street's name, set in grey) that is the figures' ink.
-const inkIn = async (png, boxes) => {
+// The share of each box's figures (not its street's name, set in grey) that the lists' ink changes:
+// `png` is the picture with the lists, `bare` the same view with their ink off.
+const pixelsOf = async (png) => {
   const image = await loadImage(png), canvas = createCanvas(image.width, image.height), ctx = canvas.getContext('2d');
   ctx.drawImage(image, 0, 0);
-  const { data, width, height } = ctx.getImageData(0, 0, image.width, image.height);
+  return ctx.getImageData(0, 0, image.width, image.height);
+};
+const inkIn = async (png, bare, boxes) => {
+  const [{ data, width, height }, { data: under }] = [await pixelsOf(png), await pixelsOf(bare)];
   return boxes.map((b) => {
     let n = 0, ink = 0;
     for (let t = -b.hw + b.lead; t <= b.hw; t += 0.5) for (let v = -b.hh; v <= b.hh; v += 0.5) {
@@ -112,7 +124,7 @@ const inkIn = async (png, boxes) => {
       if (x < 0 || y < 0 || x >= width || y >= height) continue;
       const i = (y * width + x) * 4;
       n++;
-      if (Math.hypot(data[i] - INK[0], data[i + 1] - INK[1], data[i + 2] - INK[2]) < INK_NEAR) ink++;
+      if (Math.hypot(data[i] - under[i], data[i + 1] - under[i + 1], data[i + 2] - under[i + 2]) >= INK_DIFFERS) ink++;
     }
     return n ? ink / n : 0;
   });
@@ -166,11 +178,15 @@ const read = (set, plan) => page.evaluate(({ set, plan }) => {
     at: f.geometry.type === 'Point' ? (() => { const q = map.project(f.geometry.coordinates); return [q.x, q.y]; })() : mid(f.geometry.coordinates) }));
   const planned = plan.map((l) => ({ i: l.i, at: (() => { const q = map.project(l.at); return [q.x, q.y]; })(),
     path: l.path ? l.path.map((c) => { const q = map.project(c); return [q.x, q.y]; }) : null }));
-  return { zoom: map.getZoom(), set: window.zoomState.busSet, drawn, planned };
+  return { zoom: map.getZoom(), set: window.zoomState.busSet, railSet: window.zoomState.railSet, drawn, planned };
 }, { set, plan: plan.map(({ i, at, path }) => ({ i, at, path })) });
+// The page keeps every rail drawing loaded and shows one, the others at no opacity (style.js): the
+// map still reports those, a few pixels from the one in the picture, so only the layers of the
+// drawing that shows are asked.
 const under = (boxes) => page.evaluate((boxes) => {
   const map = window.zoomMap;
-  const ids = (re) => map.getStyle().layers.filter((l) => re.test(l.id) && map.getLayoutProperty(l.id, 'visibility') !== 'none').map((l) => l.id);
+  const unseen = (id) => { const set = id.match(/^trial-rail.*-(\d+)$/)?.[1]; return set !== undefined && set !== window.zoomState.railSet; };
+  const ids = (re) => map.getStyle().layers.filter((l) => re.test(l.id) && map.getLayoutProperty(l.id, 'visibility') !== 'none' && !unseen(l.id)).map((l) => l.id);
   const fixed = ids(/^(trial-(rail|station|name|labels-letter|attached-letter|labels-disc|attached-disc)(?!-room)|group-stop-|hall-name-)/);
   const after = ids(/^(place|street-name|bus-street|picked-street|hall-label|airport-plane|express-shield)-/);
   const room = ids(/^list-room-/);
@@ -178,6 +194,37 @@ const under = (boxes) => page.evaluate((boxes) => {
   const on = (layers, { pts, half }) => [...new Set(pts.flatMap(([x, y]) => map.queryRenderedFeatures([[x - half, y - half], [x + half, y + half]], { layers }).map(words)))];
   return boxes.map((b) => ({ fixed: on(fixed, b), after: on(after, b), room: on(room, b).length }));
 }, boxes);
+// The control for that: the middle of a straight run of the rail drawing that shows, where the
+// page draws it (moved sideways by its slot times the pitch, style.js), if one is in view.
+const railNear = new Map();
+const railPoint = (ref, place, zoom) => {
+  const key = `${ref}/${place.name}`;
+  if (!railNear.has(key)) railNear.set(key, bundle.rails.features.filter((f) => f.properties.ref === ref)
+    .map((f) => ({ slot: f.properties.slot ?? 0, path: f.geometry.coordinates.filter((c) => Math.abs(c[0] - place.at[0]) < 0.03 && Math.abs(c[1] - place.at[1]) < 0.03) })).filter((r) => r.path.length > 1));
+  return page.evaluate(({ pieces, pitch, view, inset }) => {
+    const map = window.zoomMap, inside = (q) => q.x > inset && q.x < view.width - inset && q.y > inset && q.y < view.height - inset;
+    for (const piece of pieces) for (let i = 1; i < piece.path.length; i++) {
+      const a = map.project(piece.path[i - 1]), b = map.project(piece.path[i]), l = Math.hypot(b.x - a.x, b.y - a.y);
+      const off = piece.slot * pitch, at = { x: (a.x + b.x) / 2 - ((b.y - a.y) / l) * off, y: (a.y + b.y) / 2 + ((b.x - a.x) / l) * off };
+      if (l >= 6 && inside(at)) return [at.x, at.y];
+    }
+    return null;
+  }, { pieces: railNear.get(key), pitch: pitchAt(bundle.sizes, zoom), view: VIEW, inset: INSET });
+};
+// The lists' ink turned off (they keep their places and their room) and back on, each drawn before
+// this returns.
+const listInk = (on) => page.evaluate((on) => {
+  const map = window.zoomMap;
+  window.listLayers ??= map.getStyle().layers.filter((l) => /^(bus-list|bus-stack|bus-number|picked-list|picked-stack|picked-number)-/.test(l.id)).map((l) => l.id);
+  window.listInk ??= {};
+  for (const id of window.listLayers) {
+    if (on) { map.setPaintProperty(id, 'text-opacity', window.listInk[id]); continue; }
+    window.listInk[id] = map.getPaintProperty(id, 'text-opacity');
+    map.setPaintProperty(id, 'text-opacity-transition', { duration: 0, delay: 0 });
+    map.setPaintProperty(id, 'text-opacity', 0);
+  }
+  return new Promise((done) => { map.once('idle', () => requestAnimationFrame(() => requestAnimationFrame(done))); map.triggerRepaint(); });
+}, on);
 
 const report = [];
 let failed = 0;
@@ -211,25 +258,42 @@ try {
         const onFixed = boxes.map((b, i) => ({ list: b.list, on: hits[i].fixed })).filter((x) => x.on.length);
         const onAfter = boxes.map((b, i) => ({ list: b.list, on: hits[i].after })).filter((x) => x.on.length);
         const bare = boxes.filter((b, i) => b.list.kind === 'bus-list' && !hits[i].room).map((b) => b.list);
+        // The control: on the rail's own line the map must answer rail.
+        const railAt = await railPoint(RAIL_DRAWINGS.find((r) => r.set === seen.railSet)?.ref, place, zoom);
+        const railSeen = railAt ? (await under([{ pts: [railAt], half: 1 }]))[0].fixed.some((w) => w.startsWith('trial-rail')) : null;
         // The picture itself: a list MapLibre calls placed, with no ink where the build put it.
+        if (blank) await listInk(false);
         const png = await page.screenshot();
+        if (!blank) await listInk(false);
+        const bare = await page.screenshot();
+        await listInk(true);
         const whole = boxes.filter((b) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].every(([i, j]) => {
           const x = b.box.c[0] + b.box.ux[0] * b.box.hw * i + b.box.uy[0] * b.box.hh * j, y = b.box.c[1] + b.box.ux[1] * b.box.hw * i + b.box.uy[1] * b.box.hh * j;
           return x >= 0 && y >= 0 && x < VIEW.width && y < VIEW.height; }));
-        const shares = await inkIn(png, whole.map((b) => b.box));
+        const shares = await inkIn(png, bare, whole.map((b) => b.box));
         const faint = whole.map((b, i) => ({ list: b.list, share: shares[i] })).filter((x) => x.share < INK_SHARE);
-        const least = shares.length ? Math.min(...shares) : null;
+        const least = shares.length ? Math.min(...shares) : null, most = shares.length ? Math.max(...shares) : null;
         const words = (l) => `${l.street ? `${l.street} ` : ''}${String(l.label).replace(/\n/g, ' / ')}`;
         const row = { place: place.name, zoom, drawing: d.zoom, planned: got.inView.length, kinds: Object.fromEntries(LIST_KINDS.map((k) => [k, got.inView.filter((p) => plan[p.i].kind === k).length])),
           missing: got.missing.map((p) => ({ label: words(plan[p.i]), kind: plan[p.i].kind, at: p.at.map(Math.round) })), late,
           extra: got.extra.map((q) => ({ label: q.label, layer: q.layer, at: q.at.map(Math.round) })),
           onLists: onLists.map(([a, b]) => [words(a), words(b)]), onFixed: onFixed.map((x) => ({ label: words(x.list), kind: x.list.kind, on: x.on })),
           onAfter: onAfter.map((x) => ({ label: words(x.list), kind: x.list.kind, on: x.on })), bare: bare.map(words),
-          faint: faint.map((x) => ({ label: words(x.list), kind: x.list.kind, share: +x.share.toFixed(3) })), leastInk: least === null ? null : +least.toFixed(3) };
+          faint: faint.map((x) => ({ label: words(x.list), kind: x.list.kind, share: +x.share.toFixed(3) })), leastInk: least === null ? null : +least.toFixed(3),
+          boxes: whole.length, mostInk: most === null ? null : +most.toFixed(3), railSeen };
         report.push(row);
-        const bad = row.missing.length + row.extra.length + row.onLists.length + row.onFixed.length + row.onAfter.length + row.faint.length + row.bare.length;
+        if (blank) {
+          // Every box is empty now: one that measures as drawn says the floor is too low.
+          const seenInk = whole.length - row.faint.length;
+          failed += seenInk || railSeen === false ? 1 : 0;
+          say(`${seenInk || railSeen === false ? 'FAIL' : 'ok  '} ${place.name} ${zoom.toFixed(1)}: ${whole.length} boxes with the lists' ink off; most ink ${row.mostInk}; at or over the floor of ${INK_SHARE}: ${seenInk}; rail seen ${railSeen === null ? 'not in view' : railSeen ? 'yes' : 'NO'}`);
+          if (shots && [0, 5].includes(t)) await writeFile(path.join(out, `${place.name}-${zoom.toFixed(1)}-blank.png`), png);
+          await writeFile(path.join(out, 'report.json'), JSON.stringify({ origin: base, view: VIEW, blank, steps: report, pageErrors }, null, 1));
+          continue;
+        }
+        const bad = row.missing.length + row.extra.length + row.onLists.length + row.onFixed.length + row.onAfter.length + row.faint.length + row.bare.length + (railSeen === false ? 1 : 0);
         failed += bad ? 1 : 0;
-        say(`${bad ? 'FAIL' : 'ok  '} ${place.name} ${zoom.toFixed(1)}: ${row.planned} placed in view (${row.kinds['bus-list']} points, ${row.kinds['bus-stack']} stacked, ${row.kinds['bus-label']} along a bend); missing ${row.missing.length}${late ? ` (${late} came late)` : ''}, no ink ${row.faint.length} (least ${row.leastInk}), not placed ${row.extra.length}, list on list ${row.onLists.length}, on fixed ${row.onFixed.length}, placed after on a list ${row.onAfter.length}, no room ${row.bare.length}`);
+        say(`${bad ? 'FAIL' : 'ok  '} ${place.name} ${zoom.toFixed(1)}: ${row.planned} placed in view (${row.kinds['bus-list']} points, ${row.kinds['bus-stack']} stacked, ${row.kinds['bus-label']} along a bend); missing ${row.missing.length}${late ? ` (${late} came late)` : ''}, no ink ${row.faint.length} (least ${row.leastInk}), not placed ${row.extra.length}, list on list ${row.onLists.length}, on fixed ${row.onFixed.length}, placed after on a list ${row.onAfter.length}, no room ${row.bare.length}; rail seen ${railSeen === null ? 'not in view' : railSeen ? 'yes' : 'NO'}`);
         for (const m of row.missing) say(`       missing: ${m.label} (${m.kind}) at ${m.at}`);
         for (const [a, b] of row.onLists) say(`       on each other: ${a} | ${b}`);
         for (const x of row.faint) say(`       no ink: ${x.label} (${x.kind}) share ${x.share}`);
@@ -245,6 +309,9 @@ try {
   await browser.close();
 }
 const sum = (key) => report.reduce((s, r) => s + r[key].length, 0);
-say(`\n${report.length} steps at ${PLACES.length} places; ${report.reduce((s, r) => s + r.planned, 0)} placed lists looked for; missing ${sum('missing')}, no ink ${sum('faint')}, not placed ${sum('extra')}, list on list ${sum('onLists')}, on fixed ${sum('onFixed')}, placed after on a list ${sum('onAfter')}, no room ${sum('bare')}; page errors ${pageErrors.length}`);
+const inks = (key) => report.map((r) => r[key]).filter((v) => v !== null);
+const rail = `rail seen on its own line at ${report.filter((r) => r.railSeen).length} of the ${report.filter((r) => r.railSeen !== null).length} steps with rail in view`;
+if (blank) say(`\n${report.length} steps at ${PLACES.length} places with the lists' ink off; ${report.reduce((s, r) => s + r.boxes, 0)} boxes; most ink in one ${inks('mostInk').length ? Math.max(...inks('mostInk')) : 'none'}; at or over the floor of ${INK_SHARE}: ${report.reduce((s, r) => s + r.boxes - r.faint.length, 0)}; ${rail}; page errors ${pageErrors.length}`);
+else say(`\n${report.length} steps at ${PLACES.length} places; ${report.reduce((s, r) => s + r.planned, 0)} placed lists looked for; missing ${sum('missing')}, no ink ${sum('faint')} (least ${inks('leastInk').length ? Math.min(...inks('leastInk')) : 'none'}, floor ${INK_SHARE}), not placed ${sum('extra')}, list on list ${sum('onLists')}, on fixed ${sum('onFixed')}, placed after on a list ${sum('onAfter')}, no room ${sum('bare')}; ${rail}; page errors ${pageErrors.length}`);
 if (pageErrors.length) say(`page errors: ${JSON.stringify(pageErrors.slice(0, 5))}`);
 process.exitCode = failed || pageErrors.length ? 1 : 0;

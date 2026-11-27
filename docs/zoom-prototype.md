@@ -522,6 +522,85 @@ Limits:
 - The room lines make the drawings 3 to 4 percent larger as sent (bus-13
   132 to 136 kB gzipped, bus-14 202 to 210 kB).
 
+## One line for a divided road below 16 (2026-11-26)
+
+Chris sent three screenshots near 41st / Fox, at 12.75, 13.34 and 14.49:
+"Here's my main issue with the zoom", meaning the express line. At 12.75 and
+13.34 I-25's express lanes were one dashed line that forks near 38th. At
+14.49 they were two lines side by side, with ramps crossing and a loop that
+ended in a stub.
+
+The streets file holds two street graphs (`streets.mjs`): one with each
+divided road joined into its centre line (`zoom: 'far'`) and one with both
+carriageways (`'near'`). DESIGN.md's rule is one line out to zoom 16 and the
+two carriageways from 16 in. The sheets' zoom-14 sheet uses the carriageways
+(`SHEETS` in `sheets.mjs`), and the trial's `withZoom` used them from 13. RTD
+files the two directions of the express routes on separate lanes and ramps
+here, 30 to 60 m apart and crossing. Each drawing joins only what lies within
+7 px at its own zoom, which is 103 m at 12, 51 m at 13 and 26 m at 14, so the
+two directions were one line at 12 and 13 and a braid from 14.
+
+Every drawing below 16 now uses the joined streets (`CARRIAGEWAYS_FROM` in
+`scripts/zoom-prototype.mjs`). The drawings at 12 and 16 come out as they
+were, line for line.
+
+`node qa/zoom-doubled.mjs [--all] <drawing> ...` measures line that has a
+second line beside it (8 to 70 m to its side, within 30 degrees), and counts
+loops under 400 m round:
+
+| Zoom | 12 | 13 | 14 | 15 | 16 |
+|---|---|---|---|---|---|
+| Express line doubled, before, km | 4.4 | 8.6 | 38.6 | 31.4 | 65.1 |
+| Express line doubled, now, km | 4.4 | 9.3 | 16.7 | 15.8 | 65.1 |
+| Every bus street doubled, before, km | 46.7 | 81.5 | 276.4 | 279.3 | 550.4 |
+| Every bus street doubled, now, km | 46.7 | 79.9 | 183.4 | 194.8 | 550.4 |
+| Small loops, before | 1 | 16 | 75 | 202 | 355 |
+| Small loops, now | 1 | 13 | 54 | 168 | 355 |
+
+Comparing the two builds' drawings at 14, 89 km of line went and 44 km came,
+in 316 places 600 m across (line with none of the other build's within 12 m).
+Looked at before and after, as lines at one ground scale and on the page at
+the phone's size, dark: 41st / Fox at 12.75, 13.34, 14.49, 15.2, 15.9 and 16,
+and at 14.5 6th Avenue Parkway, Speer Boulevard and 19th and Curtis; as lines
+alone, the Colfax viaduct, the Diagonal Highway and Civic Center. At 41st /
+Fox the express is one line that forks near 38th from 12 to just under 16.
+The parkways and Speer become one line. Broadway and Lincoln, and the downtown
+one-way pairs, a block apart, are as they were. Captures are in
+`qa/.scratch/consistency/express/`.
+
+The route lists on this build (the table under "Route lists the build places"
+is the build before it):
+
+| | Zoom 13 | Zoom 14 |
+|---|---|---|
+| Lists the sheets' build planned | 895 | 1,561 |
+| Standing straight | 811 | 1,418 |
+| Following a bend | 11 | 81 |
+| Stacked in two rows (points already) | 22 | 13 |
+| Left out: on rail | 22 | 18 |
+| Left out: no straight or gently bending place | 26 | 27 |
+| Left out: on a station's name, a line letter or another bus line | 3 | 4 |
+
+Every route on a list that was left out is still named on at least two other
+lists at 13 and five at 14. At the handover to 14, 762 of the 844 lists
+placed at 13 stand within 5 px of where they stood (556 within 1 px).
+LIST_CHECK_RESULT
+
+Limits:
+
+- From 16 the two carriageways come in, with the bus stops, as the rule says.
+  On the trial page 16 is the last zoom. The express has no stops on I-25, so
+  its two lines and ramps there show a rider nothing. Whether a road with no
+  stops stays one line at every zoom is Chris's to decide.
+- The join leaves small loops, and each closer drawing shows more of them
+  (the table). Two are on the express near 41st / Fox from 14, where a ramp
+  runs 25 to 50 m from the main lanes, and Speer has two at 14 that its two
+  carriageways did not have. Where the join does not pair an express road's
+  two directions, the express is still two lines from 14. The fix is in the
+  street build, which is main's.
+- The sheets' zoom-14 sheet on main still draws both carriageways. The live
+  map shows the braid at 41st / Fox on that sheet (2026-11-26).
+
 ## Line letters
 
 Letters are placed outward from 12, like the names: the letters at 12 stay
@@ -588,6 +667,7 @@ Open `http://127.0.0.1:8804/zoom/`. In another terminal in that checkout:
 npm run check:zoom -- http://127.0.0.1:8804
 npm run check:zoom-spacing
 npm run check:zoom-lists -- http://127.0.0.1:8804
+node qa/zoom-doubled.mjs public/data/zoom-prototype/bus-1[2-6].geojson
 node qa/zoom-spacing-browser.mjs http://127.0.0.1:8804
 THEMES=light,dark node qa/zoom-crowding-browser.mjs http://127.0.0.1:8804
 node scripts/package-zoom-preview.mjs qa/.scratch/zoom-prototype/site

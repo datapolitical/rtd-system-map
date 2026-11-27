@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { textWidth } from '../scripts/glyphs.mjs';
 import { SIZES, names, toPx, toLonLat } from '../scripts/lib/sheets.mjs';
-import { withZoom, zoomStops, placedLists, fixedOver, listWide, LIST_STRAIGHT, LIST_FOLLOW } from '../scripts/zoom-prototype.mjs';
+import { withZoom, zoomStops, placedLists, fixedOver, listWide, LIST_STRAIGHT, LIST_FOLLOW, BUS_BUILT, CARRIAGEWAYS_FROM } from '../scripts/zoom-prototype.mjs';
 import { previewStyle } from '../public/js/zoom/style.js';
 import { sheetStyle } from '../public/js/sheets/style.js';
 import { attachedPoint, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChanges,
@@ -35,6 +35,13 @@ test('between 14 and 16 the adapter runs sizes from sheet 3 to sheet 4, and swit
   withZoom(16, (s) => assert.equal(SIZES.rail[s.id], SIZES.rail[4]));
   assert.throws(() => withZoom(8, () => {}), /not between two sheets/);
   assert.deepEqual(SIZES, before);
+});
+
+test('a divided road is one line in every drawing below zoom 16 and its two carriageways from 16', () => {
+  assert.equal(CARRIAGEWAYS_FROM, 16);
+  for (const zoom of BUS_BUILT) withZoom(zoom, (s) => assert.equal(s.streets, zoom < CARRIAGEWAYS_FROM ? 'far' : 'near', `drawing ${zoom}`));
+  withZoom(15.9, (s) => assert.equal(s.streets, 'far'));
+  withZoom(12.5, (s) => assert.equal(s.streets, 'far'));
 });
 
 test('two slot attachments keep their screen spacing at fractional zooms in both directions', () => {

@@ -2660,6 +2660,16 @@ name with a list in its way is left out. The trial's ground map is still
 fetched from OpenFreeMap's server; it moves to the site's own tiles when they
 are cut for what the zoom page draws (#158).
 
+Every bus drawing of the trial below zoom 16 uses the merged streets, so a
+divided road is one line out to 16 and its two carriageways from there in,
+as "Readable geometry, on the street graph" says. The sheets' zoom-14 sheet
+draws both carriageways (`SHEETS` in `sheets.mjs`), and the trial's drawings
+at 13, 14 and 15 had done the same: I-25's express lanes were one line at 12
+and two lines with crossing ramps at 14. What the merge leaves alone still
+differs between drawings, because each joins what lies within 7 px at its own
+zoom: a ramp 25 to 50 m from its road is part of the line at 12 and 13 and a
+small loop from 14 (`docs/zoom-prototype.md`).
+
 ## Interface
 
 **Clean, at the quality of the best product design,** in this site's own
@@ -5657,6 +5667,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   the site's tiles are cut for what the zoom page draws (#158). Reason: the
   site's tiles hold at each zoom only what the sheets draw there, and the trial
   holds each road band a zoom either side of its own.
+- 2026-11-26: Zoom trial (#154): every bus drawing below zoom 16 draws a
+  divided road as one line, as the rule of 2026-11-11 says; the drawings at
+  13, 14 and 15 had drawn both carriageways, as the sheets' zoom-14 sheet
+  still does. Reason: Chris, on screenshots at 12.75, 13.34 and 14.49 near
+  41st / Fox, where the express was one line, then two lines with crossing
+  ramps: "Here's my main issue with the zoom." Express line with a second
+  express line beside it fell from 39 to 17 km at 14 and from 31 to 16 km at
+  15 (`qa/zoom-doubled.mjs`); at 12 it is 4 km.
 
 ## Sources
 

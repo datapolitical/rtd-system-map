@@ -33,6 +33,12 @@ export function thinned(f, px = THIN_PX) {
   return { ...f, geometry: { ...f.geometry, coordinates: simplify(coords.map((c, i) => [...project(c), i]), tolerance).map((p) => coords[p[2]]) } };
 }
 
+// A divided road is one line out to this zoom and its two carriageways from here in (DESIGN.md,
+// "Readable geometry, on the street graph"). Every drawing below it uses the merged streets, so a
+// road keeps one shape through the band: drawn as two carriageways from 13, a freeway's express
+// lanes were one line at 12 and a braid of ramps at 14.
+export const CARRIAGEWAYS_FROM = 16;
+
 // The production size tables stay untouched after each synchronous experiment. This adapter
 // is intentionally local to the trial; #155 replaces sheet lookups in the production build.
 // Between two sheets a size runs straight from the wider sheet's value to the closer one's; a
@@ -50,7 +56,7 @@ export function withZoom(zoom, run) {
     const a = table[lo.id], b = table[up.id];
     table[id] = typeof a === 'number' && typeof b === 'number' ? a + (b - a) * t : t < 1 - 1e-9 ? a : b;
   }
-  try { return run({ id, zoom, streets: zoom >= 13 ? 'near' : 'far' }); }
+  try { return run({ id, zoom, streets: zoom >= CARRIAGEWAYS_FROM - 1e-9 ? 'near' : 'far' }); }
   finally { for (const [table, existed, value] of saved) { if (existed) table[id] = value; else delete table[id]; } }
 }
 
