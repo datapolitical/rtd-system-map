@@ -1,4 +1,4 @@
-// The four sheets on a phone: one map that rests only at the sheets' zooms.
+// The five sheets on a phone: one map that rests only at the sheets' zooms.
 // Pinch or scroll and it goes to the next sheet that way; the buttons step.
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { SHEETS, OPENING, LOWEST, HIGHEST, edge, tilesUrl, TILE_LAYER, sheetStyle, PALETTES, GROUP, GROUP_INK, PLACE_SIZE, PLACE_MAJOR_RANK, expressInk, airportInk, shortStreet } from './style.js';

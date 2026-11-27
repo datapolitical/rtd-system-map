@@ -12,8 +12,9 @@ should look and behave. Read it before changing the map, the interface, or the
 data pipeline. When a decision changes, update this file and add a line to the
 decision log at the bottom.
 
-The deployed front page is the four sheets, with the whole district one step
-out from them ("Four sheets"). Old `/classic/` links redirect to that page.
+The deployed front page is the five sheets: four for the network at closer
+scales and the whole district one step out from them ("Five sheets"). Old
+`/classic/` links redirect to that page.
 The smooth-zoom trial has its own branch and `/zoom/` entry point. Classic
 details elsewhere below describe the archive or planned features.
 
@@ -2069,10 +2070,10 @@ state; its icon and tooltip show the mode a tap will choose.
   20% fade is unchanged.
 - `color-scheme` and `theme-color` metas cover both themes.
 
-## Four sheets
+## Five sheets
 
-The site's front page: a second way of drawing the same data, built to be
-finished before it is clever. Think of four printed maps of the district, each drawn
+The site's front page and its only map: RTD's data drawn as fixed sheets, built to be
+finished before it is clever. Think of five printed maps of the district, each drawn
 for one scale on a phone, each complete: every rail line and every bus route
 is on every sheet. The page rests only on a sheet. A scroll or a pinch goes
 to the next sheet the way it was heading, however short it was (a tenth of
@@ -2899,17 +2900,14 @@ are in `public/js/sheets/address.js`, with tests.
 A link to the site shows the title "RTD system map", the page's description
 and a picture (`public/og.png`, 1200x630): central Denver on sheet 2 in the
 dark theme, the rail lines fanning out from Union Station past Ball Arena and
-Empower Field, with the buttons and credit hidden. A link to the classic map
-shows its own (`public/classic/og.png`): central Denver at zoom 11 in the
-light theme, with the interface and route letters hidden.
+Empower Field, with the buttons and credit hidden. An old classic link
+redirects to the front page, so it shows the same picture.
 The build retakes the sheets' picture each time, from the site it just built
 (`scripts/poster-build.mjs` runs `scripts/og-image.mjs`), and gives the
 `og:image` link the picture's hash as `?v=`, so apps that keep a preview by
 its address fetch the new one. `node scripts/og-image.mjs` makes it again by
 hand from the live site. The browser tab says
-"RTD system map" on the front page and "RTD system map: classic" on the
-classic map; the classic map's key still says the map is unofficial, and so
-does the sheets' credit line.
+"RTD system map", and the sheets' credit line says the map is unofficial.
 
 ### The key
 
@@ -3110,7 +3108,7 @@ are deferred, not ruled out. See "Open questions".
   build while it is panned. Screen edges and controls crop the drawing;
   they do not trigger alternate positions or abbreviations. Place names
   have a fixed centre anchor. `qa/labels.mjs` compares label pixels at the
-  same world positions before and after pans on all four sheets.
+  same world positions before and after pans on every sheet.
 - **A picked route looks right:** `qa/pickcheck.mjs` picks every bus and
   rail route on every sheet and counts gaps in the picked line, stubs under
   a stub's length beside the rest of the line (a route drawn whole as one
@@ -5639,6 +5637,10 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ("What people can do", items 2 to 5); most of these sit on top of the
   drawing rather than in it; and the plan of 2026-11-18 no longer
   described the work the trial found. Chris: yes to both.
+- 2026-11-27: The section "Four sheets" is now "Five sheets" (#229, phase 2).
+  The map has had five since sheet 0 joined (#152); entries above keep
+  their wording. Text that described the removed classic map's link
+  picture and tab title now says old classic links redirect.
 
 ## Sources
 

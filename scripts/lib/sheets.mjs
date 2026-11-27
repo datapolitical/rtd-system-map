@@ -1,5 +1,5 @@
-// The four sheets (DESIGN.md, "Four sheets"). The map is four finished
-// drawings, each for one fixed zoom on a phone, like four printed maps. This
+// The five sheets (DESIGN.md, "Five sheets"). The map is five finished
+// drawings, each for one fixed zoom on a phone, like five printed maps. This
 // turns the build's network into what one sheet draws: every rail line as one
 // smooth path, each station as one mark across the lines that stop there, a
 // letter for each line wherever it runs alone, and every bus street.
@@ -22,7 +22,7 @@ export const SHEETS = [
 
 /**
  * RTD's district, light enough to hand the page (#152). The build's boundary is RTD's mask
- * (DESIGN.md, "Data sources"): a large rectangle with the district cut out of it, and the
+ * (DESIGN.md, "Map geometry"): a large rectangle with the district cut out of it, and the
  * places inside the cut-outs that are not in the district as polygons of their own. The
  * district is the cut-outs, each with those places as its holes; a boundary with no mask is
  * taken as the district itself. Every ring is simplified to about `metres`, and pieces and holes
@@ -3500,12 +3500,12 @@ const BUSIEST = { c5: true, c3: true };
 // The routes RTD files under a service category (its routes layer's `category`).
 const inCategory = (routes, category) => new Set((routes?.features ?? [])
   .filter((f) => String(f.properties.category ?? '').trim().toUpperCase() === category).map((f) => String(f.properties.route)));
-// The express (DESIGN.md, "Four sheets"): the routes in the service category RTD files the Flatiron
+// The express (DESIGN.md, "Five sheets"): the routes in the service category RTD files the Flatiron
 // Flyer under (today the FF alone). Their streets are marked `express` and drawn in rose; a route RTD
 // adds to that category is drawn so with no change here. The map calls it an express, not by RTD's name.
 export const EXPRESS_CATEGORY = 'BUS RAPID TRANSIT';
 export const expressRoutes = (routes) => inCategory(routes, EXPRESS_CATEGORY);
-// The airport buses (DESIGN.md, "Four sheets"): the routes in the service category RTD files its
+// The airport buses (DESIGN.md, "Five sheets"): the routes in the service category RTD files its
 // airport buses under (SkyRide). Their streets are marked `airport` and drawn in indigo with a plane.
 export const AIRPORT_CATEGORY = 'SKYRIDE';
 export const airportRoutes = (routes) => inCategory(routes, AIRPORT_CATEGORY);

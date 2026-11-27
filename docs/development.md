@@ -57,7 +57,8 @@ until deliberately enabled. Neither reports smooth-zoom acceptance.
 
 ## Smooth zoom
 
-In the trial worktree, follow `docs/zoom-prototype.md`. Its additional commands
+In the trial worktree, follow `docs/zoom-prototype.md`, which exists only on
+the trial branch, not on main. Its additional commands
 are `npm run prototype:zoom`, `npm run check:zoom` and
 `npm run check:zoom-spacing`. A normal `npm run build` does not generate the
 trial bundle. Select its generated `/zoom/` preview explicitly and report
