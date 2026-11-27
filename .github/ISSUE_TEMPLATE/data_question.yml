@@ -1,0 +1,30 @@
+name: Data question
+description: A route, stop or frequency that doesn't match what RTD publishes.
+labels: [question]
+body:
+  - type: input
+    id: route
+    attributes:
+      label: Route or stop
+      description: The route number or name, or the stop's name or number.
+    validations:
+      required: true
+  - type: textarea
+    id: map
+    attributes:
+      label: What the map shows
+      description: For example, "Every 30 min" or "No Sunday service".
+    validations:
+      required: true
+  - type: textarea
+    id: rtd
+    attributes:
+      label: What RTD's own sources say
+      description: The schedule, map or notice you checked, with a link and the date you checked it.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Optional. A screenshot of the map, of RTD's source, or both.

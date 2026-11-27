@@ -17,6 +17,23 @@ const WAIT = process.env.WAIT_LABEL || 'needs Chris';
 const PAGE = fs.readFileSync(path.join(ROOT, 'status/index.html'));
 // Claude plan usage readings, kept on this machine only (ignored by git).
 const USAGE = process.env.USAGE_FILE || path.join(ROOT, 'status/usage.json');
+const USAGE_STALE_MIN = 30;
+// The usage box wants {plan, snapshots: [{t, w: [{label, pct, resets}]}]}. A file in that
+// shape (status/usage.json) is passed through. A flat reading from a usage collector
+// ({session_percent, session_reset, weekly_percent, weekly_reset, snapshot}) becomes one
+// snapshot. Either way, a newest reading older than USAGE_STALE_MIN minutes is marked stale.
+function usage() {
+  const u = safe(() => JSON.parse(fs.readFileSync(USAGE, 'utf8')), null);
+  if (!u) return null;
+  let v = u;
+  if (!Array.isArray(u.snapshots) && ('session_percent' in u || 'weekly_percent' in u)) {
+    const w = [['Session', u.session_percent, u.session_reset], ['Weekly', u.weekly_percent, u.weekly_reset]]
+      .filter(([, pct]) => Number.isFinite(+pct) && pct !== null).map(([label, pct, resets]) => ({ label, pct: +pct, resets }));
+    v = { plan: u.plan || '', source: 'collector', published: u.published, snapshots: [{ t: u.snapshot || u.published, w }] };
+  }
+  const t = v.snapshots?.at(-1)?.t;
+  return { ...v, stale: !t || !(Date.now() - new Date(t) <= USAGE_STALE_MIN * 60e3) };
+}
 // Jobs: facts and plain summaries for each running job, written by a collector
 // on the machine that runs the agents (ignored by git; see CLAUDE.md, "Status page").
 const JOBS = process.env.JOBS_FILE || path.join(ROOT, 'status/jobs.json');
@@ -261,7 +278,7 @@ http.createServer((req, res) => {
     if (Date.now() - gh.at > 60000) refresh();
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     const { busy, ...g } = gh;
-    return res.end(JSON.stringify({ now: new Date(), repo: OWNER ? `${OWNER}/${NAME}` : '', waitLabel: WAIT, ...g, usage: safe(() => JSON.parse(fs.readFileSync(USAGE, 'utf8')), null), jobs: safe(() => JSON.parse(fs.readFileSync(JOBS, 'utf8')), null), sessions: sessions(), hermes: hermes(), agents: agents(), captures: captures(), commits: commits() }));
+    return res.end(JSON.stringify({ now: new Date(), repo: OWNER ? `${OWNER}/${NAME}` : '', waitLabel: WAIT, ...g, usage: usage(), jobs: safe(() => JSON.parse(fs.readFileSync(JOBS, 'utf8')), null), sessions: sessions(), hermes: hermes(), agents: agents(), captures: captures(), commits: commits() }));
   }
   if (u.pathname === '/img' || u.pathname === '/thumb') {
     const p = path.resolve(u.searchParams.get('p') || '');

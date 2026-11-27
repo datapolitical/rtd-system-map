@@ -87,15 +87,19 @@ function stepRow(s){
 function finishLine(j){
   const S=j.summary;
   if(S&&S.finish&&S.finish.length)return `<div class="fl"><div class="lbl">Finish line</div>${S.finish.map(x=>{const c=x.status==='proven'?'proven':x.status==='partly'?'partly':'notyet';return `<div class="fi ${c}"><span class="k">${c==='proven'?'✓':c==='partly'?'◐':'○'}</span><span>${esc(x.item)}<small>${c==='proven'?'Shown':c==='partly'?'Partly shown':'Not shown yet'}: ${esc(x.evidence)}</small></span></div>`}).join('')}</div>`;
-  return j.doneWhen?`<div class="fl"><div class="lbl">Finish line</div><div class="fi notyet"><span class="k">○</span><span>${esc(j.doneWhen)}<small>Not checked yet.</small></span></div></div>`:'';
+  return j.doneWhen?`<div class="fl"><div class="lbl">Finish line</div><div class="fi notyet"><span class="k">○</span><span>${esc(j.doneWhen)}${j.kind==='orchestrator'?'':'<small>Not checked yet.</small>'}</span></div></div>`:'';
 }
 function facts(j){
   const F=j.facts||{};if(!Object.keys(F).length)return '';
   const out=[];
   if(j.stepStarted)out.push(f(j.kind==='chain'?'This step running':'Running for',dur(j.stepStarted)));
   if(F.changed!=null)out.push(f('Uncommitted',F.changed?`${F.changed} file${F.changed>1?'s':''}, +${num(F.added)} −${num(F.removed)}`:'Nothing'));
+  const O=F.orch;
+  if(O){out.push(f('Orchestrator',esc(O.activity||O.status||'?')));if(O.pr)out.push(f('Pull request',link(O.pr.url,'#'+O.pr.number)+' · CI '+esc(O.pr.ci||'?')));if(O.branch)out.push(f('Branch',esc(O.branch)))}
+  if(!O){
   if(F.tests)out.push(f('Last test run',`${F.tests.fail?`<span style="display:inline;color:var(--bad);text-transform:none;font-size:inherit;letter-spacing:0">${F.tests.fail} failing</span>, `:''}${F.tests.pass} passing · ${time(F.tests.at)}`));
   else if(F.changed!=null)out.push(f('Last test run','None seen'));
+  }
   const c=F.commit;
   if(c){const fresh=j.stepStarted&&new Date(c.at)>=new Date(j.stepStarted);
     out.push(f('Last commit',fresh?`${esc(c.hash)} · ${time(c.at)} · ${c.pushed===true?'pushed':c.pushed===false?'not pushed':'branch not on GitHub yet'}`:`None in this step`));}
@@ -108,12 +112,13 @@ function jobCard(j){
   const right=j.kind==='chain'&&j.stepCount?`Step ${Math.min(j.stepIndex,j.stepCount)} of ${j.stepCount}`:j.started?`since ${time(j.started)}`:'';
   const S=j.summary;
   return `<div class="card job"><div class="jh"><span class="dot ${h}"></span><b>${esc(j.title)}</b><span class="r">${right}</span></div>
-  <div class="ht ${h}">${esc(j.healthText)}${j.state==='running'&&j.started&&j.kind!=='review'&&j.kind!=='worker'?` · running ${dur(j.started)} in all`:''}</div>
+  <div class="ht ${h}">${esc(j.healthText)}${j.state==='running'&&j.started&&j.kind!=='review'&&j.kind!=='worker'&&j.kind!=='orchestrator'?` · running ${dur(j.started)} in all`:''}</div>
   ${j.issue&&j.kind!=='lane'?`<div class="is">${link(j.issueUrl,'#'+j.issue+' '+(j.issueTitle||''))}</div>`:''}
   ${S?`<div class="sum">${esc(S.text)}</div><div class="sub">As of ${time(S.at)}</div>`:''}
   ${S&&S.problems&&S.problems.length?S.problems.map(p=>`<div class="prob">${esc(p)}</div>`).join(''):''}
-  ${j.note?`<div class="sum">${esc(j.note)}</div>`:''}
+  ${j.note&&j.kind!=='orchestrator'?`<div class="sum">${esc(j.note)}</div>`:''}
   ${finishLine(j)}${facts(j)}
+  ${j.plan?`<details ${det('plan-'+j.id,false)}><summary>The plan: the task as given</summary><div class="sum" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(j.plan)}</div></details>`:''}
   ${j.steps?`<details ${det('steps-'+j.id,true)}><summary>The plan: ${j.steps.filter(s=>s.state==='done').length} of ${j.steps.length} steps pushed</summary>${j.steps.map(stepRow).join('')}</details>`:''}
   ${j.links&&j.links.length?`<div class="links">${j.links.map(l=>link(l.url,l.t)).join('')}</div>`:''}</div>`;
 }
@@ -147,8 +152,8 @@ async function load(){
    const col=p=>p>=90?'var(--bad)':p>=75?'var(--warn)':'var(--ok)';
    const rows=L.w.map(w=>{const f0=F.w.find(x=>x.label===w.label);const dlt=f0&&S.length>1&&new Date(w.resets)-new Date(f0.resets)===0?w.pct-f0.pct:null;return `<div style="margin:8px 0"><div style="display:flex;font-size:14px"><span>${esc(w.label)}</span><b style="margin-left:auto">${w.pct}%</b></div><div class="bar"><i style="width:${w.pct}%;background:${col(w.pct)}"></i></div><div class="sub">resets in ${left(w.resets)}${dlt!==null?` · +${dlt} pts since ${time(F.t)}`:''}</div></div>`}).join('');
    const hist=S.length>1?`<details ${det('usage-hist',false)}><summary>Readings (${S.length})</summary>${S.slice().reverse().map(s=>`<div class="ev"><span class="t">${time(s.t)}</span><span class="s">${s.w.map(w=>w.label.replace('Weekly · ','')+' '+w.pct+'%').join(' · ')}${s.note?' — '+esc(s.note):''}</span></div>`).join('')}</details>`:'';
-   $('usage').innerHTML=`<div class="card"><span class="sub">${esc(U.plan||'')} plan · read ${ago(L.t)} (Claude adds a reading to status/usage.json when it checks; the page can't read usage on its own)</span>${rows}${hist}</div>`;
-  }else $('usage').innerHTML='<div class="card sub">No readings in status/usage.json yet.</div>';
+   $('usage').innerHTML=`<div class="card"><span class="sub">${U.plan?esc(U.plan)+' plan · ':''}read ${ago(L.t)}${U.source==='collector'?'':' (Claude adds a reading to status/usage.json when it checks; the page can\'t read usage on its own)'}</span>${U.stale?` <span class="pill quiet">stale</span><span class="sub">older than 30 min: the usage reader may have stopped</span>`:''}${rows}${hist}</div>`;
+  }else $('usage').innerHTML='<div class="card sub">No usage readings yet.</div>';
   const k=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':String(n);
   const nice=m=>String(m||'?').replace(/^claude-/,'').replace(/-(\d+)-(\d+)$/,' $1.$2').replace(/^./,c=>c.toUpperCase());
   $('sessions').innerHTML=d.sessions.length?d.sessions.map(a=>{const cls=a.state==='working'?'working':a.state==='finished'?'done':'quiet';return `<div class="card"><span class="pill ${cls}">${esc(a.state)}</span><span class="sub">${a.kind}${a.branch?' · '+esc(a.branch):''} · last activity ${ago(a.updated)}</span><div style="margin:6px 0 2px;font-weight:600">${esc(a.title||'(first message not in the part read)')}</div><div class="meta">${f('Model',esc(nice(a.model)))}${f('Effort',esc(a.effort||'?'))}${a.type?f('Agent type',esc(a.type)):''}${f('Running for',a.started?dur(a.started):'?')}${f('Model calls',a.calls)}${f('Context now',k(a.context))}${f('Written',k(a.out)+(a.think?` <span style="display:inline;text-transform:none">(${k(a.think)} thinking)</span>`:''))}${f('Read, new',k(a.fresh))}${f('Read, cached',k(a.cached))}${f('Transcript',a.transcriptMB+' MB')}${f('Of your weekly limit',U?.ratio?'≈ '+(a.units*U.ratio/1e6).toFixed(1)+'%':'measuring…')}</div><div class="tools">Tools: ${a.tools.map(([n,c])=>esc(n)+' '+c).join(' · ')}</div><details ${det('ses-'+a.started+a.title,false)}><summary>Latest steps (${a.steps} in all)</summary>${a.events.map(e=>`<div class="ev ${e.kind}"><span class="t">${time(e.t)}</span><span class="s">${esc(e.s)}</span></div>`).join('')}</details></div>`}).join(''):'<div class="card sub">No Claude sessions in this repo in the last six hours.</div>';
