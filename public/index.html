@@ -54,13 +54,20 @@
     } catch {}
   }
 </script>
+<!-- The map's own downloads wait for the loading picture (window.pictureIn): on a slow connection
+     they shared it with the picture, and the picture came in with them at the end, so the page
+     showed nothing for 8 s (an iPhone at about 0.65 Mbit/s, 2026-11-26). The picture script below
+     says when it's in; with no picture, at once; and never later than 2 s. -->
+<script>
+  window.pictureIn = new Promise((go) => { window.pictureGo = go; setTimeout(go, 2000); });
+</script>
 <!-- The opening view's glyphs are fetched here and handed to the map (main.js, "early"), not
      preloaded: on an iPhone Safari appeared to fetch the preloads again when the map asked, and
      the opening view waited for them more than for anything else (DESIGN.md, 2026-11-25). -->
 <script>
   window.early = Object.fromEntries(['Overpass Medium', 'Overpass SemiBold', 'Overpass ExtraBold'].map((font) => {
     const path = `/vendor/glyphs/${encodeURIComponent(font)}/0-255.pbf`;
-    return [path, fetch(path).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)];
+    return [path, window.pictureIn.then(() => fetch(path)).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)];
   }));
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -112,25 +119,17 @@
 </script>
 <!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the loading picture. -->
 <link rel="stylesheet" href="/vendor/maplibre-gl.css" media="print" onload="this.media='all'">
-<!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
-     for the one that names it (DESIGN.md, "Quality floor"). Its tiles are fetched by the script
-     after the loading picture, which knows the view. -->
-<link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
-<link rel="modulepreload" href="/js/sheets/style.js">
-<link rel="modulepreload" href="/js/sheets/settle.js">
-<link rel="modulepreload" href="/js/sheets/pick.js">
-<link rel="modulepreload" href="/js/sheets/address.js">
-<link rel="modulepreload" href="/js/sheets/say.js">
-<link rel="modulepreload" href="/js/sheets/view.js">
-<!-- Named by style.js and pick.js, so without these they waited for those files to arrive first. -->
-<link rel="modulepreload" href="/js/color.js">
-<link rel="modulepreload" href="/js/often.js">
+<!-- Everything the opening view needs is asked for at once, instead of each file waiting for the
+     one that names it (DESIGN.md, "Quality floor"): the small files here, the map's code in the
+     template at the end of the page, and its tiles by the script after the loading picture, which
+     knows the view; the code and tiles once the picture is in. -->
 <link rel="preload" href="/data/meta.json" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="/data/sheets.json" as="fetch" crossorigin="anonymous">
-<!-- The font early too: the loading line is set in it, and a block-display font shows nothing until it arrives. -->
+<!-- The font early too: the loading line is set in it. It swaps in when it arrives; until then the
+     line is in the phone's own font, not hidden (block display hid it for 8 s on a slow link). -->
 <link rel="preload" href="/vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-  @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: block; }
+  @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
   /* --note is the card's and the credit's quieter text, and --rim a route button's ring: AA on the card and the ground in both themes (#14). */
   :root { color-scheme: light; --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; --note: #656a74; --rim: #8b8f98; }
   :root[data-theme="dark"] { color-scheme: dark; --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; --note: #8592a6; --rim: #6c7890; }
@@ -270,7 +269,10 @@
     const [z, lat, lon] = poster.dataset.view.split('/').map(Number);
     const [hz, hlat, hlon] = location.hash.slice(1).split('/').map(Number);
     const elsewhere = Number.isFinite(hlon) && (Math.abs(hz - z) > 0.01 || Math.abs(hlat - lat) > 0.002 || Math.abs(hlon - lon) > 0.002);
-    if (!Number.isFinite(lon) || elsewhere || new URLSearchParams(location.search).has('theme')) return poster.querySelector('picture').remove();
+    if (!Number.isFinite(lon) || elsewhere || new URLSearchParams(location.search).has('theme')) {
+      window.pictureGo();
+      return poster.querySelector('picture').remove();
+    }
     // Where the map will put the view's middle: a screen wider than the map's bounds allow round
     // it has the map shifted in from that edge (MapLibre's maxBounds), and the picture goes with it.
     const [west, south, east, north] = poster.dataset.bounds.split(',').map(Number);
@@ -306,6 +308,9 @@
     };
     if (img.complete && img.naturalWidth) whole();
     else img.addEventListener('load', whole);
+    // The map's downloads start once the picture's bytes are in, shown or not.
+    if (img.complete) window.pictureGo();
+    else for (const end of ['load', 'error']) img.addEventListener(end, () => window.pictureGo());
   })();
 </script>
 <script>
@@ -327,7 +332,7 @@
           const path = `/tiles/${name}/${tz}/${x}/${y}.pbf`;
           // A tile the site doesn't have is empty: the host answers it with the front page.
           // It comes back with the tiles' own type (_headers), so it is known by its "<".
-          early[path] = fetch(path).then(async (r) => {
+          early[path] = window.pictureIn.then(() => fetch(path)).then(async (r) => {
             const data = r.ok ? await r.arrayBuffer() : new ArrayBuffer(0);
             return new Uint8Array(data)[0] === 0x3c ? new ArrayBuffer(0) : data;
           }, () => null);
@@ -351,6 +356,22 @@
 <p id="say" class="sr" role="status"></p>
 </main>
 <footer id="credit">Unofficial. Data: RTD<span class="sep" aria-hidden="true">·</span><a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a><span class="sep" aria-hidden="true">·</span><a href="https://openfreemap.org">OpenFreeMap</a></footer>
+<!-- The map's code, put into the page once the loading picture is in (window.pictureIn, above). -->
+<template id="map-code">
+<link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
+<link rel="modulepreload" href="/js/sheets/style.js">
+<link rel="modulepreload" href="/js/sheets/settle.js">
+<link rel="modulepreload" href="/js/sheets/pick.js">
+<link rel="modulepreload" href="/js/sheets/address.js">
+<link rel="modulepreload" href="/js/sheets/say.js">
+<link rel="modulepreload" href="/js/sheets/view.js">
+<!-- Named by style.js and pick.js, so without these they waited for those files to arrive first. -->
+<link rel="modulepreload" href="/js/color.js">
+<link rel="modulepreload" href="/js/often.js">
 <script type="module" src="/js/sheets/main.js"></script>
+</template>
+<script>
+  window.pictureIn.then(() => document.head.append(document.getElementById('map-code').content.cloneNode(true)));
+</script>
 </body>
 </html>
