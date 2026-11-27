@@ -6,7 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { railOrderErrors } from './lib/zoom-order.mjs';
 import { checkBusControls } from './lib/zoom-ui.mjs';
-import { coverInPage, MAX_COVER } from './lib/zoom-cover.mjs';
+import { coverInPage, MAX_COVER, creditInPage, creditErrors } from './lib/zoom-cover.mjs';
 
 const base = (process.argv[2] ?? 'http://127.0.0.1:8804').replace(/\/$/, '');
 const out = path.resolve(process.argv[3] ?? 'qa/.scratch/zoom-prototype/browser');
@@ -43,6 +43,16 @@ try {
     await settled();
     await check(`${theme}: fractional URL restores without snapping`, async () => {
       assert.ok(Math.abs(await page.evaluate(() => window.zoomMap.getZoom()) - 12.37) < 1e-6);
+    });
+    // The map's credit: one "i", clear of the panels and on the screen, open as it loads and
+    // closed after a tap (qa/recall/prototype-credit.json pins the build that failed this).
+    await check(`${theme}: the map credit shows one "i", clear of the controls, open and closed`, async () => {
+      const open = await page.evaluate(creditInPage);
+      await page.locator('.maplibregl-ctrl-attrib-button').click();
+      const closed = await page.evaluate(creditInPage);
+      assert.ok(open.open && !closed.open, 'a tap closes the credit');
+      assert.deepEqual([...creditErrors(open), ...creditErrors(closed)], []);
+      return { open, closed };
     });
     for (const mode of ['offset']) {
       await settled();

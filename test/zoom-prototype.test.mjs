@@ -410,6 +410,25 @@ test('the controls check fails the first preview, whose panels covered nearly a 
   assert.ok(coverShare([[10, 10, 172, 44], [10, 800, 382, 48]], [402, 874]) <= MAX_COVER, 'today\'s pill and row');
 });
 
+test('the map credit shows one "i", clear of the controls: the check catches the pinned build and planted faults', async () => {
+  const { creditErrors } = await import('../qa/lib/zoom-cover.mjs');
+  const pinned = JSON.parse(readFileSync(new URL('../qa/recall/prototype-credit.json', import.meta.url), 'utf8'));
+  for (const state of ['open', 'closed']) {
+    const errors = creditErrors(pinned[state]);
+    assert.ok(errors.some((e) => e.includes('under the panel')), `missed the credit under the zoom row on build ${pinned.build}, ${state}`);
+    assert.ok(errors.some((e) => e.includes('shows 4 times')), `missed the four icons on build ${pinned.build}, ${state}`);
+  }
+  // Today's layout at phone size, open and closed, as measured on the fixed page.
+  const panels = [[10, 10, 172, 44], [10, 800, 382, 48]];
+  const today = { viewport: [402, 874], repeat: 'repeat', panels };
+  assert.deepEqual(creditErrors({ ...today, credit: [94, 766, 298, 24], button: [368, 766, 24, 24] }), []);
+  assert.deepEqual(creditErrors({ ...today, credit: [368, 766, 24, 24], button: [368, 766, 24, 24] }), []);
+  // Planted: the credit one pixel into the row, off the screen's edge, and no credit at all.
+  assert.equal(creditErrors({ ...today, credit: [368, 777, 24, 24], button: [368, 777, 24, 24] }).length, 1);
+  assert.equal(creditErrors({ ...today, credit: [390, 766, 24, 24], button: [390, 766, 24, 24] }).length, 2);
+  assert.deepEqual(creditErrors({ ...today, credit: null, button: null }), ['the map has no credit']);
+});
+
 test('every line letter the build places reaches the page at every zoom, across the rail handover too', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const placed = bundle.report.letters.byZoom;

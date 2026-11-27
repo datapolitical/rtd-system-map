@@ -25,3 +25,38 @@ export function coverInPage() {
 // The most of the screen the controls may cover. The first preview's panels took 23%.
 export const MAX_COVER = 0.1;
 export const coverShare = (panels, [W, H]) => panels.reduce((n, [x, y, w, h]) => n + Math.max(0, Math.min(x + w, W) - Math.max(x, 0)) * Math.max(0, Math.min(y + h, H) - Math.max(y, 0)), 0) / (W * H);
+
+// The map's credit (MapLibre's attribution control, a <details> with a <summary> "i" button).
+// Runs in the page (page.evaluate(creditInPage)): where the credit and its button are, how the
+// button's icon repeats, and where the page's panels are. creditErrors judges it, so the same
+// rule runs on a pinned measurement in the unit tests (qa/recall/prototype-credit.json).
+export function creditInPage() {
+  const box = (e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; };
+  const credit = document.querySelector('.maplibregl-ctrl-attrib');
+  const button = credit?.querySelector('.maplibregl-ctrl-attrib-button');
+  const panels = [...document.querySelectorAll('.panel')].filter((e) => !e.hidden && getComputedStyle(e).display !== 'none')
+    .map(box).filter(([, , w, h]) => w && h);
+  return { viewport: [innerWidth, innerHeight], open: credit?.classList.contains('maplibregl-compact-show') ?? false,
+    credit: credit ? box(credit) : null, button: button ? box(button) : null,
+    repeat: button ? getComputedStyle(button).backgroundRepeat : null, panels };
+}
+
+// MapLibre draws the "i" as a 24 px background image on a 24 px button.
+export const CREDIT_ICON = 24;
+export function creditErrors({ viewport: [W, H], credit, button, repeat, panels }) {
+  if (!credit || !button) return ['the map has no credit'];
+  const errors = [];
+  for (const [what, [bx, by, bw, bh]] of [['credit', credit], ['credit\'s button', button]]) {
+    if (bx < 0 || by < 0 || bx + bw > W || by + bh > H) errors.push(`the ${what} runs off the screen at ${[bx, by, bw, bh]}`);
+  }
+  const [x, y, w, h] = credit;
+  for (const [px, py, pw, ph] of panels) {
+    const overlap = Math.max(0, Math.min(x + w, px + pw) - Math.max(x, px)) * Math.max(0, Math.min(y + h, py + ph) - Math.max(y, py));
+    if (overlap > 0) errors.push(`the credit ${credit} lies under the panel ${[px, py, pw, ph]}`);
+  }
+  if (repeat !== 'no-repeat') {
+    const icons = Math.ceil(button[2] / CREDIT_ICON - 0.01) * Math.ceil(button[3] / CREDIT_ICON - 0.01);
+    if (icons > 1) errors.push(`the credit's "i" shows ${icons} times on a ${button[2]} by ${button[3]} px button`);
+  }
+  return errors;
+}

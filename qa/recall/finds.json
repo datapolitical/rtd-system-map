@@ -2448,6 +2448,39 @@
       "pinned_by": "Claude, 2026-11-26",
       "confidence": "clear",
       "note": "Three causes, seen in a frame log of a throttled headless pinch (qa/.scratch/flicker): the page stopped updating until every source had loaded, so the zoom-14 bus drawing hung on and then cross-faded with the next, whose streets lie a few pixels apart; the base map's zoom-15 roads and buildings were missing from the zoom-14 tiles MapLibre stands in with while loading; and the zoom-16 bus drawing had nothing to draw until its tiles parsed. The unit tests check the handover (instant, waiting until the next drawing can draw) and the ground bands; the look in motion needs a Device Farm run."
+    },
+    {
+      "id": "154-prototype-credit-under-controls",
+      "issue": 154,
+      "place": "Zoom preview, the map credit at the bottom right, under the zoom row",
+      "said": "The map credit lay half under the zoom row, and its \"i\" showed four times, two of them half off the bottom of the screen, open and closed, in both themes.",
+      "kind": "credit-under-controls",
+      "caught_by": [
+        "prototype-credit"
+      ],
+      "seen_on": [
+        "3a14dcf"
+      ],
+      "theme": "light",
+      "zoom": 12,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 400,
+      "capture": {
+        "view": "12/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Claude, on the captures of the zoom-154-merge branch preview, 2026-11-27; Chris asked for it to be fixed",
+      "pinned_by": "Claude, measuring the preview with qa/lib/zoom-cover.mjs creditInPage (qa/recall/prototype-credit.json), 2026-11-27",
+      "confidence": "clear",
+      "note": "Prototype only. public/css/zoom.css styled every details and summary for the page's ? panel, and MapLibre's credit is a details with a summary button. Checked by the credit test in test/zoom-prototype.test.mjs and by npm run check:zoom in both themes, open and closed. Classic recall fixtures do not run the /zoom/ page."
     }
   ]
 }

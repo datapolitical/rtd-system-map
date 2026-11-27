@@ -1,0 +1,9 @@
+{
+  "build": "3a14dcf",
+  "preview": "zoom-154-merge branch preview (2026-11-27)",
+  "said": "The map credit at the bottom of /zoom/ lies half under the zoom bar, and its \"i\" shows four times. Found by Claude on the deployed preview's captures; Chris asked for it to be fixed.",
+  "cause": "public/css/zoom.css styled every details and summary element for the page's own \"?\" panel; MapLibre's credit is a details with a summary button, so its 24 px button grew to 44 px (the icon tiles 2 by 2, half off the screen) and its lettering to 13 px, and the credit sits 10 px from the bottom, under the zoom bar.",
+  "measured_by": "qa/lib/zoom-cover.mjs creditInPage on the preview, light theme, Union Station at 12, 2026-11-27",
+  "open": {"viewport": [402, 874], "open": true, "credit": [15, 840, 377, 24], "button": [348, 840, 44, 44], "repeat": "repeat", "panels": [[10, 10, 172, 44], [10, 800, 382, 48]]},
+  "closed": {"viewport": [402, 874], "open": false, "credit": [368, 840, 24, 24], "button": [348, 840, 44, 44], "repeat": "repeat", "panels": [[10, 10, 172, 44], [10, 800, 382, 48]]}
+}
