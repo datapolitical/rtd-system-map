@@ -616,6 +616,13 @@ const searchBar = document.querySelector('#finder .bar');
 const searchBox = document.querySelector('#search');
 // The place search found, ringed on the map until the next tap (goTo, below).
 const found = new maplibregl.Marker({ element: Object.assign(document.createElement('div'), { className: 'found' }) });
+let panelOpen = false; // the route panel's fold (tell)
+// The route panel's words (js/panel/route.js) are not the opening view's: they load once it has
+// settled, or with the first route's card if that comes sooner.
+let panelCode = null;
+const loadPanel = () => import('../panel/route.js').then((m) => { panelCode = m; });
+whenSettled(() => loadPanel().catch(() => {}));
+let timeWindows = {}; // the hours the build measured each frequency in (directory.json, windows)
 function setPick(p) {
   picked = p;
   // A picked bus route is drawn from its sheets' route lines, whose layers show only now (#193).
@@ -672,8 +679,16 @@ function tell(what) {
   // runs under them, and nothing else, so it covers as little of the map as it can (DESIGN.md).
   card.classList.toggle('route', what.kind === 'route');
   if (what.kind === 'route') {
+    // The route panel (js/panel/route.js): how often it runs through the week, its first and
+    // last trips and RTD's timetable, folded under the card's two lines until asked for.
+    const panel = what.entry && panelCode ? panelCode.routePanel(what.entry, timeWindows) : null;
+    if (what.entry && !panelCode) loadPanel().then(() => { if (shown === what) tell(what); }, () => {});
+    card.classList.toggle('open', Boolean(panel) && panelOpen);
     card.innerHTML = `<div class="head"><div class="routes">${routes.map(chip).join('')}</div><b id="card-title" role="heading" aria-level="2">${esc(what.name)}</b></div>`
-      + `${what.line ? `<span>${detail(what.line)}</span>` : ''}<button type="button" class="close" aria-label="Close">\u00d7</button>`;
+      + `${what.line ? `<span class="line">${detail(what.line)}</span>` : ''}`
+      + (panel ? `<button type="button" class="more" aria-expanded="${panelOpen}" aria-controls="route-more">Times through the week<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5.5 8 4.5 4.5L14.5 8"/></svg></button>`
+        + `<div id="route-more"${panelOpen ? '' : ' hidden'}>${panelCode.routePanelHtml(panel)}</div>` : '')
+      + '<button type="button" class="close" aria-label="Close">\u00d7</button>';
     card.hidden = false;
     say(cardSaid({ title: what.name, note: what.line, routes }));
     keepFocus();
@@ -703,6 +718,16 @@ function close({ focus = false } = {}) {
   if (focus) (opener ?? map.getCanvas()).focus({ preventScroll: true });
 }
 card.addEventListener('click', (e) => {
+  // The route panel's fold: open or shut, it stays that way for the next route too.
+  const more = e.target.closest('button.more');
+  if (more) {
+    panelOpen = !panelOpen;
+    more.setAttribute('aria-expanded', String(panelOpen));
+    card.querySelector('#route-more').hidden = !panelOpen;
+    card.classList.toggle('open', panelOpen);
+    if (panelOpen && shown?.entry) say(panelCode.routePanelSaid(panelCode.routePanel(shown.entry, timeWindows)));
+    return;
+  }
   // Back to where the card was opened from; not to the search box after a touch, which would raise a phone's keyboard.
   if (e.target.closest('button.close')) { found.remove(); return close({ focus: e.detail === 0 || opener !== searchBox }); }
   const place = e.target.closest('button[data-place]');
@@ -1083,7 +1108,8 @@ addEventListener('hashchange', (event) => {
 // A picked route in the address opens its card too, as a tap on it would: closing the card
 // clears the pick, the same as after a tap. A rail line's chip takes its colour from the map.
 let directory = null;
-const routeEntry = (p) => (directory ??= fetch(new URL('../../data/directory.json', import.meta.url)).then((r) => (r.ok ? r.json() : { routes: [] })).catch(() => ({ routes: [] })))
+const routeEntry = (p) => (directory ??= fetch(new URL('../../data/directory.json', import.meta.url)).then((r) => (r.ok ? r.json() : { routes: [] })).catch(() => ({ routes: [] }))
+  .then((d) => { timeWindows = d.windows ?? {}; return d; }))
   .then((d) => d.routes.find((r) => r.route === p.route && r.mode === p.mode) ?? null);
 // A picked route framed whole in the map left clear above its card (DESIGN.md, "the address"):
 // on the link's own sheet, its middle in the middle of that clear area, where it fits there. A
@@ -1104,7 +1130,7 @@ function openCard(p, { framed = false } = {}) {
   const fill = (r = null) => {
     if (picked !== p) return;
     const what = pickCard(p, r);
-    tell({ ...what, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
+    tell({ ...what, entry: r, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
   };
   fill();
   // RTD's name for it, its ends and how often it runs come from the directory, read once.
@@ -1141,7 +1167,7 @@ function goTo(r, from) {
       // A route RTD lists that the sheets don't draw: its card, with nothing to highlight.
       setPick(null);
       const what = pickCard(p, r.entry);
-      tell({ ...what, routes: [] });
+      tell({ ...what, entry: r.entry, routes: [] });
       return focus();
     }
     // The closest sheet that shows all of it, between the search bar and its card.

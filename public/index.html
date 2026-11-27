@@ -174,7 +174,27 @@
   #card.route .head .routes { flex: none; margin: 0; padding: 0; max-height: none; }
   #card.route .head b { padding-right: 0; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #card.route span { margin-top: 2px; font-size: 12px; }
-  #card.route button.close { top: 50%; transform: translateY(-50%); }
+  #card.route button.close { top: 5px; }
+  /* The route panel (js/panel/route.js), folded under the card's two lines: a quiet row opens it. */
+  #card.route button.more { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; width: calc(100% + 20px); min-height: 32px; margin: 6px -10px -7px; padding: 1px 10px 0;
+    border-top: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 0 0 14px 14px; font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; touch-action: manipulation; }
+  #card.route button.more svg { width: 18px; height: 18px; margin-right: 3px; fill: none; stroke: var(--note); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform 150ms ease-out; }
+  #card.route button.more[aria-expanded="true"] svg { transform: rotate(180deg); }
+  #card.route button.more[aria-expanded="true"] { border-radius: 0; margin-bottom: 0; }
+  #card.route button.more:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; }
+  #route-more { padding: 8px 0 4px; }
+  #route-more[hidden] { display: none; }
+  #route-more p { margin: 0; }
+  #route-more .headline strong { font-size: 17px; font-weight: 700; letter-spacing: -0.005em; }
+  #card #route-more .headline span { display: inline; margin: 0 0 0 5px; font-size: 12.5px; }
+  #route-more .week { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 8px 0 0; font-size: 13.5px; line-height: 1.3; }
+  #route-more .week dt { color: var(--note); }
+  #route-more .week dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #route-more .trips { margin-top: 9px; font-size: 12.5px; line-height: 1.35; color: var(--note); }
+  #route-more .link { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin-top: 5px; font-size: 13.5px; font-weight: 600; color: var(--ink); text-underline-offset: 3px; }
+  #route-more .link svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  #route-more .link:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce) { #card.route button.more svg { transition: none; } }
   #card b { display: block; padding-right: 26px; font-size: 15px; font-weight: 700; line-height: 1.25; }
   #card span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--note); line-height: 1.3; }
   /* Closes the card as a tap on empty ground does, without having to find empty ground. */
