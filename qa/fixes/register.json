@@ -167,6 +167,27 @@
       "path": "qa/.scratch/zoom-224/credit-preview-dark-closed.png",
       "commit": "e8f29da",
       "type": "image"
+    },
+    {
+      "id": "credit-white-dark",
+      "label": "The credit white on the dark map, as it loads (dark)",
+      "path": "qa/.scratch/zoom-224/theme-before-dark-open.png",
+      "commit": "e8f29da",
+      "type": "image"
+    },
+    {
+      "id": "credit-below-zoom-dark",
+      "label": "The credit's \"i\" below the word Zoom, dark, on the branch preview",
+      "path": "qa/.scratch/zoom-224/preview-below-dark-start.png",
+      "commit": "a46002d",
+      "type": "image"
+    },
+    {
+      "id": "credit-below-zoom-open-dark",
+      "label": "The credit opened, dark, on the branch preview",
+      "path": "qa/.scratch/zoom-224/preview-below-dark-opened.png",
+      "commit": "a46002d",
+      "type": "image"
     }
   ],
   "findings": [
@@ -589,6 +610,27 @@
       ],
       "verification": "Build e8f29da: npm run check:zoom 88 ok, 0 failed, light and dark, including the credit check open and closed; the same measurement on the zoom-154-merge branch preview found nothing in either theme; the unit test catches the pinned build 3a14dcf (qa/recall/prototype-credit.json).",
       "fixed_commit": "e8f29da564e2da452280a8451eadcfffc4d877c6"
+    },
+    {
+      "id": "RTD-021",
+      "title": "Map credit white on the dark map, open until the first drag",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · phone layout",
+      "issues": [
+        154
+      ],
+      "observation": "MapLibre's credit kept its own white ground and black lettering in both themes and opened as a full line until the first drag. Chris: the white credit on the dark map \"is pretty awful\"; \"just have it start as an i\"; \"just put it below the word zoom\". It now takes the panels' colours, starts as one \"i\" below the word Zoom, and opens to its right.",
+      "next": "Recheck when the production zoom refactor (#155) lands; a picked route's card covers the \"i\" while it is open.",
+      "done_when": "In both themes the credit starts as one \"i\" below the word Zoom, in the theme's colours with lettering at 4.5 to 1 or better, opens and closes with a tap, on the screen and clear of the controls.",
+      "evidence": [
+        "credit-white-dark",
+        "credit-below-zoom-dark",
+        "credit-below-zoom-open-dark"
+      ],
+      "verification": "Build a46002d: npm run check:zoom 88 ok, 0 failed, light and dark, including the credit check (starts closed below Zoom, opens and closes, clear of the panels, theme colours); the same measurement on the branch preview found nothing in either theme; keyboard: Tab reaches the \"i\", the page's focus outline shows, Enter opens it. The unit tests catch the pinned white credit on the dark map (e8f29da).",
+      "fixed_commit": "a46002d650b69330e10a5000d74e48023d0e2cf4"
     }
   ]
 }
