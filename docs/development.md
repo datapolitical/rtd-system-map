@@ -17,6 +17,13 @@ Use a separate Git worktree for each active branch. Keep the existing smooth-zoo
 worktree on its branch. Do not change another session's checkout or copy its
 generated data back into main.
 
+Each worktree runs its own `npm ci`. Never link `node_modules` to another
+checkout: `npm ci` and `npm install` empty a linked folder's target, so one
+install in a linked worktree empties the checkout the live site deploys from.
+Before installing in a worktree someone else set up, run `ls -ld node_modules`;
+if it is a link, remove the link itself (`rm node_modules`, no trailing slash)
+and then run `npm ci`.
+
 Make current-map and generally applicable data fixes on a small branch from
 `origin/main`, test them, and merge through a pull request. Then merge the
 updated `origin/main` into the smooth-zoom branch. Resolve shared-engine

@@ -123,7 +123,10 @@ function source() {
   run('git', ['-C', ROOT, 'worktree', 'prune'], { quiet: true });
   const r = run('git', ['-C', ROOT, 'worktree', 'add', '-q', '--detach', src, 'origin/main']);
   if (r.status !== 0) throw new Error('could not check out origin/main');
-  fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(src, 'node_modules'));
+  // Its own install, never a link to this checkout's node_modules: npm ci and
+  // npm install empty a linked folder's target (docs/development.md).
+  const installed = run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: src, quiet: true });
+  if (installed.status !== 0) throw new Error('npm ci failed in the checkout of origin/main');
   return src;
 }
 

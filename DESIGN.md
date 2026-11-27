@@ -677,7 +677,17 @@ Every frequency shown to riders says when it applies. Some examples:
 
 The route panel also shows weekday peak, evening, Saturday, and Sunday
 frequency, plus first and last trips, so one number is never read as all-day
-service.
+service. The peak rows are RTD's own periods, 6 to 9am and 3 to 6pm, and the
+evening row is 7 to 10pm (`WINDOWS` in `scripts/lib/gtfs.mjs`; #22). Each is
+measured as midday is (the typical gap, the bunching rule, the less frequent
+direction), at the stop with the most departures in that window, since a
+route's rush-hour trips may not pass its busiest midday stop. Rush-hour
+service often runs one way only, in to the city in the morning and out in
+the afternoon. Where only one direction comes twice or more in a window, the
+row gives that direction's frequency and says "one direction"; a window with
+one trip says "1 trip", and with none "No trips". These figures are in
+`directory.json` only (`wk_am`, `wk_pm`, `wk_eve`, `wk_one`, and the hours
+themselves in `windows`), so the drawings do not change.
 
 **Bus routes are measured by stretch, not once per route.** A bus route can
 come every 15 minutes in one place and a few times a day in another: the
@@ -2848,6 +2858,21 @@ say "here" for the stretch under the finger. A stretch with no weekday
 service reads "No weekday service here; runs Saturday and Sunday". The panel
 ends with a link to RTD's timetable.
 
+On today's sheets (#162, #22) the panel is folded under the picked route's
+card: the card keeps its two lines (the chip and name, then the ends and the
+midday figure), and a row under them, "Times through the week", opens the
+panel in place. Open or shut, it stays that way for the next route. Each row
+says its own hours ("Weekdays, 6 to 9am", "Saturday, 9am to 3pm"), which
+come from the build, never from the page. The rows are for the whole route:
+the stretch note and "here" are not on the sheets, since which stretch is
+under the finger is the drawing's to say. Data built before a row existed
+leaves that row out.
+
+The panel's words are their own code (`public/js/panel/route.js`): it takes
+a route's directory entry and returns the rows, with no page and nothing of
+the sheets in it (`test/panel-route.test.mjs` fails if it names them). The
+sheets' page only puts it on its card.
+
 Where a bus goes is read from its signs (GTFS `trip_headsign`), most common
 first, without the route's number, "free" and any "via ...", and with RTD's
 short forms spelled out (Stn, Ctr, PnR). An end at a rail station takes the
@@ -3171,7 +3196,18 @@ are deferred, not ruled out. See "Open questions".
     sheet's own zoom), shows the same line, and steps on once they are in.
     While a step waits, its own tiles are the only ones asked for. After 8
     seconds (a dropped connection) the step goes ahead anyway, and on that
-    sheet no step waits again. Measured on a 9 Mbps connection (local copy,
+    sheet no step waits again. A tap made during the wait adds a step to
+    it (#210): two taps on + go two sheets on, up to the last sheet, one
+    sheet at a time, each step waiting for its sheet as above (a move of
+    two sheets at once drew bare ground on the way: 2 of 8 frames, and 9
+    of 14 for three); a tap on − takes one off, and back to the sheet shown
+    ends the wait. A tap on + or − counts when the finger lifts, not on
+    the click Safari makes of it: Safari makes no click of a tap within
+    about 300 ms of the last, so quick taps were lost (#210). A double tap
+    on the map still goes one sheet on. The + and − keys step as the
+    buttons do. A pinch or a
+    scroll that meets the sheet's edge just after the next sheet is ready,
+    before the edge is let out, steps on too (it was lost). Measured on a 9 Mbps connection (local copy,
     412 px phone): a step 0.3 s after the opening waited 1.2 to 1.5 s and
     drew no blank frame, where the page before drew 9 or 10 blank frames.
     Those tiles start loading at the opening, not at the first touch, so
@@ -5567,6 +5603,18 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   The drawing is unchanged to the pixel at 18 views in both themes, and a
   step through every sheet gives the same layers in the same order.
   Chris said go.
+- 2026-11-25: Sheets: a tap during a step's wait adds a step (#210). Each
+  tap on + or − counts from the sheet the map is going to, not the one
+  shown, clamped at the first and last sheets; − during a wait for + ends
+  it. The map goes one sheet at a time, each step waiting for its sheet.
+  The + and − keys go the same way instead of through MapLibre's own
+  keyboard zoom. Reason: three taps on + during a wait gave one step, since
+  each asked for the same next sheet. The checks wait while a step is held.
+- 2026-11-25: Sheets: + and − step when the finger lifts (#210), and the
+  click a browser makes of that tap is not counted again; a click with no
+  touch before it (a mouse, a key, a screen reader) steps as before.
+  Reason: on Chris's iPhone quick taps were lost; Safari makes no click of
+  a tap within about 300 ms of the last one.
 - 2026-11-26: The page head builds the map's drawing programs in a worker
   (OffscreenCanvas, KHR_parallel_shader_compile) while the map downloads,
   from the programs recorded from the map when the pictures are taken
@@ -5637,6 +5685,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ("What people can do", items 2 to 5); most of these sit on top of the
   drawing rather than in it; and the plan of 2026-11-18 no longer
   described the work the trial found. Chris: yes to both.
+- 2026-11-27: The route panel on today's sheets (#162) with weekday
+  rush-hour and evening rows (#22). The panel is folded under the picked
+  route's two-line card, so the card still covers as little of the map as
+  it did; "Times through the week" opens it. #22 was not blocked on #11:
+  the rows need two more measures per route, in windows DESIGN.md already
+  set, and #11 is the Key's time chooser. One-way rush service says "one
+  direction": the less-frequent-direction rule alone gave an express no
+  rush-hour figure at all.
 - 2026-11-27: The section "Four sheets" is now "Five sheets" (#229, phase 2).
   The map has had five since sheet 0 joined (#152); entries above keep
   their wording. Text that described the removed classic map's link
