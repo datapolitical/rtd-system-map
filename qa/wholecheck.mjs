@@ -58,9 +58,11 @@ async function open(viewport, theme, hash = '', extra = {}) {
   await settled(page);
   return page;
 }
-// The map at rest, its tiles drawn, and the page's own step finished.
+// The map at rest, its tiles drawn, and the page's own step finished: none waiting for its
+// sheet (main.js, sheetsHeld), which has not happened yet.
 async function settled(page) {
   await page.waitForTimeout(450);
+  await page.waitForFunction(() => !window.sheetsHeld, null, { timeout: 60000 });
   await page.evaluate(() => new Promise((ok) => {
     const map = window.sheetsMap;
     const t = setTimeout(ok, 8000);
@@ -92,7 +94,12 @@ const rest = (page) => page.evaluate(([[w, s, e, n], low, high]) => {
   const map = window.sheetsMap;
   const box = map.getContainer().getBoundingClientRect();
   const under = Math.max(0, box.bottom - document.querySelector('#steps').getBoundingClientRect().top);
+  // MapLibre's fit stops at the map's zoom limit, which a step's wait narrows (main.js, limits):
+  // the fit is read with the limit lifted for the moment, so the wait cannot pass the check.
+  const max = map.getMaxZoom();
+  map.setMaxZoom(24);
   const fit = map.cameraForBounds([[w, s], [e, n]], { padding: { top: 16, left: 32, right: 32, bottom: 16 + under } }).zoom;
+  map.setMaxZoom(max);
   return Math.max(low, Math.min(high - 0.05, fit));
 }, [sheets.frame, drawnAt, top]);
 const whole = async (page, v) => Math.abs(v.zoom - await rest(page)) < 0.02 && v.zoom >= drawnAt - 0.01 && v.zoom < top;
