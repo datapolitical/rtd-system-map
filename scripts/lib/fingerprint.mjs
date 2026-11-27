@@ -1,8 +1,9 @@
-// Which code built the committed data (DESIGN.md, "Zero maintenance", Rule 2).
-// The data in public/data is built on a machine of ours and committed;
-// Cloudflare only publishes it. So the publish step must know whether the
-// data was built by the code being published: each build records a hash of
-// the modules that made it, and scripts/publish-check.mjs recomputes it.
+// Which code built the deployed data (DESIGN.md, "Zero maintenance", Rule 2).
+// The data in public/data is built on a machine of ours and uploaded by
+// `npm run deploy` (not committed); Cloudflare only serves it. So the publish
+// step must know whether the data was built by the code being published: each
+// build records a hash of the modules that made it, and
+// scripts/publish-check.mjs recomputes it.
 //
 // A hash covers a script and every module it imports, followed through
 // relative imports. `stopAt` leaves out a module and what only it imports:

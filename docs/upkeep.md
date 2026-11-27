@@ -36,7 +36,12 @@ September) and edits its map or republishes its feed now and then between.
 Cloudflare builds nothing. `npm run deploy` (`scripts/deploy.mjs`) runs the
 publish check (`scripts/publish-check.mjs`) against the build on disk and
 refuses to upload when it fails, or when the worktree has uncommitted changes
-(`--allow-dirty` overrides that). It writes `public/deploy-manifest.json`
+(`--allow-dirty` overrides that). It also refuses unless `HEAD` is the commit
+GitHub has for the branch (push first, or pull if behind; `--dry-run` reports
+this without failing), and, from `main`, when `public/` holds ignored files
+beyond the built site (such as `public/data/zoom-prototype/` or
+`public/data.next/`); on a branch those are listed as "also uploading (preview
+only)" and sent, so a trial can be previewed. It writes `public/deploy-manifest.json`
 (commit, branch, dirty or not, when the data was built) and runs
 `wrangler pages deploy public` for the project `rtd-system-map`, with the
 current branch name and commit. A branch other than `main` becomes a preview
