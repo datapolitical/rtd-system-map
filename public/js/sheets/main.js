@@ -662,6 +662,9 @@ function keepVisible() {
 }
 function tell(what) {
   shown = what;
+  // A card redrawn while the keyboard is in it (a route's, when RTD's name for it arrives) keeps the focus.
+  const held = card.contains(document.activeElement);
+  const keepFocus = () => { if (held && !card.contains(document.activeElement)) (card.querySelector('button:not(.close)') ?? card.querySelector('button.close'))?.focus({ preventScroll: true }); };
   const { title, note, lead, groups = [] } = what;
   const routes = routesOf(what);
   const hint = hintFor(routes);
@@ -673,6 +676,7 @@ function tell(what) {
       + `${what.line ? `<span>${detail(what.line)}</span>` : ''}<button type="button" class="close" aria-label="Close">\u00d7</button>`;
     card.hidden = false;
     say(cardSaid({ title: what.name, note: what.line, routes }));
+    keepFocus();
     requestAnimationFrame(keepVisible);
     return;
   }
@@ -686,6 +690,7 @@ function tell(what) {
   card.classList.remove('list');
   card.hidden = false;
   say(cardSaid({ title: card.querySelector('#card-title').textContent, note, lead, routes }));
+  keepFocus();
   requestAnimationFrame(keepVisible);
 }
 // Closing the card is a tap on empty ground: the card goes, and so does a pick.
