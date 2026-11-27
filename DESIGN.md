@@ -2030,7 +2030,7 @@ sheets start with that setting too, and have a 44 px circular sun/moon button
 in the lower-right corner. It switches the map and interface together and
 remembers the reader's choice locally. Until a choice is made, system changes
 recolour the open map. Theme changes preserve the view, card and picked route.
-A saved choice is applied before paint, including to the loading picture.
+A saved choice is applied before paint, including to the loading placeholder.
 The button has a stable accessible name, “Dark mode”, and reports its pressed
 state; its icon and tooltip show the mode a tap will choose.
 
@@ -3184,26 +3184,24 @@ are deferred, not ruled out. See "Open questions".
     layer gives its colour, width and opacity per feature, with the same
     values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
   - MapLibre's stylesheet doesn't hold up the first paint: the page uses
-    none of its controls, and the picture covers the map until it is drawn.
+    none of its controls, and the placeholder covers the map until it is drawn.
   - The Overpass font swaps in when it arrives; until then "Loading…" is in
     the phone's own font, not hidden.
   - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are tiles
     of their own, `routes-N`, whose layers show from the first pick, or at the opening when the
     address picks a bus route (#193). They were about 40% of every sheet's bytes.
-  - While it loads, the sheets page shows a picture of the view it opens on,
-    with a "Loading…" line over it, and fades to the map once the map has
-    drawn that view (or at once, if a button is pressed first). The pictures
-    (`public/poster/`, one per theme for a phone and for a wider screen, about
-    60 to 150 KB each) are taken by `scripts/poster.mjs` at the end of every
-    build, from the site just built (`scripts/poster-build.mjs`), so they go
-    live with the drawing they show. A fingerprint of the opening drawing
-    and its rendering code is captured with the pictures, along with the
-    planet build the basemap is from (`data-ground`); the publish check fails
-    if that is not the committed basemap's. The picture stays
-    hidden unless its fingerprint matches the current `sheets.json`; a stale
-    picture cannot jump to a different drawing. The page centres the picture as the map is centred, and shifts it as the
-    map's bounds shift the view on a very wide screen. A link to another view,
-    or an address forcing a theme, gets the line on plain ground instead.
+  - While it loads, the sheets page shows the map's ground with a small
+    junction mark in the middle and the "Loading…" line at the top, and
+    fades to the map once the map has drawn its opening view (or at once,
+    if a button is pressed first). The mark is drawn in the page itself
+    (an inline SVG in the theme's own ink, grey and card colours), so it
+    is on screen with the first bytes of the page and asks for nothing:
+    the map's downloads have the whole connection from the start (#222).
+    The build still takes the pictures of the opening view
+    (`scripts/poster.mjs`, `public/poster/`): the same step records the
+    opening view and its tile zooms (`data-view`, `data-early`), the
+    drawing programs, and the drawing and ground fingerprints the publish
+    check reads, but the page no longer shows or asks for the pictures.
   - MapLibre and the Overpass font are served from the site itself: no extra
     connections to a CDN or Google before the map can start.
   - Symbols are drawn on canvases kept in memory, not on the GPU
@@ -5639,6 +5637,21 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ("What people can do", items 2 to 5); most of these sit on top of the
   drawing rather than in it; and the plan of 2026-11-18 no longer
   described the work the trial found. Chris: yes to both.
+- 2026-11-27: While the map loads, the page shows a small junction mark
+  drawn in the page itself and the "Loading…" line on the map's ground,
+  not a picture of the opening view (#222). This replaces the picture of
+  2026-11-12 and the download order tried on the first-paint branch (#226).
+  Reason: the picture was 90 to 102 KB of the about 680 KB a phone fetched
+  before the map drew, and on a normal connection it gave nothing but cost
+  the map's downloads that share of the line. Chris: "show something
+  immediately, with no extra download", then, on the measurements, "we
+  shouldn't use the picture anymore". Measured locally (Chromium at iPhone
+  14 size, 4x CPU, light and dark): 572 KB before the map, was 683 KB; the
+  map's files all in at 1.20 s on typical 4G (was 1.50 s), 4.0 s on slow
+  4G (was 4.1 s), 8.6 s at 0.65 Mbit/s (was 9.8 s); something on screen
+  at first paint in every case, where the picture showed at 3.1 s on slow
+  4G and 6.6 s at 0.65 Mbit/s. The time the map is drawn did not differ
+  beyond the noise of a busy machine.
 
 ## Sources
 

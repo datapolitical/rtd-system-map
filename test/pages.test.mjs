@@ -96,19 +96,22 @@ test('a list a feature carries is looked up from the build\'s table, as the tile
   for (const o of offsets) assert.deepEqual(o, ['match', ['get', 'offset'], listKey([0, -1.2]), ['literal', [0, -1.2]], listKey([0.5, 0]), ['literal', [0.5, 0]], ['literal', [0, 0]]]);
 });
 
-test('the front page shows a picture of its opening view while the map loads', { skip: NO_POSTER }, async () => {
+test('the front page shows a placeholder drawn in the page itself while the map loads', async () => {
   const html = read('');
   const [, view, bounds] = html.match(/<div id="poster" data-view="([^"]*)" data-bounds="([^"]*)" data-drawing="[^"]*"[^>]*>/) ?? [];
-  // scripts/poster.mjs writes these: the view the pictures show, and the map's bounds the page shifts them by.
-  assert.match(view ?? '', /^\d+(\.\d+)?\/-?\d+\.\d+\/-?\d+\.\d+$/, 'the view the pictures show');
+  // scripts/poster.mjs writes these: the opening view (its tiles are fetched early) and the map's bounds.
+  assert.match(view ?? '', /^\d+(\.\d+)?\/-?\d+\.\d+\/-?\d+\.\d+$/, 'the opening view');
   const [w, s, e, n] = (bounds ?? '').split(',').map(Number);
   assert.ok(w < e && s < n, 'the map bounds');
   const [, lat, lon] = view.split('/').map(Number);
   assert.ok(w < lon && lon < e && s < lat && lat < n, 'the view is inside them');
-  // Every picture the page can choose is there, one per theme and screen.
-  const pictures = [...html.matchAll(/\/poster\/[\w-]+\.webp/g)].map((m) => m[0]);
-  assert.ok(pictures.length >= 4);
-  for (const p of pictures) assert.ok(fs.existsSync(path.join(PUBLIC, p)), `${p} is in public/`);
+  // Nothing to download before the map can start (#222): a mark drawn inline in the theme's own
+  // colours, and the line saying so. No picture, no font of its own.
+  const poster = html.slice(html.indexOf('<div id="poster"'), html.indexOf('</div>', html.indexOf('<div id="poster"')));
+  assert.match(poster, /<svg [^>]*aria-hidden="true"/);
+  assert.match(poster, /<p id="loading" role="status"><span>Loading…<\/span><\/p>/);
+  assert.doesNotMatch(poster, /\b(?:src|href)=|#[0-9a-f]{3,8}\b/i, 'no file and no colour of its own');
+  assert.doesNotMatch(html, /\/poster\//, 'the page asks for no loading picture');
   // The buttons start as they are on the opening sheet, so nothing changes under the picture when the script runs.
   // The page opens on sheet 1, one step in from the whole district (#152): a wider sheet is there.
   const { SHEETS, OPENING } = await import('../public/js/sheets/style.js');

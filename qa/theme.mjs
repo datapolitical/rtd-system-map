@@ -1,5 +1,5 @@
 // Theme toggle: map/UI agreement, camera and pick preservation, keyboard access,
-// saved preference before paint, the correct poster, and responsive placement.
+// saved preference before paint, the placeholder in that theme, and responsive placement.
 // node qa/theme.mjs <site> [output]
 import { chromium } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -67,17 +67,19 @@ try {
     await page.emulateMedia({ colorScheme: system }); await palette(other);
     assert.equal(await page.evaluate(() => localStorage.getItem('rtd-sheets-theme')), other);
 
-    // Hold the map back so a saved preference and its poster can be checked before draw.
+    // Hold the map back so a saved preference and its placeholder can be checked before draw.
     let release; const gate = new Promise((done) => { release = done; });
     await page.route('**/data/meta.json', async (route) => { await gate; await route.continue(); });
     try {
       await page.goto(base, { waitUntil: 'commit' });
-      await page.waitForFunction(() => document.querySelector('#poster img.whole')?.complete, null, { timeout: 30000 });
+      await page.waitForSelector('#poster svg', { timeout: 30000 });
       assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), other);
-      assert.ok((await page.locator('#poster img').evaluate((i) => i.currentSrc)).includes(`-${other}`));
+      // The placeholder is drawn in the saved theme's ground, not the device's.
+      const ground = await page.evaluate(() => [getComputedStyle(document.querySelector('#poster')).backgroundColor, getComputedStyle(document.documentElement).getPropertyValue('--ground').trim()]);
+      assert.equal(ground[1], other === 'dark' ? '#0e141d' : '#f5f3ef');
     } finally { release(); }
     await palette(other); await page.unroute('**/data/meta.json');
-    results.push({ system, check: 'saved preference overrides device setting before paint and uses matching poster', ok: true });
+    results.push({ system, check: 'saved preference overrides device setting before paint and draws the placeholder in it', ok: true });
 
     for (const [width, height] of [[393, 760], [852, 393], [1440, 900]]) {
       await page.setViewportSize({ width, height }); await ready();

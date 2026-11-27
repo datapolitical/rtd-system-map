@@ -99,22 +99,12 @@
   document.documentElement.dataset.theme = chosenTheme ?? (scheme.matches ? 'dark' : 'light');
   document.documentElement.dataset.themeManual = String(Boolean(chosenTheme));
   document.querySelector('meta[name="theme-color"]').content = document.documentElement.dataset.theme === 'dark' ? '#0e141d' : '#f5f3ef';
-  // The loading picture (#poster below) is asked for first, before anything the map needs: it is
-  // what the reader sees until the map is drawn. Only on a plain visit; a link to a view, or a theme
-  // the address forces, shows no picture. Before the stylesheet, so this runs without waiting for it.
-  if (!location.hash && !new URLSearchParams(location.search).has('theme')) {
-    const theme = document.documentElement.dataset.theme;
-    const link = Object.assign(document.createElement('link'), { rel: 'preload', as: 'image', fetchPriority: 'high' });
-    if (matchMedia('(max-width: 480px)').matches) link.href = `/poster/phone-${theme}.webp`;
-    else link.imageSrcset = `/poster/wide-${theme}-1x.webp 1x, /poster/wide-${theme}-2x.webp 2x`;
-    document.head.append(link);
-  }
 </script>
-<!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the loading picture. -->
+<!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the first paint. -->
 <link rel="stylesheet" href="/vendor/maplibre-gl.css" media="print" onload="this.media='all'">
 <!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
      for the one that names it (DESIGN.md, "Quality floor"). Its tiles are fetched by the script
-     after the loading picture, which knows the view. -->
+     after the placeholder, which knows the view. -->
 <link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
 <link rel="modulepreload" href="/js/sheets/style.js">
 <link rel="modulepreload" href="/js/sheets/settle.js">
@@ -231,12 +221,13 @@
   /* A picked route: its stop's square ringed, and the route itself as the card's pressed chip. */
   #key .row.picked i { outline: 1.5px solid var(--ink); outline-offset: 1px; }
   #key .routes span.picked { background: var(--ink); color: var(--card); padding: 0 3px; }
-  /* While the map loads: a picture of the view it opens on, centred as the map is, and a line saying so (scripts/poster.mjs). */
-  /* Touches go through the picture to the map under it: a pinch on the picture zoomed the page, not the map. */
+  /* While the map loads: a small mark drawn in the page itself and a line saying so, on the map's ground. Nothing
+     to download, so it is there with the first bytes and costs the map nothing (DESIGN.md, "While it loads"). */
+  /* Touches go through it to the map under it, so a pinch zooms the map, not the page. */
   #poster { position: absolute; inset: 0; overflow: hidden; background: var(--ground); transition: opacity 250ms ease-out; pointer-events: none; }
-  #poster img { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: none; user-select: none; -webkit-user-drag: none;
-    opacity: 0; transition: opacity 200ms ease-out; }
-  #poster img.whole { opacity: 1; }
+  #poster svg { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  #poster svg path { stroke: var(--quiet); stroke-width: 4; }
+  #poster svg circle { fill: var(--card); stroke: var(--ink); stroke-width: 2.5; }
   #poster.gone { opacity: 0; pointer-events: none; }
   #loading, #wait { position: absolute; left: 50%; top: max(16px, calc(env(safe-area-inset-top) + 10px)); transform: translateX(-50%); margin: 0; padding: 7px 15px 6px;
     background: var(--card); color: var(--ink); border-radius: 16px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
@@ -244,7 +235,7 @@
   #wait { z-index: 3; pointer-events: none; }
   #wait[hidden] { display: none; }
   @keyframes breathe { 50% { opacity: 0.45; } }
-  @media (prefers-reduced-motion: reduce) { #poster, #poster img, #key { transition: none; } #loading span, #wait span { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #poster, #key { transition: none; } #loading span, #wait span { animation: none; } }
 </style>
 </head>
 <body>
@@ -256,59 +247,9 @@
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
 <div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="203e4506498fa9042c3a60fb7b0a19c9567026d3db7d7a56b5d3a2e7252fa9f9" data-ground="20261122_124456_pt" data-early="{&quot;ground&quot;:10,&quot;sheet-1&quot;:9}">
-  <picture>
-    <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
-    <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">
-    <source media="(prefers-color-scheme: dark)" srcset="/poster/wide-dark-1x.webp 1x, /poster/wide-dark-2x.webp 2x">
-    <img src="/poster/wide-light-1x.webp" srcset="/poster/wide-light-1x.webp 1x, /poster/wide-light-2x.webp 2x" alt="" fetchpriority="high" draggable="false">
-  </picture>
+  <svg viewBox="0 0 56 56" aria-hidden="true" focusable="false"><path d="M4 38h12l12-12h24M28 4v22l12 12v14"/><circle cx="28" cy="26" r="5"/></svg>
   <p id="loading" role="status"><span>Loading…</span></p>
 </div>
-<script>
-  // The picture is of the opening view in the reader's theme: not of a view a link names, nor a theme the address forces.
-  (() => {
-    const poster = document.getElementById('poster');
-    const [z, lat, lon] = poster.dataset.view.split('/').map(Number);
-    const [hz, hlat, hlon] = location.hash.slice(1).split('/').map(Number);
-    const elsewhere = Number.isFinite(hlon) && (Math.abs(hz - z) > 0.01 || Math.abs(hlat - lat) > 0.002 || Math.abs(hlon - lon) > 0.002);
-    if (!Number.isFinite(lon) || elsewhere || new URLSearchParams(location.search).has('theme')) return poster.querySelector('picture').remove();
-    // Where the map will put the view's middle: a screen wider than the map's bounds allow round
-    // it has the map shifted in from that edge (MapLibre's maxBounds), and the picture goes with it.
-    const [west, south, east, north] = poster.dataset.bounds.split(',').map(Number);
-    const world = 512 * 2 ** z;
-    const x = (lng) => ((lng + 180) / 360) * world;
-    const y = (la) => ((180 - (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + (la * Math.PI) / 360))) / 360) * world;
-    const fit = (c, lo, hi, half) => (hi - lo < 2 * half ? (lo + hi) / 2 : Math.min(Math.max(c, lo + half), hi - half));
-    const img = poster.querySelector('img');
-    // The picture element's media queries follow the device. A saved manual choice
-    // needs that theme's assets even when it differs from the device setting.
-    const activeTheme = document.documentElement.dataset.theme;
-    for (const source of poster.querySelectorAll('source')) source.srcset = source.srcset.replace(/-(light|dark)/g, `-${activeTheme}`);
-    img.src = img.getAttribute('src').replace(/-(light|dark)/g, `-${activeTheme}`);
-    img.srcset = img.getAttribute('srcset').replace(/-(light|dark)/g, `-${activeTheme}`);
-
-    const place = () => {
-      if (![west, south, east, north].every(Number.isFinite)) return;
-      const dx = x(lon) - fit(x(lon), x(west), x(east), innerWidth / 2);
-      const dy = y(lat) - fit(y(lat), y(north), y(south), innerHeight / 2);
-      img.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-    };
-    place();
-    addEventListener('resize', place);
-    // Shown whole, not drawn in strips as it arrives.
-    // A deployment rebuilds the drawing from current data. An older screenshot must
-    // never flash before a different drawing, even if its centre is unchanged.
-    const json = (url) => fetch(url).then((r) => r.ok ? r.json() : null);
-    // The ground is the site's own, published with the drawing (publish-check: data-ground).
-    const matches = json('/data/sheets.json').then((s) => Boolean(s?.drawing && s.drawing === poster.dataset.drawing)).catch(() => false);
-    const whole = async () => {
-      if (await matches) img.classList.add('whole');
-      else img.closest('picture')?.remove();
-    };
-    if (img.complete && img.naturalWidth) whole();
-    else img.addEventListener('load', whole);
-  })();
-</script>
 <script>
   // The opening view's tiles, fetched now and handed to the map as it asks for them (main.js,
   // "early"): each tile set it draws the view from, at the zoom of its tiles there (data-early,
