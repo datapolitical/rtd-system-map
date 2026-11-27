@@ -3178,6 +3178,8 @@ are deferred, not ruled out. See "Open questions".
     values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
   - MapLibre's stylesheet doesn't hold up the first paint: the page uses
     none of its controls, and the picture covers the map until it is drawn.
+  - The Overpass font swaps in when it arrives; until then "Loading…" is in
+    the phone's own font, not hidden.
   - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are tiles
     of their own, `routes-N`, whose layers show from the first pick, or at the opening when the
     address picks a bus route (#193). They were about 40% of every sheet's bytes.
@@ -5577,6 +5579,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   internals renamed and no check, the step waited the whole 8 s cap before
   going; test/maplibre-internals.test.mjs now fails when an update renames
   them. Chris: "Do the second one" (measure it before deciding).
+- 2026-11-27: The Overpass font is swap-display, not block. Reason: on
+  Chris's iPhone at about 0.65 Mbit/s (the page's ?timing readout), the font
+  came in at 8.3 s with everything else, and the block-display "Loading…"
+  line kept the screen empty until 8.4 s. Holding the map's downloads until
+  the loading picture is in (#222, branch first-paint) showed the picture
+  much sooner on slow links but drew the map 0.3 s later on typical 4G; it
+  waits until real load times (Cloudflare Web Analytics) say how many
+  visits are on slow connections. Chris agreed: land the font change alone.
 
 ## Sources
 
