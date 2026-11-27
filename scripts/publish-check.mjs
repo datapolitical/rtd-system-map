@@ -72,6 +72,12 @@ else {
   const shows = html.match(/<div id="poster"[^>]*\sdata-ground="([^"]*)"/)?.[1];
   if (shows !== pack.planet) problems.push(`the loading pictures show another ground (${shows || 'none'}, basemap/ is ${pack.planet}): run \`node scripts/poster-build.mjs\`, commit public/index.html (the pictures themselves are not committed), then \`npm run deploy\``);
 }
+// The tiles the page reads (scripts/tiles.mjs; git ignores them): each sheet, its route lines,
+// and the ground. Without them the site would upload with no map drawn.
+for (const dir of ['ground', ...SHEETS.flatMap((_, i) => [`sheet-${i}`, `routes-${i}`])]) {
+  const n = await readdir(path.join(ROOT, 'public/tiles', dir), { recursive: true }).then((e) => e.length, () => 0);
+  if (!n) problems.push(`public/tiles/${dir} is missing or empty: run \`node scripts/tiles.mjs\`, then \`npm run deploy\``);
+}
 // What Cloudflare Pages takes: 20,000 files a site on its free plan (developers.cloudflare.com/pages/platform/limits).
 const count = async (dir) => (await readdir(dir, { withFileTypes: true, recursive: true })).filter((d) => d.isFile()).length;
 const files = await count(path.join(ROOT, 'public'));
