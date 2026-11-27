@@ -2632,9 +2632,14 @@ How it is built:
 - **Lines change place gently.** Where a line joins or leaves a pack, the
   others slide to their new places over about 26 pixels each side, so the
   lines beside one that ends do not jog at its last station.
-- **Made for continuous zoom later.** Each sheet's layers show for a band of
-  zooms around its own, so drawing between two sheets is a later step that
-  changes the page, not the build.
+- **Continuous zoom changes the build as well as the page.** Each sheet's
+  layers show for a band of zooms around its own. The zoom trial (#154)
+  showed that drawing between sheets is not a page step alone. The build
+  sets rail lines side by side at one zoom's pixel scale, so the zoomable
+  map draws rail once for every two zooms and the page sets the space
+  between lines. Each drawing places its lettering fresh, so the build plans
+  lettering across zooms. The plan is #129. (Corrected 2026-11-27; until
+  then this said the change was the page's alone.)
 
 ### Continuous zoom trial (#154)
 
@@ -3888,22 +3893,29 @@ and Chris has given concise release approval. Routine QA belongs to the agent;
 release approval does not ask the user to repeat that test matrix. The page address
 is its share link; a custom domain is not a launch requirement. V1 to
 V3 above are the names of the design stages that led there, not releases.
-What comes after launch is in four milestones, in this order (decided
-2026-11-13; v2 and v2.x redrawn 2026-11-18):
+What comes after launch is in these milestones, in this order (decided
+2026-11-13; v2 and v2.x redrawn 2026-11-18; v1.3 added and v2 replanned
+2026-11-27):
 
 1. **v1.1: Sheets polish.** Faults on the sheets and in the bus data they
-   draw from.
-2. **v2: One zoomable map.** The sheets' drawing at every zoom, one map
-   that zooms smoothly. The milestone holds only the steps to it, in
+   draw from. Released 2026-11-25.
+2. **v1.2: Fixes from the weekly round.** Fixes Chris picks in the weekly
+   map round, on today's sheets.
+3. **v1.3: Live, panels and search.** On today's sheets, built so the
+   zoomable map reuses them: the route panel and route tracing, Live, stop
+   and station panels with next departures and alerts, and search.
+4. **v2: One zoomable map.** The sheets' drawing at every zoom from the
+   whole district to 16, one map that zooms smoothly, with the build
+   deciding every label. The milestone holds only the steps to it, in
    order; the plan is #129. Classic is preserved on
    `classic-archive`; its historical issues carry the `classic` label. Work on
    the isolated smooth-zoom branch proceeds under regression and current-sheet
    parity checks; blanket manual launch review is not an engineering gate.
-3. **v2.x: Classic features, other times and Live.** On the zoomable map:
-   the classic map's features carried over (edge letters, relief, route
-   panel, route tracing, Live), then Saturday, Sunday and evening in the
-   Key, Live tiers, alerts, departures and vehicles.
-4. **Later.** Ideas with no date.
+5. **v2.x: Other times, Live tiers, edge letters and relief.** On the
+   zoomable map: edge letters and relief, then Saturday, Sunday and evening
+   in the Key, and Live tiers, built on how other times fit the drawings
+   (#233).
+6. **Later.** Ideas with no date.
 
 A fifth milestone, **Parked: recheck on the zoomable map**, is not a
 release and not planned work. It holds faults and leftovers written against
@@ -5703,6 +5715,28 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   after the publish check, and a merge publishes nothing. Reason: the built
   files were most of what each pull request changed, and Cloudflare's build
   only re-checked what mini had already built.
+- 2026-11-27: Live, the route panel and route tracing, stop and station
+  panels with next departures and alerts, and search come to today's sheets
+  first, in a new milestone, v1.3 (#162, #13, #22, #238), built so the
+  zoomable map reuses them. Other times and Live tiers stay in v2.x until
+  #233 settles how they fit the zoomable map's drawings, since each drawing
+  holds one time's frequency classes and route lists. The v2 plan (#129) is
+  rewritten from the zoom trial, the consistency proposal and Chris's
+  answers of 2026-11-26. In order: the other-times decision (#233); the
+  groundwork, one lettering plan the build writes and the page draws
+  (#234); base-map names placed by our build (#235); streets that only
+  split and sizes as zoom rules (#155, with #81 moved out of Parked); what
+  carries between zooms (#156); then hand fixes that hold across zooms
+  (#64), landmark tints (#243), our own ground (#241) and area and river
+  lettering (#242), which Chris put next after the lettering; then
+  drawings at every whole zoom (#157), zooms 8.75 to 12 (#236), tiles
+  (#237), the page, checks, review and close. The zoom-14 sheet's express
+  braid is fixed on today's map first (#240; Chris, 2026-11-27). Reason:
+  since Classic left the site on 2026-11-21 the live map has no Live,
+  search or other times, and a tap gives a short card with no departures
+  ("What people can do", items 2 to 5); most of these sit on top of the
+  drawing rather than in it; and the plan of 2026-11-18 no longer
+  described the work the trial found. Chris: yes to both.
 
 ## Sources
 

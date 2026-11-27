@@ -906,6 +906,61 @@ function crossing(p, u, ring) {
   return best < Infinity ? [p[0] + u[0] * best, p[1] + u[1] * best] : null;
 }
 
+// Items in square cells of `size` px, found by what is within `reach` of a point. `some` asks
+// `test` of every item in the cells that reach touches, so it answers as a scan of all items would.
+function grid(items, at, size) {
+  const cells = new Map();
+  const add = (item) => {
+    const [x, y] = at(item), k = `${Math.floor(x / size)},${Math.floor(y / size)}`;
+    if (!cells.has(k)) cells.set(k, []);
+    cells.get(k).push(item);
+  };
+  for (const item of items) add(item);
+  const some = (p, reach, test) => {
+    for (let x = Math.floor((p[0] - reach) / size); x <= Math.floor((p[0] + reach) / size); x++) {
+      for (let y = Math.floor((p[1] - reach) / size); y <= Math.floor((p[1] + reach) / size); y++) {
+        const here = cells.get(`${x},${y}`);
+        if (here && here.some(test)) return true;
+      }
+    }
+    return false;
+  };
+  return { add, some };
+}
+
+// Every segment of every line's paths, filed under each cell a point within `reach` of it can be
+// in. `some(p, line, test)` asks `test(a, b)` of the segments of the other lines filed at p's cell.
+function segmentGrid(lines, within) {
+  // A pixel more than asked, so rounding where the pieces meet can't leave a near segment out.
+  const reach = within + 1;
+  const size = Math.max(4 * reach, 1);
+  const cells = new Map();
+  for (const line of lines) {
+    for (const path of line.paths) {
+      for (let i = 1; i < path.length; i++) {
+        const a = path[i - 1], b = path[i];
+        const seen = new Set();
+        // A long segment is filed in short pieces, so it lands only in cells along it.
+        const pieces = Math.max(1, Math.ceil(dist(a, b) / size));
+        for (let k = 0; k < pieces; k++) {
+          const p = lerp(a, b, k / pieces), q = lerp(a, b, (k + 1) / pieces);
+          for (let x = Math.floor((Math.min(p[0], q[0]) - reach) / size); x <= Math.floor((Math.max(p[0], q[0]) + reach) / size); x++) {
+            for (let y = Math.floor((Math.min(p[1], q[1]) - reach) / size); y <= Math.floor((Math.max(p[1], q[1]) + reach) / size); y++) {
+              const key = `${x},${y}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              if (!cells.has(key)) cells.set(key, []);
+              cells.get(key).push({ line, a, b });
+            }
+          }
+        }
+      }
+    }
+  }
+  const some = (p, line, test) => (cells.get(`${Math.floor(p[0] / size)},${Math.floor(p[1] / size)}`) ?? []).some((s) => s.line !== line && test(s.a, s.b));
+  return { some };
+}
+
 /**
  * Where each line's letter goes: on the line, where no other line is beside
  * it, clear of station marks and other letters, near each end and then every
@@ -918,21 +973,37 @@ export function letters(lines, marks, sheet) {
   const clear = SIZES.letterClear[sheet.id];
   const every = SIZES.letterEvery[sheet.id];
   const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
+  const aloneBy = SIZES.alone * pitch;
+  // Each test below asks what lies within a few pixels of a point, at every 2 px of every line.
+  // Grids of what is near (the same distances, measured the same way) keep each test to its
+  // neighbourhood, so a sheet drawn larger costs in proportion to its lines, not their square.
+  const stopGrid = grid(stops, (s) => s, 1.4 * clear);
+  const letterGrid = grid([], (s) => s.at, 2 * clear);
+  const segments = segmentGrid(lines, aloneBy);
   for (const line of lines) {
-    const others = lines.filter((l) => l !== line).flatMap((l) => l.paths);
     for (const path of line.paths) {
       const pts = resample(path, 2);
       const mine = [];
       const near = Math.round(clear / 4);
+      // Whether another line runs within `aloneBy` of a point (nearest(other, p).d < aloneBy).
+      const crowded = new Map();
+      const crowdedAt = (j) => {
+        if (!crowded.has(j)) crowded.set(j, segments.some(pts[j], line, (a, b) => toSegment(pts[j], a, b).d < aloneBy));
+        return crowded.get(j);
+      };
       const fits = (i, alone = true, markClear = 1.4 * clear) => {
         const p = pts[i];
         return Math.min(i, pts.length - 1 - i) * 2 >= 2 * clear
-          && !stops.some((s) => dist(s, p) < markClear)
-          && ![...placed, ...mine].some((s) => dist(s.at, p) < 2 * clear)
+          && !stopGrid.some(p, markClear, (s) => dist(s, p) < markClear)
+          && !letterGrid.some(p, 2 * clear, (s) => dist(s.at, p) < 2 * clear)
           // Alone means alone for a letter's width each way, so no letter sits where lines part.
-          && !(alone && [i - near, i, i + near].some((j) => pts[j] && others.some((o) => nearest(o, pts[j]).d < SIZES.alone * pitch)));
+          && !(alone && [i - near, i, i + near].some((j) => pts[j] && crowdedAt(j)));
       };
-      const put = (i) => mine.push({ route: line.route, color: line.color, ink: inkOn(line.color), at: pts[i], i });
+      const put = (i) => {
+        const letter = { route: line.route, color: line.color, ink: inkOn(line.color), at: pts[i], i };
+        mine.push(letter);
+        letterGrid.add(letter);
+      };
       // The first clear spot from each end, so the letter is as near the line's ends (and
       // the hub, where lines are told apart) as it can be; then one every so often between.
       const first = pts.findIndex((_, i) => fits(i));

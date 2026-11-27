@@ -41,3 +41,6 @@ public/poster/
 public/deploy-manifest.json
 # The zoom trial is never committed.
 public/zoom/
+# Claude Code's per-checkout permission settings. Untracked, it made
+# npm run deploy refuse the main checkout as having uncommitted changes.
+.claude/settings.local.json
