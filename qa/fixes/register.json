@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "title": "RTD map fixes",
-  "updated_at": "2026-11-25T00:00:00.000Z",
+  "updated_at": "2026-11-27T00:00:00.000Z",
   "map_commit": "89ab0413167cb5e558558f56c915aeb4090d5ab1",
   "repository": "datapolitical/rtd-system-map",
   "tracking_note": "GitHub Issues remain the canonical work tracker. These linked findings supplement the imported open issues. New findings have not been written back to GitHub: the connected integration rejected issue writes with HTTP 403.",
@@ -139,6 +139,34 @@
       "path": "qa/.scratch/zoom16/crowding-final/report.json",
       "commit": "89ab041",
       "type": "data"
+    },
+    {
+      "id": "credit-before-open",
+      "label": "Map credit under the zoom row, two \"i\" icons, as it loads (light)",
+      "path": "qa/.scratch/zoom-224/credit-before-light-open.png",
+      "commit": "3a14dcf",
+      "type": "image"
+    },
+    {
+      "id": "credit-before-closed",
+      "label": "Map credit closed: four \"i\" icons, half off the screen (light)",
+      "path": "qa/.scratch/zoom-224/credit-before-light-closed.png",
+      "commit": "3a14dcf",
+      "type": "image"
+    },
+    {
+      "id": "credit-after-open",
+      "label": "Map credit above the zoom row, one \"i\", on the branch preview (light)",
+      "path": "qa/.scratch/zoom-224/credit-preview-light-open.png",
+      "commit": "e8f29da",
+      "type": "image"
+    },
+    {
+      "id": "credit-after-closed",
+      "label": "Map credit closed: one \"i\" above the zoom row, on the branch preview (dark)",
+      "path": "qa/.scratch/zoom-224/credit-preview-dark-closed.png",
+      "commit": "e8f29da",
+      "type": "image"
     }
   ],
   "findings": [
@@ -539,6 +567,28 @@
       "evidence": [],
       "verification": "Not yet verified. Sweep of rendered labels 12 to 16 by tenths (local build, uncommitted): flagged labels 12 to 6 at 19th and Curtis, 5 to 4 at Union Station, 3 to 2 at Colfax.",
       "fixed_commit": ""
+    },
+    {
+      "id": "RTD-020",
+      "title": "Map credit lies under the zoom row and its \"i\" shows four times",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · phone layout",
+      "issues": [
+        154
+      ],
+      "observation": "public/css/zoom.css styled every details and summary for the ? panel; MapLibre's credit is a details with a summary button, so its 24 px \"i\" grew to 44 px (four icons, half off the screen) and its lettering to 13 px, and the credit sat under the zoom row. The panel's rules now apply to the top pill only and the credit sits above the row.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
+      "done_when": "At phone size in both themes, the credit shows one \"i\", lies clear of the controls and on the screen, open and closed.",
+      "evidence": [
+        "credit-before-open",
+        "credit-before-closed",
+        "credit-after-open",
+        "credit-after-closed"
+      ],
+      "verification": "Build e8f29da: npm run check:zoom 88 ok, 0 failed, light and dark, including the credit check open and closed; the same measurement on the zoom-154-merge branch preview found nothing in either theme; the unit test catches the pinned build 3a14dcf (qa/recall/prototype-credit.json).",
+      "fixed_commit": "e8f29da564e2da452280a8451eadcfffc4d877c6"
     }
   ]
 }
