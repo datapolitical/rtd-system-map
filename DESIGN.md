@@ -5613,17 +5613,22 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   zoomable map reuses them. Other times and Live tiers stay in v2.x until
   #233 settles how they fit the zoomable map's drawings, since each drawing
   holds one time's frequency classes and route lists. The v2 plan (#129) is
-  rewritten from the zoom trial and the consistency proposal: groundwork in
-  main's build (#155, with #81 moved out of Parked), one lettering plan the
-  build writes and the page draws (#234), what carries between zooms
-  (#156), base-map names placed by our build (#235), drawings at every
-  whole zoom (#157), zooms 8.75 to 12 (#236), tiles (#237), then the page,
-  checks, review and close. Reason: since Classic left the site on
-  2026-11-21 the live map has no Live, search or other times, and a tap
-  gives a short card with no departures ("What people can do", items 2 to
-  5); most of these sit on top of the drawing rather than in it; and the
-  plan of 2026-11-18 no longer described the work the trial found. Chris:
-  yes to both.
+  rewritten from the zoom trial, the consistency proposal and Chris's
+  answers of 2026-11-26. In order: the other-times decision (#233); the
+  groundwork, one lettering plan the build writes and the page draws
+  (#234); base-map names placed by our build (#235); streets that only
+  split and sizes as zoom rules (#155, with #81 moved out of Parked); what
+  carries between zooms (#156); then hand fixes that hold across zooms
+  (#64), landmark tints (#243), our own ground (#241) and area and river
+  lettering (#242), which Chris put next after the lettering; then
+  drawings at every whole zoom (#157), zooms 8.75 to 12 (#236), tiles
+  (#237), the page, checks, review and close. The zoom-14 sheet's express
+  braid is fixed on today's map first (#240; Chris, 2026-11-27). Reason:
+  since Classic left the site on 2026-11-21 the live map has no Live,
+  search or other times, and a tap gives a short card with no departures
+  ("What people can do", items 2 to 5); most of these sit on top of the
+  drawing rather than in it; and the plan of 2026-11-18 no longer
+  described the work the trial found. Chris: yes to both.
 
 ## Sources
 
