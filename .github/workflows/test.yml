@@ -2,7 +2,8 @@
 # which are plain Node and need no browser, network data or build; and a
 # dry-run bundle of the Worker deployed by hand (the Live relay), so a broken
 # import fails here rather than at deploy. The data is built on our machine
-# and committed; Cloudflare Pages only checks and publishes it on each push.
+# and uploaded with npm run deploy (docs/upkeep.md); it is not in git, so
+# the few tests that read the built map skip here (test/pages.test.mjs).
 # Sheet-map health checks run in checks-nightly.yml against the live site.
 # Branch browser checks remain manual unless their disabled workflow is enabled.
 # And the recall score (npm run check:recall, qa/recall/README.md): the map

@@ -287,9 +287,9 @@ every hour   timer on our machine (refresh/watch.mjs)
    changed?  ──yes──> one phone alert; nothing is rebuilt
 
 when we choose   npm run build:data on our machine (download, checks, sheets,
-                 loading pictures) ─> look at it ─> commit public/data
-                   └─> push ─> Cloudflare Pages: npm run build checks the
-                                committed site is whole and current, publishes
+                 loading pictures) ─> look at it ─> npm run deploy
+                   └─> publish check, then wrangler uploads public/ to
+                       Cloudflare Pages (from main: the live site)
 ```
 
 - RTD changes its schedules three times a year (January, May, and late
@@ -297,15 +297,17 @@ when we choose   npm run build:data on our machine (download, checks, sheets,
   in between. Each new map is built here, its pictures checked, and anything
   the new data draws badly fixed before it is committed. The alert says what
   changed and is sent once per change.
-- The data is committed (`public/data/`, with the loading pictures in
-  `public/poster/` and `public/index.html`). Cloudflare's build
-  (`npm run build`, `scripts/publish-check.mjs`) downloads nothing. It fails,
-  and the live site stays as it is, when a file is missing or the committed
+- The data is built here and uploaded, not committed (`public/data/`, with the
+  loading pictures in `public/poster/`; `public/index.html` is committed).
+  `npm run deploy` runs the publish check (`npm run build`,
+  `scripts/publish-check.mjs`), which downloads nothing, and uploads
+  `public/` to Cloudflare Pages with wrangler; a merge publishes nothing. It
+  fails, and the live site stays as it is, when a file is missing or the built
   data was not made by the code going live: each build records a hash of the
   modules that made it (`scripts/lib/fingerprint.mjs`), the data build's in
   `meta.json` and the sheets' in `sheets.json`, and the loading pictures must
   show the current drawing. A change to the sheets or the page's drawing code
-  needs only `npm run build:sheets` (redraw from the committed data, new
+  needs only `npm run build:sheets` (redraw from the data on disk, new
   pictures), so a drawing fix doesn't bring in RTD's newer data with it.
 
 - ArcGIS reports change dates directly: the Experience and web map items have
@@ -3519,7 +3521,7 @@ and failure states have words.
 hourly check (refresh/watch.mjs) ── RTD changed? ──> phone alert
 
 build (npm run build:data,         Cloudflare Pages site
- on our machine, committed)        (npm run build only checks and publishes)
+ on our machine, uploaded)         (npm run deploy checks and uploads it)
 ───────────────────────            ─────────────────────────────
 RTD Experience item                /              static map app, service worker
  └─> web map ─> ArcGIS layers ─┐   /data/*        GeoJSON, frequency, lookups
@@ -3550,8 +3552,9 @@ RTD GTFS ──────────────────────┼�
   The page preloads the main module and starts the worker early.
 - `npm run build:data` discovers, fetches, checks, and writes the data and
   takes the loading pictures; `npm run build:sheets` redraws the sheets and
-  pictures from the data on disk; `npm run build` (what Cloudflare runs)
-  only checks the committed site and publishes it; `npm run
+  pictures from the data on disk; `npm run build`
+  checks the built site; `npm run deploy` checks it and uploads it to
+  Cloudflare Pages; `npm run
   dev` runs the site locally with `wrangler pages dev`, and `npm run
   dev:live` the relay beside it, which the site finds on its own.
 - Updates are built by hand when the hourly check alerts (see "Zero
@@ -5587,6 +5590,11 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   much sooner on slow links but drew the map 0.3 s later on typical 4G; it
   waits until real load times (Cloudflare Web Analytics) say how many
   visits are on slow connections. Chris agreed: land the font change alone.
+- 2026-11-27: The built map (`public/data/`, `public/poster/`) is no longer
+  committed; `npm run deploy` uploads `public/` to Cloudflare Pages from mini
+  after the publish check, and a merge publishes nothing. Reason: the built
+  files were most of what each pull request changed, and Cloudflare's build
+  only re-checked what mini had already built.
 
 ## Sources
 

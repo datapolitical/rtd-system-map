@@ -46,7 +46,8 @@ Read `CLAUDE.md` and skim `DESIGN.md` (the spec) before starting.
 ```bash
 git checkout -b qa/deepseek
 npm install
-npm run build        # checks the committed data in public/data (seconds)
+npm run build:data   # builds public/data (about six minutes; it is not in git)
+npm run build        # checks the built data in public/data (seconds)
 npm test             # the project's own tests; all should pass
 ```
 

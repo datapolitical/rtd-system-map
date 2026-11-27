@@ -1,9 +1,9 @@
-// What Cloudflare runs on every push (`npm run build`): it builds nothing, it
-// checks that the committed site is whole and current, and fails the deploy
+// What `npm run deploy` runs first (and `npm run build`): it builds nothing, it
+// checks that the built site on disk is whole and current, and fails the deploy
 // if not, so the live site stays as it was (DESIGN.md, "Zero maintenance",
 // Rule 2). The data is built on our own machine with `npm run build:data` and
-// committed; this only makes sure what is about to go live is what that build
-// made with the code going live beside it.
+// uploaded by `npm run deploy`, not committed; this only makes sure what is
+// about to go live is what that build made with the code going live beside it.
 //
 //   node scripts/publish-check.mjs
 import { readFile } from 'node:fs/promises';
@@ -23,7 +23,7 @@ const json = async (name) => {
   try {
     return JSON.parse(await readFile(path.join(DATA, name), 'utf8'));
   } catch (err) {
-    problems.push(`public/data/${name} is missing or unreadable (${err.code ?? err.message}): run \`npm run build:data\` and commit public/data`);
+    problems.push(`public/data/${name} is missing or unreadable (${err.code ?? err.message}): run \`npm run build:data\`, then \`npm run deploy\``);
     return null;
   }
 };
@@ -36,14 +36,14 @@ const drawn = {};
 for (const sheet of SHEETS) drawn[sheet.id] = await json(`sheet-${sheet.id}.geojson`);
 
 if (meta && meta.code !== (await dataCode())) {
-  problems.push('the data build\'s code (scripts/build-data.mjs and what it imports) changed since public/data was built: run `npm run build:data` and commit public/data');
+  problems.push('the data build\'s code (scripts/build-data.mjs and what it imports) changed since public/data was built: run `npm run build:data`, then `npm run deploy`');
 }
 if (sheets && sheets.code !== (await sheetsCode())) {
-  problems.push('the sheets\' code (scripts/sheets.mjs and what it imports) changed since they were drawn: run `npm run build:sheets` and commit public/data and public/poster');
+  problems.push('the sheets\' code (scripts/sheets.mjs and what it imports) changed since they were drawn: run `npm run build:sheets`, then `npm run deploy` (commit public/index.html if the build changed it)');
 }
 const opens = SHEETS.find((s) => s.opens);
 if (sheets && drawn[opens.id] && sheets.drawing !== (await drawingFingerprint(drawn[opens.id]))) {
-  problems.push('the page\'s drawing code (public/js/sheets/, color.js) changed since the sheets were drawn: run `npm run build:sheets` and commit public/data and public/poster');
+  problems.push('the page\'s drawing code (public/js/sheets/, color.js) changed since the sheets were drawn: run `npm run build:sheets`, then `npm run deploy` (commit public/index.html if the build changed it)');
 }
 
 // The drawing programs the page builds ahead (index.html's head) were recorded from this drawing
@@ -51,13 +51,13 @@ if (sheets && drawn[opens.id] && sheets.drawing !== (await drawingFingerprint(dr
 const programs = await json('programs.json');
 const maplibre = JSON.parse(await readFile(path.join(ROOT, 'node_modules', 'maplibre-gl', 'package.json'), 'utf8')).version;
 if (sheets && programs && (programs.drawing !== sheets.drawing || programs.maplibre !== maplibre)) {
-  problems.push('public/data/programs.json was recorded from another drawing or MapLibre: run `node scripts/poster-build.mjs` and commit public/data/programs.json');
+  problems.push('public/data/programs.json was recorded from another drawing or MapLibre: run `node scripts/poster-build.mjs`, then `npm run deploy`');
 }
 // The loading pictures were taken of this drawing; otherwise the page hides them.
 const html = await readFile(path.join(ROOT, 'public', 'index.html'), 'utf8');
 const poster = html.match(/<div id="poster"[^>]*\sdata-drawing="([^"]*)"/)?.[1];
 if (sheets && poster !== sheets.drawing) {
-  problems.push('the loading pictures were taken of another drawing: run `node scripts/poster-build.mjs` and commit public/index.html and public/poster');
+  problems.push('the loading pictures were taken of another drawing: run `node scripts/poster-build.mjs`, commit public/index.html (the pictures themselves are not committed), then `npm run deploy`');
 }
 
 // The ground is the site's own (scripts/basemap.mjs): there, with every property the style reads,
@@ -70,7 +70,7 @@ else {
     if (!pack.layers?.[layer] || missing.length) problems.push(`the style reads the ground's ${layer}${missing.length ? ` (${missing.join(', ')})` : ''}, which basemap/ left out: run \`npm run build:basemap\` and commit basemap/`);
   }
   const shows = html.match(/<div id="poster"[^>]*\sdata-ground="([^"]*)"/)?.[1];
-  if (shows !== pack.planet) problems.push(`the loading pictures show another ground (${shows || 'none'}, basemap/ is ${pack.planet}): run \`node scripts/poster-build.mjs\` and commit public/index.html and public/poster`);
+  if (shows !== pack.planet) problems.push(`the loading pictures show another ground (${shows || 'none'}, basemap/ is ${pack.planet}): run \`node scripts/poster-build.mjs\`, commit public/index.html (the pictures themselves are not committed), then \`npm run deploy\``);
 }
 // What Cloudflare Pages takes: 20,000 files a site on its free plan (developers.cloudflare.com/pages/platform/limits).
 const count = async (dir) => (await readdir(dir, { withFileTypes: true, recursive: true })).filter((d) => d.isFile()).length;
