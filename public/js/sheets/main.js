@@ -678,7 +678,8 @@ function tell(what) {
   // A plain card says what it is before its routes; a stop-group card leads with its letters.
   const said = note ? `<span>${detail(note)}</span>` : '';
   card.innerHTML = `<b id="card-title" role="heading" aria-level="2">${title}</b>${lead ? `<span>${esc(lead)}</span>` : ''}${groups.length ? '' : said}${rows}${list}${groups.length ? said : ''}<span class="hint">${hint}</span>`
-    + '<button type="button" class="close" aria-label="Close">\u00d7</button>';
+    + '<div class="departures" hidden></div><button type="button" class="close" aria-label="Close">\u00d7</button>';
+  showDepartures(what);
   card.classList.remove('list');
   card.hidden = false;
   say(cardSaid({ title: card.querySelector('#card-title').textContent, note, lead, routes }));
@@ -822,7 +823,7 @@ map.on('click', (e) => {
     setPick(p);
     return openCard(p);
   }
-  tell({ title: what.title, note: what.note, routes });
+  tell({ title: what.title, note: what.note, routes, ...leaves({ station, stop: station ? null : stop }) });
 });
 map.on('dragstart', () => {
   selectedAt = null;
@@ -834,14 +835,60 @@ map.on('dragstart', () => {
   } else close();
 });
 
+// --- Next departures (js/panel/departures.js; #13) ---------------------------------
+// The panel reads RTD's timetable and knows nothing of the sheets. This is the part that does:
+// which stop or station a card is for, and where on the card its departures go. Scheduled
+// times, redrawn each half minute while the card shows them, so a bus that has left drops off.
+// The panel's code and RTD's timetable load with the first stop's or station's card, not with the page.
+let departuresCode = null;
+let departures = null;
+const loadDepartures = async () => {
+  departuresCode ??= await import('../panel/departures.js');
+  departures ??= departuresCode.departureSource(new URL('../../data/departures/', import.meta.url));
+  return departuresCode;
+};
+// What a tapped place's card asks the timetable for: a station's platforms, or one stop.
+const leaves = ({ station, stop }) => (station?.id != null ? { station: station.id } : stop?.id != null ? { stops: [String(stop.id)] } : {});
+let departuresTimer = 0;
+const departureChip = (row) => {
+  const color = drawnRoutes?.rail?.includes(row.route) ? colorOf.get(row.route) : null;
+  const look = color ? ` class="chip rail" style="background:${esc(color)};color:${esc(inkOn(color))}"` : ' class="chip"';
+  return `<b${look}><span class="sr">${color ? '' : 'Route '}</span>${esc(row.name)}<span class="sr">${color ? ' Line' : ''}</span></b>`;
+};
+async function showDepartures(what) {
+  clearInterval(departuresTimer);
+  const box = card.querySelector('.departures');
+  if (!box || (what.station == null && !what.stops?.length)) return;
+  try {
+    const { upcoming, clockIn, departuresHtml, accessible } = await loadDepartures();
+    const { index, records } = await departures.stops({ stops: what.stops ?? [], station: what.station ?? null });
+    if (shown !== what || !box.isConnected) return;
+    // A stop's own line under its departures: its number, and whether a wheelchair can board there.
+    const about = what.stops?.length === 1 ? [`Stop ${what.stops[0]}`, accessible(records[0])].filter(Boolean).join(' \u00b7 ') : '';
+    const draw = () => {
+      const next = records.length ? upcoming(records, index, clockIn(new Date(), index.tz), { first: (route) => Boolean(drawnRoutes?.rail?.includes(route)) }) : null;
+      box.innerHTML = '<span class="head" role="heading" aria-level="3">Next departures, scheduled</span>'
+        + (next ? departuresHtml(next, { chip: departureChip }) : '<p class="none">RTD\u2019s timetable lists no trips here.</p>')
+        + (about ? `<p class="about">${detail(about)}</p>` : '');
+      box.hidden = false;
+    };
+    draw();
+    departuresTimer = setInterval(() => { if (shown === what && box.isConnected && !card.hidden) draw(); else clearInterval(departuresTimer); }, 30_000);
+  } catch {
+    if (shown !== what || !box.isConnected) return;
+    box.innerHTML = '<p class="none">Departure times aren\u2019t loading. Check your connection.</p>';
+    box.hidden = false;
+  }
+}
+
 // A station's or a stop's card, from a tap or from the list of what's in view.
 function placeCard({ station, lettered, stop }, { focus = false } = {}) {
   if (lettered) {
     tell({ title: esc(lettered.name), note: `Bus stop ${lettered.letter}${lettered.heading ? ` · ${lettered.heading}` : ''}`,
-      groups: groupList(`${lettered.letter} ${routeList(lettered.routes).join(' ')}`) });
+      groups: groupList(`${lettered.letter} ${routeList(lettered.routes).join(' ')}`), ...leaves({ stop: lettered }) });
   } else {
     const what = pickFrom({ station, stop });
-    tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')] });
+    tell({ title: what.title, note: what.note, routes: [...rails(what.rail ?? []), ...buses(what.bus ?? '')], ...leaves({ station, stop }) });
   }
   // Opened from the list, the card takes the focus its button had: the button is gone.
   if (focus) (card.querySelector('button:not(.close)') ?? card.querySelector('button.close')).focus();

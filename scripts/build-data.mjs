@@ -10,6 +10,7 @@ import { clock, csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, read
 import { RT_FEEDS, liveRoutes } from './lib/realtime.mjs';
 import { coreBounds } from './lib/core.mjs';
 import { directory } from './lib/directory.mjs';
+import { departureTables } from './lib/departures.mjs';
 import { labelPoints } from './lib/labels.mjs';
 import { busNames } from './lib/busnames.mjs';
 import { heading, stopLines, unservedStops } from './lib/stops.mjs';
@@ -824,6 +825,15 @@ async function main() {
   meta.code = await dataCode();
   await writeFile(path.join(next, 'meta.json'), JSON.stringify(meta, null, 2));
   await writeFile(path.join(next, 'directory.json'), JSON.stringify(index));
+  // Every stop's departures, in small files a stop's or a station's card reads (#13).
+  const tables = departureTables(gtfs.text, {
+    lineOf: (id) => groupOf.get(id) ?? null,
+    stations: geo.stations.map((f, i) => ({ id: f.properties.id, stops: (service.stations[i]?.platforms ?? []).map((p) => p.id) })),
+  });
+  await mkdir(path.join(next, 'departures'), { recursive: true });
+  await writeFile(path.join(next, 'departures', 'index.json'), JSON.stringify(tables.index));
+  await Promise.all(tables.files.map((file, k) => writeFile(path.join(next, 'departures', `${k}.json`), JSON.stringify(file))));
+  console.log(`  departures: ${tables.departures} at ${tables.stops} stops (${tables.ends} more where trips only end), in ${tables.files.length} files of about ${Math.round(tables.chars / tables.files.length / 1000)} KB; ${Object.keys(tables.index.stations).length} stations' platforms`);
   // The four sheets are drawn from the files just written (DESIGN.md, "Four sheets").
   await writeSheets(next);
   await rm(OUT, { recursive: true, force: true });

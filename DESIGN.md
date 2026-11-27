@@ -483,6 +483,11 @@ next one?" and "is anything wrong?" in either view, Live or not:
   - Rail within about a 20-minute walk is included.
   - "Near me" does the same for your location.
 
+Built on today's sheets (2026-11-27, #13): a stop's and a station's card
+show the next scheduled departures. Live predictions, alerts in panels and
+the vehicle panel are not built; the vehicle panel and alert marks on the
+map wait for Live on the zoomable map (#251).
+
 *Done when:* someone can answer "when's the next bus I can catch from here?"
 in under 20 seconds, and "what's the most frequent bus within a 5-minute walk
 of this address?" in under 30.
@@ -754,6 +759,37 @@ publishes:
 
 The page works out the tiers for any moment from the summary. In Live it
 recomputes every minute and fades a line to its new tier when it changes.
+
+### Departures: every stop's timetable, in small files
+
+The build writes every stop's departures from the feed's `stop_times.txt`
+to `data/departures/` (`scripts/lib/departures.mjs`; #13): one small file
+per group of stops and an index, so a card fetches a few kilobytes, not the
+timetable. A trip's last stop is not a departure, nor is a stop where it
+only sets down; a stop where trips only end is marked, and its card says
+"Trips end here". Each departure belongs to a pattern (the map's route, the
+name on the bus, where it is headed, and the service it runs on), and the
+index carries the feed's calendar and its exceptions and each rail station's
+platforms. The page works out "next" itself for today's real date
+(`public/js/panel/departures.js`): the services running today, and
+yesterday's that run past midnight, in the timetable's own time zone
+whatever the device is set to. So a holiday shows its own timetable, and
+nothing is rebuilt each day. Measured on the November 2026 feed: 791,758
+departures at 7,468 stops in 128 files, 2.8 MB in all and about 460 KB
+compressed, the largest 58 KB; `qa/departures.mjs data` recounts every
+stop from RTD's raw file by a second reading.
+
+A card shows the next two departures for each route and destination within
+three hours, soonest first, at most six rows, trains first at a station,
+as clock times ("9:41pm"): a count of minutes is kept for RTD's live
+predictions. It is headed "Next departures, scheduled" and redrawn each
+half minute, so a bus that has left drops off. Stops in RTD's stops layer
+that its timetable does not carry (64 in November 2026) say "RTD's
+timetable lists no trips here".
+
+The panel is its own code and reads nothing of the sheets; the sheets' page
+only says which stop or station a card is for (`leaves` and
+`showDepartures` in `public/js/sheets/main.js`).
 
 ### Station service: also from GTFS
 
@@ -5662,6 +5698,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ("What people can do", items 2 to 5); most of these sit on top of the
   drawing rather than in it; and the plan of 2026-11-18 no longer
   described the work the trial found. Chris: yes to both.
+- 2026-11-27: Next departures on today's sheets (#13), scheduled first.
+  The build publishes every stop's timetable in small files and the page
+  works out "next" for today's real calendar, so nothing is rebuilt daily
+  and a holiday shows its own timetable. Scheduled times are clock times;
+  minutes are kept for live predictions, which are not built: RTD's
+  TripUpdate feed reaches the page only through the Live relay, and Live
+  waits for the zoomable map (#251). Alerts in panels are not built
+  either: the relay asks RTD for alerts only while someone has Live on.
 
 ## Sources
 
