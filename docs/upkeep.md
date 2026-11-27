@@ -17,18 +17,44 @@ September) and edits its map or republishes its feed now and then between.
    shows what it would say.
 2. In a worktree from main, run `npm run build:data`. It downloads RTD's
    layers and GTFS, draws the five sheets and takes the loading pictures.
-3. Look at the result before committing: `npm test`, the route check
+3. Look at the result before deploying: `npm test`, the route check
    (`npm run check:accuracy`) against the last build's, and the sheets at
    phone size in both themes where the change is (new routes, moved stops, a
    new runboard's frequencies). Anything the new data draws badly is fixed as
    in refining.md before it goes live.
-4. Commit `public/data`, `public/poster`, `public/index.html`, `public/icons`,
-   `public/manifest.webmanifest` and `public/og.png` together, push a branch,
-   check its preview, and merge.
-5. Cloudflare publishes. Its build (`npm run build`) downloads nothing; it
-   runs `scripts/publish-check.mjs`, which refuses to publish when a file is
-   missing or the committed data was not made by the code going live. The
-   live site then stays as it was.
+4. Commit `public/index.html`, `public/icons`, `public/manifest.webmanifest`
+   and `public/og.png` (the build rewrites them). `public/data` and
+   `public/poster` are not committed. Push a branch, run `npm run deploy`
+   from it, check the preview at `<branch>.rtd-system-map.pages.dev`, and
+   merge.
+5. A merge does not publish. From `main`, with the merged commit checked out
+   and the data built from it, run `npm run deploy`: that publishes the live
+   site.
+
+## Deploying
+
+Cloudflare builds nothing. `npm run deploy` (`scripts/deploy.mjs`) runs the
+publish check (`scripts/publish-check.mjs`) against the build on disk and
+refuses to upload when it fails, or when the worktree has uncommitted changes
+(`--allow-dirty` overrides that). It writes `public/deploy-manifest.json`
+(commit, branch, dirty or not, when the data was built) and runs
+`wrangler pages deploy public` for the project `rtd-system-map`, with the
+current branch name and commit. A branch other than `main` becomes a preview
+at `<branch>.rtd-system-map.pages.dev`; `main` becomes the live site. Open
+`/deploy-manifest.json` on the site to see which commit it is.
+
+Wrangler reads its credentials from the environment: `CLOUDFLARE_API_TOKEN`
+is the contents of `~/.config/cloudflare/mini-sites.token` in the account that
+runs the build on mini, and `CLOUDFLARE_ACCOUNT_ID` is the Cloudflare account's
+ID. Neither is kept in the repository.
+
+Cloudflare's Git integration no longer builds previews. Set it to stop
+building production too when this change is merged.
+
+A fresh checkout has no `public/data` or `public/poster`, so run
+`npm run build:data` (about six minutes) before `npm run deploy`, `npm run dev`
+or the tests that read the built map; those tests skip when it is missing.
+The smooth-zoom trial's build is never committed or deployed from `main`.
 
 ## When the basemap should be newer
 
@@ -46,9 +72,10 @@ left out.
 ## When the drawing code changes
 
 `npm run build:sheets` redraws the sheets, pictures and icons from the
-committed data, so a drawing fix does not bring in RTD's newer data with it.
-Commit what it changes with the code. `node scripts/publish-check.mjs` run
-locally gives the same answer Cloudflare's build will.
+data on disk, so a drawing fix does not bring in RTD's newer data with it.
+Commit what it changes outside `public/data` and `public/poster` with the
+code. `node scripts/publish-check.mjs` run locally gives the same answer
+`npm run deploy` will.
 
 ## What watches the live site
 
@@ -67,10 +94,9 @@ locally gives the same answer Cloudflare's build will.
   `public/vendor` (the map library and fonts) is made by `scripts/vendor.mjs`
   and not committed. `build:sheets` and `build:data` now run it first; a hand
   run of a single script may still need `node scripts/vendor.mjs`.
-- A branch preview's state is a GitHub check run named "Cloudflare Pages",
-  not a commit status: read it with
-  `gh api repos/OWNER/REPO/commits/SHA/check-runs`. Confirm a preview carries
-  the new build by comparing its `/data/sheets.json` with the committed one.
+- A branch preview is made by `npm run deploy`, not by Cloudflare, so no
+  check run appears on the commit. Confirm a preview carries the build by
+  reading its `/deploy-manifest.json`: the commit must be the branch's head.
 - An icon cropped from the map looked the same at two zooms: the map draws in
   steps, so a fractional zoom shows the same sheet. `scripts/icons.mjs` takes
   a wider square at the same zoom and shrinks it instead.

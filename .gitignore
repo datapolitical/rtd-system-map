@@ -33,3 +33,11 @@ qa/recall/fixtures/
 qa/recall/out/
 # Captures and scripts from the frequency work (not kept).
 .captures/
+# Built on our machine by npm run build:data / build:sheets and uploaded with
+# npm run deploy; never committed (docs/upkeep.md).
+public/data/
+public/poster/
+# Written by npm run deploy (scripts/deploy.mjs).
+public/deploy-manifest.json
+# The zoom trial is never committed.
+public/zoom/
