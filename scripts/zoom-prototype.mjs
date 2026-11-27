@@ -37,7 +37,9 @@ export function thinned(f, px = THIN_PX) {
 // "Readable geometry, on the street graph"). Every drawing below it uses the merged streets, so a
 // road keeps one shape through the band: drawn as two carriageways from 13, a freeway's express
 // lanes were one line at 12 and a braid of ramps at 14.
-export const CARRIAGEWAYS_FROM = 16;
+// TRIAL_CARRIAGEWAYS_FROM draws a variant for a comparison (17: one line at every zoom of the
+// trial), e.g. `TRIAL_CARRIAGEWAYS_FROM=17 node scripts/zoom-prototype.mjs --bus <copy of data>`.
+export const CARRIAGEWAYS_FROM = Number(process.env.TRIAL_CARRIAGEWAYS_FROM) || 16;
 
 // The production size tables stay untouched after each synchronous experiment. This adapter
 // is intentionally local to the trial; #155 replaces sheet lookups in the production build.

@@ -257,7 +257,7 @@ try {
         const hits = await under(boxes.map((b) => probes(b.box)));
         const onFixed = boxes.map((b, i) => ({ list: b.list, on: hits[i].fixed })).filter((x) => x.on.length);
         const onAfter = boxes.map((b, i) => ({ list: b.list, on: hits[i].after })).filter((x) => x.on.length);
-        const bare = boxes.filter((b, i) => b.list.kind === 'bus-list' && !hits[i].room).map((b) => b.list);
+        const noRoom = boxes.filter((b, i) => b.list.kind === 'bus-list' && !hits[i].room).map((b) => b.list);
         // The control: on the rail's own line the map must answer rail.
         const railAt = await railPoint(RAIL_DRAWINGS.find((r) => r.set === seen.railSet)?.ref, place, zoom);
         const railSeen = railAt ? (await under([{ pts: [railAt], half: 1 }]))[0].fixed.some((w) => w.startsWith('trial-rail')) : null;
@@ -278,7 +278,7 @@ try {
           missing: got.missing.map((p) => ({ label: words(plan[p.i]), kind: plan[p.i].kind, at: p.at.map(Math.round) })), late,
           extra: got.extra.map((q) => ({ label: q.label, layer: q.layer, at: q.at.map(Math.round) })),
           onLists: onLists.map(([a, b]) => [words(a), words(b)]), onFixed: onFixed.map((x) => ({ label: words(x.list), kind: x.list.kind, on: x.on })),
-          onAfter: onAfter.map((x) => ({ label: words(x.list), kind: x.list.kind, on: x.on })), bare: bare.map(words),
+          onAfter: onAfter.map((x) => ({ label: words(x.list), kind: x.list.kind, on: x.on })), bare: noRoom.map(words),
           faint: faint.map((x) => ({ label: words(x.list), kind: x.list.kind, share: +x.share.toFixed(3) })), leastInk: least === null ? null : +least.toFixed(3),
           boxes: whole.length, mostInk: most === null ? null : +most.toFixed(3), railSeen };
         report.push(row);
