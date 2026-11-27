@@ -5582,6 +5582,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   internals renamed and no check, the step waited the whole 8 s cap before
   going; test/maplibre-internals.test.mjs now fails when an update renames
   them. Chris: "Do the second one" (measure it before deciding).
+- 2026-11-26: MapLibre 6.15.0 -> 6.19.0. The version stays pinned exactly, so
+  a rebuild never changes it on its own; it moves only by a change like this
+  one, checked before and after. Reason: it had not moved since the map was
+  built, four releases behind, and 6.16 fixes two iPhone faults that hit the
+  map from the Home Screen (it stopped loading after iOS shut down its
+  workers; it shrank to one pixel on return from the background). Checked: on
+  mini 18 views and 7 steps identical to 6.15 to the pixel; on the Mac in
+  WebKit (Safari 26's engine) at iPhone size, 20 views in light and dark
+  identical, opening and steps as fast, no new errors. Chris: "Update, with
+  the Mac check".
 - 2026-11-27: The Overpass font is swap-display, not block. Reason: on
   Chris's iPhone at about 0.65 Mbit/s (the page's ?timing readout), the font
   came in at 8.3 s with everything else, and the block-display "Loading…"
