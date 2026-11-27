@@ -48,7 +48,7 @@ loop ran against the E Line and its stop ring sat on it.
    one-place fixes file (#64).
 
 6. See what else moved. Rebuild every sheet (`npm run build:sheets`),
-   list every feature that changed against the committed sheets, and look at
+   list every feature that changed against the live site's sheets, and look at
    each place. A rule written for one place reaches others: #97's moved two
    other loops a few pixels (Alameda, and the 48 at 48th & Brighton). Each
    one is either better, no worse, or the fix is not done.

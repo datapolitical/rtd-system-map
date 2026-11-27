@@ -2,6 +2,58 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- The map's drawing programs, built in a worker while the page downloads. Building them is the
+     graphics chip's work, and on a phone that had never opened the map it blocked the page about
+     600 ms when MapLibre did it at its first draw. The programs are the map's own, recorded from
+     it when the site is built (scripts/poster.mjs, data/programs.json); if they ever differ from
+     what MapLibre asks for, MapLibre builds its own as before (DESIGN.md, 2026-11-26). The worker
+     is made from this text, not a file of its own, so it starts without a round trip. -->
+<script>
+  if (typeof OffscreenCanvas === 'function') {
+    const warm = async (site) => {
+      const at = () => performance.timeOrigin + performance.now();
+      const start = at();
+      let built = 0;
+      try {
+        const { programs } = await (await fetch(`${site}/data/programs.json`)).json();
+        const gl = new OffscreenCanvas(1, 1).getContext('webgl2');
+        // In the background (KHR_parallel_shader_compile) and never waited on: waiting for each in
+        // turn kept the phone's graphics process busy, and the map's first GL call waited for all
+        // of it (iPhone 17 Pro in Device Farm, 2026-11-26).
+        const parallel = gl?.getExtension('KHR_parallel_shader_compile');
+        if (gl && parallel) {
+          const made = programs.map(({ vertex, fragment }) => {
+            const p = gl.createProgram();
+            for (const [type, text] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
+              const s = gl.createShader(type);
+              gl.shaderSource(s, text);
+              gl.compileShader(s);
+              gl.attachShader(p, s);
+            }
+            gl.linkProgram(p);
+            return p;
+          });
+          // Asked only whether each is done, which doesn't wait; the link status once all are.
+          await new Promise((done) => {
+            const poll = () => (made.every((p) => gl.getProgramParameter(p, parallel.COMPLETION_STATUS_KHR)) ? done() : setTimeout(poll, 25));
+            poll();
+          });
+          built = made.filter((p) => gl.getProgramParameter(p, gl.LINK_STATUS)).length;
+          gl.getExtension('WEBGL_lose_context')?.loseContext();
+        }
+      } catch {}
+      postMessage({ built, start, end: at() });
+    };
+    try {
+      const worker = new Worker(URL.createObjectURL(new Blob([`(${warm})(${JSON.stringify(location.origin)})`], { type: 'text/javascript' })));
+      worker.onmessage = ({ data }) => {
+        const ms = (t) => Math.round(t - performance.timeOrigin);
+        window.warmed = `${data.built} programs, ${ms(data.start)}–${ms(data.end)}`;
+        worker.terminate();
+      };
+    } catch {}
+  }
+</script>
 <!-- The opening view's glyphs are fetched here and handed to the map (main.js, "early"), not
      preloaded: on an iPhone Safari appeared to fetch the preloads again when the map asked, and
      the opening view waited for them more than for anything else (DESIGN.md, 2026-11-25). -->
@@ -70,12 +122,16 @@
 <link rel="modulepreload" href="/js/sheets/address.js">
 <link rel="modulepreload" href="/js/sheets/say.js">
 <link rel="modulepreload" href="/js/sheets/view.js">
+<!-- Named by style.js and pick.js, so without these they waited for those files to arrive first. -->
+<link rel="modulepreload" href="/js/color.js">
+<link rel="modulepreload" href="/js/often.js">
 <link rel="preload" href="/data/meta.json" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="/data/sheets.json" as="fetch" crossorigin="anonymous">
-<!-- The font early too: the loading line is set in it, and a block-display font shows nothing until it arrives. -->
+<!-- The font early too: the loading line is set in it. It swaps in when it arrives; until then the
+     line is in the phone's own font, not hidden (block display hid it for 8 s on a slow link). -->
 <link rel="preload" href="/vendor/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-  @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: block; }
+  @font-face { font-family: Overpass; src: url(/vendor/overpass-latin.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
   /* --note is the card's and the credit's quieter text, and --rim a route button's ring: AA on the card and the ground in both themes (#14). */
   :root { color-scheme: light; --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; --note: #656a74; --rim: #8b8f98; }
   :root[data-theme="dark"] { color-scheme: dark; --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; --note: #8592a6; --rim: #6c7890; }
@@ -199,7 +255,7 @@
 <button id="key" type="button" class="off" aria-hidden="true" tabindex="-1"></button>
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
-<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="99cadcee4dc932b37835f0f5e52e5a60f88be14eb2194f3f15eb9c06565426b2" data-ground="20261122_124456_pt" data-early="{&quot;ground&quot;:10,&quot;sheet-1&quot;:9}">
+<div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="203e4506498fa9042c3a60fb7b0a19c9567026d3db7d7a56b5d3a2e7252fa9f9" data-ground="20261122_124456_pt" data-early="{&quot;ground&quot;:10,&quot;sheet-1&quot;:9}">
   <picture>
     <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
     <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">

@@ -17,6 +17,9 @@ affiliated with RTD.
 
 ## Development
 
+To report a problem or send a change, start with
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 The front page is five sheets, each drawn for one scale. Live vehicles and the
 earlier map's other features are planned for the smooth-zoom replacement. The
 earlier Classic application is preserved on the
@@ -38,8 +41,9 @@ You need Node 22 and Cloudflare's Wrangler CLI (`npm install -g wrangler`).
 
 ```sh
 npm install        # also copies MapLibre and the font into public/vendor/
-npm run build:data # downloads RTD's public data into public/data/ (committed)
-npm run build      # what Cloudflare runs: checks the committed site, builds nothing
+npm run build:data # downloads RTD's public data into public/data/ (built here, not in git)
+npm run build      # checks the built site is whole and current (the publish check)
+npm run deploy     # uploads public/ to Cloudflare Pages: a preview from a branch, the live site from main
 npm run dev        # serves the site at http://127.0.0.1:8788
 npm run dev:live   # the Live relay, on 8789; the site finds it on its own
 npm test           # unit tests, plain Node, no browser
@@ -62,8 +66,9 @@ network is written into the code; the build derives it from RTD's data.
 ### Layout
 
 - `public/`: the static site (plain ES modules in `js/`, no framework).
-  `public/data/` is built with `npm run build:data` and committed;
-  `public/vendor/` is generated and not committed.
+  `public/data/` and `public/poster/` are built with `npm run build:data` and
+  deployed with `npm run deploy`; they are not committed, and neither is
+  `public/vendor/`. A fresh checkout has none of them until it is built.
 - `scripts/`: the build, which fetches, checks and writes the data.
 - `live/`: the Live relay, a Cloudflare Durable Object that polls RTD's
   realtime feeds and pushes changes to every open page.

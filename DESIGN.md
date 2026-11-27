@@ -287,9 +287,9 @@ every hour   timer on our machine (refresh/watch.mjs)
    changed?  ──yes──> one phone alert; nothing is rebuilt
 
 when we choose   npm run build:data on our machine (download, checks, sheets,
-                 loading pictures) ─> look at it ─> commit public/data
-                   └─> push ─> Cloudflare Pages: npm run build checks the
-                                committed site is whole and current, publishes
+                 loading pictures) ─> look at it ─> npm run deploy
+                   └─> publish check, then wrangler uploads public/ to
+                       Cloudflare Pages (from main: the live site)
 ```
 
 - RTD changes its schedules three times a year (January, May, and late
@@ -297,15 +297,17 @@ when we choose   npm run build:data on our machine (download, checks, sheets,
   in between. Each new map is built here, its pictures checked, and anything
   the new data draws badly fixed before it is committed. The alert says what
   changed and is sent once per change.
-- The data is committed (`public/data/`, with the loading pictures in
-  `public/poster/` and `public/index.html`). Cloudflare's build
-  (`npm run build`, `scripts/publish-check.mjs`) downloads nothing. It fails,
-  and the live site stays as it is, when a file is missing or the committed
+- The data is built here and uploaded, not committed (`public/data/`, with the
+  loading pictures in `public/poster/`; `public/index.html` is committed).
+  `npm run deploy` runs the publish check (`npm run build`,
+  `scripts/publish-check.mjs`), which downloads nothing, and uploads
+  `public/` to Cloudflare Pages with wrangler; a merge publishes nothing. It
+  fails, and the live site stays as it is, when a file is missing or the built
   data was not made by the code going live: each build records a hash of the
   modules that made it (`scripts/lib/fingerprint.mjs`), the data build's in
   `meta.json` and the sheets' in `sheets.json`, and the loading pictures must
   show the current drawing. A change to the sheets or the page's drawing code
-  needs only `npm run build:sheets` (redraw from the committed data, new
+  needs only `npm run build:sheets` (redraw from the data on disk, new
   pictures), so a drawing fix doesn't bring in RTD's newer data with it.
 
 - ArcGIS reports change dates directly: the Experience and web map items have
@@ -2630,9 +2632,14 @@ How it is built:
 - **Lines change place gently.** Where a line joins or leaves a pack, the
   others slide to their new places over about 26 pixels each side, so the
   lines beside one that ends do not jog at its last station.
-- **Made for continuous zoom later.** Each sheet's layers show for a band of
-  zooms around its own, so drawing between two sheets is a later step that
-  changes the page, not the build.
+- **Continuous zoom changes the build as well as the page.** Each sheet's
+  layers show for a band of zooms around its own. The zoom trial (#154)
+  showed that drawing between sheets is not a page step alone. The build
+  sets rail lines side by side at one zoom's pixel scale, so the zoomable
+  map draws rail once for every two zooms and the page sets the space
+  between lines. Each drawing places its lettering fresh, so the build plans
+  lettering across zooms. The plan is #129. (Corrected 2026-11-27; until
+  then this said the change was the page's alone.)
 
 ## Interface
 
@@ -3189,6 +3196,8 @@ are deferred, not ruled out. See "Open questions".
     values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
   - MapLibre's stylesheet doesn't hold up the first paint: the page uses
     none of its controls, and the picture covers the map until it is drawn.
+  - The Overpass font swaps in when it arrives; until then "Loading…" is in
+    the phone's own font, not hidden.
   - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are tiles
     of their own, `routes-N`, whose layers show from the first pick, or at the opening when the
     address picks a bus route (#193). They were about 40% of every sheet's bytes.
@@ -3528,7 +3537,7 @@ and failure states have words.
 hourly check (refresh/watch.mjs) ── RTD changed? ──> phone alert
 
 build (npm run build:data,         Cloudflare Pages site
- on our machine, committed)        (npm run build only checks and publishes)
+ on our machine, uploaded)         (npm run deploy checks and uploads it)
 ───────────────────────            ─────────────────────────────
 RTD Experience item                /              static map app, service worker
  └─> web map ─> ArcGIS layers ─┐   /data/*        GeoJSON, frequency, lookups
@@ -3559,8 +3568,9 @@ RTD GTFS ──────────────────────┼�
   The page preloads the main module and starts the worker early.
 - `npm run build:data` discovers, fetches, checks, and writes the data and
   takes the loading pictures; `npm run build:sheets` redraws the sheets and
-  pictures from the data on disk; `npm run build` (what Cloudflare runs)
-  only checks the committed site and publishes it; `npm run
+  pictures from the data on disk; `npm run build`
+  checks the built site; `npm run deploy` checks it and uploads it to
+  Cloudflare Pages; `npm run
   dev` runs the site locally with `wrangler pages dev`, and `npm run
   dev:live` the relay beside it, which the site finds on its own.
 - Updates are built by hand when the hourly check alerts (see "Zero
@@ -3858,22 +3868,29 @@ and Chris has given concise release approval. Routine QA belongs to the agent;
 release approval does not ask the user to repeat that test matrix. The page address
 is its share link; a custom domain is not a launch requirement. V1 to
 V3 above are the names of the design stages that led there, not releases.
-What comes after launch is in four milestones, in this order (decided
-2026-11-13; v2 and v2.x redrawn 2026-11-18):
+What comes after launch is in these milestones, in this order (decided
+2026-11-13; v2 and v2.x redrawn 2026-11-18; v1.3 added and v2 replanned
+2026-11-27):
 
 1. **v1.1: Sheets polish.** Faults on the sheets and in the bus data they
-   draw from.
-2. **v2: One zoomable map.** The sheets' drawing at every zoom, one map
-   that zooms smoothly. The milestone holds only the steps to it, in
+   draw from. Released 2026-11-25.
+2. **v1.2: Fixes from the weekly round.** Fixes Chris picks in the weekly
+   map round, on today's sheets.
+3. **v1.3: Live, panels and search.** On today's sheets, built so the
+   zoomable map reuses them: the route panel and route tracing, Live, stop
+   and station panels with next departures and alerts, and search.
+4. **v2: One zoomable map.** The sheets' drawing at every zoom from the
+   whole district to 16, one map that zooms smoothly, with the build
+   deciding every label. The milestone holds only the steps to it, in
    order; the plan is #129. Classic is preserved on
    `classic-archive`; its historical issues carry the `classic` label. Work on
    the isolated smooth-zoom branch proceeds under regression and current-sheet
    parity checks; blanket manual launch review is not an engineering gate.
-3. **v2.x: Classic features, other times and Live.** On the zoomable map:
-   the classic map's features carried over (edge letters, relief, route
-   panel, route tracing, Live), then Saturday, Sunday and evening in the
-   Key, Live tiers, alerts, departures and vehicles.
-4. **Later.** Ideas with no date.
+5. **v2.x: Other times, Live tiers, edge letters and relief.** On the
+   zoomable map: edge letters and relief, then Saturday, Sunday and evening
+   in the Key, and Live tiers, built on how other times fit the drawings
+   (#233).
+6. **Later.** Ideas with no date.
 
 A fifth milestone, **Parked: recheck on the zoomable map**, is not a
 release and not planned work. It holds faults and leftovers written against
@@ -5553,6 +5570,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   connection for the ground, and every sheet's whole file was downloaded
   in the background (sheet 4's 4.85 MB). Chris: "Don't we also want to
   serve the base map ourselves?" and "Yes, let's do that."
+- 2026-11-25: The map starts with the opening sheet's layers only and adds
+  the other sheets' layers once it is first ready, and the opening sets its
+  sheet without a move. Reason: the timing readout's map-worker rows on
+  Chris's iPhone showed each worker reading the whole style, two-thirds of
+  it for sheets not in view (37 to 158 ms a worker), and the opening's
+  380 ms move to the zoom the map was already at kept MapLibre from calling
+  the map ready until it ended (a reload ready at 785 ms, drawn by 664).
+  The drawing is unchanged to the pixel at 18 views in both themes, and a
+  step through every sheet gives the same layers in the same order.
+  Chris said go.
 - 2026-11-25: Sheets: a tap during a step's wait adds a step (#210). Each
   tap on + or − counts from the sheet the map is going to, not the one
   shown, clamped at the first and last sheets; − during a wait for + ends
@@ -5565,6 +5592,76 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   touch before it (a mouse, a key, a screen reader) steps as before.
   Reason: on Chris's iPhone quick taps were lost; Safari makes no click of
   a tap within about 300 ms of the last one.
+- 2026-11-26: The page head builds the map's drawing programs in a worker
+  (OffscreenCanvas, KHR_parallel_shader_compile) while the map downloads,
+  from the programs recorded from the map when the pictures are taken
+  (public/data/programs.json, kept in the offline copy; the publish check fails if they are from
+  another drawing or MapLibre). The head also asks at once for color.js and
+  often.js. Reason: on iPhone 17 Pros in AWS Device Farm that had never
+  opened the map, MapLibre building its ten programs at its first draw
+  blocked the page about 600 ms (Chris's own phone keeps them, so his runs
+  never showed it); with the worker, the time from the code arriving to a
+  live map fell from 864 and 941 ms to 586 to 655 ms in four runs, and
+  reloads are unchanged. Waiting on each program in the worker held up the
+  map's own first GL call and saved nothing, so the worker never waits on
+  them. Chris: find "what is causing it to be slower than it needs to be".
+- 2026-11-26: Steps keep making the other sheets' tiles ahead (main.js warm(),
+  which reaches into MapLibre's tile managers), and now go at once if a
+  MapLibre update takes away what it uses (canWarm). Reason: asked whether it
+  is worth what it costs a future maintainer, Chris had it measured. In 24
+  first visits on mini (headless, emulated 9 Mbps phone connection,
+  alternating), a step 3 s after the map appeared showed 0 blank frames and
+  finished in 0.79 s with it, against 11 to 15 of about 20 frames blank and
+  1.02 s without. A tap the moment the map appears waits about 1 s and
+  finishes later (1.75 s against 0.98 s), but with no blank frames. With the
+  internals renamed and no check, the step waited the whole 8 s cap before
+  going; test/maplibre-internals.test.mjs now fails when an update renames
+  them. Chris: "Do the second one" (measure it before deciding).
+- 2026-11-26: MapLibre 6.15.0 -> 6.19.0. The version stays pinned exactly, so
+  a rebuild never changes it on its own; it moves only by a change like this
+  one, checked before and after. Reason: it had not moved since the map was
+  built, four releases behind, and 6.16 fixes two iPhone faults that hit the
+  map from the Home Screen (it stopped loading after iOS shut down its
+  workers; it shrank to one pixel on return from the background). Checked: on
+  mini 18 views and 7 steps identical to 6.15 to the pixel; on the Mac in
+  WebKit (Safari 26's engine) at iPhone size, 20 views in light and dark
+  identical, opening and steps as fast, no new errors. Chris: "Update, with
+  the Mac check".
+- 2026-11-27: The Overpass font is swap-display, not block. Reason: on
+  Chris's iPhone at about 0.65 Mbit/s (the page's ?timing readout), the font
+  came in at 8.3 s with everything else, and the block-display "Loading…"
+  line kept the screen empty until 8.4 s. Holding the map's downloads until
+  the loading picture is in (#222, branch first-paint) showed the picture
+  much sooner on slow links but drew the map 0.3 s later on typical 4G; it
+  waits until real load times (Cloudflare Web Analytics) say how many
+  visits are on slow connections. Chris agreed: land the font change alone.
+- 2026-11-27: The built map (`public/data/`, `public/poster/`) is no longer
+  committed; `npm run deploy` uploads `public/` to Cloudflare Pages from mini
+  after the publish check, and a merge publishes nothing. Reason: the built
+  files were most of what each pull request changed, and Cloudflare's build
+  only re-checked what mini had already built.
+- 2026-11-27: Live, the route panel and route tracing, stop and station
+  panels with next departures and alerts, and search come to today's sheets
+  first, in a new milestone, v1.3 (#162, #13, #22, #238), built so the
+  zoomable map reuses them. Other times and Live tiers stay in v2.x until
+  #233 settles how they fit the zoomable map's drawings, since each drawing
+  holds one time's frequency classes and route lists. The v2 plan (#129) is
+  rewritten from the zoom trial, the consistency proposal and Chris's
+  answers of 2026-11-26. In order: the other-times decision (#233); the
+  groundwork, one lettering plan the build writes and the page draws
+  (#234); base-map names placed by our build (#235); streets that only
+  split and sizes as zoom rules (#155, with #81 moved out of Parked); what
+  carries between zooms (#156); then hand fixes that hold across zooms
+  (#64), landmark tints (#243), our own ground (#241) and area and river
+  lettering (#242), which Chris put next after the lettering; then
+  drawings at every whole zoom (#157), zooms 8.75 to 12 (#236), tiles
+  (#237), the page, checks, review and close. The zoom-14 sheet's express
+  braid is fixed on today's map first (#240; Chris, 2026-11-27). Reason:
+  since Classic left the site on 2026-11-21 the live map has no Live,
+  search or other times, and a tap gives a short card with no departures
+  ("What people can do", items 2 to 5); most of these sit on top of the
+  drawing rather than in it; and the plan of 2026-11-18 no longer
+  described the work the trial found. Chris: yes to both.
 
 ## Sources
 

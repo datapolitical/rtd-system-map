@@ -900,6 +900,61 @@ function crossing(p, u, ring) {
   return best < Infinity ? [p[0] + u[0] * best, p[1] + u[1] * best] : null;
 }
 
+// Items in square cells of `size` px, found by what is within `reach` of a point. `some` asks
+// `test` of every item in the cells that reach touches, so it answers as a scan of all items would.
+function grid(items, at, size) {
+  const cells = new Map();
+  const add = (item) => {
+    const [x, y] = at(item), k = `${Math.floor(x / size)},${Math.floor(y / size)}`;
+    if (!cells.has(k)) cells.set(k, []);
+    cells.get(k).push(item);
+  };
+  for (const item of items) add(item);
+  const some = (p, reach, test) => {
+    for (let x = Math.floor((p[0] - reach) / size); x <= Math.floor((p[0] + reach) / size); x++) {
+      for (let y = Math.floor((p[1] - reach) / size); y <= Math.floor((p[1] + reach) / size); y++) {
+        const here = cells.get(`${x},${y}`);
+        if (here && here.some(test)) return true;
+      }
+    }
+    return false;
+  };
+  return { add, some };
+}
+
+// Every segment of every line's paths, filed under each cell a point within `reach` of it can be
+// in. `some(p, line, test)` asks `test(a, b)` of the segments of the other lines filed at p's cell.
+function segmentGrid(lines, within) {
+  // A pixel more than asked, so rounding where the pieces meet can't leave a near segment out.
+  const reach = within + 1;
+  const size = Math.max(4 * reach, 1);
+  const cells = new Map();
+  for (const line of lines) {
+    for (const path of line.paths) {
+      for (let i = 1; i < path.length; i++) {
+        const a = path[i - 1], b = path[i];
+        const seen = new Set();
+        // A long segment is filed in short pieces, so it lands only in cells along it.
+        const pieces = Math.max(1, Math.ceil(dist(a, b) / size));
+        for (let k = 0; k < pieces; k++) {
+          const p = lerp(a, b, k / pieces), q = lerp(a, b, (k + 1) / pieces);
+          for (let x = Math.floor((Math.min(p[0], q[0]) - reach) / size); x <= Math.floor((Math.max(p[0], q[0]) + reach) / size); x++) {
+            for (let y = Math.floor((Math.min(p[1], q[1]) - reach) / size); y <= Math.floor((Math.max(p[1], q[1]) + reach) / size); y++) {
+              const key = `${x},${y}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              if (!cells.has(key)) cells.set(key, []);
+              cells.get(key).push({ line, a, b });
+            }
+          }
+        }
+      }
+    }
+  }
+  const some = (p, line, test) => (cells.get(`${Math.floor(p[0] / size)},${Math.floor(p[1] / size)}`) ?? []).some((s) => s.line !== line && test(s.a, s.b));
+  return { some };
+}
+
 /**
  * Where each line's letter goes: on the line, where no other line is beside
  * it, clear of station marks and other letters, near each end and then every
@@ -912,21 +967,37 @@ export function letters(lines, marks, sheet) {
   const clear = SIZES.letterClear[sheet.id];
   const every = SIZES.letterEvery[sheet.id];
   const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
+  const aloneBy = SIZES.alone * pitch;
+  // Each test below asks what lies within a few pixels of a point, at every 2 px of every line.
+  // Grids of what is near (the same distances, measured the same way) keep each test to its
+  // neighbourhood, so a sheet drawn larger costs in proportion to its lines, not their square.
+  const stopGrid = grid(stops, (s) => s, 1.4 * clear);
+  const letterGrid = grid([], (s) => s.at, 2 * clear);
+  const segments = segmentGrid(lines, aloneBy);
   for (const line of lines) {
-    const others = lines.filter((l) => l !== line).flatMap((l) => l.paths);
     for (const path of line.paths) {
       const pts = resample(path, 2);
       const mine = [];
       const near = Math.round(clear / 4);
+      // Whether another line runs within `aloneBy` of a point (nearest(other, p).d < aloneBy).
+      const crowded = new Map();
+      const crowdedAt = (j) => {
+        if (!crowded.has(j)) crowded.set(j, segments.some(pts[j], line, (a, b) => toSegment(pts[j], a, b).d < aloneBy));
+        return crowded.get(j);
+      };
       const fits = (i, alone = true, markClear = 1.4 * clear) => {
         const p = pts[i];
         return Math.min(i, pts.length - 1 - i) * 2 >= 2 * clear
-          && !stops.some((s) => dist(s, p) < markClear)
-          && ![...placed, ...mine].some((s) => dist(s.at, p) < 2 * clear)
+          && !stopGrid.some(p, markClear, (s) => dist(s, p) < markClear)
+          && !letterGrid.some(p, 2 * clear, (s) => dist(s.at, p) < 2 * clear)
           // Alone means alone for a letter's width each way, so no letter sits where lines part.
-          && !(alone && [i - near, i, i + near].some((j) => pts[j] && others.some((o) => nearest(o, pts[j]).d < SIZES.alone * pitch)));
+          && !(alone && [i - near, i, i + near].some((j) => pts[j] && crowdedAt(j)));
       };
-      const put = (i) => mine.push({ route: line.route, color: line.color, ink: inkOn(line.color), at: pts[i], i });
+      const put = (i) => {
+        const letter = { route: line.route, color: line.color, ink: inkOn(line.color), at: pts[i], i };
+        mine.push(letter);
+        letterGrid.add(letter);
+      };
       // The first clear spot from each end, so the letter is as near the line's ends (and
       // the hub, where lines are told apart) as it can be; then one every so often between.
       const first = pts.findIndex((_, i) => fits(i));
@@ -3070,6 +3141,39 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true, { sl
   return out;
 }
 
+// Whether any segment of `path` comes nearer `p` than `d` (nearest(path, p).d < d), stopping at the
+// first that does. A segment whose box is more than d + 1 px from p can't, so it isn't measured.
+function nearerThan(path, p, d) {
+  const far = d + 1;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i];
+    if (p[0] < Math.min(a[0], b[0]) - far || p[0] > Math.max(a[0], b[0]) + far || p[1] < Math.min(a[1], b[1]) - far || p[1] > Math.max(a[1], b[1]) + far) continue;
+    if (toSegment(p, a, b).d < d) return true;
+  }
+  return false;
+}
+
+// Streets filed by the cells their points fall in. `near(box)` gives, in their order in `streets`,
+// every street with a point in a cell the box touches: all that have a point inside it, and a few more.
+export function streetIndex(streets, size = 64) {
+  const cells = new Map();
+  streets.forEach((st, i) => {
+    for (const p of st.path) {
+      const k = `${Math.floor(p[0] / size)},${Math.floor(p[1] / size)}`;
+      const here = cells.get(k) ?? cells.set(k, []).get(k);
+      if (here.at(-1) !== i) here.push(i);
+    }
+  });
+  const near = (box) => {
+    const found = new Set();
+    for (let x = Math.floor(box[0] / size); x <= Math.floor(box[2] / size); x++) {
+      for (let y = Math.floor(box[1] / size); y <= Math.floor(box[3] / size); y++) for (const i of cells.get(`${x},${y}`) ?? []) found.add(i);
+    }
+    return [...found].sort((a, b) => a - b).map((i) => streets[i]);
+  };
+  return { near };
+}
+
 /**
  * Which side of its street a block's route numbers go on: 1 for the side above the upright
  * figures (as the page sets them by default), -1 for the side below, 0 where neither has room.
@@ -3078,7 +3182,7 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true, { sl
  * the numbers would sit on that street. The page sets figures upright, so which side is above
  * them follows the way the block runs across the screen.
  */
-export function labelSide(street, streets, size, rows = 1) {
+export function labelSide(street, streets, size, rows = 1, index = null) {
   const len = length(street.path);
   // Near its corners a block meets its cross streets; a short block is judged at its middle.
   const margin = Math.min(size + 2, len / 2);
@@ -3092,7 +3196,9 @@ export function labelSide(street, streets, size, rows = 1) {
   const reach = [2.5, 2.5 + (0.72 + SIZES.busRowHeight * (rows - 1)) * size + 2];
   const box = street.path.reduce((m, p) => [Math.min(m[0], p[0]), Math.min(m[1], p[1]), Math.max(m[2], p[0]), Math.max(m[3], p[1])], [Infinity, Infinity, -Infinity, -Infinity]);
   const pad = reach[1] + 2;
-  const others = streets.filter((o) => o !== street && o.path.some((p) => p[0] > box[0] - pad && p[0] < box[2] + pad && p[1] > box[1] - pad && p[1] < box[3] + pad));
+  const inside = (o) => o !== street && o.path.some((p) => p[0] > box[0] - pad && p[0] < box[2] + pad && p[1] > box[1] - pad && p[1] < box[3] + pad);
+  // With an index of `streets` (streetIndex), only the streets with a point near the block are tested.
+  const others = index ? index.near([box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad]).filter(inside) : streets.filter(inside);
   const crowded = (sign) => {
     let hits = 0;
     let probes = 0;
@@ -3101,7 +3207,7 @@ export function labelSide(street, streets, size, rows = 1) {
       probes++;
       if ([reach[0], (reach[0] + reach[1]) / 2, reach[1]].some((r) => {
         const q = [p[0] + sign * up[0] * r, p[1] + sign * up[1] * r];
-        return others.some((o) => nearest(o.path, q).d < 1.5);
+        return others.some((o) => nearerThan(o.path, q, 1.5));
       })) hits++;
     }
     return probes && hits / probes >= 0.25;
@@ -3666,7 +3772,8 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // The figures and their halo, with clear air at each end so they stop short of a cross street.
   const width = (s, rows = 1) => Math.max(...(rows > 1 ? stacked(s.routes) : [listed(s.routes)]).map((row) => row.length)) * size * 0.5 + 2 * SIZES.busLabelAir;
   const sides = new Map();
-  const side = (path, rows) => { if (!sides.has(path)) sides.set(path, labelSide({ path }, bus, size, rows)); return sides.get(path); };
+  const nearBus = streetIndex(bus);
+  const side = (path, rows) => { if (!sides.has(path)) sides.set(path, labelSide({ path }, bus, size, rows, nearBus)); return sides.get(path); };
   const stationNames = names(marks, lines, discs, sheet, bus);
   // On the sheets between the table's and the stops', each lettered stop's letter in a square on
   // its street, placed before the route lists and street names, which keep off it (placeStreetLetters).
