@@ -1,7 +1,7 @@
 # RTD system map: design specification
 
 > Current implementation: `main` deploys the five-sheet map. Smooth zoom is
-> developed separately on `zoom-prototype-154`. Classic is preserved on
+> developed separately on `zoom-154-merge`. Classic is preserved on
 > `classic-archive`; its older interface details below are historical or planned
 > features, rather than a second deployed application. See
 > [the development guide](docs/development.md).
@@ -2095,7 +2095,7 @@ preserved on `classic-archive` at commit
 files from the site's root, including at addresses the host answers with it.
 
 `main` holds the current sheets. Smooth-zoom work stays on
-`zoom-prototype-154`, in its own worktree and `/zoom/` preview, until reviewed.
+`zoom-154-merge`, in its own worktree and `/zoom/` preview, until reviewed.
 Shared/current-map fixes land on main first and then merge into that branch.
 See `docs/development.md` for the workflow and separate verification commands.
 `npm run check` exercises the sheets. Historical browser checks and renderer
@@ -5641,6 +5641,11 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   The map has had five since sheet 0 joined (#152); entries above keep
   their wording. Text that described the removed classic map's link
   picture and tab title now says old classic links redirect.
+- 2026-11-27: The smooth-zoom trial's branch is `zoom-154-merge` (PR #224),
+  not `zoom-prototype-154`. On 2026-11-23 the trial's history was rewritten
+  without the tailnet addresses in its fix register, under the new name, and
+  the old branch left GitHub. Every commit of the old branch has a twin
+  there with the same change, so no work was lost.
 
 ## Sources
 

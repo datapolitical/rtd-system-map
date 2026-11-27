@@ -27,7 +27,7 @@ earlier Classic application is preserved on the
 Old `/classic/` links redirect to the current map.
 
 Development has two active tracks: the current map on `main`, and the
-smooth-zoom trial on `zoom-prototype-154`. See
+smooth-zoom trial on `zoom-154-merge`. See
 [the development guide](docs/development.md) for the branches, folders and checks.
 
 **How it's built: [the design specification](DESIGN.md)**, also [in the

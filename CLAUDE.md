@@ -67,7 +67,7 @@ we are" section from them (closed issues show as done).
   out, with a work log kept as it happens. Rebuilding for RTD's new data and
   what watches the live site are in [docs/upkeep.md](docs/upkeep.md).
 - Read [docs/development.md](docs/development.md) for the branch boundaries.
-  `main` owns the current sheet map; `zoom-prototype-154` owns smooth-zoom
+  `main` owns the current sheet map; `zoom-154-merge` owns smooth-zoom
   experiments; `classic-archive` preserves the earlier application. Do not
   merge the archive back into main or restore Classic under `public/`.
   Fix shared/current-map faults on main first, then bring main into the
