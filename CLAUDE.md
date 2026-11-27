@@ -95,6 +95,10 @@ in `qa/recall/finds.json` remain regression evidence, not confirmed current bugs
 - Several sessions share a checkout and switch its branch without warning.
   Do feature work in its own worktree (`git worktree add`), and check
   `git branch --show-current` in the same command as `git commit`.
+- Each worktree runs its own `npm ci`. Never link `node_modules` to another
+  checkout: `npm ci` and `npm install` empty a linked folder's target. If
+  `ls -ld node_modules` shows a link, remove the link (`rm node_modules`)
+  before installing.
 - To bring a pull request up to date, merge `origin/main` into its branch
   and push normally; pull requests are squash-merged, so the branch's own
   history rarely matters. Rebasing, amending or force-pushing a branch that

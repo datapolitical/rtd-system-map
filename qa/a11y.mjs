@@ -23,8 +23,9 @@ for (const theme of ['light', 'dark']) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  // At rest, and no step waiting for its sheet (main.js, sheetsHeld): a held step has not happened yet.
   const settled = async () => {
-    await page.waitForFunction(() => window.sheetsMap?.isStyleLoaded() && window.sheetsMap.areTilesLoaded() && !window.sheetsMap.isMoving(), null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.sheetsMap?.isStyleLoaded() && window.sheetsMap.areTilesLoaded() && !window.sheetsMap.isMoving() && !window.sheetsHeld, null, { timeout: 60_000 });
     await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   };
   let visits = 0;
@@ -35,7 +36,8 @@ for (const theme of ['light', 'dark']) {
     await settled();
   };
   await visit();
-  const said = () => page.waitForTimeout(250).then(() => page.locator('#say').textContent());
+  // What the live region says once a step that waits for its sheet has been taken.
+  const said = () => page.waitForFunction(() => !window.sheetsHeld, null, { timeout: 60_000 }).then(() => page.waitForTimeout(250)).then(() => page.locator('#say').textContent());
   const axe = async (label, include) => {
     let b = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']);
     if (include) b = b.include(include);
