@@ -3178,6 +3178,11 @@ are deferred, not ruled out. See "Open questions".
     values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
   - MapLibre's stylesheet doesn't hold up the first paint: the page uses
     none of its controls, and the picture covers the map until it is drawn.
+  - The loading picture comes first. The map's code, the opening glyphs and
+    the opening tiles wait until the picture's bytes are in (at once with no
+    picture, never later than 2 s), so on a slow connection they don't share
+    it with the picture. The Overpass font swaps in when it arrives; until
+    then "Loading…" is in the phone's own font, not hidden.
   - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are tiles
     of their own, `routes-N`, whose layers show from the first pick, or at the opening when the
     address picks a bus route (#193). They were about 40% of every sheet's bytes.
@@ -5577,6 +5582,17 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   internals renamed and no check, the step waited the whole 8 s cap before
   going; test/maplibre-internals.test.mjs now fails when an update renames
   them. Chris: "Do the second one" (measure it before deciding).
+- 2026-11-27: The map's downloads wait for the loading picture, and the font
+  swaps in instead of hiding the loading line. Reason: on Chris's iPhone at
+  about 0.65 Mbit/s (the page's ?timing readout), about 600 KB was asked for
+  at 0.9 s and shared the link evenly, so the picture, the font and the map
+  all came in together at 8.3 to 8.7 s, and nothing showed until 8.4 s.
+  Measured locally (Chromium, 402 px phone, 4x CPU, three runs each): the
+  picture shows at 1.27 s on slow 4G (was 2.64 s) and 0.52 s on typical 4G
+  (was 0.94 s), and at 4.1 s at 0.65 Mbit/s (was 6.6 s, one run). The map
+  is drawn 0.17 s later on slow 4G (4.68 s) and 0.29 s later on typical 4G
+  (1.91 s, was 1.61 s): its downloads start one round trip after the
+  picture's end instead of beside it. Chris: "Go".
 
 ## Sources
 
