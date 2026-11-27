@@ -147,9 +147,11 @@ fails its checks writes nothing. Test that without touching the real data:
    ```bash
    QA="$PWD/qa"
    git worktree add --detach ../rtd-drill HEAD
-   ln -s "$PWD/node_modules" ../rtd-drill/node_modules
-   cd ../rtd-drill && node scripts/build-data.mjs   # one good build first
+   cd ../rtd-drill && npm ci && node scripts/build-data.mjs   # one good build first
    ```
+
+   The copy runs its own `npm ci`. Never link its `node_modules` to another
+   checkout: `npm ci` and `npm install` empty a linked folder's target.
 
 2. The build fetches with Node's global `fetch`. Write
    `qa/drills/mock-fetch.mjs` (in your checkout, not the copy) so it returns
