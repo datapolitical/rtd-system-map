@@ -4,6 +4,163 @@
   "said": "The map credit at the bottom of /zoom/ lies half under the zoom bar, and its \"i\" shows four times. Found by Claude on the deployed preview's captures; Chris asked for it to be fixed.",
   "cause": "public/css/zoom.css styled every details and summary element for the page's own \"?\" panel; MapLibre's credit is a details with a summary button, so its 24 px button grew to 44 px (the icon tiles 2 by 2, half off the screen) and its lettering to 13 px, and the credit sits 10 px from the bottom, under the zoom bar.",
   "measured_by": "qa/lib/zoom-cover.mjs creditInPage on the preview, light theme, Union Station at 12, 2026-11-27",
-  "open": {"viewport": [402, 874], "open": true, "credit": [15, 840, 377, 24], "button": [348, 840, 44, 44], "repeat": "repeat", "panels": [[10, 10, 172, 44], [10, 800, 382, 48]]},
-  "closed": {"viewport": [402, 874], "open": false, "credit": [368, 840, 24, 24], "button": [348, 840, 44, 44], "repeat": "repeat", "panels": [[10, 10, 172, 44], [10, 800, 382, 48]]}
+  "open": {
+    "viewport": [
+      402,
+      874
+    ],
+    "open": true,
+    "credit": [
+      15,
+      840,
+      377,
+      24
+    ],
+    "button": [
+      348,
+      840,
+      44,
+      44
+    ],
+    "repeat": "repeat",
+    "panels": [
+      [
+        10,
+        10,
+        172,
+        44
+      ],
+      [
+        10,
+        800,
+        382,
+        48
+      ]
+    ]
+  },
+  "closed": {
+    "viewport": [
+      402,
+      874
+    ],
+    "open": false,
+    "credit": [
+      368,
+      840,
+      24,
+      24
+    ],
+    "button": [
+      348,
+      840,
+      44,
+      44
+    ],
+    "repeat": "repeat",
+    "panels": [
+      [
+        10,
+        10,
+        172,
+        44
+      ],
+      [
+        10,
+        800,
+        382,
+        48
+      ]
+    ]
+  },
+  "dark": {
+    "build": "e8f29da",
+    "said": "Chris, on the dark map: having the credit line in white \"is pretty awful\". MapLibre's credit keeps its own white ground and black lettering in both themes.",
+    "measured_by": "qa/lib/zoom-cover.mjs creditInPage on the branch preview, dark theme, Union Station at 12, 2026-11-27",
+    "open": {
+      "viewport": [
+        402,
+        874
+      ],
+      "theme": "dark",
+      "open": true,
+      "credit": [
+        94,
+        766,
+        298,
+        24
+      ],
+      "button": [
+        368,
+        766,
+        24,
+        24
+      ],
+      "repeat": "repeat",
+      "panels": [
+        [
+          10,
+          10,
+          172,
+          44
+        ],
+        [
+          10,
+          800,
+          382,
+          48
+        ]
+      ],
+      "ground": "rgb(255, 255, 255)",
+      "ink": "rgb(0, 0, 0)",
+      "links": [
+        "rgba(0, 0, 0, 0.75)",
+        "rgba(0, 0, 0, 0.75)",
+        "rgba(0, 0, 0, 0.75)"
+      ],
+      "icon": null
+    },
+    "closed": {
+      "viewport": [
+        402,
+        874
+      ],
+      "theme": "dark",
+      "open": false,
+      "credit": [
+        368,
+        766,
+        24,
+        24
+      ],
+      "button": [
+        368,
+        766,
+        24,
+        24
+      ],
+      "repeat": "repeat",
+      "panels": [
+        [
+          10,
+          10,
+          172,
+          44
+        ],
+        [
+          10,
+          800,
+          382,
+          48
+        ]
+      ],
+      "ground": "rgb(255, 255, 255)",
+      "ink": "rgb(0, 0, 0)",
+      "links": [
+        "rgba(0, 0, 0, 0.75)",
+        "rgba(0, 0, 0, 0.75)",
+        "rgba(0, 0, 0, 0.75)"
+      ],
+      "icon": null
+    }
+  }
 }

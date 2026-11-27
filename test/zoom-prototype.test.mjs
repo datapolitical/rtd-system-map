@@ -429,6 +429,24 @@ test('the map credit shows one "i", clear of the controls: the check catches the
   assert.deepEqual(creditErrors({ ...today, credit: null, button: null }), ['the map has no credit']);
 });
 
+test('the map credit follows the theme: the check catches the white credit on the dark map and planted faults', async () => {
+  const { creditErrors } = await import('../qa/lib/zoom-cover.mjs');
+  const { dark } = JSON.parse(readFileSync(new URL('../qa/recall/prototype-credit.json', import.meta.url), 'utf8'));
+  for (const state of ['open', 'closed']) {
+    assert.ok(creditErrors(dark[state]).some((e) => e.includes('is light on the dark map')), `missed the white credit on build ${dark.build}, ${state}`);
+  }
+  // Today's colours, as measured on the fixed page: the panels' ground and the muted ink.
+  const place = { viewport: [402, 874], repeat: 'repeat', panels: [[10, 10, 172, 44], [10, 800, 382, 48]], open: true,
+    credit: [94, 766, 298, 24], button: [368, 766, 24, 24] };
+  const themed = (theme, ground, ink) => ({ ...place, theme, ground, ink, links: [ink, ink, ink], icon: ink });
+  assert.deepEqual(creditErrors(themed('dark', 'rgb(27, 37, 52)', 'rgb(178, 192, 209)')), []);
+  assert.deepEqual(creditErrors(themed('light', 'rgb(255, 255, 255)', 'rgb(98, 110, 124)')), []);
+  // Planted: a dark credit on the light map, and lettering too faint to read on its ground.
+  assert.ok(creditErrors(themed('light', 'rgb(27, 37, 52)', 'rgb(178, 192, 209)')).some((e) => e.includes('is dark on the light map')));
+  assert.ok(creditErrors(themed('dark', 'rgb(27, 37, 52)', 'rgb(60, 70, 85)')).some((e) => e.includes('lettering')));
+  assert.ok(creditErrors({ ...themed('dark', 'rgb(27, 37, 52)', 'rgb(178, 192, 209)'), icon: 'rgb(0, 0, 0)' }).some((e) => e.includes('"i"')));
+});
+
 test('every line letter the build places reaches the page at every zoom, across the rail handover too', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const placed = bundle.report.letters.byZoom;

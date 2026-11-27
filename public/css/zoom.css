@@ -10,3 +10,10 @@
 /* The map's credit (MapLibre's "i") sits above the zoom row, not under it: the row's bottom
    (max(26px, safe area)) plus its 48 px height; MapLibre's own 10 px margin is the gap. */
 .maplibregl-ctrl-bottom-right{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 48px)}
+/* The credit in the page's colours, not MapLibre's white and black: the panels' ground and the
+   muted ink, in both themes. MapLibre's "i" is a black picture, so it is drawn here as a mask
+   in the muted ink, on a layer of its own so the button's focus ring still shows. */
+#map .maplibregl-ctrl-attrib.maplibregl-compact{background-color:var(--panel);color:var(--muted);box-shadow:var(--shadow)}
+#map .maplibregl-ctrl-attrib a{color:inherit}
+#map .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button{background:transparent}
+#map .maplibregl-ctrl-attrib-button::before{content:'';position:absolute;inset:0;background-color:var(--muted);-webkit-mask:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill-rule='evenodd'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E") center/24px 24px no-repeat;mask:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill-rule='evenodd'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E") center/24px 24px no-repeat}
