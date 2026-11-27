@@ -81,10 +81,12 @@ we are" section from them (closed issues show as done).
 - Several sessions share a checkout and switch its branch without warning.
   Do feature work in its own worktree (`git worktree add`), and check
   `git branch --show-current` in the same command as `git commit`.
-- Never rebase, amend or force-push a branch that is already on GitHub. To
-  bring a pull request up to date, merge `origin/main` into its branch and
-  push normally; pull requests are squash-merged, so the branch's own history
-  doesn't matter. If a task's instructions say to rebase, merge instead.
+- To bring a pull request up to date, merge `origin/main` into its branch
+  and push normally; pull requests are squash-merged, so the branch's own
+  history rarely matters. Rebasing, amending or force-pushing a branch that
+  is already on GitHub needs Chris's OK first: tell him why it is better
+  than a merge in this case, and wait for his answer. A task that says
+  "rebase" does not count as that OK.
 - Run one heavy agent (dev server plus headless browser) at a time, and stop
   each dev server when its agent finishes. With a Playwright device profile,
   pass `browserName: 'chromium'`: profiles such as iPhone 14 default to
