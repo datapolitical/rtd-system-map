@@ -413,6 +413,7 @@ map.on('zoomend', (e) => {
   if (e.settling || began === null) return;
   const to = settle(rests, sheet, began, map.getZoom(), { least: input.touch ? 0.25 : 0.1 });
   began = null;
+  aim = null; // the reader's own zoom says where the map goes now
   // A scroll zooms about the pointer, and so does the rest of the way.
   const box = map.getContainer().getBoundingClientRect();
   step(to, input.wheel ? map.unproject([input.wheel[0] - box.left, input.wheel[1] - box.top]) : undefined);
@@ -428,10 +429,31 @@ map.on('zoomstart', (e) => {
   const box = map.getContainer().getBoundingClientRect();
   const around = map.unproject([p.clientX - box.left, p.clientY - box.top]);
   began = null;
-  requestAnimationFrame(() => step(sheet + 1, around));
+  requestAnimationFrame(() => nudge(1, around));
 });
-document.querySelector('#in').addEventListener('click', () => step(sheet + 1, !cameFrom && openingSteps && hub ? hub : undefined));
-document.querySelector('#out').addEventListener('click', () => step(sheet - 1));
+// + and - step when a finger lifts off them, not on the click Safari makes of a tap: of two quick
+// taps, Safari on the iPhone makes no click of the second (it waits for a double tap; on the home
+// screen, any tap within about 300 ms of the last), so quick taps were lost (#210, Chris
+// 2026-11-25). A click that follows a counted tap is not counted again; a click with no tap
+// before it (a mouse, a key, a screen reader) steps as before.
+const stepButtons = [['#in', 1], ['#out', -1]].map(([id, dir]) => [document.querySelector(id), dir]);
+let tappedAt = -Infinity;
+const press = (dir) => nudge(dir, dir > 0 && !cameFrom && openingSteps && hub ? hub : undefined);
+for (const [button, dir] of stepButtons) {
+  button.addEventListener('pointerup', (e) => {
+    if (e.pointerType === 'mouse' || button.disabled || !e.isPrimary) return;
+    const box = button.getBoundingClientRect(); // a finger slid off the button is not a tap
+    if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) return;
+    tappedAt = performance.now();
+    reveal();
+    press(dir);
+  });
+  button.addEventListener('click', () => {
+    if (performance.now() - tappedAt < 800) return; // the click Safari makes of a tap already counted
+    press(dir);
+  });
+  button.addEventListener('dblclick', (e) => e.preventDefault());
+}
 
 // --- No step before the next sheet is ready ----------------------------------------
 
@@ -470,12 +492,54 @@ function hold(h) {
   waiting(true);
   watch();
 }
-// Pinch, scroll or keyboard at the edge of the sheet's limits: a step like any other, which waits.
+// A tap on + or -, a double tap, or the + and - keys: one sheet on from where the map is going,
+// not from the sheet shown. So a tap during a wait or a step adds a step (two taps go two sheets
+// on, #210), up to the first or last sheet, and a tap the other way takes one off; back to the
+// sheet shown ends a wait. The map goes there one sheet at a time, each step as any other, which
+// waits for its sheet: a move of several sheets at once drew bare ground on the way.
+let aim = null; // the sheet the taps ask for, until the map is there
+let aimAround;
+function nudge(dir, around) {
+  aim = Math.max(0, Math.min(zooms.length - 1, (aim ?? held?.to ?? sheet) + dir));
+  aimAround = around;
+  onward();
+}
+// Our own step under way: the next waits for it to end.
+let stepping = false;
+map.on('movestart', (e) => { stepping = !!e.settling; });
+map.on('moveend', () => {
+  stepping = false;
+  // After the map's own handlers are done with the move; a move cut off by the next is not an end.
+  requestAnimationFrame(() => { if (!map.isMoving()) onward(); });
+});
+function onward() {
+  if (aim === null || held?.to === aim) return;
+  if (aim === sheet) {
+    aim = null;
+    if (held) { // a tap on - during a wait for +
+      held = null;
+      waiting(false);
+      show(sheet);
+    }
+    return;
+  }
+  const next = sheet + Math.sign(aim - sheet);
+  if (held?.to === next || (stepping && map.isMoving())) return;
+  step(next, aimAround);
+}
+// For the checks: whether a step waits for its sheet, or more steps are to come (qa/a11y.mjs,
+// qa/wholecheck.mjs). The map rests while it waits.
+Object.defineProperty(window, 'sheetsHeld', { get: () => !!held || (aim !== null && aim !== sheet) });
+// Pinch or scroll at the edge of the sheet's limits: a step like any other, which waits. The
+// limits are let out a moment after the next sheet is ready (watch); a scroll that meets them
+// in that moment steps at once, and a pinch once the fingers are off, where both were lost.
 function pushed(dir) {
   const to = sheet + dir;
-  if (held || !SHEETS[to] || givenUp === sheet || !canWarm() || stepReady(to)) return;
+  if (held || !SHEETS[to] || givenUp === sheet || !canWarm()) return;
   const z = map.getZoom();
-  if (dir > 0 ? z >= map.getMaxZoom() - 0.01 : z <= map.getMinZoom() + 0.01) hold({ to });
+  if (!(dir > 0 ? z >= map.getMaxZoom() - 0.01 : z <= map.getMinZoom() + 0.01)) return;
+  if (stepReady(to) && !map.isMoving()) step(to);
+  else hold({ to });
 }
 map.getContainer().addEventListener('wheel', (e) => { if (e.deltaY) pushed(e.deltaY < 0 ? 1 : -1); }, { passive: true });
 let spread = 0;
@@ -486,10 +550,16 @@ map.getContainer().addEventListener('touchmove', (e) => {
   const r = apart(e.touches) / spread;
   if (r > 1.05 || r < 0.95) pushed(r > 1 ? 1 : -1);
 }, { passive: true });
+// The + and - keys step as the buttons do, so a key pressed during a wait counts as a tap does.
+// Taken before MapLibre's own keyboard zoom sees them, which would zoom one level and settle.
 map.getContainer().addEventListener('keydown', (e) => {
-  if (['+', '='].includes(e.key)) pushed(1);
-  else if (['-', '_'].includes(e.key)) pushed(-1);
-});
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  const dir = ['+', '='].includes(e.key) ? 1 : ['-', '_'].includes(e.key) ? -1 : 0;
+  if (!dir) return;
+  e.stopPropagation();
+  e.preventDefault();
+  nudge(dir);
+}, { capture: true });
 // The sheet's limits: no further than its own tiles reach, toward a neighbour not yet ready. A
 // pinch in can go almost to the next whole zoom (the same tiles, larger), and then steps on
 // once the next sheet is ready; out, there is nothing to show past the sheet's own zoom.
