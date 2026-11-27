@@ -7,7 +7,6 @@ import { settle } from './settle.js';
 import { readView, writeView, drawsRoute } from './address.js';
 import { routeName, sheetName, pickSaid, cardSaid, inkOn } from './say.js';
 import { clearPoint } from './view.js';
-import { routePanel, routePanelHtml, routePanelSaid } from '../panel/route.js';
 
 // Start the map's worker downloading while the two small files below load. With ?timing, the
 // worker carries a stopwatch (timing.js sets the address).
@@ -544,6 +543,11 @@ let shown = null; // what the card names: { title, note, routes: [{ mode, route,
 let opener = null; // the button the card was opened from (the list, #135), where closing it returns
 let selectedAt = null;
 let panelOpen = false; // the route panel's fold (tell)
+// The route panel's words (js/panel/route.js) are not the opening view's: they load once it has
+// settled, or with the first route's card if that comes sooner.
+let panelCode = null;
+const loadPanel = () => import('../panel/route.js').then((m) => { panelCode = m; });
+whenSettled(() => loadPanel().catch(() => {}));
 let timeWindows = {}; // the hours the build measured each frequency in (directory.json, windows)
 function setPick(p) {
   picked = p;
@@ -600,12 +604,13 @@ function tell(what) {
   if (what.kind === 'route') {
     // The route panel (js/panel/route.js): how often it runs through the week, its first and
     // last trips and RTD's timetable, folded under the card's two lines until asked for.
-    const panel = what.entry ? routePanel(what.entry, timeWindows) : null;
+    const panel = what.entry && panelCode ? panelCode.routePanel(what.entry, timeWindows) : null;
+    if (what.entry && !panelCode) loadPanel().then(() => { if (shown === what) tell(what); }, () => {});
     card.classList.toggle('open', Boolean(panel) && panelOpen);
     card.innerHTML = `<div class="head"><div class="routes">${routes.map(chip).join('')}</div><b id="card-title" role="heading" aria-level="2">${esc(what.name)}</b></div>`
       + `${what.line ? `<span class="line">${detail(what.line)}</span>` : ''}`
       + (panel ? `<button type="button" class="more" aria-expanded="${panelOpen}" aria-controls="route-more">Times through the week<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5.5 8 4.5 4.5L14.5 8"/></svg></button>`
-        + `<div id="route-more"${panelOpen ? '' : ' hidden'}>${routePanelHtml(panel)}</div>` : '')
+        + `<div id="route-more"${panelOpen ? '' : ' hidden'}>${panelCode.routePanelHtml(panel)}</div>` : '')
       + '<button type="button" class="close" aria-label="Close">\u00d7</button>';
     card.hidden = false;
     say(cardSaid({ title: what.name, note: what.line, routes }));
@@ -641,7 +646,7 @@ card.addEventListener('click', (e) => {
     more.setAttribute('aria-expanded', String(panelOpen));
     card.querySelector('#route-more').hidden = !panelOpen;
     card.classList.toggle('open', panelOpen);
-    if (panelOpen && shown?.entry) say(routePanelSaid(routePanel(shown.entry, timeWindows)));
+    if (panelOpen && shown?.entry) say(panelCode.routePanelSaid(panelCode.routePanel(shown.entry, timeWindows)));
     return;
   }
   if (e.target.closest('button.close')) return close({ focus: true });
