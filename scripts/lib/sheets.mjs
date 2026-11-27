@@ -3141,6 +3141,39 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true, { sl
   return out;
 }
 
+// Whether any segment of `path` comes nearer `p` than `d` (nearest(path, p).d < d), stopping at the
+// first that does. A segment whose box is more than d + 1 px from p can't, so it isn't measured.
+function nearerThan(path, p, d) {
+  const far = d + 1;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i];
+    if (p[0] < Math.min(a[0], b[0]) - far || p[0] > Math.max(a[0], b[0]) + far || p[1] < Math.min(a[1], b[1]) - far || p[1] > Math.max(a[1], b[1]) + far) continue;
+    if (toSegment(p, a, b).d < d) return true;
+  }
+  return false;
+}
+
+// Streets filed by the cells their points fall in. `near(box)` gives, in their order in `streets`,
+// every street with a point in a cell the box touches: all that have a point inside it, and a few more.
+export function streetIndex(streets, size = 64) {
+  const cells = new Map();
+  streets.forEach((st, i) => {
+    for (const p of st.path) {
+      const k = `${Math.floor(p[0] / size)},${Math.floor(p[1] / size)}`;
+      const here = cells.get(k) ?? cells.set(k, []).get(k);
+      if (here.at(-1) !== i) here.push(i);
+    }
+  });
+  const near = (box) => {
+    const found = new Set();
+    for (let x = Math.floor(box[0] / size); x <= Math.floor(box[2] / size); x++) {
+      for (let y = Math.floor(box[1] / size); y <= Math.floor(box[3] / size); y++) for (const i of cells.get(`${x},${y}`) ?? []) found.add(i);
+    }
+    return [...found].sort((a, b) => a - b).map((i) => streets[i]);
+  };
+  return { near };
+}
+
 /**
  * Which side of its street a block's route numbers go on: 1 for the side above the upright
  * figures (as the page sets them by default), -1 for the side below, 0 where neither has room.
@@ -3149,7 +3182,7 @@ export function labelRuns(streets, every, width = () => 0, ok = () => true, { sl
  * the numbers would sit on that street. The page sets figures upright, so which side is above
  * them follows the way the block runs across the screen.
  */
-export function labelSide(street, streets, size, rows = 1) {
+export function labelSide(street, streets, size, rows = 1, index = null) {
   const len = length(street.path);
   // Near its corners a block meets its cross streets; a short block is judged at its middle.
   const margin = Math.min(size + 2, len / 2);
@@ -3163,7 +3196,9 @@ export function labelSide(street, streets, size, rows = 1) {
   const reach = [2.5, 2.5 + (0.72 + SIZES.busRowHeight * (rows - 1)) * size + 2];
   const box = street.path.reduce((m, p) => [Math.min(m[0], p[0]), Math.min(m[1], p[1]), Math.max(m[2], p[0]), Math.max(m[3], p[1])], [Infinity, Infinity, -Infinity, -Infinity]);
   const pad = reach[1] + 2;
-  const others = streets.filter((o) => o !== street && o.path.some((p) => p[0] > box[0] - pad && p[0] < box[2] + pad && p[1] > box[1] - pad && p[1] < box[3] + pad));
+  const inside = (o) => o !== street && o.path.some((p) => p[0] > box[0] - pad && p[0] < box[2] + pad && p[1] > box[1] - pad && p[1] < box[3] + pad);
+  // With an index of `streets` (streetIndex), only the streets with a point near the block are tested.
+  const others = index ? index.near([box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad]).filter(inside) : streets.filter(inside);
   const crowded = (sign) => {
     let hits = 0;
     let probes = 0;
@@ -3172,7 +3207,7 @@ export function labelSide(street, streets, size, rows = 1) {
       probes++;
       if ([reach[0], (reach[0] + reach[1]) / 2, reach[1]].some((r) => {
         const q = [p[0] + sign * up[0] * r, p[1] + sign * up[1] * r];
-        return others.some((o) => nearest(o.path, q).d < 1.5);
+        return others.some((o) => nearerThan(o.path, q, 1.5));
       })) hits++;
     }
     return probes && hits / probes >= 0.25;
@@ -3737,7 +3772,8 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // The figures and their halo, with clear air at each end so they stop short of a cross street.
   const width = (s, rows = 1) => Math.max(...(rows > 1 ? stacked(s.routes) : [listed(s.routes)]).map((row) => row.length)) * size * 0.5 + 2 * SIZES.busLabelAir;
   const sides = new Map();
-  const side = (path, rows) => { if (!sides.has(path)) sides.set(path, labelSide({ path }, bus, size, rows)); return sides.get(path); };
+  const nearBus = streetIndex(bus);
+  const side = (path, rows) => { if (!sides.has(path)) sides.set(path, labelSide({ path }, bus, size, rows, nearBus)); return sides.get(path); };
   const stationNames = names(marks, lines, discs, sheet, bus);
   // On the sheets between the table's and the stops', each lettered stop's letter in a square on
   // its street, placed before the route lists and street names, which keep off it (placeStreetLetters).
