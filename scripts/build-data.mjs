@@ -6,7 +6,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { writeSheets } from './sheets.mjs';
 import path from 'node:path';
 import { discoverLayers, downloadLayer } from './lib/arcgis.mjs';
-import { clock, csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, riderNames, routeFrequency, tierOf } from './lib/gtfs.mjs';
+import { clock, csvRows, lineEnds, lineShapes, loadGtfs, matchGtfs, MIDDAY, readCsv, representativeDates, riderNames, routeFrequency, tierOf, WINDOWS } from './lib/gtfs.mjs';
 import { RT_FEEDS, liveRoutes } from './lib/realtime.mjs';
 import { coreBounds } from './lib/core.mjs';
 import { directory } from './lib/directory.mjs';
@@ -210,9 +210,13 @@ async function main() {
     }
   }
 
+  // The route panel's rush-hour and evening rows (#22), kept beside the drawn routes, not on
+  // them: they are the panel's, and the drawings stay as they were.
+  const otherTimes = new Map();
   for (const { properties: p } of geo.routes) {
     const found = members.get(p.route);
     const f = frequency.get(p.route) ?? {};
+    if (f.weekday?.windows) otherTimes.set(p.route, f.weekday.windows);
     const rail = found.length > 0 && found.every((r) => isRail(r.route_type));
     const color = rail && found.map((r) => r.route_color).find(Boolean);
     const textColor = rail && found.map((r) => r.route_text_color).find(Boolean);
@@ -621,6 +625,9 @@ async function main() {
     busEnds: lineEnds(gtfs.text, (id) => (busLines.has(groupOf.get(id)) ? groupOf.get(id) : null), dates.weekday?.services),
     lineOf: (code) => (busLines.has(code) ? code : byCode.get(code) ?? null),
     levels,
+    otherTimes,
+    // The hours each figure is measured in, as the panel says them: never written on the page.
+    windows: Object.fromEntries(Object.entries({ midday: MIDDAY, ...WINDOWS }).map(([name, w]) => [name, w.map(clock)])),
     urls: new Map([...members].map(([route, found]) => [route, found.map((r) => r.route_url).find(Boolean)]).filter(([, url]) => url)),
   });
   // Stations know their buses too, so a highlighted bus keeps the stations

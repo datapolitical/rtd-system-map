@@ -163,6 +163,10 @@ export const MIDDAY = [9 * 3600, 15 * 3600];
 const MORNING = [0, 9 * 3600];
 const EVENING = [15 * 3600, 20 * 3600];
 const within = (t, [from, to]) => t >= from && t < to;
+// The route panel's other rows (DESIGN.md, "Frequency and schedules"; #22): RTD's own peak
+// periods, 6 to 9am and 3 to 6pm (Transit Service Policies & Standards, Table 1), and the
+// evening the map's "Weekday evening" measures, 7 to 10pm. Measured as midday is.
+export const WINDOWS = { am: [6 * 3600, 9 * 3600], pm: [15 * 3600, 18 * 3600], eve: [19 * 3600, 22 * 3600] };
 // Buses that run in bunched pairs (two hourly patterns a few minutes apart)
 // have a short median gap but leave riders waiting most of an hour. Where the
 // average gap across the window is more than this many times the median, the
@@ -268,13 +272,50 @@ export function routeFrequency(text, dates, groupOf = (id) => id, { stopTimes = 
       const route = key.slice(0, key.lastIndexOf('|'));
       const stops = [...byStop.values()].map((all) => ({ all, midday: all.filter((t) => within(t, MIDDAY)).length }));
       const { all: busiest } = stops.sort((a, b) => b.midday - a.midday || b.all.length - a.all.length)[0];
-      directions.set(route, [...(directions.get(route) ?? []), directionSummary(busiest)]);
+      // Each other window at its own busiest stop: a route's rush-hour trips may not pass its midday one.
+      const windows = Object.fromEntries(Object.entries(WINDOWS).map(([name, window]) => {
+        const best = stops.reduce((a, b) => (countIn(b.all, window) > countIn(a.all, window) ? b : a));
+        return [name, headwayIn(best.all, window)];
+      }));
+      directions.set(route, [...(directions.get(route) ?? []), { ...directionSummary(busiest), windows }]);
     }
     for (const [route, dirs] of directions) {
-      result.set(route, { ...(result.get(route) ?? {}), [kind]: daySummary(dirs, tripCounts[kind].get(route) ?? 0) });
+      const windows = Object.fromEntries(Object.keys(WINDOWS).map((name) => [name, windowSummary(dirs.map((d) => d.windows[name]))]));
+      result.set(route, { ...(result.get(route) ?? {}), [kind]: { ...daySummary(dirs, tripCounts[kind].get(route) ?? 0), windows } });
     }
   }
   return result;
+}
+
+const countIn = (times, window) => times.reduce((n, t) => n + (within(t, window) ? 1 : 0), 0);
+
+/**
+ * How often one direction comes in a window at one place: `{ departures, headway }`, the headway
+ * the median gap between the window's departures in minutes, or the average gap where buses
+ * run bunched (see BUNCHED); null with fewer than two departures.
+ */
+export function headwayIn(times, window) {
+  const inside = times.filter((t) => within(t, window)).sort((a, b) => a - b);
+  const gaps = inside.slice(1).map((t, k) => t - inside[k]);
+  const average = gaps.length ? (inside.at(-1) - inside[0]) / gaps.length : null;
+  const typical = gaps.length ? median(gaps) : null;
+  return { departures: inside.length, headway: gaps.length ? Math.round((average > BUNCHED * typical ? average : typical) / 60) : null };
+}
+
+/**
+ * A window's service from its directions' (headwayIn): `{ headway, oneWay, departures }`. The
+ * less frequent direction sets the frequency, as at midday. Rush-hour service often runs one way
+ * only (in to the city in the morning, out in the afternoon): where only some directions have
+ * two departures or more, the frequency is theirs and `oneWay` says so, so a panel can say
+ * "one direction" and never give an inbound frequency as though it ran both ways.
+ */
+export function windowSummary(dirs) {
+  const running = dirs.filter((d) => d.headway != null);
+  return {
+    headway: running.length ? Math.max(...running.map((d) => d.headway)) : null,
+    oneWay: running.length > 0 && running.length < dirs.length,
+    departures: Math.max(0, ...dirs.map((d) => d.departures)),
+  };
 }
 
 /**
@@ -285,15 +326,12 @@ export function routeFrequency(text, dates, groupOf = (id) => id, { stopTimes = 
  * morning, evening }.
  */
 export function directionSummary(times) {
-  const midday = times.filter((t) => within(t, MIDDAY)).sort((a, b) => a - b);
-  const gaps = midday.slice(1).map((t, k) => t - midday[k]);
-  const average = gaps.length ? (midday.at(-1) - midday[0]) / gaps.length : null;
-  const typical = gaps.length ? median(gaps) : null;
+  const midday = headwayIn(times, MIDDAY);
   let [first, last] = [Infinity, -Infinity];
   for (const t of times) [first, last] = [Math.min(first, t), Math.max(last, t)];
   return {
-    middayDepartures: midday.length,
-    headway: gaps.length ? Math.round((average > BUNCHED * typical ? average : typical) / 60) : null,
+    middayDepartures: midday.departures,
+    headway: midday.headway,
     first,
     last,
     morning: times.some((t) => within(t, MORNING)),

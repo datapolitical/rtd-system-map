@@ -681,7 +681,17 @@ Every frequency shown to riders says when it applies. Some examples:
 
 The route panel also shows weekday peak, evening, Saturday, and Sunday
 frequency, plus first and last trips, so one number is never read as all-day
-service.
+service. The peak rows are RTD's own periods, 6 to 9am and 3 to 6pm, and the
+evening row is 7 to 10pm (`WINDOWS` in `scripts/lib/gtfs.mjs`; #22). Each is
+measured as midday is (the typical gap, the bunching rule, the less frequent
+direction), at the stop with the most departures in that window, since a
+route's rush-hour trips may not pass its busiest midday stop. Rush-hour
+service often runs one way only, in to the city in the morning and out in
+the afternoon. Where only one direction comes twice or more in a window, the
+row gives that direction's frequency and says "one direction"; a window with
+one trip says "1 trip", and with none "No trips". These figures are in
+`directory.json` only (`wk_am`, `wk_pm`, `wk_eve`, `wk_one`, and the hours
+themselves in `windows`), so the drawings do not change.
 
 **Bus routes are measured by stretch, not once per route.** A bus route can
 come every 15 minutes in one place and a few times a day in another: the
@@ -2882,6 +2892,21 @@ frequency. When a route's stretches differ, a note lists them and the rows
 say "here" for the stretch under the finger. A stretch with no weekday
 service reads "No weekday service here; runs Saturday and Sunday". The panel
 ends with a link to RTD's timetable.
+
+On today's sheets (#162, #22) the panel is folded under the picked route's
+card: the card keeps its two lines (the chip and name, then the ends and the
+midday figure), and a row under them, "Times through the week", opens the
+panel in place. Open or shut, it stays that way for the next route. Each row
+says its own hours ("Weekdays, 6 to 9am", "Saturday, 9am to 3pm"), which
+come from the build, never from the page. The rows are for the whole route:
+the stretch note and "here" are not on the sheets, since which stretch is
+under the finger is the drawing's to say. Data built before a row existed
+leaves that row out.
+
+The panel's words are their own code (`public/js/panel/route.js`): it takes
+a route's directory entry and returns the rows, with no page and nothing of
+the sheets in it (`test/panel-route.test.mjs` fails if it names them). The
+sheets' page only puts it on its card.
 
 Where a bus goes is read from its signs (GTFS `trip_headsign`), most common
 first, without the route's number, "free" and any "via ...", and with RTD's
@@ -5698,6 +5723,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ("What people can do", items 2 to 5); most of these sit on top of the
   drawing rather than in it; and the plan of 2026-11-18 no longer
   described the work the trial found. Chris: yes to both.
+- 2026-11-27: The route panel on today's sheets (#162) with weekday
+  rush-hour and evening rows (#22). The panel is folded under the picked
+  route's two-line card, so the card still covers as little of the map as
+  it did; "Times through the week" opens it. #22 was not blocked on #11:
+  the rows need two more measures per route, in windows DESIGN.md already
+  set, and #11 is the Key's time chooser. One-way rush service says "one
+  direction": the less-frequent-direction rule alone gave an express no
+  rush-hour figure at all.
 - 2026-11-27: Next departures on today's sheets (#13), scheduled first.
   The build publishes every stop's timetable in small files and the page
   works out "next" for today's real calendar, so nothing is rebuilt daily

@@ -23,9 +23,13 @@ const END_METERS = 400;
  * frequency); `levels` holds each route's own properties, its frequency
  * measured for the whole route, which is what its entry describes. Without
  * it, a route takes its first feature's properties, with `route_tier` and
- * `route_wk` over a stretch's. Returns { routes, stations }.
+ * `route_wk` over a stretch's. `otherTimes` holds each route's weekday
+ * frequency in the morning and afternoon rush hours and the evening
+ * (gtfs.mjs, WINDOWS), for the route panel's rows, and `windows` the hours
+ * each figure is measured in, which the panel says beside it. Returns
+ * { routes, stations, windows }.
  */
-export function directory({ routes, stations, stops, facilities, service, busEnds, lineOf, urls, levels = new Map() }) {
+export function directory({ routes, stations, stops, facilities, service, busEnds, lineOf, urls, levels = new Map(), otherTimes = new Map(), windows = null }) {
   const byRoute = new Map();
   for (const f of routes) (byRoute.get(f.properties.route) ?? byRoute.set(f.properties.route, []).get(f.properties.route)).push(f);
 
@@ -109,6 +113,7 @@ export function directory({ routes, stations, stops, facilities, service, busEnd
       su_trips: p.su_trips,
       wk_first: p.wk_first,
       wk_last: p.wk_last,
+      ...otherRows(otherTimes.get(route)),
       url: urls.get(route) ?? null,
       bbox: bbox(features),
       goes,
@@ -116,12 +121,23 @@ export function directory({ routes, stations, stops, facilities, service, busEnd
     };
   });
 
+  // A route's other weekday rows: `wk_am`, `wk_pm` and `wk_eve` in minutes where it comes twice
+  // or more in that window, or `wk_am_trips` (none, or one) where it doesn't; and `wk_one`, the
+  // windows in which only one direction comes twice or more.
+  function otherRows(times) {
+    if (!times) return {};
+    const rows = Object.fromEntries(Object.entries(times).map(([name, w]) => (w.headway != null ? [`wk_${name}`, w.headway] : [`wk_${name}_trips`, w.departures])));
+    const one = Object.entries(times).filter(([, w]) => w.headway != null && w.oneWay).map(([name]) => name);
+    return { ...rows, ...(one.length ? { wk_one: one.join(' ') } : {}) };
+  }
+
   const parkingNear = (at) =>
     facilities
       .filter((f) => f.properties.spaces > 0 && meters(f.geometry.coordinates, at) <= PARKING_METERS)
       .sort((a, b) => meters(a.geometry.coordinates, at) - meters(b.geometry.coordinates, at))[0]?.properties.spaces ?? 0;
 
   return {
+    ...(windows ? { windows } : {}),
     routes: out.sort((a, b) => (b.mode === 'rail') - (a.mode === 'rail') || byNumber(a.route, b.route)),
     stations: stations.map((s, i) => ({
       id: s.properties.id,
