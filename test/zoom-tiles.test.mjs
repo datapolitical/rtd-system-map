@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PbfReader } from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
-import { wholeInOneTile, seamFaults, seamControls, px, labelKey } from '../scripts/lib/zoom-seam.mjs';
+import { boundsOf, wholeInOneTile, seamFaults, seamControls, px, labelKey } from '../scripts/lib/zoom-seam.mjs';
 import { zoomDrawings, listsOf, cutZoomDrawings } from '../scripts/zoom-tiles.mjs';
 import { cutData } from '../scripts/tiles.mjs';
 
@@ -137,4 +137,26 @@ test('the report the cut writes says what each set holds', { timeout: 240000 }, 
     assert.deepEqual(set.zooms, [...new Set(set.zooms)], 'whole zooms, ascending and unique');
   }
   assert.ok(Object.keys(report.lists).length > 0, 'the lists a tile names by text are in the table');
+});
+
+test('a label is cut by its ink, not its geometry: the same line with and without text size', () => {
+  // A line that fills a buffered tile to within 4 px: whole as geometry, cut once its text and halo are counted.
+  const step = 360 / 2 ** 12;
+  const edge = Math.ceil(-105 / step) * step, px1 = step / 512;
+  const [a, b] = [edge - 256 * px1 + 2 * px1, edge + 768 * px1 - 2 * px1];
+  const line = (extra) => ({ type: 'Feature', properties: { kind: 'list-room', label: 'x', ...extra }, geometry: { type: 'LineString', coordinates: [[a, 39.74], [b, 39.74]] } });
+  assert.ok(wholeInOneTile(boundsOf(line()), 12, 256, 0), 'the geometry alone fits one tile');
+  const faultsOf = (f) => seamFaults([f], { zooms: [12] }).filter((x) => x.fault === 'cut').length;
+  assert.equal(faultsOf(line({ size: 1, halo: 0 })), 0, 'with almost no ink beyond the line it is whole');
+  assert.equal(faultsOf(line({ size: 24, halo: 4 })), 1, 'with big text and halo it is cut');
+});
+
+test('a seam fault stops the cut: nothing is written and the build fails', async () => {
+  const step = 360 / 2 ** 12;
+  const cut = { type: 'Feature', properties: { kind: 'list-room', label: 'planted-cut' }, geometry: { type: 'LineString', coordinates: [[-105 - 1.5 * step, 39.74], [-105 + 1.5 * step, 39.74]] } };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'seam-fail-'));
+  const out = path.join(dir, 'tiles');
+  await assert.rejects(cutZoomDrawings([{ name: 'zoom-planted', zooms: [12], features: [cut] }], dir, out), /seam fault/);
+  assert.equal(fs.existsSync(path.join(dir, 'tiles.json')), false, 'no manifest is written');
+  assert.equal(fs.existsSync(out), false, 'no tiles are written');
 });

@@ -109,6 +109,13 @@ async function sizeOf(dir) {
  * by text. Returns the report. */
 export async function cutZoomDrawings(drawings, dir, out) {
   const controls = seamControls();
+  // Every drawing is checked before anything is cut or written: a seam fault stops the build,
+  // so no tile set or manifest that carries one can be deployed.
+  const found = drawings.flatMap((d) => seamFaults(structuredClone(d.features), { zooms: d.zooms }).map((f) => ({ drawing: d.name, ...f })));
+  if (found.length) {
+    const first = found.slice(0, 5).map((f) => `${f.drawing} z${f.zoom} ${f.fault} ${f.key}`).join('; ');
+    throw new Error(`zoom tiles: ${found.length} seam fault(s), nothing written. ${first}`);
+  }
   const sets = [];
   const lists = {};
   for (const d of drawings) {
@@ -133,7 +140,10 @@ if (import.meta.main ?? process.argv[1] === import.meta.filename) {
     process.exit(0);
   }
   const out = path.join(ROOT, 'public', 'tiles');
-  const report = await cutZoomDrawings(drawings, dir, out);
+  const report = await cutZoomDrawings(drawings, dir, out).catch((e) => {
+    console.error(e.message);
+    process.exit(1);
+  });
   const totalTiles = report.sets.reduce((n, s) => n + s.tiles, 0);
   console.log(`Cut ${totalTiles} zoom-map tiles into public/tiles; ${report.sets.reduce((n, s) => n + (s.seamFaults?.length ?? 0), 0)} seam faults`);
 }

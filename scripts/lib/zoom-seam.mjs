@@ -40,9 +40,10 @@ export const boundsOf = (f) => {
 /** Which tile at `zoom` holds `bounds` whole, its buffer included, if any does: the tile's
  * buffered extent is the tile grown by TILING.buffer px on every side of a 512 px tile, and the
  * tiles cover the world 512 px apart at that zoom. */
-export const wholeInOneTile = (bounds, zoom, buffer = TILING.buffer) => {
+export const wholeInOneTile = (bounds, zoom, buffer = TILING.buffer, reach = 0) => {
   const [w, s, e, n] = bounds;
-  const [Ex, Ny] = px([e, n], zoom), [Wx, Sy] = px([w, s], zoom);
+  // `reach`: how far the label's ink (half its text height plus halo) goes past its geometry.
+  const [Ex, Ny] = px([e, n], zoom).map((v, i) => v + (i ? -reach : reach)), [Wx, Sy] = px([w, s], zoom).map((v, i) => v + (i ? reach : -reach));
   if (Ex - Wx > SPAN + 2 * buffer || Ny - Sy > SPAN + 2 * buffer) return null;
   for (let x = Math.max(0, Math.floor(Wx / SPAN) - 1); x <= Math.min(2 ** zoom - 1, Math.floor(Ex / SPAN) + 1); x++) {
     for (let y = Math.max(0, Math.floor(Ny / SPAN) - 1); y <= Math.min(2 ** zoom - 1, Math.floor(Sy / SPAN) + 1); y++) {
@@ -61,12 +62,19 @@ export const labelKey = (f) => `${f.properties.key ?? `${f.properties.kind}|${f.
 /** The seam faults of `features` at each of `zooms`, as the tiles are cut there. `whole` are the
  * kinds the page always shows as one line; `points` are the kinds it always shows at a place.
  * Returns [{ fault, zoom, kind, key, detail }]. */
+/** How far a label's ink reaches past its geometry, in px: half its text size, its halo, and a
+ * point's own glyph box. A feature that states `size` (text px) and `halo` (px) is measured by
+ * them; otherwise the page's defaults. */
+export const inkReach = (f) => (Number.isFinite(f.properties?.size) ? f.properties.size : DEFAULT_TEXT) / 2 + (Number.isFinite(f.properties?.halo) ? f.properties.halo : DEFAULT_HALO);
+const DEFAULT_TEXT = 12;
+const DEFAULT_HALO = 2;
+
 export function seamFaults(features, { zooms, buffer = TILING.buffer, whole = ['list-room', 'station', 'hall'], points = ['bus-list', 'bus-stack', 'bus-end', 'letter', 'name'] }) {
   const faults = [];
   for (const zoom of zooms) {
     for (const f of features) {
       const kind = f.properties?.kind;
-      if (whole.includes(kind) && f.geometry.type !== 'Point' && !wholeInOneTile(boundsOf(f), zoom, buffer)) {
+      if (whole.includes(kind) && f.geometry.type !== 'Point' && !wholeInOneTile(boundsOf(f), zoom, buffer, inkReach(f))) {
         faults.push({ fault: 'cut', zoom, kind, key: labelKey(f), detail: 'no tile at this zoom holds it whole' });
       }
     }
