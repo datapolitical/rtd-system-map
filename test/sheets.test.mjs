@@ -104,6 +104,19 @@ test('a bar crosses every line that stops there, and never reaches one that pass
   assert.ok(Math.abs(toBar - (railW / 2 + gapW / 2)) < 0.2, `the bar stops ${toBar.toFixed(2)} px from the passing line's centre, want ${railW / 2 + gapW / 2}`);
 });
 
+test('a passing line right beside the outer line cannot shorten the bar so it fails to cross its own line', () => {
+  const rail = (route, slot) => line({ mode: 'rail', route, color: '#57C1E9', slot }, [at(0, 0), at(300, 0)]);
+  const [railW, gapW] = [SIZES.rail[sheet.id], SIZES.gap[sheet.id]];
+  const place = toPx(at(150, 0), sheet.zoom);
+  // D passes a quarter-slot beyond A: stopping half a gap short of D would end the bar inside A.
+  const lines = railLines(all([rail('A', 0.5), rail('B', 0), rail('D', 0.75)]), sheet);
+  const marks = stationMarks(all([point({ id: 1, name: 'Mill', served: true, lines: 'A B' }, at(150, 0))]), lines, sheet);
+  const [a, b] = marks[0].ends;
+  const centre = nearest(lines.find((l) => l.route === 'A').paths[0], place).at;
+  const toEnd = Math.min(dist(centre, a), dist(centre, b));
+  assert.ok(toEnd >= railW / 2 + gapW / 4 - 0.1, `A is still crossed whole: ${toEnd.toFixed(2)} px from the nearer end`);
+});
+
 test('one line through a station keeps its dot, and the bar that grows is only across two or more', () => {
   const rail = (route, slot) => line({ mode: 'rail', route, color: '#57C1E9', slot }, [at(0, 0), at(300, 0)]);
   const lines = railLines(all([rail('A', 0)]), sheet);
