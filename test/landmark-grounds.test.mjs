@@ -13,6 +13,7 @@ import {
 } from '../public/js/sheets/style.js';
 import { groundNeeds, groundDraws } from '../scripts/lib/basemap.mjs';
 import { contrast } from '../public/js/color.js';
+import { featureFilter } from '@maplibre/maplibre-gl-style-spec';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -105,4 +106,47 @@ test('the landmark tint reads as ground, not as another competing element', () =
     assert.ok(contrast(c.landmark, c.ground) <= 1.3, `${theme}: the landmark tint stays close to the ground (${contrast(c.landmark, c.ground).toFixed(2)}:1)`);
     assert.ok(contrast(c.landmark, c.ground) > 1, `${theme}: the landmark tint still reads as a tint`);
   }
+});
+
+// The style's own filters, evaluated as MapLibre evaluates them on a tile feature, not the
+// tile trimmer's test: removing or inverting a filter in style.js must fail here.
+const styleKeeps = (layerId, theme, geometry, properties) => {
+  const layer = sheetStyle(theme).layers.find((l) => l.id === layerId);
+  return featureFilter(layer.filter, `layers.${layerId}.filter`).filter({ zoom: 15 }, { type: geometry, properties });
+};
+
+test('the style filters themselves tint landmark grounds and the airport, and only those', () => {
+  for (const theme of ['light', 'dark']) {
+    for (const cls of ['hospital', 'university', 'college', 'stadium']) {
+      assert.ok(styleKeeps('landmark', theme, 3, { class: cls }), `${theme}: landuse ${cls} is drawn tinted`);
+    }
+    for (const cls of ['residential', 'retail', 'school', 'pitch', 'cemetery', 'parking']) {
+      assert.ok(!styleKeeps('landmark', theme, 3, { class: cls }), `${theme}: landuse ${cls} is not tinted`);
+    }
+    assert.ok(!styleKeeps('landmark', theme, 3, {}), `${theme}: a landuse with no class is not tinted`);
+    assert.ok(styleKeeps('landmark-airport', theme, 3, { class: 'aerodrome' }), `${theme}: the aerodrome is tinted`);
+    for (const cls of ['runway', 'taxiway', 'apron', 'gate', 'helipad']) {
+      assert.ok(!styleKeeps('landmark-airport', theme, 3, { class: cls }), `${theme}: aeroway ${cls} is not the airport ground`);
+    }
+  }
+});
+
+test('the buildings style filter keeps only buildings at the major height, and tolerates a missing height', () => {
+  for (const theme of ['light', 'dark']) {
+    const at = (h) => styleKeeps('buildings-4', theme, 3, h === undefined ? {} : { render_height: h });
+    assert.ok(at(MAJOR_BUILDING_HEIGHT), `${theme}: a building at the height stays`);
+    assert.ok(at(94), `${theme}: a tall building stays`);
+    assert.ok(!at(MAJOR_BUILDING_HEIGHT - 1), `${theme}: a building just under goes`);
+    assert.ok(!at(5), `${theme}: an ordinary building goes`);
+    assert.ok(!at(undefined), `${theme}: a building with no height goes`);
+  }
+});
+
+test('the filter check has teeth: an inverted landmark filter is caught', () => {
+  const layer = sheetStyle('light').layers.find((l) => l.id === 'landmark');
+  const inverted = ['!', layer.filter];
+  const { filter: f } = featureFilter(inverted, 'layers.landmark.filter');
+  const check = (props) => f({ zoom: 15 }, { type: 3, properties: props });
+  assert.equal(check({ class: 'hospital' }), false);
+  assert.equal(check({ class: 'residential' }), true);
 });
