@@ -1,4 +1,4 @@
-// Draws the four sheets from the build's output: public/data/sheet-<n>.geojson.
+// Draws every sheet from the build's output: public/data/sheet-<n>.geojson.
 // `npm run build:data` runs this last; `npm run build:sheets` runs it alone to
 // redraw from the data on disk, then retakes the loading pictures.
 import { createHash } from 'node:crypto';

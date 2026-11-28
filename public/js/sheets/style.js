@@ -1,4 +1,4 @@
-// What each sheet draws, and at what size (DESIGN.md, "Four sheets"). One
+// What each sheet draws, and at what size (DESIGN.md, "Five sheets"). One
 // table per sheet; nothing here depends on the zoom except which sheet shows.
 // The build draws the geometry for each sheet (scripts/lib/sheets.mjs); this
 // file is only ink.
@@ -30,7 +30,7 @@ const GAP = { 0: 1.2, 1: 1.4, 2: 1.6, 3: 2, 4: 2.5 };
 const [LETTER_TEXT, LETTER_LIFT] = [1.42, 0.06];
 
 // The build's six headway classes are drawn as three steps: a bus every 10 minutes or better,
-// every 15, and every 30 or less often. More steps than three don't read as steps (DESIGN.md, "Four sheets").
+// every 15, and every 30 or less often. More steps than three don't read as steps (DESIGN.md, "Five sheets").
 export const BUS_STEP = { c60: 0, c30: 0, c15: 1, c10: 2, c5: 2, c3: 2 };
 // Widths, per sheet. The busiest step is as wide as the sheet's rail, never wider: where frequent
 // streets lie a block apart downtown, anything wider fills the grid. It reads first among the bus
@@ -66,7 +66,7 @@ export const AIRPORT = { hue: 278, chroma: 1.5, quiet: 1.8, lift: { light: 0.02,
 const steps = (quiet, mid, top) => Object.fromEntries(Object.entries(BUS_STEP).map(([k, s]) => [k, [quiet, mid, top][s]]));
 
 // The bus blue's hue: the middle of the widest gap RTD's rail colours leave round the colour
-// wheel, so no bus street reads as a rail line (DESIGN.md, "Four sheets"). Greys don't count.
+// wheel, so no bus street reads as a rail line (DESIGN.md, "Five sheets"). Greys don't count.
 // With no line colours to go by (a test), a blue.
 export const BUS_HUE_FALLBACK = (267 * Math.PI) / 180;
 export function busHue(colors = []) {
@@ -211,7 +211,7 @@ export function shortStreet(name) {
   return ['let', 'n', head, tail];
 }
 
-// --- A picked route (DESIGN.md, "Four sheets": tap a route to highlight it) ----------------
+// --- A picked route (DESIGN.md, "Five sheets": tap a route to highlight it) ----------------
 // The page sets MapLibre global state `bus` or `rail` to the route the reader picked ('' for
 // none; main.js). It is a layer of state over the drawing: every sheet's layers carry the rule
 // once, so a pick is one property write, holds on every sheet, and no tile is made again.

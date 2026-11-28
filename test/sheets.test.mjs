@@ -1,4 +1,4 @@
-// The four sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
+// The sheets' drawing rules (scripts/lib/sheets.mjs), on small made-up networks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 // style.js gives some paint values per feature with the same value either way (SAME), so MapLibre
