@@ -82,3 +82,18 @@ test('a model with no sheetAt reports the intermediate zoom as blocked and does 
   assert.equal(report.complete, false);
   assert.match(report.drawings[0].blocked, /#155/);
 });
+
+test('a redrawn anchor that differs from the sheet is reported as not matching', { skip: NO_DATA }, async (t) => {
+  const out = await mkdtemp(path.join(tmpdir(), 'rtd-zoom-drawings-'));
+  t.after(() => rm(out, { recursive: true, force: true }));
+  const drawing = JSON.parse(await read('sheet-2.geojson'));
+  const routes = JSON.parse(await read('sheet-2-routes.geojson'));
+  const changed = structuredClone(drawing);
+  changed.features[0].properties.planted = 'a difference';
+  const report = await writeZoomDrawings({
+    dir: DATA, out, data: {}, zooms: [12],
+    draw: () => ({ ...changed, features: [...changed.features, ...routes.features] }),
+  });
+  assert.equal(report.drawings[0].drawingMatchesSheet, false, 'a changed drawing does not match the sheet');
+  assert.equal(report.drawings[0].routesMatchesSheet, true, 'the untouched route file still does');
+});
