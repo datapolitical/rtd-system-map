@@ -15,8 +15,8 @@ const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 // The area drawn, in CSS pixels around the view's middle: a phone in either orientation and most
 // laptop screens. A wider screen shows the sketch's edge; the map then draws the rest.
 export const HALF = { w: 720, h: 500 };
-// The pulses: bright stretches flowing out from the hub along every line, one every PULSE_PX pixels
-// (half lit, half not), moving PULSE_PX in PULSE_MS. index.html's #sketch animation uses the same two.
+// The timing cycle for the runs of the loading sketch. The page uses the phase of each run
+// to bring up the ink starting near the hub. Keep the 2000 ms cycle in sync with index.html.
 export const PULSE_PX = 360;
 export const PULSE_MS = 2000;
 // Points closer than this to the line through their neighbours are left out (CSS pixels).
@@ -65,7 +65,7 @@ function clip(points) {
 }
 
 // The markup: a group per rail line, in route order, with its colour in light (--l) and dark (--d): the
-// whole line faint (.base), and its runs, each carrying pulses outward from the hub.
+// whole line faint (.base), and its runs, starting near the hub and pointing outward.
 export async function sketch(site = PUBLIC) {
   const html = await readFile(`${site}index.html`, 'utf8');
   const view = html.match(/<div id="poster"[^>]*\sdata-view="([^"]*)"/)?.[1];
@@ -104,8 +104,7 @@ export async function sketch(site = PUBLIC) {
   };
   const order = [...lines].filter(([, l]) => l.runs.length).sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }));
   const drawn = order.map(([, l]) => ({ l, runs: l.runs.flatMap(outward) }));
-  // Each run's pulses are timed by how far it starts from the hub, so they flow on from the run before
-  // as one wave: its animation starts --t ms into the cycle (index.html runs it that far behind).
+  // Each run's phase (--t) comes from how far it starts from the hub.
   const lag = (r) => (far(r[0]) / PULSE_PX) * PULSE_MS;
   const at = (r) => `M${r.map(([a, b]) => `${a} ${b}`).join(' ')}`;
   const groups = drawn.map(({ l, runs }) => {
