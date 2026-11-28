@@ -107,14 +107,14 @@ test('the front page shows the rail lines drawing in, drawn in the page itself, 
   const poster = html.slice(html.indexOf('<div id="poster"'), html.indexOf('<p id="loading"'));
   const svg = poster.match(/<svg id="sketch"[^>]*aria-hidden="true"[^>]*>([\s\S]*?)<\/svg>/)?.[1];
   assert.ok(svg, 'the sketch, hidden from screen readers');
-  // A group per rail line with its colour in both themes: the line faint, and its runs carrying the pulses.
+  // A group per rail line with its colour in both themes: the line faint, and its timed runs.
   const groups = [...svg.matchAll(/<g style="--l:(#[0-9a-f]{6});--d:(#[0-9a-f]{6})"><path class="base" d="M[-\d. M]+"\/>((?:<path style="--t:\d+" d="M[-\d. ]+"\/>)+)<\/g>/gi)];
   assert.ok(groups.length >= 1 && groups.length === (svg.match(/<g /g) ?? []).length, 'every rail line, with its colour in both themes and its runs');
   assert.doesNotMatch(poster, /\b(?:src|href)=/, 'no file of its own');
   assert.doesNotMatch(html, /\/poster\//, 'the page asks for no loading picture');
   assert.match(html, /<p id="loading" role="status"><span>Loading…<\/span><\/p>/);
-  // Still, with reduced motion: the lines whole, not moving (the rule matches the growing runs exactly).
-  assert.match(html, /@media \(prefers-reduced-motion: reduce\) \{[^\n]*#sketch path:not\(\.base\) \{ animation: none; \}[^\n]*#sketch path:not\(\.base\) \{ stroke-dasharray: none; \}/);
+  assert.match(html, /@media \(prefers-reduced-motion: no-preference\) \{\s*#poster:not\(\.settled, \.gone\) #sketch path:not\(\.base\) \{ animation: sketch-ink [^;]+ backwards; \}/);
+  assert.doesNotMatch(html, /stroke-dashoffset|#loading span[^{}]*\{[^}]*animation:/, 'no continuous animation on the loading overlay');
   // It is of the built rail lines and opening view, when they are here (scripts/sketch.mjs; the publish check too).
   if (fs.existsSync(path.join(PUBLIC, 'data', 'routes.geojson'))) {
     const { sketch } = await import('../scripts/sketch.mjs');

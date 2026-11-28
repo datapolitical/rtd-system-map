@@ -3333,13 +3333,14 @@ are deferred, not ruled out. See "Open questions".
   - While it loads, the sheets page shows RTD's rail lines on the map's
     ground, each in its own colour (as the map draws it in that theme) and
     where the map will draw it on the opening view, with the "Loading…"
-    line at the top. The whole network is there faint, and over it bright
-    pulses flow out from the hub (sheets.json) along every line, one every
-    360 px, moving 360 px in 2 s, each run timed by its distance from the
-    hub so they carry on from one run to the next, until the map has drawn
-    that view (or at once, if a button is pressed first); then the sketch
-    fades and the map lands on the same lines. With reduced motion the
-    lines are there whole and still. The sketch is part of the page (an inline SVG of
+    line at the top. The whole network is visible at first paint. Its ink
+    builds once from the hub, each run timed by its distance from the hub,
+    and settles into a finished drawing before MapLibre starts (#261). The
+    finished lines and loading label hold until the map has drawn that view
+    (or the rider moves off it); then the sketch fades and the map lands on
+    the same lines. With reduced motion the lines are whole and still from
+    first paint and the sketch clears immediately when the map is ready.
+    The sketch is part of the page (an inline SVG of
     about 14 KB, 4 KB compressed), so it is on screen with the first
     bytes and asks for nothing: the map's downloads have the whole
     connection from the start (#222). `scripts/sketch.mjs` writes it from
@@ -5868,6 +5869,11 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   same with no throttling (2.85 s, was 2.90 s); the lines on screen from
   first paint (0.4 s on slow 4G), where the picture showed at 3.1 s on
   slow 4G and 6.5 s at 0.65 Mbit/s.
+- 2026-11-27: The loading sketch's lines finish in one short ink reveal and
+  hold their colour with the steady loading label while the map starts (#261).
+  On an iPhone 8, the repeating pulses stalled during MapLibre startup and the
+  opacity-breathing trial still had visible stalls. The drawing now resolves
+  before the constructor, and the map takes over at the same position.
 - 2026-11-27: Live predictions on stop and station cards (#13; Chris, about
   20:10 MST, with the relay change). An open card asks, since the sheets
   have no Live button. The relay sends a page only its own stops, and asks

@@ -295,28 +295,30 @@
   /* A picked route: its stop's square ringed, and the route itself as the card's pressed chip. */
   #key .row.picked i { outline: 1.5px solid var(--ink); outline-offset: 1px; }
   #key .routes span.picked { background: var(--ink); color: var(--card); padding: 0 3px; }
-  /* While the map loads: RTD's rail lines, with pulses flowing out from the hub, where the map will draw them, and a line saying so,
+  /* While the map loads: RTD's rail lines, where the map will draw them, and a line saying so,
      on the map's ground (scripts/sketch.mjs writes the lines from the data). Part of the page, so it is there with
      the first bytes and costs the map nothing (DESIGN.md, "While it loads"). */
   /* Touches go through it to the map under it, so a pinch zooms the map, not the page. */
   #poster { position: absolute; inset: 0; overflow: hidden; background: var(--ground); transition: opacity 250ms ease-out; pointer-events: none; }
   #sketch { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
-  /* The whole network faint, and over it pulses flowing out from the hub along every line until the map is drawn:
-     one every 360 px, moving 360 px in 2 s, each run timed by its distance from the hub (--t; scripts/sketch.mjs,
-     PULSE_PX and PULSE_MS). */
+  /* The network is visible from first paint. Its ink builds from the hub along the timed runs
+     (--t in scripts/sketch.mjs), settling into a finished drawing while the map starts. */
   #sketch path { fill: none; stroke: var(--l); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
   :root[data-theme="dark"] #sketch path { stroke: var(--d); }
   #sketch .base { opacity: 0.3; }
-  #sketch path:not(.base) { opacity: 0.9; stroke-dasharray: 180 180; animation: pulse 2s linear calc(var(--t) * -1ms) infinite; }
-  @keyframes pulse { from { stroke-dashoffset: 360; } to { stroke-dashoffset: 0; } }
+  #sketch path:not(.base) { opacity: 0.9; }
+  @media (prefers-reduced-motion: no-preference) {
+    #poster:not(.settled, .gone) #sketch path:not(.base) { animation: sketch-ink 240ms ease-out calc((2000 - var(--t)) * 0.08ms) backwards; }
+  }
+  @keyframes sketch-ink { from { opacity: 0.45; } }
   #poster.gone { opacity: 0; pointer-events: none; }
   #loading, #wait { position: absolute; left: 50%; top: var(--under); transform: translateX(-50%); margin: 0; padding: 7px 15px 6px;
     background: var(--card); color: var(--ink); border-radius: 16px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
-  #loading span, #wait span { animation: breathe 1.4s ease-in-out infinite; }
+  #wait span { animation: breathe 1.4s ease-in-out infinite; }
   #wait { z-index: 3; pointer-events: none; }
   #wait[hidden] { display: none; }
   @keyframes breathe { 50% { opacity: 0.45; } }
-  @media (prefers-reduced-motion: reduce) { #poster, #key { transition: none; } #loading span, #wait span, #sketch path:not(.base) { animation: none; } #sketch path:not(.base) { stroke-dasharray: none; } }
+  @media (prefers-reduced-motion: reduce) { #poster, #key { transition: none; } #wait span { animation: none; } }
 </style>
 </head>
 <body>

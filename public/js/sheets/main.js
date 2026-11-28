@@ -139,6 +139,22 @@ function addOtherSheets() {
   map._update(true);
 }
 
+// On a fast visit the sketch may still be drawing in. Show its finished lines before the map
+// constructor can block a frame. The timer lets startup proceed if the tab stops painting.
+const poster = document.querySelector('#poster');
+const sketch = poster?.querySelector('#sketch');
+const drawingIn = !document.hidden && sketch?.getAnimations({ subtree: true }).some((animation) => animation.playState === 'running');
+poster?.classList.add('settled');
+if (drawingIn) {
+  await new Promise((resolve) => {
+    const fallback = setTimeout(resolve, 50);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      clearTimeout(fallback);
+      resolve();
+    }));
+  });
+}
+
 // How far out and in the map goes (style.js, LOWEST and HIGHEST); a step waiting for its tiles
 // limits it less far (limits()).
 const map = new maplibregl.Map({
@@ -1321,7 +1337,6 @@ finder?.addEventListener('focusin', () => import('../search/box.js').then(({ ini
 // It goes once the map has drawn the same view. The page only shows a picture whose
 // drawing fingerprint matches this build. A step the reader takes before then
 // clears it at once: the map is moving away from the view it shows.
-const poster = document.querySelector('#poster');
 function reveal() {
   if (!poster?.isConnected || poster.classList.contains('gone')) return;
   poster.classList.add('gone');
