@@ -15,6 +15,10 @@ const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 // The area drawn, in CSS pixels around the view's middle: a phone in either orientation and most
 // laptop screens. A wider screen shows the sketch's edge; the map then draws the rest.
 export const HALF = { w: 720, h: 500 };
+// The pulses: bright stretches flowing out from the hub along every line, one every PULSE_PX pixels
+// (half lit, half not), moving PULSE_PX in PULSE_MS. index.html's #sketch animation uses the same two.
+export const PULSE_PX = 360;
+export const PULSE_MS = 2000;
 // Points closer than this to the line through their neighbours are left out (CSS pixels).
 const TOLERANCE = 1.2;
 const SVG = /<svg id="sketch"[\s\S]*?<\/svg>/;
@@ -60,8 +64,8 @@ function clip(points) {
   return runs;
 }
 
-// The markup: one path per rail line, in route order, each with its colour in light (--l) and dark (--d)
-// and its place in the drawing-in (--i).
+// The markup: a group per rail line, in route order, with its colour in light (--l) and dark (--d): the
+// whole line faint (.base), and its runs, each carrying pulses outward from the hub.
 export async function sketch(site = PUBLIC) {
   const html = await readFile(`${site}index.html`, 'utf8');
   const view = html.match(/<div id="poster"[^>]*\sdata-view="([^"]*)"/)?.[1];
@@ -87,11 +91,29 @@ export async function sketch(site = PUBLIC) {
     }
     lines.set(p.route, line);
   }
-  const paths = [...lines].filter(([, l]) => l.runs.length).sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true })).map(([, l], i) => {
-    const d = l.runs.map((r) => `M${r.map(([a, b]) => `${a} ${b}`).join(' ')}`).join('');
-    return `<path pathLength="1" style="--l:${railInk('light', l.color).line};--d:${railInk('dark', l.color).line};--i:${i}" d="${d}"/>`;
+  // Where the lines branch out from: the network's hub (sheets.json), in the same pixels.
+  const { hub } = JSON.parse(await readFile(`${site}data/sheets.json`, 'utf8'));
+  const [hx, hy] = Array.isArray(hub) ? [x(hub[0]) - cx, y(hub[1]) - cy] : [0, 0];
+  const far = ([a, b]) => Math.hypot(a - hx, b - hy);
+  const length = (run) => run.slice(1).reduce((sum, p, i) => sum + Math.hypot(p[0] - run[i][0], p[1] - run[i][1]), 0);
+  // Each run is drawn from its end nearer the hub, outward; one that passes the hub is two runs from there.
+  const outward = (run) => {
+    let near = 0;
+    run.forEach((p, i) => { if (far(p) < far(run[near])) near = i; });
+    return [run.slice(0, near + 1).reverse(), run.slice(near)].filter((r) => r.length > 1 && length(r) > 2);
+  };
+  const order = [...lines].filter(([, l]) => l.runs.length).sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }));
+  const drawn = order.map(([, l]) => ({ l, runs: l.runs.flatMap(outward) }));
+  // Each run's pulses are timed by how far it starts from the hub, so they flow on from the run before
+  // as one wave: its animation starts --t ms into the cycle (index.html runs it that far behind).
+  const lag = (r) => (far(r[0]) / PULSE_PX) * PULSE_MS;
+  const at = (r) => `M${r.map(([a, b]) => `${a} ${b}`).join(' ')}`;
+  const groups = drawn.map(({ l, runs }) => {
+    const base = `<path class="base" d="${l.runs.map(at).join('')}"/>`;
+    const grow = runs.map((r) => `<path style="--t:${Math.round(PULSE_MS - (lag(r) % PULSE_MS)) % PULSE_MS}" d="${at(r)}"/>`).join('');
+    return `<g style="--l:${railInk('light', l.color).line};--d:${railInk('dark', l.color).line}">${base}${grow}</g>`;
   });
-  return `<svg id="sketch" width="${2 * HALF.w}" height="${2 * HALF.h}" viewBox="${-HALF.w} ${-HALF.h} ${2 * HALF.w} ${2 * HALF.h}" aria-hidden="true" focusable="false">${paths.join('')}</svg>`;
+  return `<svg id="sketch" width="${2 * HALF.w}" height="${2 * HALF.h}" viewBox="${-HALF.w} ${-HALF.h} ${2 * HALF.w} ${2 * HALF.h}" aria-hidden="true" focusable="false">${groups.join('')}</svg>`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

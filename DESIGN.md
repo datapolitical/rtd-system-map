@@ -3224,14 +3224,17 @@ are deferred, not ruled out. See "Open questions".
   - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are tiles
     of their own, `routes-N`, whose layers show from the first pick, or at the opening when the
     address picks a bus route (#193). They were about 40% of every sheet's bytes.
-  - While it loads, the sheets page shows RTD's rail lines drawing
-    themselves in on the map's ground, each in its own colour (as the map
-    draws it in that theme) and where the map will draw it on the opening
-    view, with the "Loading…" line at the top. Once the map has drawn that
-    view (or at once, if a button is pressed first) the sketch fades and
-    the map lands on the same lines. With reduced motion the lines are
-    there whole from the start. The sketch is part of the page (an inline
-    SVG of about 10 KB, 3 KB compressed), so it is on screen with the first
+  - While it loads, the sheets page shows RTD's rail lines on the map's
+    ground, each in its own colour (as the map draws it in that theme) and
+    where the map will draw it on the opening view, with the "Loading…"
+    line at the top. The whole network is there faint, and over it bright
+    pulses flow out from the hub (sheets.json) along every line, one every
+    360 px, moving 360 px in 2 s, each run timed by its distance from the
+    hub so they carry on from one run to the next, until the map has drawn
+    that view (or at once, if a button is pressed first); then the sketch
+    fades and the map lands on the same lines. With reduced motion the
+    lines are there whole and still. The sketch is part of the page (an inline SVG of
+    about 14 KB, 4 KB compressed), so it is on screen with the first
     bytes and asks for nothing: the map's downloads have the whole
     connection from the start (#222). `scripts/sketch.mjs` writes it from
     the built rail lines, the opening view and the map's colour rule
@@ -5707,8 +5710,9 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   without the tailnet addresses in its fix register, under the new name, and
   the old branch left GitHub. Every commit of the old branch has a twin
   there with the same change, so no work was lost.
-- 2026-11-27: While the map loads, the page shows RTD's rail lines drawing
-  themselves in, in their own colours and where the map will draw them, and
+- 2026-11-27: While the map loads, the page shows RTD's rail lines with
+  pulses flowing out from the hub along them, in their own colours and
+  where the map will draw them, and
   the "Loading…" line, all drawn in the page itself; not a picture of the
   opening view (#222). This replaces the picture of 2026-11-12 and the
   download order tried on the first-paint branch (#226). Reason: the
@@ -5718,13 +5722,17 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   with no extra download", then, on the measurements, "we shouldn't use
   the picture anymore", and he picked the rail sketch from four looks
   (review of 2026-11-27: the sketch, trains on grey tracks, line bullets, a
-  small mark) because he wanted "something visually interesting".
-  Measured locally (Chromium at iPhone 14 size, 4x CPU, light and dark),
-  with the picture gone: the map's files all in at 1.20 s on typical 4G
-  (was 1.50 s), 4.0 s on slow 4G (was 4.1 s), 8.6 s at 0.65 Mbit/s (was
-  9.8 s); something on screen at first paint in every case, where the
-  picture showed at 3.1 s on slow 4G and 6.6 s at 0.65 Mbit/s. The time
-  the map is drawn did not differ beyond the noise of a busy machine.
+  small mark) because he wanted "something visually interesting". On the
+  first version, which drew the lines in once: "it just sort of sits there
+  when what it should probably do is either pulse or something like it
+  should branch out and repeat that until it loads".
+  Measured locally (Chromium at iPhone 14 size, 4x CPU, light and dark,
+  three runs each): 578 KB before the map, was 685 KB (673 in dark); the
+  map drawn at 3.46 s on typical 4G (was 3.69 s), 5.78 s on slow 4G (was
+  6.55 s) and 10.5 s at 0.65 Mbit/s (was 12.0 s), the same with no
+  throttling (2.83 s, was 2.79 s); the lines on screen from first paint
+  (0.4 s on slow 4G), where the picture showed at 3.1 s on slow 4G and
+  6.5 s at 0.65 Mbit/s.
 
 ## Sources
 
