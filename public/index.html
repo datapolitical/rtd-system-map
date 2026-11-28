@@ -99,22 +99,12 @@
   document.documentElement.dataset.theme = chosenTheme ?? (scheme.matches ? 'dark' : 'light');
   document.documentElement.dataset.themeManual = String(Boolean(chosenTheme));
   document.querySelector('meta[name="theme-color"]').content = document.documentElement.dataset.theme === 'dark' ? '#0e141d' : '#f5f3ef';
-  // The loading picture (#poster below) is asked for first, before anything the map needs: it is
-  // what the reader sees until the map is drawn. Only on a plain visit; a link to a view, or a theme
-  // the address forces, shows no picture. Before the stylesheet, so this runs without waiting for it.
-  if (!location.hash && !new URLSearchParams(location.search).has('theme')) {
-    const theme = document.documentElement.dataset.theme;
-    const link = Object.assign(document.createElement('link'), { rel: 'preload', as: 'image', fetchPriority: 'high' });
-    if (matchMedia('(max-width: 480px)').matches) link.href = `/poster/phone-${theme}.webp`;
-    else link.imageSrcset = `/poster/wide-${theme}-1x.webp 1x, /poster/wide-${theme}-2x.webp 2x`;
-    document.head.append(link);
-  }
 </script>
-<!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the loading picture. -->
+<!-- Not needed before the map is drawn (the page uses none of its controls), so it never holds up the first paint. -->
 <link rel="stylesheet" href="/vendor/maplibre-gl.css" media="print" onload="this.media='all'">
 <!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
      for the one that names it (DESIGN.md, "Quality floor"). Its tiles are fetched by the script
-     after the loading picture, which knows the view. -->
+     after the placeholder, which knows the view. -->
 <link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
 <link rel="modulepreload" href="/js/sheets/style.js">
 <link rel="modulepreload" href="/js/sheets/settle.js">
@@ -300,12 +290,20 @@
   /* A picked route: its stop's square ringed, and the route itself as the card's pressed chip. */
   #key .row.picked i { outline: 1.5px solid var(--ink); outline-offset: 1px; }
   #key .routes span.picked { background: var(--ink); color: var(--card); padding: 0 3px; }
-  /* While the map loads: a picture of the view it opens on, centred as the map is, and a line saying so (scripts/poster.mjs). */
-  /* Touches go through the picture to the map under it: a pinch on the picture zoomed the page, not the map. */
+  /* While the map loads: RTD's rail lines, with pulses flowing out from the hub, where the map will draw them, and a line saying so,
+     on the map's ground (scripts/sketch.mjs writes the lines from the data). Part of the page, so it is there with
+     the first bytes and costs the map nothing (DESIGN.md, "While it loads"). */
+  /* Touches go through it to the map under it, so a pinch zooms the map, not the page. */
   #poster { position: absolute; inset: 0; overflow: hidden; background: var(--ground); transition: opacity 250ms ease-out; pointer-events: none; }
-  #poster img { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: none; user-select: none; -webkit-user-drag: none;
-    opacity: 0; transition: opacity 200ms ease-out; }
-  #poster img.whole { opacity: 1; }
+  #sketch { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  /* The whole network faint, and over it pulses flowing out from the hub along every line until the map is drawn:
+     one every 360 px, moving 360 px in 2 s, each run timed by its distance from the hub (--t; scripts/sketch.mjs,
+     PULSE_PX and PULSE_MS). */
+  #sketch path { fill: none; stroke: var(--l); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  :root[data-theme="dark"] #sketch path { stroke: var(--d); }
+  #sketch .base { opacity: 0.3; }
+  #sketch path:not(.base) { opacity: 0.9; stroke-dasharray: 180 180; animation: pulse 2s linear calc(var(--t) * -1ms) infinite; }
+  @keyframes pulse { from { stroke-dashoffset: 360; } to { stroke-dashoffset: 0; } }
   #poster.gone { opacity: 0; pointer-events: none; }
   #loading, #wait { position: absolute; left: 50%; top: var(--under); transform: translateX(-50%); margin: 0; padding: 7px 15px 6px;
     background: var(--card); color: var(--ink); border-radius: 16px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
@@ -313,7 +311,7 @@
   #wait { z-index: 3; pointer-events: none; }
   #wait[hidden] { display: none; }
   @keyframes breathe { 50% { opacity: 0.45; } }
-  @media (prefers-reduced-motion: reduce) { #poster, #poster img, #key { transition: none; } #loading span, #wait span { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #poster, #key { transition: none; } #loading span, #wait span, #sketch path:not(.base) { animation: none; } #sketch path:not(.base) { stroke-dasharray: none; } }
 </style>
 </head>
 <body>
@@ -340,57 +338,33 @@
 <!-- Lists what is on screen, for a keyboard or a screen reader (#135). Shown only with the keyboard's focus. -->
 <button id="inview" type="button">List what's in view</button>
 <div id="poster" data-view="10/39.71919300/-105.00183800" data-bounds="-105.88406,39.1565,-104.36933,40.50672" data-drawing="6deba043c81f3acd81628da02af3718bd623b4b66fbc65992ccc8db491db4e07" data-ground="20261122_124456_pt" data-early="{&quot;ground&quot;:10,&quot;sheet-1&quot;:9}">
-  <picture>
-    <source media="(max-width: 480px) and (prefers-color-scheme: dark)" srcset="/poster/phone-dark.webp 2x">
-    <source media="(max-width: 480px)" srcset="/poster/phone-light.webp 2x">
-    <source media="(prefers-color-scheme: dark)" srcset="/poster/wide-dark-1x.webp 1x, /poster/wide-dark-2x.webp 2x">
-    <img src="/poster/wide-light-1x.webp" srcset="/poster/wide-light-1x.webp 1x, /poster/wide-light-2x.webp 2x" alt="" fetchpriority="high" draggable="false">
-  </picture>
+  <svg id="sketch" width="1440" height="1000" viewBox="-720 -500 1440 1000" aria-hidden="true" focusable="false"><g style="--l:#57C1E9;--d:#57C1E9"><path class="base" d="M477.7 -242.5 477.3 -231.9 473.7 -227 393.8 -226.9 388 -224.1 383.2 -212.7 378.3 -208.9 373.3 -207.4 331.3 -206.4 322.7 -202.3 317.7 -187.7 315.9 -144.6 311.2 -129.2 311.9 -90.2 308.2 -76.4 302.7 -70.9 295.7 -71.2 241.8 -89.6 156.2 -97.9 98 -108.4 67.4 -106.4 62 -102 46 -101.7 28.9 -88.8M28.9 -88.8 28.1 -88.2M28.1 -88.2 27.4 -87.5M27.4 -87.5 26.9 -87.1M26.9 -87.1 26.5 -86.6M26.5 -86.6 26.2 -86.4M26.2 -86.4 25.7 -85.9M25.7 -85.9 25.5 -85.7M25.5 -85.7 25 -85.2M25 -85.2 24.8 -85M24.8 -85 24.6 -84.7M24.6 -84.7 24.3 -84.5M24.3 -84.5 23.8 -84M23.8 -84 23.6 -83.8M23.6 -83.8 23.4 -83.6M23.4 -83.6 23.1 -83.3M23.1 -83.3 22.9 -83.1M22.9 -83.1 22.6 -82.9M22.6 -82.9 22.1 -82.4M22.1 -82.4 21.9 -82.2M21.9 -82.2 21.7 -82M21.7 -82 21.4 -81.7M21.4 -81.7 21.2 -81.5M21.2 -81.5 20.9 -81.3M20.9 -81.3 20.7 -81M20.7 -81 20.4 -80.8M20.4 -80.8 20.2 -80.6M20.2 -80.6 19.9 -80.4M19.9 -80.4 19.7 -80.1M19.7 -80.1 19.5 -79.9M19.5 -79.9 19.2 -79.7M19.2 -79.7 18.7 -79.2M18.7 -79.2 18.5 -79M18.5 -79 18.2 -78.8M18.2 -78.8 18 -78.5M18 -78.5 17.8 -78.3M17.8 -78.3 17.5 -78.1M17.5 -78.1 17 -77.6M17 -77.6 16.8 -77.4M16.8 -77.4 16.6 -77.2M16.6 -77.2 16.1 -76.8M16.1 -76.8 15.8 -76.6M15.8 -76.6 15.3 -76.3M15.3 -76.3 14.8 -75.9M14.8 -75.9 14.2 -75.6M14.2 -75.6 13.6 -75.4M13.6 -75.4 12.9 -75.1M12.9 -75.1 12 -74.6M12 -74.6 10.5 -73.9M1.7 -65.2 10.5 -73.9"/><path style="--t:1796" d="M28.9 -88.8 46 -101.7 62 -102 67.4 -106.4 98 -108.4 156.2 -97.9 241.8 -89.6 295.7 -71.2 302.7 -70.9 308.2 -76.4 311.9 -90.2 311.2 -129.2 315.9 -144.6 317.7 -187.7 322.7 -202.3 331.3 -206.4 373.3 -207.4 378.3 -208.9 383.2 -212.7 388 -224.1 393.8 -226.9 473.7 -227 477.3 -231.9 477.7 -242.5"/><path style="--t:1989" d="M1.7 -65.2 10.5 -73.9"/></g><g style="--l:#2a7a00;--d:#4E9D2D"><path class="base" d="M1.7 -65.2 10.2 -73.8M10.2 -73.8 10.8 -75.6M10.8 -75.6 10.7 -76.9M10.7 -76.9 10.2 -78.2M10.2 -78.2 10 -78.8M10 -78.8 9.8 -79.4M9.8 -79.4 9.3 -80.3M9.3 -80.3 9 -80.9M9 -80.9 8.9 -81.2M8.9 -81.2 8.5 -81.8M8.5 -81.8 8.2 -82.4M8.2 -82.4 7.9 -83M7.9 -83 7.8 -83.3M7.8 -83.3 7.5 -83.9M7.5 -83.9 7.3 -84.5M7.3 -84.5 7.2 -85M7.2 -85 7.1 -85.6M7.1 -85.6 7.1 -85.9M7.1 -85.9 7.1 -86.5M7.1 -86.5 7 -87.2M7 -87.2 7 -87.5M7 -87.5 7 -88.2M7 -88.2 7 -88.9M7 -88.9 7 -89.2M7 -89.2 6.9 -89.9M6.9 -89.9 6.9 -90.5M6.9 -90.5 6.9 -91.2M6.9 -91.2 6.9 -91.9M6.9 -91.9 6.9 -92.5M6.9 -92.5 6.9 -93.5M6.9 -93.5 6.8 -94.1M6.8 -94.1 6.8 -95.1M6.8 -95.1 6.8 -96.8M6.8 -96.8 7.4 -149.8 0.2 -159.3 -10.5 -166.6M-10.5 -166.6 -12.3 -168.6M-12.3 -168.6 -13.3 -170.5M-13.3 -170.5 -14.1 -172M-14.1 -172 -14.7 -173.2M-14.7 -173.2 -15.2 -174.1M-15.2 -174.1 -15.8 -175.3M-15.8 -175.3 -16.3 -176.2M-16.3 -176.2 -16.8 -177.1M-16.8 -177.1 -17.2 -178M-17.2 -178 -17.8 -179.1M-17.8 -179.1 -18.3 -180M-18.3 -180 -18.7 -180.9M-18.7 -180.9 -19.3 -182.1M-19.3 -182.1 -20.2 -183.2M-20.2 -183.2 -21.4 -184.3M-21.4 -184.3 -23 -185.4M-23 -185.4 -40.3 -196.6"/><path style="--t:1989" d="M1.7 -65.2 10.2 -73.8"/><path style="--t:1826" d="M6.8 -96.8 7.4 -149.8 0.2 -159.3 -10.5 -166.6"/><path style="--t:1440" d="M-10.5 -166.6 -12.3 -168.6"/><path style="--t:1427" d="M-12.3 -168.6 -13.3 -170.5"/><path style="--t:1326" d="M-23 -185.4 -40.3 -196.6"/></g><g style="--l:#F79239;--d:#F79239"><path class="base" d="M-11.9 -40.6 -14.5 -45.3 -17.8 -46.5 -17.8 -50.4 -9.4 -57.2 -1.7 -68.6M12.6 19.9 -2.5 -12.4 -6.2 -28.3M-6.2 -28.3 -6.2 -29.6M-6.2 -29.6 -6.3 -30.6M-6.3 -30.6 -6.3 -31.6M-6.3 -31.6 -6.4 -32.6M-6.4 -32.6 -6.4 -33.3M-6.4 -33.3 -6.4 -34M-6.4 -34 -6.5 -35M-6.5 -35 -6.5 -35.7M-6.5 -35.7 -6.5 -36.3M-6.5 -36.3 -6.7 -37.1M-6.7 -37.1 -6.9 -37.7M-6.9 -37.7 -7.4 -38.6M-7.4 -38.6 -7.9 -39.5M-7.9 -39.5 -8.7 -40.1M-8.7 -40.1 -10 -40.3M-10 -40.3 -11.9 -40.6M17.2 35.5 16.1 27 12.6 19.9M17.2 35.5 17.4 37.5M17.4 37.5 17.5 38.8M17.5 38.8 17.6 39.8M17.6 39.8 17.7 40.8M17.7 40.8 17.8 41.5M17.8 41.5 17.9 42.1M17.9 42.1 18 42.8M18 42.8 18.1 43.4M18.1 43.4 18.2 44.1M18.2 44.1 18.3 44.7M18.3 44.7 18.4 45.3M18.4 45.3 18.4 45.9M18.4 45.9 18.5 46.2M18.5 46.2 18.5 46.9M18.5 46.9 18.5 47.5M18.5 47.5 18.6 47.8M18.6 47.8 18.6 48.5M18.6 48.5 18.6 49.1M18.6 49.1 18.6 49.4M18.6 49.4 18.5 50.1M18.5 50.1 18.5 50.7M18.5 50.7 18.5 51.3M18.5 51.3 18.4 51.7M18.4 51.7 18.4 52.3M18.4 52.3 18.3 52.9M18.3 52.9 18.2 53.5M18.2 53.5 18 54.4M18 54.4 17.9 54.9M17.9 54.9 17.7 55.9M17.7 55.9 17.6 56.5M17.6 56.5 17.4 57.5M17.4 57.5 17.1 59.1M17.1 59.1 8 104.2 -5.5 148.5 -15.9 195.3 -25.9 219.3 -30.9 253.9 -34 263.7"/><path style="--t:1984" d="M-1.7 -68.6 -9.4 -57.2 -17.8 -50.4 -17.8 -46.5 -14.5 -45.3 -11.9 -40.6"/><path style="--t:1786" d="M-6.2 -28.3 -2.5 -12.4 12.6 19.9"/><path style="--t:1516" d="M12.6 19.9 16.1 27 17.2 35.5"/><path style="--t:1427" d="M17.2 35.5 17.4 37.5"/><path style="--t:1297" d="M17.1 59.1 8 104.2 -5.5 148.5 -15.9 195.3 -25.9 219.3 -30.9 253.9 -34 263.7"/></g><g style="--l:#552683;--d:#a673e3"><path class="base" d="M198.1 376.6 200.8 367.2 200.4 359.5 194 356 190.5 351.1 192.7 328.7M192.7 328.7 184.1 268.6 137.9 164.6M137.9 164.6 137 162.2M137 162.2 136.1 160.1M136.1 160.1 135.3 158.6M135.3 158.6 134.8 157.4M134.8 157.4 134.4 156.5M134.4 156.5 134 155.2M134 155.2 133.7 154.3M133.7 154.3 133.3 153.2M133.3 153.2 132.9 152.3M132.9 152.3 132.4 151.1M132.4 151.1 132.1 150.2M132.1 150.2 131.5 149.1M131.5 149.1 131.1 148.2M131.1 148.2 130.6 146.9M130.6 146.9 129.9 145.4M129.9 145.4 129.1 143.5M129.1 143.5 120.5 125.6 113.8 104.5 97.9 76.3 90.2 74.1 85.7 68.4 81.4 66.7 61.8 66.6 55.4 64.9 38.9 54.7 31.7 46.9M31.7 46.9 30.3 45.4M30.3 45.4 29.4 44.4M29.4 44.4 28.8 43.6M28.8 43.6 28.1 42.9M28.1 42.9 27.4 42.1M27.4 42.1 26.8 41.3M26.8 41.3 26.1 40.5M26.1 40.5 25.7 40M25.7 40 25 39.3M25 39.3 24.3 38.5M24.3 38.5 23.7 37.8M23.7 37.8 23.1 37.1M23.1 37.1 22.3 36.2M22.3 36.2 21 35.7M21 35.7 19.2 36.3M19.2 36.3 17.3 35.6M17.3 35.6 16.1 27 12.6 19.9M12.6 19.9 -2.6 -12.6 -6.2 -28.1M-6.2 -28.1 -6.2 -29.5M-6.2 -29.5 -6.3 -30.5M-6.3 -30.5 -6.3 -31.5M-6.3 -31.5 -6.3 -32.4M-6.3 -32.4 -6.4 -33.1M-6.4 -33.1 -6.4 -33.8M-6.4 -33.8 -6.4 -34.8M-6.4 -34.8 -6.5 -35.4M-6.5 -35.4 -6.5 -36.1M-6.5 -36.1 -6.6 -36.9M-6.6 -36.9 -6.9 -37.7M-6.9 -37.7 -7.2 -38.3M-7.2 -38.3 -7.7 -39.2M-7.7 -39.2 -8.5 -40.1M-8.5 -40.1 -10 -40.3M-10 -40.3 -11.8 -40.5M-11.8 -40.5 -14.6 -45.3 -17.9 -46.6 -17.8 -50.3 -9.4 -57.2 -1.7 -68.6"/><path style="--t:1558" d="M192.7 328.7 190.5 351.1 194 356 200.4 359.5 200.8 367.2 198.1 376.6"/><path style="--t:506" d="M137.9 164.6 184.1 268.6 192.7 328.7"/><path style="--t:520" d="M137 162.2 137.9 164.6"/><path style="--t:533" d="M136.1 160.1 137 162.2"/><path style="--t:632" d="M129.1 143.5 129.9 145.4"/><path style="--t:1347" d="M31.7 46.9 38.9 54.7 55.4 64.9 61.8 66.6 81.4 66.7 85.7 68.4 90.2 74.1 97.9 76.3 113.8 104.5 120.5 125.6 129.1 143.5"/><path style="--t:1357" d="M30.3 45.4 31.7 46.9"/><path style="--t:1426" d="M17.3 35.6 19.2 36.3"/><path style="--t:1516" d="M12.6 19.9 16.1 27 17.3 35.6"/><path style="--t:1785" d="M-6.2 -28.1 -2.6 -12.6 12.6 19.9"/><path style="--t:1984" d="M-1.7 -68.6 -9.4 -57.2 -17.8 -50.3 -17.9 -46.6 -14.6 -45.3 -11.8 -40.5"/></g><g style="--l:#F6B221;--d:#F6B221"><path class="base" d="M-191.5 -130.3 -144.4 -141.6 -112.1 -151.9 -86.7 -154.7 -60.8 -162.2 -27.2 -160.2M-27.2 -160.2 -25.5 -160M-25.5 -160 -24.5 -159.9M-24.5 -159.9 -23.2 -159.8M-23.2 -159.8 -22.3 -160M-22.3 -160 -21.5 -160.3M-21.5 -160.3 -20.8 -160.9M-20.8 -160.9 -20.2 -161.5M-20.2 -161.5 -19.5 -162.1M-19.5 -162.1 -18.9 -162.6M-18.9 -162.6 -18.2 -163.1M-18.2 -163.1 -17.4 -163.6M-17.4 -163.6 -16.5 -164.1M-16.5 -164.1 -15.7 -164.6M-15.7 -164.6 -14.6 -165.3M-14.6 -165.3 -13.1 -166.2M-13.1 -166.2 -10.9 -166.7M10.4 -74 10.8 -75.9M10.8 -75.9 10.6 -77.2M10.6 -77.2 10.2 -78.1M10.2 -78.1 9.9 -79.1M9.9 -79.1 9.6 -79.7M9.6 -79.7 9.3 -80.3M9.3 -80.3 9 -80.9M9 -80.9 8.7 -81.5M8.7 -81.5 8.4 -82.1M8.4 -82.1 8.1 -82.7M8.1 -82.7 7.9 -83M7.9 -83 7.6 -83.6M7.6 -83.6 7.4 -84.2M7.4 -84.2 7.2 -84.7M7.2 -84.7 7.1 -85.3M7.1 -85.3 7.1 -85.6M7.1 -85.6 7.1 -86.2M7.1 -86.2 7 -86.8M7 -86.8 7 -87.2M7 -87.2 7 -87.8M7 -87.8 7 -88.5M7 -88.5 7 -88.9M7 -88.9 7 -89.5M7 -89.5 6.9 -90.2M6.9 -90.2 6.9 -90.9M6.9 -90.9 6.9 -91.5M6.9 -91.5 6.9 -92.2M6.9 -92.2 6.9 -92.8M6.9 -92.8 6.9 -93.5M6.9 -93.5 6.8 -94.5M6.8 -94.5 6.8 -95.4M6.8 -95.4 6.8 -96.8M6.8 -96.8 7.4 -149.9 0.1 -159.4 -10.9 -166.7M1.7 -65.2 10.4 -74"/><path style="--t:1457" d="M-27.2 -160.2 -60.8 -162.2 -86.7 -154.7 -112.1 -151.9 -144.4 -141.6 -191.5 -130.3"/><path style="--t:1440" d="M-13.1 -166.2 -10.9 -166.7"/><path style="--t:1826" d="M6.8 -96.8 7.4 -149.9 0.1 -159.4 -10.9 -166.7"/><path style="--t:1989" d="M1.7 -65.2 10.4 -74"/></g><g style="--l:#9F26B5;--d:#d84af3"><path class="base" d="M1.7 -65.2 10.1 -73.6M10.1 -73.6 11.7 -75.7M11.7 -75.7 12.6 -77.6M12.6 -77.6 13.1 -79.2M13.1 -79.2 13.2 -80.6M13.2 -80.6 13.2 -81.9M13.2 -81.9 13.2 -82.9M13.2 -82.9 13.3 -83.8M13.3 -83.8 13.4 -85.1M13.4 -85.1 13.6 -86.1M13.6 -86.1 14 -87.2M14 -87.2 14.3 -88.1M14.3 -88.1 14.8 -89.3M14.8 -89.3 15.3 -90.2M15.3 -90.2 16.1 -91.2M16.1 -91.2 17.1 -92.5M17.1 -92.5 18.5 -94.2M18.5 -94.2 67.9 -143.4 69.6 -158 86.4 -198.8 82.1 -216.2 69.5 -248 68.4 -255.1 69.7 -262.3 88.3 -298 89.1 -304.9 87 -308.8 60.1 -333 63.2 -370.2 57.6 -387"/><path style="--t:1989" d="M1.7 -65.2 10.1 -73.6"/><path style="--t:1931" d="M10.1 -73.6 11.7 -75.7"/><path style="--t:1917" d="M11.7 -75.7 12.6 -77.6"/><path style="--t:1826" d="M17.1 -92.5 18.5 -94.2"/><path style="--t:1814" d="M18.5 -94.2 67.9 -143.4 69.6 -158 86.4 -198.8 82.1 -216.2 69.5 -248 68.4 -255.1 69.7 -262.3 88.3 -298 89.1 -304.9 87 -308.8 60.1 -333 63.2 -370.2 57.6 -387"/></g><g style="--l:#C4D600;--d:#C4D600"><path class="base" d="M198.1 376.6 200.8 367 200.4 359.4 193.9 356 190.5 350.9 192.7 328.7M192.7 328.7 184.1 268.7 138 164.5M138 164.5 138.3 162.7M138.3 162.7 139 161.4M139 161.4 139.7 160.7M139.7 160.7 140.5 160.1M140.5 160.1 141.2 159.8M141.2 159.8 142 159.5M142 159.5 142.6 159.4M142.6 159.4 143.3 159.4M143.3 159.4 143.9 159.4M143.9 159.4 144.2 159.4M144.2 159.4 144.9 159.3M144.9 159.3 145.5 159.3M145.5 159.3 146.2 159.3M146.2 159.3 146.5 159.3M146.5 159.3 147.1 159.2M147.1 159.2 147.7 159.2M147.7 159.2 148.3 159.2M148.3 159.2 148.6 159.2M148.6 159.2 149.2 159.2M149.2 159.2 149.9 159.1M149.9 159.1 150.2 159.1M150.2 159.1 150.9 159M150.9 159 151.5 159M151.5 159 152.2 158.9M152.2 158.9 152.5 158.9M152.5 158.9 153.1 158.8M153.1 158.8 153.8 158.8M153.8 158.8 154.8 158.7M154.8 158.7 155.4 158.6M155.4 158.6 156.2 158.4M156.2 158.4 157.4 158.2M157.4 158.2 158.5 157.8M158.5 157.8 185.5 141 195.1 137.4 215 122.3 225.5 118.3 243 107.5 249.2 100.3 255.6 85.2 252.7 77.5 252.5 30 266.2 27.8 265.6 5.5 255.9 3.9 260.1 -11.2 258.5 -18.7 259.6 -30.9 255.6 -33.1 250.5 -59.1 243.5 -67.2 225.6 -67.9 224.7 -89.8 219.5 -91.4"/><path style="--t:1558" d="M192.7 328.7 190.5 350.9 193.9 356 200.4 359.4 200.8 367 198.1 376.6"/><path style="--t:506" d="M138 164.5 184.1 268.7 192.7 328.7"/><path style="--t:773" d="M219.5 -91.4 224.7 -89.8 225.6 -67.9 243.5 -67.2 250.5 -59.1 255.6 -33.1 259.6 -30.9 258.5 -18.7 260.1 -11.2 255.9 3.9 265.6 5.5 266.2 27.8 252.5 30 252.7 77.5 255.6 85.2 249.2 100.3 243 107.5 225.5 118.3 215 122.3 195.1 137.4 185.5 141 158.5 157.8"/></g><g style="--l:#B71318;--d:#fb4b43"><path class="base" d="M17.3 35.4 16.1 27.2 12.6 19.9M137.8 164.2 136.9 161.8M136.9 161.8 135.8 159.6M135.8 159.6 135.2 158.3M135.2 158.3 134.7 157.2M134.7 157.2 134.2 156M134.2 156 133.8 154.8M133.8 154.8 133.5 153.8M133.5 153.8 133.2 152.9M133.2 152.9 132.8 152M132.8 152 132.3 150.8M132.3 150.8 131.9 149.9M131.9 149.9 131.4 148.8M131.4 148.8 130.9 147.6M130.9 147.6 130.3 146.3M130.3 146.3 129.8 145.1M129.8 145.1 128.8 143M128.8 143 120.5 125.5 114 104.8 97.8 76.3 90.3 74.2 85.7 68.4 81 66.6 61.6 66.6 55.5 65 38.8 54.6 31.7 46.9M31.7 46.9 30.3 45.4M30.3 45.4 29.4 44.4M29.4 44.4 28.8 43.7M28.8 43.7 28.1 42.9M28.1 42.9 27.5 42.1M27.5 42.1 26.8 41.4M26.8 41.4 26.2 40.6M26.2 40.6 25.5 39.8M25.5 39.8 24.8 39.1M24.8 39.1 24.4 38.6M24.4 38.6 23.6 37.6M23.6 37.6 22.9 36.9M22.9 36.9 22.1 36.1M22.1 36.1 20.8 35.8M20.8 35.8 19.2 36.3M19.2 36.3 17.3 35.4M192.7 328.7 184.1 268.6 137.8 164.2"/><path style="--t:1516" d="M12.6 19.9 16.1 27.2 17.3 35.4"/><path style="--t:522" d="M136.9 161.8 137.8 164.2"/><path style="--t:536" d="M135.8 159.6 136.9 161.8"/><path style="--t:635" d="M128.8 143 129.8 145.1"/><path style="--t:1347" d="M31.7 46.9 38.8 54.6 55.5 65 61.6 66.6 81 66.6 85.7 68.4 90.3 74.2 97.8 76.3 114 104.8 120.5 125.5 128.8 143"/><path style="--t:1357" d="M30.3 45.4 31.7 46.9"/><path style="--t:1427" d="M17.3 35.4 19.2 36.3"/><path style="--t:508" d="M137.8 164.2 184.1 268.6 192.7 328.7"/></g><g style="--l:#007683;--d:#009DAA"><path class="base" d="M-291.3 -14.3 -285.7 -11.7 -241.2 -12.6 -236 -10.5 -192.6 -11 -187.9 -8.9 -187.3 -1.7 -183.9 -1.4 -178.5 -16.5 -183.7 -27.3 -175.4 -34.4 -160.4 -32.8 -84.3 -33 -78.5 -30.2 -51.6 -29.4 -36.3 -32.1 -29.3 -35.8M-29.3 -35.8 -28.1 -35.9M-28.1 -35.9 -27.1 -35.9M-27.1 -35.9 -26.1 -35.9M-26.1 -35.9 -25.4 -35.9M-25.4 -35.9 -24.7 -35.9M-24.7 -35.9 -24.4 -35.9M-24.4 -35.9 -23.7 -36M-23.7 -36 -23.1 -36M-23.1 -36 -22.5 -35.9M-22.5 -35.9 -22 -35.8M-22 -35.8 -21.7 -35.7M-21.7 -35.7 -21.1 -35.4M-21.1 -35.4 -20.8 -35.3M-20.8 -35.3 -20.2 -35M-20.2 -35 -19.9 -34.9M-19.9 -34.9 -19.3 -34.8M-19.3 -34.8 -18.8 -34.7M-18.8 -34.7 -18.2 -34.7M-18.2 -34.7 -17.9 -34.7M-17.9 -34.7 -17.2 -34.7M-17.2 -34.7 -16.9 -34.7M-16.9 -34.7 -16.3 -34.7M-16.3 -34.7 -15.6 -34.7M-15.6 -34.7 -15.3 -34.7M-15.3 -34.7 -14.7 -34.7M-14.7 -34.7 -14.1 -34.8M-14.1 -34.8 -13.5 -35.1M-13.5 -35.1 -13 -35.5M-13 -35.5 -12.7 -36.3M-12.7 -36.3 -12.5 -37.2M-12.5 -37.2 -12.3 -38.6M-12.3 -38.6 -12.1 -40.3M-12.1 -40.3 -14.6 -45.3 -17.8 -46.5 -17.8 -50.4 -9.4 -57.2 -1.7 -68.6"/><path style="--t:1765" d="M-29.3 -35.8 -36.3 -32.1 -51.6 -29.4 -78.5 -30.2 -84.3 -33 -160.4 -32.8 -175.4 -34.4 -183.7 -27.3 -178.5 -16.5 -183.9 -1.4 -187.3 -1.7 -187.9 -8.9 -192.6 -11 -236 -10.5 -241.2 -12.6 -285.7 -11.7 -291.3 -14.3"/><path style="--t:1984" d="M-1.7 -68.6 -9.4 -57.2 -17.8 -50.4 -17.8 -46.5 -14.6 -45.3 -12.1 -40.3"/></g></svg>
   <p id="loading" role="status"><span>Loading…</span></p>
 </div>
 <script>
-  // The picture is of the opening view in the reader's theme: not of a view a link names, nor a theme the address forces.
+  // The sketch is of the opening view: not shown for a view a link names. Its middle goes where the map
+  // will put the view's middle: a screen wider than the map's bounds allow round it has the map shifted
+  // in from that edge (MapLibre's maxBounds), and the sketch goes with it.
   (() => {
     const poster = document.getElementById('poster');
+    const sketch = document.getElementById('sketch');
     const [z, lat, lon] = poster.dataset.view.split('/').map(Number);
     const [hz, hlat, hlon] = location.hash.slice(1).split('/').map(Number);
     const elsewhere = Number.isFinite(hlon) && (Math.abs(hz - z) > 0.01 || Math.abs(hlat - lat) > 0.002 || Math.abs(hlon - lon) > 0.002);
-    if (!Number.isFinite(lon) || elsewhere || new URLSearchParams(location.search).has('theme')) return poster.querySelector('picture').remove();
-    // Where the map will put the view's middle: a screen wider than the map's bounds allow round
-    // it has the map shifted in from that edge (MapLibre's maxBounds), and the picture goes with it.
+    if (!Number.isFinite(lon) || elsewhere) return sketch.remove();
     const [west, south, east, north] = poster.dataset.bounds.split(',').map(Number);
+    if (![west, south, east, north].every(Number.isFinite)) return;
     const world = 512 * 2 ** z;
     const x = (lng) => ((lng + 180) / 360) * world;
     const y = (la) => ((180 - (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + (la * Math.PI) / 360))) / 360) * world;
     const fit = (c, lo, hi, half) => (hi - lo < 2 * half ? (lo + hi) / 2 : Math.min(Math.max(c, lo + half), hi - half));
-    const img = poster.querySelector('img');
-    // The picture element's media queries follow the device. A saved manual choice
-    // needs that theme's assets even when it differs from the device setting.
-    const activeTheme = document.documentElement.dataset.theme;
-    for (const source of poster.querySelectorAll('source')) source.srcset = source.srcset.replace(/-(light|dark)/g, `-${activeTheme}`);
-    img.src = img.getAttribute('src').replace(/-(light|dark)/g, `-${activeTheme}`);
-    img.srcset = img.getAttribute('srcset').replace(/-(light|dark)/g, `-${activeTheme}`);
-
     const place = () => {
-      if (![west, south, east, north].every(Number.isFinite)) return;
       const dx = x(lon) - fit(x(lon), x(west), x(east), innerWidth / 2);
       const dy = y(lat) - fit(y(lat), y(north), y(south), innerHeight / 2);
-      img.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      sketch.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     };
     place();
     addEventListener('resize', place);
-    // Shown whole, not drawn in strips as it arrives.
-    // A deployment rebuilds the drawing from current data. An older screenshot must
-    // never flash before a different drawing, even if its centre is unchanged.
-    const json = (url) => fetch(url).then((r) => r.ok ? r.json() : null);
-    // The ground is the site's own, published with the drawing (publish-check: data-ground).
-    const matches = json('/data/sheets.json').then((s) => Boolean(s?.drawing && s.drawing === poster.dataset.drawing)).catch(() => false);
-    const whole = async () => {
-      if (await matches) img.classList.add('whole');
-      else img.closest('picture')?.remove();
-    };
-    if (img.complete && img.naturalWidth) whole();
-    else img.addEventListener('load', whole);
   })();
 </script>
 <script>
