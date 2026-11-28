@@ -147,6 +147,7 @@ test('a label missing from the fresh drawing stays while its old room is clear',
   assert.deepEqual(label.stops.map((s) => s.zoom), [12, 14]);
   assert.equal(label.stops[1].carried, true);
   assert.equal(label.stops[1].retained, true);
+  assert.equal(label.stops[1].size, 13, 'the zoom-14 size comes from SIZES, not a fitted median');
   assert.equal(label.stops[1].moved, 0);
   assert.deepEqual(planReport(plan).transitions, [{ from: 12, to: 14, before: 1, after: 1, carried: 1, retained: 1, moved: 0, handovers: 0, gaveWay: 0, added: 0 }]);
   assert.equal(carryFaults(plan).length, 0);

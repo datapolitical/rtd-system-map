@@ -452,17 +452,19 @@ export function carryLettering(freshPlan) {
     const room = new Room();
     const current = [];
     const used = new Set();
-    const sizeScales = new Map();
-    for (const old of before) {
-      const now = byId.get(old.label.id);
-      if (!now || old.stop.size <= 0) continue;
-      const values = sizeScales.get(old.label.kind) ?? [];
-      values.push(now.stop.size / old.stop.size);
-      sizeScales.set(old.label.kind, values);
-    }
-    const scaleFor = (kind) => {
-      const values = sizeScales.get(kind);
-      return values?.length ? values.sort((a, b) => a - b)[Math.floor(values.length / 2)] : 1;
+    // A retained label has no fresh stop to take its size from. Read the same build
+    // and page tables as a fresh entry, never a median inferred from other labels.
+    const sizeFor = (old) => {
+      switch (old.label.kind) {
+        case 'station-name': return old.stop.size === SIZES.nameMinor ? SIZES.nameMinor : SIZES.name[drawing.id];
+        case 'station-letter': return SIZES.nameLetter[drawing.id] * SIZES.letterText;
+        case 'line-letter': return SIZES.letterDisc[drawing.id] * SIZES.letterText;
+        case 'route-list':
+        case 'street-name': return NUMBER_SIZE[drawing.id];
+        case 'hall-label': return SIZES.name[drawing.id] - 2;
+        case 'hall-name': return SIZES.hallLetter;
+        default: throw new Error(`No size rule for ${old.label.kind}`);
+      }
     };
     const take = (label, stop, held) => {
       if (!label.partOf) room.take(stopBox(stop, drawing.zoom), { id: label.id, kind: label.kind });
@@ -485,10 +487,11 @@ export function carryLettering(freshPlan) {
         source.why = handover.why;
         continue;
       }
-      const scale = scaleFor(old.label.kind);
+      const retainedSize = now ? null : sizeFor(old);
+      const scale = retainedSize / old.stop.size;
       const held = {
         ...old.stop, sheet: drawing.id, zoom: drawing.zoom, moved: 0, ...(!now ? { retained: true } : {}),
-        size: now?.stop.size ?? ROUND(old.stop.size * scale),
+        size: now?.stop.size ?? ROUND(retainedSize),
         room: now?.stop.room ?? old.stop.room.map((v) => ROUND(v * scale)),
         text: now?.stop.text ?? old.stop.text,
       };
