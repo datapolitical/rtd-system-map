@@ -616,6 +616,10 @@ let picked = null; // { mode: 'bus' | 'rail', route }
 let shown = null; // what the card names: { title, note, routes: [{ mode, route, color }] }
 let opener = null; // the button the card was opened from (the list, #135), where closing it returns
 let selectedAt = null;
+// Live predictions for the open card (showDepartures): the module, its connection, and the card's redraw.
+let liveCode = null;
+let liveWatch = null;
+let redrawDepartures = null;
 const searchBar = document.querySelector('#finder .bar');
 const searchBox = document.querySelector('#search');
 // The place search found, ringed on the map until the next tap (goTo, below).
@@ -717,6 +721,7 @@ function tell(what) {
 function close({ focus = false } = {}) {
   if (card.hidden && !picked) return;
   card.hidden = true;
+  if (redrawDepartures) { redrawDepartures = null; liveWatch?.watch([]); }
   shown = null;
   selectedAt = null;
   if (picked) { setPick(null); say(pickSaid(null)); }
@@ -895,28 +900,70 @@ const departureChip = (row) => {
   const look = color ? ` class="chip rail" style="background:${esc(color)};color:${esc(inkOn(color))}"` : ' class="chip"';
   return `<b${look}><span class="sr">${color ? '' : 'Route '}</span>${esc(row.name)}<span class="sr">${color ? ' Line' : ''}</span></b>`;
 };
+// RTD's live predictions for the card's stops (js/panel/live.js), asked of the site's relay only
+// while a stop's or a station's card is open. Without them (an older relay, a feed that fails, a
+// dropped connection, data built before trips were kept) the card shows the timetable, and says so.
+const loadLive = async () => {
+  liveCode ??= await import('../panel/live.js');
+  if (!liveWatch) {
+    const url = new URL('../../live/stream?for=card', import.meta.url);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    liveWatch = liveCode.watcher(url.href, { changed: () => redrawDepartures?.() });
+  }
+  return liveCode;
+};
+// How long live times may take to arrive before the card says they aren't loading.
+const LIVE_WAIT_MS = 20_000;
 async function showDepartures(what) {
   clearInterval(departuresTimer);
+  redrawDepartures = null;
   const box = card.querySelector('.departures');
-  if (!box || (what.station == null && !what.stops?.length)) return;
+  if (!box || (what.station == null && !what.stops?.length)) { liveWatch?.watch([]); return; }
   try {
     const { upcoming, clockIn, departuresHtml, accessible } = await loadDepartures();
-    const { index, records } = await departures.stops({ stops: what.stops ?? [], station: what.station ?? null });
+    const { index, records, ids } = await departures.stops({ stops: what.stops ?? [], station: what.station ?? null });
     if (shown !== what || !box.isConnected) return;
     // A stop's own line under its departures: its number, and whether a wheelchair can board there.
-    const about = what.stops?.length === 1 ? [`Stop ${what.stops[0]}`, accessible(records[0])].filter(Boolean).join(' \u00b7 ') : '';
+    const about = what.stops?.length === 1 ? [`Stop ${what.stops[0]}`, accessible(records[0])].filter(Boolean).join(' · ') : '';
+    const live = records.length ? await loadLive().catch(() => null) : null;
+    if (shown !== what || !box.isConnected) return;
+    const asked = Date.now();
+    let trips = null; // each departure's trip, read once predictions arrive
+    let tripsAsked = false;
     const draw = () => {
-      const next = records.length ? upcoming(records, index, clockIn(new Date(), index.tz), { first: (route) => Boolean(drawnRoutes?.rail?.includes(route)) }) : null;
-      box.innerHTML = '<span class="head" role="heading" aria-level="3">Next departures, scheduled</span>'
-        + (next ? departuresHtml(next, { chip: departureChip }) : '<p class="none">RTD\u2019s timetable lists no trips here.</p>')
+      const now = Date.now();
+      const state = live ? liveWatch.state() : null;
+      const isFresh = Boolean(live && state && live.fresh(state, now));
+      if (isFresh && !tripsAsked) {
+        tripsAsked = true;
+        departures.trips(ids).then((t) => { trips = t; if (shown === what) draw(); }, () => {});
+      }
+      const next = records.length ? upcoming(records, index, clockIn(new Date(now), index.tz), {
+        first: (route) => Boolean(drawnRoutes?.rail?.includes(route)),
+        live: isFresh && trips ? live.liveFor(state, ids, trips, index, now) : null,
+      }) : null;
+      // Which kind of time is shown is always said. Live times were tried and are not here: said too.
+      const failed = live && !isFresh && (state?.problem || now - asked > LIVE_WAIT_MS);
+      const kind = next?.live ? 'Minutes are RTD’s live predictions. Clock times are scheduled.' : failed && next?.rows.length ? 'Live times aren’t loading. These are scheduled.' : '';
+      box.innerHTML = `<span class="head" role="heading" aria-level="3">Next departures, ${next?.live ? 'live' : 'scheduled'}</span>`
+        + (next ? departuresHtml(next, { chip: departureChip }) : '<p class="none">RTD’s timetable lists no trips here.</p>')
+        + (kind ? `<p class="kind">${esc(kind)}</p>` : '')
         + (about ? `<p class="about">${detail(about)}</p>` : '');
+      box.dataset.kind = next?.live ? 'live' : 'scheduled';
       box.hidden = false;
     };
     draw();
-    departuresTimer = setInterval(() => { if (shown === what && box.isConnected && !card.hidden) draw(); else clearInterval(departuresTimer); }, 30_000);
+    if (live) {
+      redrawDepartures = () => { if (shown === what && box.isConnected && !card.hidden) draw(); };
+      liveWatch.watch(ids);
+    }
+    departuresTimer = setInterval(() => {
+      if (shown === what && box.isConnected && !card.hidden) { if (live) liveWatch.watch(ids); draw(); }
+      else { clearInterval(departuresTimer); if (redrawDepartures) { redrawDepartures = null; liveWatch?.watch([]); } }
+    }, 15_000);
   } catch {
     if (shown !== what || !box.isConnected) return;
-    box.innerHTML = '<p class="none">Departure times aren\u2019t loading. Check your connection.</p>';
+    box.innerHTML = '<p class="none">Departure times aren’t loading. Check your connection.</p>';
     box.hidden = false;
   }
 }

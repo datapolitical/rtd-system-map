@@ -840,6 +840,8 @@ async function main() {
   await mkdir(path.join(next, 'departures'), { recursive: true });
   await writeFile(path.join(next, 'departures', 'index.json'), JSON.stringify(tables.index));
   await Promise.all(tables.files.map((file, k) => writeFile(path.join(next, 'departures', `${k}.json`), JSON.stringify(file))));
+  // Each departure's trip, for live predictions: read only by a page that is showing them.
+  await Promise.all(tables.tripFiles.map((file, k) => writeFile(path.join(next, 'departures', `trips-${k}.json`), JSON.stringify(file))));
   console.log(`  departures: ${tables.departures} at ${tables.stops} stops (${tables.ends} more where trips only end), in ${tables.files.length} files of about ${Math.round(tables.chars / tables.files.length / 1000)} KB; ${Object.keys(tables.index.stations).length} stations' platforms`);
   // The sheets are drawn from the files just written (DESIGN.md, "Five sheets").
   await writeSheets(next);
