@@ -2738,17 +2738,21 @@ How it is built:
   lettering across zooms. The plan is #129. (Corrected 2026-11-27; until
   then this said the change was the page's alone.)
 - **One lettering plan.** `npm run build:sheets` writes
-  `public/data/lettering-plan.json` beside the sheets (#234): every station
-  name, station letter, line letter and route list once, with what it says,
-  where its ink sits, its angle and size, the drawings it shows on, and the
-  label it took over from if any. Each label's ink box, measured from the
-  same glyph files the page loads, is the room it takes. `npm run
-  check:plan` reads the plan: no two labels' ink may overlap on a drawing,
-  and a label on one drawing must be on the next within 2 px and no shorter
-  unless the plan records why, as the consistency proposal sets out. The
-  sheets' own placement still leaves 110 overlapping pairs and 3,074
-  zoom changes for the plan's placement to resolve; the plan is the record
-  those later steps work from. Nothing on the page reads it yet.
+  `public/data/lettering-plan.json` beside the sheets (#234, #156): every station
+  name, station letter, line letter, hall name, bus-street name and route list
+  once, with what it says, where its ink sits, its angle and size, the drawings
+  it shows on, and the label it took over from if any. Each label's ink box,
+  measured from the same glyph files the page loads, is the room it takes. The
+  build carries labels from the widest drawing inward, rank by rank: an old
+  label keeps its ground before a new one of its rank, a label missing from the
+  fresh drawing stays while its room is clear, and a split route list hands
+  over to its detailed successor. It moves or ends only for a recorded
+  collision or handover. `npm run check:plan` reads the plan: no two labels'
+  ink may overlap on a drawing, and a label on one drawing must be on the next
+  within 2 px and no shorter unless the plan records why, as the consistency
+  proposal sets out. On the five sheets, fresh placement leaves 125 overlapping
+  pairs and 3,181 unexplained zoom changes; the carried plan has none of
+  either. Nothing on the page reads it yet (#158).
 
 ## Interface
 
@@ -5892,6 +5896,19 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   drawings are byte-identical, and the plan reports the 110 overlapping
   pairs and 3,074 unrecorded changes those placements leave. The plan is
   2,594 KB raw and 252 KB gzipped for 7,829 labels on 9,797 placements.
+- 2026-11-27: The lettering plan carries our own labels between drawings
+  (#156). It now includes bus-street names and both forms of hall lettering as
+  well as station names, station letters, line letters and route lists. Old
+  labels claim their previous ground before new labels of the same rank;
+  higher ranks still place first, a label absent from the fresh drawing is
+  retained while its ink fits, and nearby detailed route lists take over from
+  a merged list through an explicit parent link. A move or disappearance names
+  the labels it collided with. `check:plan` now fails on any overlap or
+  unrecorded change and reports every neighbouring pair. On the built sheets:
+  9,707 labels on 13,195 placements, 3,500 KB raw; zero overlaps and zero
+  unexplained changes, against 125 and 3,181 with fresh placement. The five
+  sheet GeoJSON files are unchanged; the page still has to draw the plan
+  (#158), and arbitrary whole-zoom drawings need #155.
 - 2026-11-27: Live predictions on stop and station cards (#13; Chris, about
   20:10 MST, with the relay change). An open card asks, since the sheets
   have no Live button. The relay sends a page only its own stops, and asks

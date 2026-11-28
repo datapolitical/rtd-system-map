@@ -131,6 +131,117 @@ test('the plan built from the real map is whole and every kind of lettering is i
   assert.equal(report.stops, plan.labels.reduce((n, l) => n + l.stops.length, 0));
 });
 
+test('carrying keeps a station name on its old ground when the fresh drawing moves it', () => {
+  const plan = letteringPlan(sheets([name(7, '0.0', 'Union Station', [0, 0])], [name(7, '0.0', 'Union Station', [6, 0])]), { carry: true });
+  const label = plan.labels.find((l) => l.kind === 'station-name');
+  assert.equal(label.stops.length, 2);
+  assert.equal(label.stops[1].moved, 0);
+  assert.equal(label.stops[1].carried, true);
+  assert.deepEqual(label.stops[1].at, label.stops[0].at);
+  assert.equal(carryFaults(plan).length, 0);
+});
+
+test('a label missing from the fresh drawing stays while its old room is clear', () => {
+  const plan = letteringPlan(sheets([name(7, '0.0', 'Union Station', [0, 0])], []), { carry: true });
+  const label = plan.labels.find((l) => l.kind === 'station-name');
+  assert.deepEqual(label.stops.map((s) => s.zoom), [12, 14]);
+  assert.equal(label.stops[1].carried, true);
+  assert.equal(label.stops[1].retained, true);
+  assert.equal(label.stops[1].moved, 0);
+  assert.deepEqual(planReport(plan).transitions, [{ from: 12, to: 14, before: 1, after: 1, carried: 1, retained: 1, moved: 0, handovers: 0, gaveWay: 0, added: 0 }]);
+  assert.equal(carryFaults(plan).length, 0);
+});
+
+test('a new higher-rank label makes a carried list move to its fresh place with a reason', () => {
+  const plan = letteringPlan(sheets(
+    [list([-100, 2], [100, 2], '0, 1', '0 1')],
+    [name(7, '0.0', 'Union Station', [0, 0]), list([-100, 102], [100, 102], '0, 1', '0 1')],
+  ), { carry: true });
+  const listLabel = plan.labels.find((l) => l.kind === 'route-list');
+  assert.equal(listLabel.stops.length, 2);
+  assert.ok(listLabel.stops[1].moved > 2);
+  assert.match(listLabel.stops[1].why, /no longer fits.*station-name/);
+  assert.equal(plan.labels.find((l) => l.kind === 'station-name').stops[0].moved, 0);
+  assert.equal(overlapFaults(plan).length, 0);
+  assert.equal(carryFaults(plan).length, 0);
+});
+
+test('a carried label with nowhere fresh to go ends with a recorded fit reason', () => {
+  const plan = letteringPlan(sheets(
+    [list([-100, 2], [100, 2], '0, 1', '0 1')],
+    [name(7, '0.0', 'Union Station', [0, 0])],
+  ), { carry: true });
+  const listLabel = plan.labels.find((l) => l.kind === 'route-list');
+  assert.deepEqual(listLabel.stops.map((s) => s.zoom), [12]);
+  assert.match(listLabel.why, /no longer fits/);
+  assert.equal(carryFaults(plan).length, 0);
+});
+
+test('the same copy beyond the fresh linker threshold continues instead of becoming a handover', () => {
+  const plan = letteringPlan(sheets(
+    [list([-100, 0], [100, 0], '0, 1', '0 1')],
+    [list([-100, 10], [100, 10], '0, 1', '0 1')],
+  ), { carry: true });
+  const lists = plan.labels.filter((l) => l.kind === 'route-list');
+  assert.equal(lists.length, 1);
+  assert.deepEqual(lists[0].stops.map((s) => s.zoom), [12, 14]);
+  assert.equal(lists[0].stops[1].carried, true);
+  assert.equal(lists[0].stops[1].why, undefined);
+  assert.equal(lists[0].stops[1].moved, 0);
+});
+
+test('a merged route list hands over to a nearby detailed list instead of duplicating it', () => {
+  const plan = letteringPlan(sheets(
+    [list([-100, 0], [100, 0], '0, 1', '0 1')],
+    [list([-100, 2], [100, 2], '0', '0'), list([-100, 30], [100, 30], '1', '1')],
+  ), { carry: true });
+  const old = plan.labels.find((l) => l.kind === 'route-list' && l.text === '0, 1');
+  assert.deepEqual(old.stops.map((s) => s.zoom), [12]);
+  assert.match(old.why, /handover/);
+  const child = plan.labels.find((l) => l.parent === old.id);
+  assert.equal(child.text, '0');
+  assert.match(child.stops[0].why, /handover/);
+  assert.equal(carryFaults(plan).length, 0);
+});
+
+test('a handover reason belongs only to the stop where the handover happens', () => {
+  const plan = letteringPlan([
+    drawing(2, 12, [list([-100, 0], [100, 0], '0, 1', '0 1')]),
+    drawing(3, 14, [list([-100, 2], [100, 2], '0', '0')]),
+    drawing(4, 16, [list([-100, 2], [100, 2], '0', '0')]),
+  ], { carry: true });
+  const child = plan.labels.find((l) => l.kind === 'route-list' && l.text === '0');
+  assert.match(child.stops[0].why, /handover/);
+  assert.equal(child.stops[1].why, undefined);
+  assert.equal(child.stops[1].carried, true);
+});
+
+test('bus street names and both kinds of hall lettering enter the plan with measured ink', () => {
+  const features = [
+    lineString({ kind: 'bus-street', cls: 'c15', label: 'Test Street', lines: '0' }, [at(-100, 0, 12), at(100, 0, 12)]),
+    lineString({ kind: 'hall-name', text: 'Bus concourse' }, [at(-100, 100, 12), at(100, 100, 12)]),
+    point({ kind: 'hall-label', text: 'A Bus Station', r: 10 }, at(0, 200, 12)),
+  ];
+  const plan = letteringPlan([drawing(2, 12, features)], { carry: true });
+  const street = plan.labels.find((l) => l.kind === 'street-name');
+  assert.equal(street.text, 'Test Street');
+  assert.ok(street.stops[0].room[0] > 0);
+  assert.equal(plan.labels.find((l) => l.kind === 'hall-name').text, 'BUS CONCOURSE');
+  assert.equal(plan.labels.find((l) => l.kind === 'hall-label').text, 'A Bus Station');
+  assert.equal(planFaults(plan).length, 0);
+});
+
+test('the carried plan from the real map has no overlaps or unexplained changes', { skip: NO_DATA }, () => {
+  const drawings = [0, 1, 2, 3, 4].map((id) => ({ id, zoom: [8.75, 10, 12, 14, 16][id], features: JSON.parse(readFileSync(`${DATA}sheet-${id}.geojson`, 'utf8')).features }));
+  const plan = letteringPlan(drawings, { carry: true });
+  assert.equal(planFaults(plan).length, 0);
+  assert.equal(overlapFaults(plan).length, 0);
+  assert.equal(carryFaults(plan).length, 0);
+  assert.ok(plan.labels.some((l) => l.kind === 'street-name' && l.stops.some((s) => s.carried)), 'real street names carry');
+  assert.ok(plan.labels.some((l) => l.kind === 'route-list' && l.stops.some((s) => s.why?.startsWith('no longer fits'))), 'real moves name their collision');
+  assert.ok(plan.labels.some((l) => l.why?.startsWith('handover')), 'real route-list handovers are linked');
+});
+
 test('a planted overlap and a planted disappearance are caught on the real plan', { skip: NO_DATA }, () => {
   const drawings = [0, 1, 2, 3, 4].map((id) => ({ id, zoom: [8.75, 10, 12, 14, 16][id], features: JSON.parse(readFileSync(`${DATA}sheet-${id}.geojson`, 'utf8')).features }));
   const plan = letteringPlan(drawings);
