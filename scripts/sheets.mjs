@@ -10,6 +10,8 @@ import { SHEETS, drawSheet, districtShape, sheetExtent } from './lib/sheets.mjs'
 import { sheetsCode } from './lib/fingerprint.mjs';
 import { letteringPlan, planReport } from './lib/lettering-plan.mjs';
 import { listKey } from '../public/js/sheets/style.js';
+import { resolveVisualFixes, visualFixReport } from './lib/visual-fixes.mjs';
+import visualFixes from './visual-fixes.json' with { type: 'json' };
 
 // The picture must match both the built transit drawing and the code that inks it.
 export async function drawingFingerprint(sheet) {
@@ -24,6 +26,13 @@ export async function writeSheets(dir) {
   const read = async (name) => JSON.parse(await readFile(path.join(dir, `${name}.geojson`), 'utf8'));
   // Bus stations' halls are drawn where the build found them; a build without them draws none.
   const data = { routes: await read('routes'), stations: await read('stations'), streets: await read('streets'), terminals: await read('terminals').catch(() => null), stops: await read('stops').catch(() => null) };
+  // Visual overrides are resolved once against RTD's source geometry, not once per drawing: one
+  // fingerprint therefore covers every zoom the pin names. #234/#156 will consume the live pins
+  // when the lettering plan places them; an empty register leaves every drawing unchanged.
+  const fixes = resolveVisualFixes(visualFixes, data);
+  const fixReport = visualFixReport(fixes);
+  for (const skipped of fixes.skipped) console.warn(`visual fix ${skipped.key} skipped: ${skipped.reason}`);
+  console.log(`visual fixes: ${fixReport.live} live pins (resolved only, not yet applied to any drawing), ${fixReport.skipped.length} skipped`);
   // Where the page opens (the hub), and the names the sheets give their stations.
   let hub = null;
   let opening;
@@ -91,7 +100,7 @@ export async function writeSheets(dir) {
     report.overlap.count} overlapping label pairs and ${report.carry.count} zoom changes to fix by placing from the plan`);
   // RTD's district, for the towns the whole-district sheet names (#152). A build without it names every town.
   const district = districtShape(await read('boundary').catch(() => null));
-  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), code: await sheetsCode(), hub, stations: [...named], colors: [...colors], district, frame, groups: groups.filter(Boolean),
+  await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), code: await sheetsCode(), hub, stations: [...named], colors: [...colors], district, frame, groups: groups.filter(Boolean), visualFixes: fixReport,
     routes: { rail: [...drawnRoutes.rail].sort(), bus: [...drawnRoutes.bus].sort() },
     lists: Object.fromEntries(Object.entries(lists).sort(([a], [b]) => a.localeCompare(b)).map(([k, m]) => [k, [...m.keys()].sort().map((key) => m.get(key))])) }));
 }
