@@ -162,14 +162,14 @@
     };
   });
 
-  // When the loading picture is shown (index.html adds "whole" once its file is in and the
-  // drawing matches /data/sheets.json; it then fades in over 200 ms) and when it goes.
+  // When the loading sketch (index.html, #sketch: the rail lines drawn in the page itself) is in the page,
+  // and when it is told to go.
   let posterGone = null;
-  let posterShown = null;
+  let sketchIn = null;
   new MutationObserver(() => {
-    if (posterShown === null && document.querySelector('#poster img.whole')) posterShown = now();
+    if (sketchIn === null && document.querySelector('#sketch path')) sketchIn = now();
     if (posterGone === null && document.getElementById('poster')?.classList.contains('gone')) posterGone = now();
-  }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'], subtree: true });
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
 
   const wait = () => {
     if (!window.sheetsReady) return setTimeout(wait, 10);
@@ -187,7 +187,6 @@
       'map worker': (u) => /worker/.test(u),
       'map data (ours)': (u) => /\/data\//.test(u),
       'glyphs + font': (u) => /glyphs|woff2/.test(u),
-      'loading picture': (u) => /\/poster\//.test(u),
       'basemap tiles': (u) => /openfreemap/.test(u),
     };
     const rows = [];
@@ -195,11 +194,9 @@
     rows.push(['page arrived', ms(nav?.responseEnd)]);
     // How the page itself got here: a first visit pays for the connection; a return visit's is 0.
     if (nav) rows.push(['  page: connect / secure / first byte / all in / parsed', `${ms(nav.connectStart)}–${ms(nav.connectEnd)} / ${nav.secureConnectionStart ? ms(nav.secureConnectionStart) : '–'} / ${ms(nav.responseStart)} / ${ms(nav.responseEnd)} / ${ms(nav.domInteractive)}`]);
-    // First paint is the first text or picture drawn: the "Loading…" line once its font is in, or the picture.
-    rows.push(['first paint (loading line or picture)', ms(performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint')?.startTime)]);
-    const poster = res.find((e) => /\/poster\//.test(e.name));
-    const sheets = res.find((e) => /\/data\/sheets\.json/.test(e.name));
-    rows.push(['loading picture: file in / sheets.json in / shown', `${ms(poster?.responseEnd)} / ${ms(sheets?.responseEnd)} / ${posterShown == null ? 'not shown' : ms(posterShown)}`]);
+    // First paint is the first text or drawing: the "Loading…" line or the loading sketch.
+    rows.push(['first paint (loading line or sketch)', ms(performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint')?.startTime)]);
+    rows.push(['loading sketch in the page', sketchIn == null ? 'not shown' : ms(sketchIn)]);
     for (const [label, test] of Object.entries(groups)) {
       const hit = res.filter((e) => test(e.name));
       if (!hit.length) continue;
@@ -271,8 +268,8 @@
       const drew = meanwhile.length ? `; page drew ${meanwhile.length}× ${ms(meanwhile.reduce((x, [, d]) => x + d, 0))} ms before getting it` : '';
       rows.push([`  w${a.n} ${askName[a.type] ?? a.type}`, `${ms(a.sent)}; +${ms(a.at - a.sent)}; +${ms(a.reply - begin)}${a.start - a.at > 1 ? ` (after +${ms(a.start - a.at)} queued)` : ''}; +${ms(a.back - a.reply)}${drew}`]);
     }
-    rows.push(['MAP READY (picture goes)', ms(ready)]);
-    rows.push(['picture told to go', ms(posterGone)]);
+    rows.push(['MAP READY (sketch goes)', ms(ready)]);
+    rows.push(['sketch told to go', ms(posterGone)]);
     rows.push(['repeat visit (offline copy)', String(repeat)]);
     rows.push(['screen', `${innerWidth}×${innerHeight} @${devicePixelRatio}x`]);
     const text = rows.map(([a, b]) => `${a}: ${b}`).join('\n') + `\n${navigator.userAgent}`;

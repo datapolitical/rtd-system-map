@@ -42,7 +42,7 @@ for (const theme of ['light', 'dark']) {
     let b = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']);
     if (include) b = b.include(include);
     const { violations } = await b.analyze();
-    check(theme, `axe, ${label}`, !violations.length, violations.map((v) => `${v.id}: ${v.nodes.length}`).join('; '));
+    check(theme, `axe, ${label}`, !violations.length, violations.map((v) => `${v.id}: ${v.nodes.length} [${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}]`).join('; '));
   };
 
   // The page at rest.
@@ -182,6 +182,108 @@ for (const theme of ['light', 'dark']) {
   }
   await page.keyboard.press('Escape');
   check(theme, 'Escape goes back to the list button', await page.evaluate(() => document.activeElement?.id === 'inview') && await page.locator('#card').isHidden());
+
+  // --- Search, the route panel and departures (#238, #162, #13) -----------------------
+  // Each is scanned open, where its markup is: the results list, the panel unfolded, and a
+  // stop's and a station's departures. And each is reached and left by keyboard alone.
+  await visit();
+  const focused = (test) => page.evaluate(test);
+  const ringOn = (selector) => page.evaluate((q) => { const el = document.querySelector(q); return el ? getComputedStyle(el).outlineStyle : 'missing'; }, selector);
+  const data = await page.evaluate(async () => {
+    const d = await (await fetch('/data/directory.json')).json();
+    const stops = (await (await fetch('/data/stops.geojson')).json()).features;
+    const bus = d.routes.filter((r) => r.mode === 'bus' && r.wk).sort((a, b) => a.wk - b.wk)[0];
+    const stop = stops.find((f) => !f.properties.platform && String(f.properties.lines ?? '').split(' ').includes(bus.route));
+    const station = d.stations.filter((x) => x.served).sort((a, b) => b.lines.split(' ').length - a.lines.split(' ').length)[0];
+    return { bus: bus.route, stop: String(stop.properties.id), stopName: stop.properties.name, station: station.label };
+  });
+  await page.keyboard.press('Tab');
+  check(theme, 'search: Tab from the top of the page reaches the box first', await focused(() => document.activeElement?.id === 'search'));
+  check(theme, 'search: focus is visible on the box', (await ringOn('#finder .bar')) === 'solid', await ringOn('#finder .bar'));
+  await page.keyboard.type(data.bus, { delay: 20 });
+  await page.waitForSelector('#search-list .opt', { timeout: 30_000 });
+  await page.waitForTimeout(600);
+  const box = await page.evaluate(() => {
+    const input = document.querySelector('#search');
+    const list = document.getElementById(input.getAttribute('aria-controls'));
+    const active = document.getElementById(input.getAttribute('aria-activedescendant') ?? '');
+    const options = [...list.querySelectorAll('[role="option"]')];
+    return {
+      role: input.getAttribute('role'), expanded: input.getAttribute('aria-expanded'), named: !!input.getAttribute('aria-label'),
+      list: list?.getAttribute('role'), listNamed: !!list?.getAttribute('aria-label'),
+      options: options.length, optionsNamed: options.every((o) => o.getAttribute('aria-label')),
+      groups: [...list.querySelectorAll('[role="group"]')].every((g) => document.getElementById(g.getAttribute('aria-labelledby'))?.textContent),
+      active: active?.getAttribute('aria-selected') === 'true', activeLabel: active?.getAttribute('aria-label') ?? '',
+      said: document.querySelector('#finder [role="status"]').textContent,
+    };
+  });
+  check(theme, 'search: the box is a named combobox that says its list is open', box.role === 'combobox' && box.expanded === 'true' && box.named, JSON.stringify(box));
+  check(theme, 'search: results are named options in a named listbox, in named groups', box.list === 'listbox' && box.listNamed && box.options > 0 && box.optionsNamed && box.groups, JSON.stringify(box));
+  check(theme, 'search: the box names the active result', box.active && box.activeLabel.startsWith(`Route ${data.bus},`), box.activeLabel);
+  check(theme, 'search: how many results is said', /^\d+ results?$/.test(box.said), box.said);
+  check(theme, 'search: the focus stays in the box while results show', await focused(() => document.activeElement?.id === 'search'));
+  await axe('search results open', '#finder');
+  if (box.options > 1) {
+    await page.keyboard.press('ArrowDown');
+    check(theme, 'search: the arrow keys move the active result', await focused(() => document.querySelector('#search').getAttribute('aria-activedescendant') === 'so-1' && document.getElementById('so-1').getAttribute('aria-selected') === 'true'));
+    await page.keyboard.press('ArrowUp');
+  }
+  await page.keyboard.press('Escape');
+  check(theme, 'search: Escape closes the list and keeps the box', await focused(() => document.querySelector('#search').getAttribute('aria-expanded') === 'false' && document.activeElement?.id === 'search'));
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('#card.route button.more', { timeout: 20_000 });
+  await settled();
+  check(theme, 'search: Enter opens the result and moves the focus to its card', await focused(() => document.querySelector('#card').contains(document.activeElement)));
+
+  // The route panel, folded under the route's card.
+  for (let i = 0; i < 4 && !(await focused(() => document.activeElement?.classList.contains('more'))); i++) await page.keyboard.press('Tab');
+  check(theme, 'route panel: Tab reaches its fold', await focused(() => document.activeElement?.classList.contains('more')));
+  check(theme, 'route panel: focus is visible on the fold', (await ringOn('#card button.more')) === 'solid', await ringOn('#card button.more'));
+  check(theme, 'route panel: the fold says it is shut and what it opens', await focused(() => { const b = document.querySelector('#card button.more'); return b.getAttribute('aria-expanded') === 'false' && !!document.getElementById(b.getAttribute('aria-controls')); }));
+  await page.keyboard.press('Enter');
+  const panelSaid = await said();
+  check(theme, 'route panel: the fold says it is open, and keeps the focus', await focused(() => { const b = document.querySelector('#card button.more'); return b.getAttribute('aria-expanded') === 'true' && document.activeElement === b && !document.querySelector('#route-more').hidden; }));
+  check(theme, 'route panel: its rows are said when it opens', /Saturday.*Sunday/.test(panelSaid ?? ''), panelSaid);
+  const panelTree = await page.locator('#route-more').ariaSnapshot();
+  check(theme, 'route panel: rows are terms with their figures, and the link says it opens a new tab', /term/.test(panelTree) && /definition/.test(panelTree) && /link ".*opens in a new tab/.test(panelTree), panelTree.split('\n').slice(0, 6).join(' / '));
+  await axe('route panel open', '#card');
+  await page.keyboard.press('Tab');
+  check(theme, 'route panel: Tab reaches the timetable link', await focused(() => document.activeElement?.matches('#route-more a.link')));
+  check(theme, 'route panel: focus is visible on the link', (await ringOn('#route-more a.link')) === 'solid', await ringOn('#route-more a.link'));
+  await page.keyboard.press('Escape');
+  check(theme, 'route panel: Escape closes the card and returns to the search box', await page.locator('#card').isHidden() && await focused(() => document.activeElement?.id === 'search'));
+
+  // Departures on a stop's card, then a station's, each found from the box by keyboard.
+  for (const [kind, query, title] of [['stop', data.stop, data.stopName], ['station', data.station, data.station]]) {
+    await page.locator('#search').fill('');
+    await page.keyboard.type(query, { delay: 15 });
+    await page.waitForFunction((q) => (document.querySelector('#search-list .opt')?.getAttribute('aria-label') ?? '').includes(q), kind === 'stop' ? `Stop ${query}` : title, { timeout: 30_000 }).catch(() => {});
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#card .departures:not([hidden])', { timeout: 30_000 }).catch(() => {});
+    await settled();
+    await page.waitForTimeout(400);
+    const dep = await page.evaluate(() => {
+      const box = document.querySelector('#card .departures');
+      const head = box?.querySelector('[role="heading"]');
+      const rows = [...(box?.querySelectorAll('.next li') ?? [])];
+      return { shown: !!box && !box.hidden, title: document.querySelector('#card-title')?.textContent, head: head?.textContent, level: head?.getAttribute('aria-level'),
+        rows: rows.length, said: rows.map((li) => li.innerText.replace(/\s+/g, ' ').trim()), times: rows.every((li) => li.querySelector('time')), none: box?.querySelector('.none')?.textContent ?? '',
+        focus: document.querySelector('#card').contains(document.activeElement) };
+    });
+    check(theme, `departures (${kind}): the card opens on what was found, with the focus in it`, dep.title === title && dep.focus, `${dep.title}`);
+    check(theme, `departures (${kind}): they sit under a heading that says they are scheduled`, dep.shown && dep.head === 'Next departures, scheduled' && dep.level === '3', `${dep.head}`);
+    // With no trips in the hours ahead the card says so in words; otherwise each row is a list item that names its route and where it is headed.
+    check(theme, `departures (${kind}): each row says its route, where to and its times; or the card says there are none`,
+      dep.rows ? dep.times && dep.said.every((row) => /^(Route \S+|\S+ Line) to \S/.test(row)) : dep.none.length > 0, dep.rows ? dep.said[0] : dep.none);
+    if (dep.rows) {
+      const tree = await page.locator('#card .departures').ariaSnapshot();
+      check(theme, `departures (${kind}): the rows are a list`, /- list/.test(tree) && /listitem/.test(tree), tree.split('\n').slice(0, 4).join(' / '));
+    }
+    await axe(`departures on a ${kind}'s card`, '#card');
+    await page.keyboard.press('Escape');
+    check(theme, `departures (${kind}): Escape closes the card and returns to the search box`, await page.locator('#card').isHidden() && await focused(() => document.activeElement?.id === 'search'));
+  }
   check(theme, 'no page errors', !errors.length, errors.join('; '));
   await context.close();
 }

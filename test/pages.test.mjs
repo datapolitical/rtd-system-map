@@ -11,9 +11,7 @@ const read = (page) => fs.readFileSync(path.join(PUBLIC, page, 'index.html'), 'u
 // What a page asks its own site for, as written and as the path it comes to.
 const refs = (page) => [...read(page).matchAll(/(?:href|src)="([^"#]+)"|url\(([^)]+)\)/g)].map((m) => m[1] ?? m[2]).filter((ref) => !/^[a-z]+:/.test(ref));
 const asked = (page) => refs(page).map((ref) => new URL(ref, `http://site/${page}`).pathname);
-// public/poster/ is made by npm run build:sheets on our machine and not kept in git (docs/upkeep.md).
 // Without it these checks skip, loudly, instead of failing.
-const NO_POSTER = fs.existsSync(path.join(PUBLIC, 'poster')) ? false : 'public/poster/ is not built here: run npm run build:sheets';
 
 test('the sheet map is the only deployed application; old Classic links redirect to it', () => {
   assert.ok(asked('').includes('/js/sheets/main.js'), 'the front page runs the sheets');
@@ -28,8 +26,8 @@ test('the sheet map is the only deployed application; old Classic links redirect
 
 test('each page asks only for files the site has', () => {
   for (const page of ['']) {
-    // data/ and vendor/ are made by the build and not kept in git; so is poster/.
-    for (const p of asked(page).filter((p) => !/^\/(data|vendor)\//.test(p) && !(NO_POSTER && p.startsWith('/poster/')))) {
+    // data/ and vendor/ are made by the build and not kept in git.
+    for (const p of asked(page).filter((p) => !/^\/(data|vendor)\//.test(p))) {
       assert.ok(fs.existsSync(path.join(PUBLIC, p, p.endsWith('/') ? 'index.html' : '')), `${page || '/'} asks for ${p}`);
     }
     for (const made of ['/vendor/maplibre-gl.css', '/vendor/overpass-latin.woff2']) assert.ok(asked(page).includes(made), `${page || '/'} reaches ${made}`);
@@ -96,19 +94,32 @@ test('a list a feature carries is looked up from the build\'s table, as the tile
   for (const o of offsets) assert.deepEqual(o, ['match', ['get', 'offset'], listKey([0, -1.2]), ['literal', [0, -1.2]], listKey([0.5, 0]), ['literal', [0.5, 0]], ['literal', [0, 0]]]);
 });
 
-test('the front page shows a picture of its opening view while the map loads', { skip: NO_POSTER }, async () => {
+test('the front page shows the rail lines drawing in, drawn in the page itself, while the map loads', async () => {
   const html = read('');
   const [, view, bounds] = html.match(/<div id="poster" data-view="([^"]*)" data-bounds="([^"]*)" data-drawing="[^"]*"[^>]*>/) ?? [];
-  // scripts/poster.mjs writes these: the view the pictures show, and the map's bounds the page shifts them by.
-  assert.match(view ?? '', /^\d+(\.\d+)?\/-?\d+\.\d+\/-?\d+\.\d+$/, 'the view the pictures show');
+  // scripts/poster.mjs writes these: the opening view (the sketch and the early tiles) and the map's bounds.
+  assert.match(view ?? '', /^\d+(\.\d+)?\/-?\d+\.\d+\/-?\d+\.\d+$/, 'the opening view');
   const [w, s, e, n] = (bounds ?? '').split(',').map(Number);
   assert.ok(w < e && s < n, 'the map bounds');
   const [, lat, lon] = view.split('/').map(Number);
   assert.ok(w < lon && lon < e && s < lat && lat < n, 'the view is inside them');
-  // Every picture the page can choose is there, one per theme and screen.
-  const pictures = [...html.matchAll(/\/poster\/[\w-]+\.webp/g)].map((m) => m[0]);
-  assert.ok(pictures.length >= 4);
-  for (const p of pictures) assert.ok(fs.existsSync(path.join(PUBLIC, p)), `${p} is in public/`);
+  // Nothing to download before the map can start (#222): the sketch is part of the page.
+  const poster = html.slice(html.indexOf('<div id="poster"'), html.indexOf('<p id="loading"'));
+  const svg = poster.match(/<svg id="sketch"[^>]*aria-hidden="true"[^>]*>([\s\S]*?)<\/svg>/)?.[1];
+  assert.ok(svg, 'the sketch, hidden from screen readers');
+  // A group per rail line with its colour in both themes: the line faint, and its runs carrying the pulses.
+  const groups = [...svg.matchAll(/<g style="--l:(#[0-9a-f]{6});--d:(#[0-9a-f]{6})"><path class="base" d="M[-\d. M]+"\/>((?:<path style="--t:\d+" d="M[-\d. ]+"\/>)+)<\/g>/gi)];
+  assert.ok(groups.length >= 1 && groups.length === (svg.match(/<g /g) ?? []).length, 'every rail line, with its colour in both themes and its runs');
+  assert.doesNotMatch(poster, /\b(?:src|href)=/, 'no file of its own');
+  assert.doesNotMatch(html, /\/poster\//, 'the page asks for no loading picture');
+  assert.match(html, /<p id="loading" role="status"><span>Loading…<\/span><\/p>/);
+  // Still, with reduced motion: the lines whole, not moving (the rule matches the growing runs exactly).
+  assert.match(html, /@media \(prefers-reduced-motion: reduce\) \{[^\n]*#sketch path:not\(\.base\) \{ animation: none; \}[^\n]*#sketch path:not\(\.base\) \{ stroke-dasharray: none; \}/);
+  // It is of the built rail lines and opening view, when they are here (scripts/sketch.mjs; the publish check too).
+  if (fs.existsSync(path.join(PUBLIC, 'data', 'routes.geojson'))) {
+    const { sketch } = await import('../scripts/sketch.mjs');
+    assert.equal(html.match(/<svg id="sketch"[\s\S]*?<\/svg>/)[0], await sketch(), 'run node scripts/sketch.mjs');
+  }
   // The buttons start as they are on the opening sheet, so nothing changes under the picture when the script runs.
   // The page opens on sheet 1, one step in from the whole district (#152): a wider sheet is there.
   const { SHEETS, OPENING } = await import('../public/js/sheets/style.js');

@@ -23,7 +23,8 @@ this trial is ready to merge as v2.
   moves" below.
 - Bus streets come from five drawings, at 12, 13, 14, 15 and 16, and hand
   over with a short fade; see "Bus drawings" below. Bus geometry is not
-  morphed.
+  morphed. The rail does slide across the 14 handover; see "The rail slides
+  across 14" below.
 - A route selection, geographic centre and fractional view URL survive
   zooming and changing theme. A play control sweeps the zoom range.
 - Controls are a small pill at the top (zoom, `?` notes, theme) and one row
@@ -632,8 +633,42 @@ Chris's answers to review r-20261127-163552-8bb921:
   3.9% to 0.5%). Limit: the joining step leaves a small hook on Speer at
   Lincoln, and small loops where a ramp runs 25 to 50 m from its road; their
   fix is in the street build.
-- **The jump at 14** (the rail drawing changing) is left for later: #256 has
-  the measurements and the options.
+- **The jump at 14** (the rail drawing changing) now slides (#256; option 4
+  in that issue). See "The rail slides across 14" below.
+
+## The rail slides across 14 (2026-11-27, #256)
+
+At 14 the rail drawing changes, and the two drawings disagree: measured at
+14 from each drawing's placed lines, the median gap was 1.95 px, the 90th
+percentile 7.89 px, the worst 18.4 px, and 39.6% of the rail moved more than
+3 px. Chris called it "very, very close, but when it makes a jump, the lines
+just move". A fade showed doubled lines and was rejected, so the page now
+slides one line into the other over a short band.
+
+- The band is 13.8 to 14.2 (`RAIL_BLEND_FROM`/`RAIL_BLEND_TO` in `model.js`).
+  At either end the line drawn is exactly the drawing's own, so the change
+  at 13.8 and at 14.2 is a change of nothing.
+- The build ships nothing new. Once the opening view has drawn, and at idle,
+  the page pairs the two drawings (`prepareRailBlend`, about 130 ms on mini):
+  the same 393 pieces per drawing,
+  the same nine routes and the same slot on every piece, joined route by
+  route, placed at 14 with each piece's slot offset baked in, and paired by
+  projecting every vertex of each line onto the other. Both ends keep their
+  own corners; the pair is thinned to 0.08 px at 14.
+- That is **4,531 points** across 9 route features, about 142 KB of prepared
+  coordinates in the page, against the 4,000 the issue planned for. The
+  rail-blend and attached-blend sources are filled each frame of a pinch
+  inside the band only (`main.js`); outside it they are empty and the two
+  drawings hand over as before.
+- Station bars and line letters glide with the rail (`blendAttached`): both
+  drawings carry the same 520 attached features, paired by station id and
+  bar, or by letter key.
+- Measured on the built drawings: no point moves more than 0.46 px per 0.01
+  zoom step through the band (0.23 px per 0.005); the 18.4 px jump is gone.
+  At both band edges the slide lies on the drawing's own placed line.
+- Not yet measured: the iPhone frame rate while `setData` rebuilds a 4,531
+  point source each frame (`qa/devicefarm/zoom_run.py`), and how station
+  names, which glide between quarter-zoom frames, sit against bars mid-band.
 
 ## Line letters
 
