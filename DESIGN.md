@@ -2082,7 +2082,7 @@ sheets start with that setting too, and have a 44 px circular sun/moon button
 in the lower-right corner. It switches the map and interface together and
 remembers the reader's choice locally. Until a choice is made, system changes
 recolour the open map. Theme changes preserve the view, card and picked route.
-A saved choice is applied before paint, including to the loading picture.
+A saved choice is applied before paint, including to the loading placeholder.
 The button has a stable accessible name, “Dark mode”, and reports its pressed
 state; its icon and tooltip show the mode a tap will choose.
 
@@ -3318,26 +3318,34 @@ are deferred, not ruled out. See "Open questions".
     layer gives its colour, width and opacity per feature, with the same
     values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
   - MapLibre's stylesheet doesn't hold up the first paint: the page uses
-    none of its controls, and the picture covers the map until it is drawn.
+    none of its controls, and the placeholder covers the map until it is drawn.
   - The Overpass font swaps in when it arrives; until then "Loading…" is in
     the phone's own font, not hidden.
   - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are tiles
     of their own, `routes-N`, whose layers show from the first pick, or at the opening when the
     address picks a bus route (#193). They were about 40% of every sheet's bytes.
-  - While it loads, the sheets page shows a picture of the view it opens on,
-    with a "Loading…" line over it, and fades to the map once the map has
-    drawn that view (or at once, if a button is pressed first). The pictures
-    (`public/poster/`, one per theme for a phone and for a wider screen, about
-    60 to 150 KB each) are taken by `scripts/poster.mjs` at the end of every
-    build, from the site just built (`scripts/poster-build.mjs`), so they go
-    live with the drawing they show. A fingerprint of the opening drawing
-    and its rendering code is captured with the pictures, along with the
-    planet build the basemap is from (`data-ground`); the publish check fails
-    if that is not the committed basemap's. The picture stays
-    hidden unless its fingerprint matches the current `sheets.json`; a stale
-    picture cannot jump to a different drawing. The page centres the picture as the map is centred, and shifts it as the
-    map's bounds shift the view on a very wide screen. A link to another view,
-    or an address forcing a theme, gets the line on plain ground instead.
+  - While it loads, the sheets page shows RTD's rail lines on the map's
+    ground, each in its own colour (as the map draws it in that theme) and
+    where the map will draw it on the opening view, with the "Loading…"
+    line at the top. The whole network is there faint, and over it bright
+    pulses flow out from the hub (sheets.json) along every line, one every
+    360 px, moving 360 px in 2 s, each run timed by its distance from the
+    hub so they carry on from one run to the next, until the map has drawn
+    that view (or at once, if a button is pressed first); then the sketch
+    fades and the map lands on the same lines. With reduced motion the
+    lines are there whole and still. The sketch is part of the page (an inline SVG of
+    about 14 KB, 4 KB compressed), so it is on screen with the first
+    bytes and asks for nothing: the map's downloads have the whole
+    connection from the start (#222). `scripts/sketch.mjs` writes it from
+    the built rail lines, the opening view and the map's colour rule
+    (`railInk`), as part of the build's picture step; the publish check
+    fails if it is not of the built lines. A link to another view gets the
+    line on plain ground. The build still takes the pictures of the
+    opening view (`scripts/poster.mjs`, `public/poster/`): the same step
+    records the opening view and its tile zooms (`data-view`,
+    `data-early`), the drawing programs, and the drawing and ground
+    fingerprints the publish check reads, but the page no longer shows or
+    asks for the pictures.
   - MapLibre and the Overpass font are served from the site itself: no extra
     connections to a CDN or Google before the map can start.
   - Symbols are drawn on canvases kept in memory, not on the GPU
@@ -5916,6 +5924,29 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   TripUpdate feed reaches the page only through the Live relay, and Live
   waits for the zoomable map (#251). Alerts in panels are not built
   either: the relay asks RTD for alerts only while someone has Live on.
+- 2026-11-27: While the map loads, the page shows RTD's rail lines with
+  pulses flowing out from the hub along them, in their own colours and
+  where the map will draw them, and
+  the "Loading…" line, all drawn in the page itself; not a picture of the
+  opening view (#222). This replaces the picture of 2026-11-12 and the
+  download order tried on the first-paint branch (#226). Reason: the
+  picture was 90 to 102 KB of the about 680 KB a phone fetched before the
+  map drew, and on a normal connection it gave nothing but cost the map's
+  downloads that share of the line. Chris: "show something immediately,
+  with no extra download", then, on the measurements, "we shouldn't use
+  the picture anymore", and he picked the rail sketch from four looks
+  (review of 2026-11-27: the sketch, trains on grey tracks, line bullets, a
+  small mark) because he wanted "something visually interesting". On the
+  first version, which drew the lines in once: "it just sort of sits there
+  when what it should probably do is either pulse or something like it
+  should branch out and repeat that until it loads".
+  Measured locally with the pulses (Chromium at iPhone 14 size, 4x CPU,
+  light and dark, three runs each): 583 KB before the map, was 689 KB (677
+  in dark); the map drawn at 3.35 s on typical 4G (was 3.51 s), 5.79 s on
+  slow 4G (was 6.50 s) and about 11 s at 0.65 Mbit/s (was 12.1 s), the
+  same with no throttling (2.85 s, was 2.90 s); the lines on screen from
+  first paint (0.4 s on slow 4G), where the picture showed at 3.1 s on
+  slow 4G and 6.5 s at 0.65 Mbit/s.
 
 ## Sources
 
