@@ -143,8 +143,8 @@ test('times and dates', () => {
   assert.equal(addDays('20261201', -1), '20261130');
   assert.equal(addDays('20261231', 1), '20270101');
   // Denver's clock, whatever the device's: 2026-11-28 02:30 UTC is 7:30pm on the 27th there.
-  assert.deepEqual(clockIn(new Date('2026-11-28T02:30:00Z'), 'America/Denver'), { date: '20261127', minutes: 19 * 60 + 30 });
-  assert.deepEqual(clockIn(new Date('2026-07-01T06:05:00Z'), 'America/Denver'), { date: '20260701', minutes: 5 }); // daylight time
+  assert.deepEqual(clockIn(new Date('2026-11-28T02:30:00Z'), 'America/Denver'), { date: '20261127', minutes: 19 * 60 + 30, seconds: 0 });
+  assert.deepEqual(clockIn(new Date('2026-07-01T06:05:41Z'), 'America/Denver'), { date: '20260701', minutes: 5, seconds: 41 }); // daylight time
   assert.equal(accessible({ a: 1 }), 'Wheelchair accessible');
   assert.equal(accessible({ a: 2 }), 'Not wheelchair accessible');
   assert.equal(accessible({ a: 0 }), '');

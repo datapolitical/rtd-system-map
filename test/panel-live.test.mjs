@@ -64,6 +64,15 @@ test('a prediction takes its own departure\'s place, as minutes; the rest stay s
   assert.equal(u.rows[0].times[0].clock, '8:04am');
 });
 
+test('minutes to a prediction are counted from the second, not from the start of the minute', () => {
+  // 7:55:45. RTD says 8:04:00, which is 8 min 15 s away: "8 min", not the "9 min" of counting from 7:55:00.
+  const n = { ...now, seconds: 45 };
+  const withState = { ...live({ times: [['1001', at(8, 4), '9']] }), nowS: NOW_MS / 1000 + 45 };
+  const u = upcoming([record], index, n, { live: withState });
+  assert.equal(u.rows[0].times[0].in, 8);
+  assert.equal(u.rows[0].times[0].live, true);
+});
+
 test('a late bus stays on the card after its scheduled time; an early one that has left drops off', () => {
   const later = { date: now.date, minutes: 8 * 60 + 2 };
   const shift = (stops) => ({ ...live(stops), nowS: NOW_MS / 1000 + 7 * 60 });

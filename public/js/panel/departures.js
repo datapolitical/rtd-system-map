@@ -22,9 +22,9 @@ export function chunkOf(id, count) {
  * device is set to.
  */
 export function clockIn(at, timeZone) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
     .formatToParts(at).map((p) => [p.type, p.value]));
-  return { date: `${parts.year}${parts.month}${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute) };
+  return { date: `${parts.year}${parts.month}${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute), seconds: Number(parts.second) };
 }
 
 /** The date `days` after a 'YYYYMMDD' date. */
@@ -88,6 +88,8 @@ const LIVE_NEAR = 90;
 export function upcoming(records, index, now, { each = 2, within = 180, first = () => false, live = null } = {}) {
   const today = servicesOn(index, now.date);
   const yesterday = servicesOn(index, addDays(now.date, -1));
+  // Where now is within its minute, so a prediction's minutes are counted from the second, not the minute's start.
+  const here = now.minutes + (now.seconds ?? 0) / 60;
   // Every stop given is one where trips only end: nothing boards there on any day.
   const ends = records.length > 0 && records.every((r) => r?.end);
   if (!today && !yesterday) return { rows: [], known: false, ends, live: false };
@@ -113,11 +115,11 @@ export function upcoming(records, index, now, { each = 2, within = 180, first = 
             const trip = live.id(trips[i]);
             if (live.skipped[r]?.has(trip)) continue;
             const time = live.at[r]?.get(trip);
-            const minutes = time === undefined ? null : now.minutes + (time - live.nowS) / 60;
+            const minutes = time === undefined ? null : here + (time - live.nowS) / 60;
             if (minutes !== null && Math.abs(minutes - scheduled) <= LIVE_NEAR) { at = minutes; predicted = true; }
           }
           // A predicted bus due this minute is still to come; one a minute gone has left.
-          if (at < now.minutes - (predicted ? 0.5 : 0) || at > now.minutes + within) continue;
+          if (at < (predicted ? here - 0.5 : now.minutes) || at > now.minutes + within) continue;
           const key = `${name}|${headsign}`;
           const row = rows.get(key) ?? rows.set(key, { route, name, headsign, times: [] }).get(key);
           row.times.push({ at, live: predicted });
@@ -128,7 +130,7 @@ export function upcoming(records, index, now, { each = 2, within = 180, first = 
   const list = [...rows.values()].map((row) => {
     const seen = new Set();
     const times = row.times.sort((a, b) => a.at - b.at).filter((t) => { const k = `${Math.floor(t.at)}|${t.live}`; return seen.has(k) ? false : seen.add(k); }).slice(0, each);
-    return { ...row, times: times.map((t) => ({ minutes: t.at, clock: clock(Math.floor(t.at)), in: Math.max(0, Math.round(t.at - now.minutes)), live: t.live })) };
+    return { ...row, times: times.map((t) => ({ minutes: t.at, clock: clock(Math.floor(t.at)), in: Math.max(0, Math.round(t.at - here)), live: t.live })) };
   });
   list.sort((a, b) => Number(first(b.route)) - Number(first(a.route)) || a.times[0].minutes - b.times[0].minutes || String(a.name).localeCompare(String(b.name), 'en', { numeric: true }));
   return { rows: list, known: true, ends, live: list.some((row) => row.times.some((t) => t.live)) };

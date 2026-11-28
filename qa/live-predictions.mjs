@@ -80,7 +80,8 @@ for (const theme of (process.env.THEMES ?? 'light,dark').split(',')) {
     const box = document.querySelector('#card .departures');
     return !box || box.hidden ? null : {
       kind: box.dataset.kind, head: box.querySelector('[role="heading"]')?.textContent, note: box.querySelector('.kind')?.textContent ?? '',
-      rows: [...box.querySelectorAll('.next li')].map((li) => li.innerText.replace(/\s+/g, ' ').trim()),
+      // innerText puts a space round the hidden screen-reader words and the comma between times; the page shows none.
+      rows: [...box.querySelectorAll('.next li')].map((li) => li.innerText.replace(/\s+/g, ' ').replace(/ ,/g, ',').trim()),
       live: [...box.querySelectorAll('time.live')].map((t) => t.textContent),
       marks: [...box.querySelectorAll('time.live')].every((t) => getComputedStyle(t, '::before').backgroundColor !== 'rgba(0, 0, 0, 0)'),
     };
@@ -128,11 +129,13 @@ for (const theme of (process.env.THEMES ?? 'light,dark').split(',')) {
     let c = await until((x) => x.kind === 'live', 40000, `stop ${stop.id}'s card never turned live`);
     const rec = await record(stop.id);
     const trips = await tripsOf(stop.id);
-    const expect = async (state) => { const n = await pageNow(); return upcoming([rec], index, n, { first, live: state ? liveFor(state, [stop.id], [trips], index, n.ms) : null }).rows.slice(0, 6).map(label); };
+    // The card redraws every 15 seconds, so it may be up to that behind the moment the check looks: either is right.
+    const expect = async (state, ago = 0) => { const n0 = await pageNow(); const ms = n0.ms - ago; const n = { ms, ...clockIn(new Date(ms), index.tz) }; return upcoming([rec], index, n, { first, live: state ? liveFor(state, [stop.id], [trips], index, ms) : null }).rows.slice(0, 6).map(label); };
+    const either = async (state) => (await Promise.all([0, 8000, 16000, 24000].map((ago) => expect(state, ago)))).map((rows) => JSON.stringify(rows));
     const said = { at: 0, feed: 0, problem: false, stops: { [stop.id]: { times: [[late.trip, lateAt, late.route]], skipped: [skipped.trip] } } };
     c = await card();
     check(c.head === 'Next departures, live', `${tag}: the heading reads "${c.head}" with live times on the card`);
-    check(JSON.stringify(c.rows) === JSON.stringify(await expect(said)), `${tag}: stop ${stop.id} live shows ${JSON.stringify(c.rows)}, wanted ${JSON.stringify(await expect(said))}`);
+    check((await either(said)).includes(JSON.stringify(c.rows)), `${tag}: stop ${stop.id} live shows ${JSON.stringify(c.rows)}, wanted one of ${(await either(said)).join(' or ')}`);
     check(c.live.length === 1 && /^(\d+ min|Now), live$/.test(c.live[0]) && c.marks, `${tag}: exactly the late bus is marked live, in minutes, with the live mark (${JSON.stringify(c.live)})`);
     check(/live predictions/.test(c.note) && /scheduled/.test(c.note), `${tag}: the card does not say which times are live and which scheduled ("${c.note}")`);
     const box = await page.evaluate(() => { const r = document.querySelector('#card').getBoundingClientRect(); const s = document.querySelector('#steps').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, steps: s.top, cut: [...document.querySelectorAll('#card .next .at')].filter((el) => el.scrollWidth > el.clientWidth + 1).length }; });
@@ -143,7 +146,7 @@ for (const theme of (process.env.THEMES ?? 'light,dark').split(',')) {
     await set('mode=stale');
     c = await until((x) => x.kind === 'scheduled' && /aren.t loading/.test(x.note), 60000, 'with a stale feed the card did not fall back to scheduled and say so');
     check(c && c.live.length === 0 && c.head === 'Next departures, scheduled', `${tag}: a stale feed still shows live times (${JSON.stringify(c?.live)}) or the heading "${c?.head}"`);
-    check(c && JSON.stringify(c.rows) === JSON.stringify(await expect(null)), `${tag}: with a stale feed the card shows ${JSON.stringify(c?.rows)}, the timetable gives ${JSON.stringify(await expect(null))}`);
+    check(c && (await either(null)).includes(JSON.stringify(c.rows)), `${tag}: with a stale feed the card shows ${JSON.stringify(c?.rows)}, the timetable gives ${JSON.stringify(await expect(null))}`);
     await shot('2-stop-stale-feed');
     // RTD's feed fails outright.
     await set('mode=live');
@@ -180,7 +183,8 @@ for (const theme of (process.env.THEMES ?? 'light,dark').split(',')) {
       const n3 = await pageNow();
       const want = upcoming(recs.filter(Boolean), index, n3, { first, live: liveFor({ stops: { [train.id]: { times: [[train.trip, trainAt, train.route]] } } }, ids, trs, index, n3.ms) }).rows.slice(0, 6).map(label);
       c = await card();
-      check(JSON.stringify(c.rows) === JSON.stringify(want), `${tag}: ${station.label} live shows ${JSON.stringify(c.rows)}, wanted ${JSON.stringify(want)}`);
+      const wantAt = async (ago) => { const ms = (await pageNow()).ms - ago; const nn = { ms, ...clockIn(new Date(ms), index.tz) }; return JSON.stringify(upcoming(recs.filter(Boolean), index, nn, { first, live: liveFor({ stops: { [train.id]: { times: [[train.trip, trainAt, train.route]] } } }, ids, trs, index, ms) }).rows.slice(0, 6).map(label)); };
+      check((await Promise.all([0, 8000, 16000, 24000].map(wantAt))).includes(JSON.stringify(c.rows)), `${tag}: ${station.label} live shows ${JSON.stringify(c.rows)}, wanted ${JSON.stringify(want)} (or a few seconds earlier)`);
       check(c.live.length === 1, `${tag}: ${station.label} marks ${c.live.length} times live, not the one train`);
       await shot('4-station-live');
     }
