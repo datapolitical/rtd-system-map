@@ -217,7 +217,7 @@ export function shortStreet(name) {
 // once, so a pick is one property write, holds on every sheet, and no tile is made again.
 // Everything not on the route is inked nearer the ground rather than made see-through, so
 // pieces that overlap at a corner do not show darker knots.
-export const STATE = { bus: { default: '' }, rail: { default: '' } };
+export const STATE = { bus: { default: '' }, rail: { default: '' }, busFallbackSheet: { default: -1 } };
 const BUS = ['global-state', 'bus'];
 const RAIL_PICK = ['global-state', 'rail'];
 export const PICKED = ['any', ['!=', BUS, ''], ['!=', RAIL_PICK, '']];
@@ -399,9 +399,14 @@ export function sheetStyle(theme, stations = [], colors = [], { district = null,
     // closed, round ends), so it reads as one line however many streets it takes. Its stops are
     // ringed again on top of it.
     const pickBus = ['all', ['==', ['get', 'kind'], 'route-line'], onBus()];
+    const pickStreet = kind('bus', onBus(), ['==', ['global-state', 'busFallbackSheet'], n]);
     const routes = `routes-${n}`; // the route lines' own source (#193)
-    layer('pick-bus-rim', 'line', { source: routes, filter: pickBus, layout: ROUND, paint: { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] } });
-    layer('pick-bus', 'line', { source: routes, filter: pickBus, layout: ROUND, paint: { 'line-color': c.pick, 'line-width': w } });
+    const pickRim = { 'line-color': c.ground, 'line-width': w + 2 * GAP[n] };
+    const pickInk = { 'line-color': c.pick, 'line-width': w };
+    layer('pick-street-rim', 'line', { filter: pickStreet, layout: ROUND, paint: pickRim });
+    layer('pick-street', 'line', { filter: pickStreet, layout: ROUND, paint: pickInk });
+    layer('pick-bus-rim', 'line', { source: routes, filter: pickBus, layout: ROUND, paint: pickRim });
+    layer('pick-bus', 'line', { source: routes, filter: pickBus, layout: ROUND, paint: pickInk });
     if (n >= 4) layers.push({ id: `pick-stop-${n}`, type: 'circle', source, ...band, filter: ['all', ['==', ['get', 'kind'], 'stop'], onBus()],
       paint: { 'circle-radius': STOP_RING.radius, 'circle-color': c.ground, 'circle-stroke-color': c.pick, 'circle-stroke-width': STOP_RING.stroke } });
     // A lettered stop on the picked route keeps its square over the line, as it reads off the route:

@@ -11,6 +11,22 @@ The cards dated 2026-11-08 below predate this card (2026-11-10): they score
 Accurate and Legible 0 to 3 as rows and have no Coherence or Topographicity
 row. They are left as they were scored.
 
+## 2026-11-28 — Selected bus line on Alameda Avenue (#288)
+
+The rider needs to follow route 3 after selecting it. On live deployment
+`18ad8c84` at zoom 12 in dark iPhone Safari, the chip and map numbers
+highlighted while Alameda Avenue stayed dim. The same phone drew the
+line when opened from a link with route 3 selected.
+
+Returning HTTP 503 for the route tile reproduced the visual failure in
+WebKit. The browser regression at `#12/39.73090/-104.98619` checks that
+the selected street draws over the faded streets in both themes, that it
+clears, and that a fresh link with a healthy tile uses the composed line.
+The forced failure establishes a cause for the reproduced case. The
+status of the tile request in the original iPhone session is unknown.
+Physical iPhone validation of the candidate and an overall visual score
+are pending.
+
 ## 2026-11-21: current-sheet and smooth-zoom evidence baseline
 
 **Verdict: incomplete; no overall pass.** This establishes current evidence

@@ -26,7 +26,7 @@ test("a drawn route list reads as its routes, a stacked one too, and a tap names
 });
 
 test('a picked route holds on every sheet: its pieces are drawn on top, the rest fades toward the ground', () => {
-  assert.deepEqual(Object.keys(STATE).sort(), ['bus', 'rail']);
+  assert.deepEqual(Object.keys(STATE).sort(), ['bus', 'busFallbackSheet', 'rail']);
   for (const theme of ['light', 'dark']) {
     const style = sheetStyle(theme, [], ['#57C1E9', '#E31837']);
     assert.deepEqual(style.state, STATE);
@@ -45,6 +45,13 @@ test('a picked route holds on every sheet: its pieces are drawn on top, the rest
       // One ink and one weight from end to end, whatever street the route is on.
       assert.equal(plain(pick.paint['line-color']), c.pick);
       assert.equal(typeof plain(pick.paint['line-width']), 'number');
+      const fallback = layer(style, `pick-street-${n}`);
+      const useFallback = { ...none, bus: '15', busFallbackSheet: n };
+      assert.equal(evaluate(fallback.filter, { props: on15, state: useFallback }), true);
+      assert.equal(evaluate(fallback.filter, { props: { ...on15, routes: '15L' }, state: useFallback }), false);
+      assert.equal(evaluate(fallback.filter, { props: on15, state: { ...useFallback, busFallbackSheet: -1 } }), false);
+      assert.equal(plain(fallback.paint['line-color']), c.pick);
+      assert.equal(plain(fallback.paint['line-width']), plain(pick.paint['line-width']));
       // The bus streets underneath: whole with nothing picked, faded with anything picked.
       const bus = layer(style, `bus-${n}`).paint['line-color'];
       const full = evaluate(bus, { props: on15, state: none });
