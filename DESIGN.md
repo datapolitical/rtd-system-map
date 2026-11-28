@@ -1247,12 +1247,25 @@ carry the sense of place:
 - **Landmarks people give directions by** from zoom 14: hospitals, campuses,
   stadiums, museums, theaters, libraries, city halls, and the larger parks
   (parks in green italics). Names only, no icons.
+- **Landmark grounds** are tinted, both themes: a hospital's, a campus's or a
+  stadium's grounds, and the airport, in a pale warm wash. Which grounds count
+  is a rule over OpenStreetMap's tags, not a list of places: an OpenMapTiles
+  `landuse` area whose class is `hospital`, `university`, `college` or
+  `stadium`, or an `aeroway` area whose class is `aerodrome` (the airport). A
+  new or renamed place RTD serves is picked up the next time the ground tiles
+  are rebuilt. The wash stays close to the land's lightness, so a transit line
+  drawn over it keeps its 3:1 contrast.
+- **Buildings** from zoom 16: only the major ones. Ordinary building outlines
+  are dropped; what stays are the buildings tall enough to be points of
+  reference — a `render_height` of 24 m or more, OpenMapTiles' reading of OSM's
+  `height`/`building:levels` tags. Nothing names a building: a new tower shows
+  on the next tile rebuild.
 - **Relief** for the foothills, soft hillshade from free elevation tiles,
   because "the mountains are west" is how the region orients itself. It loads
   after the network so it never delays it.
 
 It drops what competes with transit: basemap railways (they look like RTD's
-lines), POI icons, and road colors.
+lines), POI icons, road colors, and ordinary building outlines.
 
 ### Rail line colors
 
@@ -4150,6 +4163,17 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   audience, but not the default view.
 
 ## Decision log
+
+- 2026-11-27: Landmark grounds are tinted and ordinary building outlines are
+  dropped (#243). What counts as a landmark ground is a rule over OSM's tags,
+  not a list of places: OpenMapTiles `landuse` `hospital`/`university`/
+  `college`/`stadium`, and `aeroway` `aerodrome` (the airport). A building
+  stays only when its `render_height` is 24 m or more, OpenMapTiles' reading
+  of `height`/`building:levels`, so towers and other tall reference points
+  stay while ordinary outlines go. The tint is a pale warm wash close to the
+  land's lightness, so transit lines keep their 3:1 contrast over it. Schools,
+  kindergartens, libraries, theme parks and zoos are not tinted yet — left as
+  an open question.
 
 - 2026-11-17: Chris requested a light/dark toggle in the lower-right corner
   of the sheets. Use a 44 px sun/moon button aligned with the zoom controls,
