@@ -538,9 +538,9 @@ export function carryLettering(freshPlan) {
       // A base-plan id that last ran before a gap cannot be revived with a gap. Give
       // the new interval its own id and an explicit parent, as the format intends.
       if (labels.has(id) && labels.get(id).to !== before[0]?.stop.zoom) {
-        parent = id;
         let n = 2;
-        while (labels.has(`${id}/interval-${n}`)) n++;
+        parent = id;
+        while (labels.has(`${id}/interval-${n}`)) { parent = `${id}/interval-${n}`; n++; }
         id = `${id}/interval-${n}`;
         why ??= `appears again at zoom ${drawing.zoom} after its previous interval ended`;
       }
@@ -644,6 +644,17 @@ export function carryFaults(plan) {
     if (l.to < last && !l.why && !child?.why) faults.push({ kind: 'gave-way', id: l.id, zoom: l.to });
   }
   return faults;
+}
+
+/**
+ * Labels that end before the last drawing with no label taking over from them: a
+ * recorded fit reason explains why they went, but it is not a successor. Listed apart
+ * so the plan never passes a disappearance off as a handover.
+ */
+export function droppedLabels(plan) {
+  const last = plan.drawings.at(-1)?.zoom;
+  const parents = new Set(plan.labels.filter((l) => l.parent).map((l) => l.parent));
+  return plan.labels.filter((l) => l.to < last && !parents.has(l.id)).map((l) => ({ id: l.id, kind: l.kind, zoom: l.to, why: l.why ?? null }));
 }
 
 /** The carry audit for every neighbouring pair: what stayed, what changed, and why. */

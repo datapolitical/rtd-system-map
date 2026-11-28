@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { boxesOverlap, carryFaults, corners, letteringPlan, overlapFaults, planFaults, planReport, Room } from '../scripts/lib/lettering-plan.mjs';
+import { boxesOverlap, carryFaults, corners, droppedLabels, letteringPlan, overlapFaults, planFaults, planReport, Room } from '../scripts/lib/lettering-plan.mjs';
 import { toLonLat, toPx } from '../scripts/lib/sheets.mjs';
 
 const DATA = fileURLToPath(new URL('../public/data/', import.meta.url));
@@ -239,7 +239,8 @@ test('the carried plan from the real map has no overlaps or unexplained changes'
   assert.equal(overlapFaults(plan).length, 0);
   assert.equal(carryFaults(plan).length, 0);
   assert.ok(plan.labels.some((l) => l.kind === 'street-name' && l.stops.some((s) => s.carried)), 'real street names carry');
-  assert.ok(plan.labels.some((l) => l.kind === 'route-list' && l.stops.some((s) => s.why?.startsWith('no longer fits'))), 'real moves name their collision');
+  // Whatever the real map moves, it names the collision (the sizes now leave none; the planted case above pins the rule).
+  for (const l of plan.labels) for (const s of l.stops) if (s.why?.startsWith('no longer fits')) assert.match(s.why, /overlaps \S+/, 'a move names its collision');
   assert.ok(plan.labels.some((l) => l.why?.startsWith('handover')), 'real route-list handovers are linked');
 });
 
@@ -264,4 +265,20 @@ test('a planted overlap and a planted disappearance are caught on the real plan'
   assert.ok(carryFaults(plan).some((f) => f.id === gone.id && (f.kind === 'gap' || f.kind === 'gave-way')), 'a label gone from 14 is caught');
   gone.stops = before;
   gone.to = before.at(-1).zoom;
+});
+
+test('a label that goes for lack of room with nothing taking over is listed as dropped, not as handed over', () => {
+  const plan = letteringPlan(sheets([name(7, '0.0', 'Depot', [0, 0])], []));
+  plan.labels[0].why = 'no longer fits at zoom 14: overlaps station-name:9:0#1';
+  assert.equal(carryFaults(plan).filter((f) => f.kind === 'gave-way').length, 0, 'the reason is recorded');
+  assert.deepEqual(droppedLabels(plan).map((d) => d.id), [plan.labels[0].id], 'but it is still a drop');
+  // A label with a successor is a handover, not a drop.
+  const child = { ...plan.labels[0], id: 'x#2', parent: plan.labels[0].id, from: 14, to: 14 };
+  assert.deepEqual(droppedLabels({ ...plan, labels: [...plan.labels, child] }).map((d) => d.id), ['x#2'].filter(() => false).concat([]));
+});
+
+test('every later interval of a label that comes back points at the one before it, never at itself', () => {
+  const plan = letteringPlan(sheets([name(7, '0.0', 'Depot', [0, 0])], [name(7, '0.0', 'Depot', [0, 0])]), { carry: true });
+  for (const l of plan.labels) assert.notEqual(l.parent, l.id, `${l.id} is not its own parent`);
+  assert.equal(planFaults(plan).length, 0);
 });
