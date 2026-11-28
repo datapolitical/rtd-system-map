@@ -154,6 +154,8 @@
   #sheets i.on { background: var(--ink); opacity: 1; }
   #credit { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--note); padding: 2px 6px; margin-left: -6px; border-radius: 8px; background: color-mix(in srgb, var(--ground) 82%, transparent); }
   #credit a { color: inherit; }
+  #credit:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+  #credit { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   #credit .sep, #card .sep { display: inline-block; margin: 0 0.35em; color: inherit; font: inherit; }
   #card { position: absolute; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: max(84px, calc(env(safe-area-inset-bottom) + 76px)); max-width: 420px; padding: 12px 14px; background: var(--card); color: var(--ink);
     border-radius: 14px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); max-height: calc(100dvh - 112px); overflow-y: auto; overscroll-behavior: contain; }
@@ -416,5 +418,6 @@
 </main>
 <footer id="credit">Unofficial. Data: RTD<span class="sep" aria-hidden="true">·</span><a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a><span class="sep" aria-hidden="true">·</span><a href="https://openfreemap.org">OpenFreeMap</a></footer>
 <script type="module" src="/js/sheets/main.js"></script>
+<script type="module" src="/js/loadlog.js"></script>
 </body>
 </html>
