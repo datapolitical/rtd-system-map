@@ -1,6 +1,6 @@
 # Recall: how much of what is wrong the checks catch
 
-**Scope: historical Classic fixtures and three frozen trial faults.** A green
+**Scope: historical Classic fixtures and four frozen trial faults.** A green
 run preserves the Classic detection baseline and catches the trial faults on
 their original geometry, layer order or rendered anchor observations.
 Use `npm run check:recall -- --zoom-only` to replay the trial faults alone.

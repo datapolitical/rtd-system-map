@@ -10,6 +10,8 @@ export function zoomRecall(finds, catches) {
   const order = read('../recall/prototype-layer-order.json');
   const anchors = read('../../test/fixtures/zoom-anchor-observations.json');
   const [before, after] = anchors.captures.map(({ actual }) => actual);
+  const quarter = read('../recall/prototype-name-quarter-step.json');
+  const [wider, closer] = quarter.frames;
   const names = ({ names }) => names.map(({ id, anchor }) => ({ id, anchorSide: anchor }));
   const controls = [
     {
@@ -27,6 +29,12 @@ export function zoomRecall(finds, catches) {
       build: order.build,
       zooms: [14],
       findings: railOrderFindings(order),
+    },
+    {
+      id: '159-prototype-quarter-zoom-name-moved',
+      build: quarter.build,
+      zooms: [wider.zoom, closer.zoom],
+      findings: continuityFindings(wider.labels, closer.labels, closer.zoom),
     },
     {
       id: '159-prototype-station-name-moved',

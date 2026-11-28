@@ -94,5 +94,29 @@
     "radius_px": 120,
     "confidence": "clear",
     "note": "Rendered anchor observations with screenshot hashes are in test/fixtures/zoom-anchor-observations.json."
+  },
+  {
+    "id": "159-prototype-quarter-zoom-name-moved",
+    "issue": 159,
+    "place": "Sheridan",
+    "said": "The emitted station name changes from bottom-right to bottom between z12 and z12.25.",
+    "kind": "label-moved",
+    "caught_by": [
+      "label-moved"
+    ],
+    "seen_on": [
+      "329752293fdc756a10f5d68a1c17391f4e849684"
+    ],
+    "theme": "light",
+    "zoom": 12.25,
+    "points": [
+      [
+        -105.052883,
+        39.735396
+      ]
+    ],
+    "radius_px": 10,
+    "confidence": "clear",
+    "note": "Original build frame features are held in prototype-name-quarter-step.json. This is one of five changes in the stable placement of this build."
   }
 ]
