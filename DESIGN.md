@@ -2203,7 +2203,7 @@ suite still checks the original historical drawings.
 | 0 | 8.75 | The whole district on one screen: every rail line and bus street, the hub and each line's far end named, the towns in RTD's district. |
 | 1 | 10 | The network: rail lines whole, every bus street by how often a bus comes, the hub and line ends named. Tap a line for its routes. |
 | 2 | 12 | Every station named, route numbers along bus streets. |
-| 3 | 14 | One-way pairs on their own streets, names of the main streets. |
+| 3 | 14 | Divided roads as one line, one-way pairs on their own streets, names of the main streets. |
 | 4 | 16 | Every stop, buildings, platforms apart from each other. |
 
 **The whole district** (#152). Sheet 0 is one step out from sheet 1, where
@@ -2749,6 +2749,21 @@ How it is built:
   sheets' own placement still leaves 110 overlapping pairs and 3,074
   zoom changes for the plan's placement to resolve; the plan is the record
   those later steps work from. Nothing on the page reads it yet.
+- **Sizes run between the sheets; switches are zooms (#155).** Every size
+  that has a value per sheet runs straight from one sheet's value to the
+  next, so a drawing at one of today's five zooms is exactly today's drawing,
+  and `drawSheet` takes any zoom from 8.75 to 16 without a sheet number.
+  Each "which sheet" test is the zoom at which the thing comes in. Street
+  merging is held in ground metres, not sheet pixels, so it only shrinks as
+  the map zooms in: two streets drawn apart at one zoom are never joined
+  again at a closer one.
+- **A divided road is one line out to zoom 16 (#81, #240).** From zoom 14,
+  the sheet draws the joined street graph as well; sheet 3 used to draw both
+  carriageways. At 41st / Fox the I-25 express braid and its crossing ramps
+  are gone, and the doubled bus ink on sheet 3 falls from 276.4 to 183.4 km
+  (express 38.6 to 16.7 km; small loops 75 to 54). Broadway and Lincoln and
+  the downtown one-way pairs stay two lines: they are different streets, not
+  two carriageways of one.
 
 ## Interface
 
@@ -5902,6 +5917,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   is shown as live, and the card always says which kind of time it shows.
   The relay deploys before the page, and the page works with the old relay
   (scheduled times).
+
+- 2026-11-27: Sizes are functions of zoom between the five sheets and the
+  "which sheet" switches are the zooms at which the thing comes in (#155),
+  so main's build draws any zoom from 8.75 to 16. Sheet 3 draws the joined
+  street graph, making a divided road one line out to zoom 16 (#81, #240):
+  at 41st / Fox the I-25 express braid is gone, and sheet 3's doubled bus
+  ink falls from 276.4 to 183.4 km. The street merge distance is held in
+  ground metres so streets only split as the map zooms in. The page still
+  keeps its own copies of five sizes until the lettering plan (#234) gives
+  it the build's tables.
 
 ## Sources
 

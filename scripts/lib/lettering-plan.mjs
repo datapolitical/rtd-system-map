@@ -51,7 +51,10 @@ export function boxesOverlap(a, b) {
   for (const pts of [ca, cb]) {
     for (let i = 0; i < 4; i++) {
       const [p, q] = [pts[i], pts[(i + 1) % 4]];
-      const ax = [-(q[1] - p[1]), q[0] - p[0]];
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (!len) continue;
+      // A unit axis, so the gap is in pixels whatever the edge's length.
+      const ax = [-(q[1] - p[1]) / len, (q[0] - p[0]) / len];
       const [a0, a1] = [Math.min(...axis(ca, ax)), Math.max(...axis(ca, ax))];
       const [b0, b1] = [Math.min(...axis(cb, ax)), Math.max(...axis(cb, ax))];
       if (a1 <= b0 + 1e-9 || b1 <= a0 + 1e-9) return false;

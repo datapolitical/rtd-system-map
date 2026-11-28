@@ -153,3 +153,26 @@ test('a planted overlap and a planted disappearance are caught on the real plan'
   gone.stops = before;
   gone.to = before.at(-1).zoom;
 });
+
+test('overlap is exact for tiny rotated boxes: a real overlap is found and a clear control is not', () => {
+  const tiny = { x: 0, y: 0, w: 1e-5, h: 1e-5, angle: 0.3 };
+  assert.equal(boxesOverlap(tiny, { x: 2e-6, y: 1e-6, w: 1e-5, h: 1e-5, angle: 0.9 }), true, 'tiny boxes sharing ink overlap');
+  assert.equal(boxesOverlap(tiny, { x: 1, y: 0, w: 1e-5, h: 1e-5, angle: 0.9 }), false, 'tiny boxes far apart do not');
+  assert.equal(boxesOverlap(tiny, { x: 1e-4, y: 0, w: 1e-5, h: 1e-5, angle: 0 }), false, 'tiny boxes close but clear do not');
+});
+
+test('a station name is checked where its ink is, not at its station bar', () => {
+  // The ink sits 100 px east of the bar. A route list there collides; one on the bar does not.
+  const names = [name(1, 1, 'Far Name', [0, 0], [60, -10, 140, 10])];
+  const onInk = list([60, 0], [140, 0], 'ROUTES', 'X');
+  const onBar = list([-40, 0], [40, 0], 'ROUTES', 'X');
+  const stopOf = (plan, kind) => plan.labels.find((l) => l.kind === kind).stops[0];
+  const plan = letteringPlan([drawing(2, 12, [...names, onBar])]);
+  const s = stopOf(plan, 'station-name');
+  const [bx, by] = toPx(at(0, 0, 12), 12);
+  const [sx, sy] = toPx(s.at, 12);
+  assert.ok(Math.abs(sx - (bx + 100)) < 0.01 && Math.abs(sy - by) < 0.01, 'the stop is at the ink centre');
+  assert.equal(overlapFaults(plan).length, 0, 'a list on the bar, clear of the ink, is no fault');
+  const plan2 = letteringPlan([drawing(2, 12, [...names, onInk])]);
+  assert.ok(overlapFaults(plan2).length > 0 || !plan2.labels.some((l) => l.kind === 'route-list'), 'a list on the ink is a fault');
+});
