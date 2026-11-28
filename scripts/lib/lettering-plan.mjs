@@ -8,7 +8,7 @@
 // the map shows at every zoom. Two checks read it: no two labels' ink overlaps, and
 // a label on one drawing is still there on the next unless the plan records why it
 // changed. This module writes the plan and the one record of the room each label
-// takes; the placements still come from the sheets until #156/#158 draw from it.
+// takes. #156 carries those placements from wide to close; #158 makes the page draw them.
 //
 // Nothing here names RTD's network: every label comes from the built drawing, and
 // every size and offset comes from SIZES and the page's own style constants.
@@ -16,9 +16,8 @@ import { SIZES, SHEETS, toPx, toLonLat, busWide } from './sheets.mjs';
 import { textWidth } from '../glyphs.mjs';
 import { NUMBER_SIZE, ROW_HEIGHT, numberOffset } from '../../public/js/sheets/style.js';
 
-/** The kinds of lettering the plan holds today. The rest of the map's own lettering
- * (bus street names, hall names) follows in #156, and the base map's names in #235. */
-export const KINDS = ['station-name', 'station-letter', 'line-letter', 'route-list'];
+/** Every kind of our own lettering on the sheets. The base map's names follow in #235. */
+export const KINDS = ['station-name', 'station-letter', 'line-letter', 'hall-label', 'route-list', 'hall-name', 'street-name'];
 
 /** The zoom whose pixels compare places across drawings. Sheet 2 draws at it. */
 export const REFERENCE_ZOOM = 12;
@@ -51,10 +50,7 @@ export function boxesOverlap(a, b) {
   for (const pts of [ca, cb]) {
     for (let i = 0; i < 4; i++) {
       const [p, q] = [pts[i], pts[(i + 1) % 4]];
-      const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
-      if (!len) continue;
-      // A unit axis, so the gap is in pixels whatever the edge's length.
-      const ax = [-(q[1] - p[1]) / len, (q[0] - p[0]) / len];
+      const ax = [-(q[1] - p[1]), q[0] - p[0]];
       const [a0, a1] = [Math.min(...axis(ca, ax)), Math.max(...axis(ca, ax))];
       const [b0, b1] = [Math.min(...axis(cb, ax)), Math.max(...axis(cb, ax))];
       if (a1 <= b0 + 1e-9 || b1 <= a0 + 1e-9) return false;
@@ -116,7 +112,7 @@ export class Room {
 
 /** The ink centre and box of a line-placed label: its stretch's middle, the street's
  * offset to the side the build chose, and its own direction. */
-function alongStretch(path, { sheetId, cls, size, side = 1, stack = false }) {
+function alongStretch(path, { sheetId, cls, size, side = 1, stack = false, offset = true }) {
   let pts = path.map((c) => toPx(c, SHEETS[sheetId].zoom));
   if (pts.length < 2) return null;
   // Read left to right, as MapLibre turns a label along a line that runs the other way.
@@ -134,11 +130,22 @@ function alongStretch(path, { sheetId, cls, size, side = 1, stack = false }) {
   const mid = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
   // The page sets a list just beside its street (style.js, numberOffset), on the side
   // the build found room. A stack's middle sits half a row farther off.
-  const off = (-numberOffset(sheetId, busWide(cls, { id: sheetId })) + (stack ? ROW_HEIGHT / 2 : 0)) * size;
+  const off = offset ? (-numberOffset(sheetId, busWide(cls, { id: sheetId })) + (stack ? ROW_HEIGHT / 2 : 0)) * size : 0;
   const normal = [u[1], -u[0]];
   const centre = [mid[0] + normal[0] * off * side, mid[1] + normal[1] * off * side];
   if (!centre.every(Number.isFinite)) return null;
   return { mid, centre, angle: Math.atan2(u[1], u[0]) };
+}
+
+/** The page wraps a hall's name at nine ems. Do that here too, so the plan owns the place. */
+function hallRows(text, size) {
+  const rows = [''];
+  for (const word of String(text).split(/\s+/)) {
+    const candidate = `${rows.at(-1)} ${word}`.trim();
+    if (rows.at(-1) && textWidth(candidate, FONT.name, size) > 9 * size) rows.push(word);
+    else rows[rows.length - 1] = candidate;
+  }
+  return rows;
 }
 
 /** Every label of one drawing, as plan entries. */
@@ -234,6 +241,37 @@ export function planEntries({ id: sheetId, zoom, features }) {
         room: [width, rows * listSize * ROW_HEIGHT],
       });
     }
+    // A bus street's own name, from RTD's stop names, beside the street like its list.
+    if (p.kind === 'bus-street' && listSize) {
+      const place = alongStretch(f.geometry.coordinates, { sheetId, cls: p.cls, size: listSize, side: p.side === -1 ? -1 : 1 });
+      if (!place) continue;
+      out.push({
+        kind: 'street-name', key: `street-name:${p.label}`, text: p.label, font: FONT.street,
+        anchor: place.mid, centre: place.centre, angle: place.angle, size: listSize,
+        room: [textWidth(p.label, FONT.street, listSize, LETTER_SPACING), listSize * ROW_HEIGHT],
+      });
+    }
+    // What a hall is, down its axis. Unlike the old page layer, the plan owns its exact centre.
+    if (p.kind === 'hall-name') {
+      const size = SIZES.hallLetter;
+      const place = alongStretch(f.geometry.coordinates, { sheetId, size, offset: false });
+      if (!place) continue;
+      const text = String(p.text).toUpperCase();
+      out.push({ kind: 'hall-name', key: `hall-name:${p.text}`, text, font: FONT.minor, anchor: place.mid, centre: place.centre,
+        angle: place.angle, size, room: [textWidth(text, FONT.minor, size, 0.18), size * ROW_HEIGHT] });
+    }
+    // A bus station's name starts to the right of its hall. Carrying may move it only for a
+    // recorded collision; the page will no longer choose a variable anchor (#158).
+    if (p.kind === 'hall-label') {
+      const at = toPx(f.geometry.coordinates, zoom);
+      const size = SIZES.name[sheetId] - 2;
+      const rows = hallRows(p.text, size);
+      const width = Math.max(...rows.map((row) => textWidth(row, FONT.name, size)));
+      const height = rows.length * size * 1.12;
+      const centre = [at[0] + (p.r ?? 0) + size / 2 + width / 2, at[1]];
+      out.push({ kind: 'hall-label', key: `hall-label:${p.text}`, text: rows.join('\n'), font: FONT.name,
+        anchor: at, centre, angle: 0, size, room: [width, height] });
+    }
   }
   // A fixed order, so the same drawing always makes the same plan (and the nth copy of
   // a label links to the nth of the drawing before it).
@@ -257,7 +295,7 @@ const groundPx = ([lon, lat]) => toPx([lon, lat], REFERENCE_ZOOM);
  * list) must be to be carried; single-copy labels (a station's name) carry by identity
  * however far they move, and the move itself is what the check measures.
  */
-export function letteringPlan(drawings, { link = LINK_PX } = {}) {
+export function letteringPlan(drawings, { link = LINK_PX, carry = false } = {}) {
   const sorted = [...drawings].sort((a, b) => a.zoom - b.zoom);
   const labels = new Map();
   const counts = new Map();
@@ -321,7 +359,8 @@ export function letteringPlan(drawings, { link = LINK_PX } = {}) {
   }
   const out = [...labels.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   for (const l of out) l.stops.sort((a, b) => a.zoom - b.zoom);
-  return { version: 1, referenceZoom: REFERENCE_ZOOM, kinds: KINDS, conditional, drawings: stats, labels: out };
+  const plan = { version: 1, referenceZoom: REFERENCE_ZOOM, kinds: KINDS, conditional, drawings: stats, labels: out };
+  return carry ? carryLettering(plan) : plan;
 }
 
 /** One stop: where the label's ink sits on this drawing, and how far it moved. */
@@ -340,9 +379,245 @@ function stop(e, drawing, before) {
   };
 }
 
+// --- carrying the plan from one drawing to the next ----------------------------
+
+const routesOf = (text) => new Set(String(text).split(/[\s,]+/).filter(Boolean));
+const sharesRoute = (a, b) => [...routesOf(a)].some((r) => routesOf(b).has(r));
+const stopBox = (s, zoom) => {
+  const [x, y] = toPx(s.at, zoom);
+  return { x, y, w: s.room[0], h: s.room[1], angle: (s.angle * Math.PI) / 180 };
+};
+const distanceAt = (a, b, zoom) => {
+  const p = toPx(a, zoom), q = toPx(b, zoom);
+  return Math.hypot(p[0] - q[0], p[1] - q[1]);
+};
+
+// A street label whose first places are taken can slide along its own alignment, never
+// across the street or onto another feature. Try the nearest clear place first, alternating
+// directions, and go no farther than one label's own length (or 48 px for a short list).
+function slideAlong(stop, zoom, distance) {
+  const angle = (stop.angle * Math.PI) / 180;
+  const dx = Math.cos(angle) * distance, dy = Math.sin(angle) * distance;
+  const moved = (at) => {
+    const [x, y] = toPx(at, zoom);
+    return lonlat([x + dx, y + dy], zoom);
+  };
+  return { ...stop, at: moved(stop.at), anchor: moved(stop.anchor) };
+}
+function *alignmentPlacements(stop, zoom) {
+  const step = Math.max(4, stop.room[1]);
+  const limit = Math.max(48, stop.room[0]);
+  for (let distance = step; distance <= limit + 1e-9; distance += step) {
+    yield slideAlong(stop, zoom, distance);
+    yield slideAlong(stop, zoom, -distance);
+  }
+}
+
+/**
+ * The consistency rule, applied to a fresh sheet plan (#156). Existing labels claim
+ * their old ground first, in rank order. One keeps its old centre and angle when its
+ * new ink box fits; otherwise the fresh sheet placement is a fallback and its stop
+ * records what it overlapped. A label missing from the fresh drawing is retained on
+ * the same rule. A route list that splits hands over to a nearby list sharing a route
+ * instead of staying behind as a duplicate. New labels take only room still free.
+ *
+ * This pass decides label-on-label fit. Rail, stations and street geometry become
+ * zoom rules in #155; until then a move caused only by those drawings changing is
+ * left for that integration, not guessed here.
+ */
+export function carryLettering(freshPlan) {
+  const labels = new Map();
+  let before = [];
+  const lastZoom = freshPlan.drawings.at(-1)?.zoom;
+  for (const drawing of freshPlan.drawings) {
+    const fresh = freshPlan.labels.flatMap((l) => {
+      const stop = l.stops.find((s) => s.zoom === drawing.zoom);
+      return stop ? [{ label: l, stop }] : [];
+    });
+    const byId = new Map(fresh.map((f) => [f.label.id, f]));
+    // The fresh linker is deliberately conservative at 8 reference pixels. A carry
+    // pass may continue the same copy farther (up to 48 px at the closer zoom), but
+    // still one-to-one and only within its stable identity key.
+    const continued = new Set(fresh.filter((f) => before.some((old) => old.label.id === f.label.id)).map((f) => f.label.id));
+    for (const old of before) {
+      if (byId.has(old.label.id)) continue;
+      let best = null;
+      for (const candidate of fresh) {
+        if (continued.has(candidate.label.id) || candidate.label.key !== old.label.key) continue;
+        const d = distanceAt(old.stop.at, candidate.stop.at, drawing.zoom);
+        if (d <= 48 && (!best || d < best.d)) best = { candidate, d };
+      }
+      if (best) {
+        byId.set(old.label.id, best.candidate);
+        continued.add(best.candidate.label.id);
+      }
+    }
+    const claimed = new Set();
+    const handovers = new Map();
+    // A merged trunk's old list must not survive beside the lists that replace it.
+    // Match only the same kind, shared route identity and nearby ink at this zoom.
+    for (const old of before) {
+      if (old.label.kind !== 'route-list' || byId.has(old.label.id)) continue;
+      let best = null;
+      for (const candidate of fresh) {
+        if (claimed.has(candidate.label.id) || continued.has(candidate.label.id) || candidate.label.kind !== old.label.kind || listKey(old.stop.text) === listKey(candidate.stop.text) || !sharesRoute(old.stop.text, candidate.stop.text)) continue;
+        const d = distanceAt(old.stop.at, candidate.stop.at, drawing.zoom);
+        if (d <= 48 && (!best || d < best.d)) best = { candidate, d };
+      }
+      if (!best) continue;
+      const why = `handover: a more detailed route list replaces it at zoom ${drawing.zoom}`;
+      claimed.add(best.candidate.label.id);
+      handovers.set(old.label.id, { child: best.candidate, why });
+    }
+
+    const room = new Room();
+    const current = [];
+    const used = new Set();
+    // A retained label has no fresh stop to take its size from. Read the same build
+    // and page tables as a fresh entry, never a median inferred from other labels.
+    const sizeFor = (old) => {
+      switch (old.label.kind) {
+        case 'station-name': return old.stop.size === SIZES.nameMinor ? SIZES.nameMinor : SIZES.name[drawing.id];
+        case 'station-letter': return SIZES.nameLetter[drawing.id] * SIZES.letterText;
+        case 'line-letter': return SIZES.letterDisc[drawing.id] * SIZES.letterText;
+        case 'route-list':
+        case 'street-name': return NUMBER_SIZE[drawing.id];
+        case 'hall-label': return SIZES.name[drawing.id] - 2;
+        case 'hall-name': return SIZES.hallLetter;
+        default: throw new Error(`No size rule for ${old.label.kind}`);
+      }
+    };
+    const take = (label, stop, held) => {
+      if (!label.partOf) room.take(stopBox(stop, drawing.zoom), { id: label.id, kind: label.kind });
+      current.push({ label, stop });
+      if (held) stop.carried = true;
+    };
+    const finish = (label, stop) => {
+      label.stops.push(stop);
+      label.to = drawing.zoom;
+      labels.set(label.id, label);
+    };
+    const ranks = [...new Set([...before, ...fresh].map((x) => RANK[x.label.kind]))].sort((a, b) => a - b);
+    for (const rank of ranks) {
+    const ordered = [...before].filter((x) => RANK[x.label.kind] === rank).sort((a, b) => a.label.id.localeCompare(b.label.id));
+    for (const old of ordered) {
+      const source = labels.get(old.label.id);
+      const now = byId.get(old.label.id);
+      const handover = handovers.get(old.label.id);
+      if (handover) {
+        source.why = handover.why;
+        continue;
+      }
+      const retainedSize = now ? null : sizeFor(old);
+      const scale = retainedSize / old.stop.size;
+      const held = {
+        ...old.stop, sheet: drawing.id, zoom: drawing.zoom, moved: 0, ...(!now ? { retained: true } : {}),
+        size: now?.stop.size ?? ROUND(retainedSize),
+        room: now?.stop.room ?? old.stop.room.map((v) => ROUND(v * scale)),
+        text: now?.stop.text ?? old.stop.text,
+      };
+      delete held.carried;
+      delete held.why;
+      if (now) delete held.retained;
+      let why = null;
+      if (now && now.stop.text.replace(/\s+/g, ' ').length < old.stop.text.replace(/\s+/g, ' ').length)
+        why = `handover: the closer drawing changes the wording at zoom ${drawing.zoom}`;
+      const hits = source.partOf ? [] : room.hits(stopBox(held, drawing.zoom));
+      if (!hits.length) {
+        if (why) held.why = why;
+        take(source, held, true);
+        finish(source, held);
+        if (now) used.add(now.label.id);
+        continue;
+      }
+      // The old place no longer fits: the fresh sheet's place is the first recorded move.
+      const reason = `no longer fits at zoom ${drawing.zoom}: overlaps ${hits.map((h) => h.id).join(', ')}`;
+      let fullReason = reason;
+      if (now) {
+        const moved = { ...now.stop, why: reason };
+        const freshHits = source.partOf ? [] : room.hits(stopBox(moved, drawing.zoom));
+        if (!freshHits.length) {
+          take(source, moved, false);
+          finish(source, moved);
+          used.add(now.label.id);
+          continue;
+        }
+        fullReason = `${reason}; the fresh place also overlaps ${freshHits.map((h) => h.id).join(', ')}`;
+      }
+      // A list or street name belongs to a line, so its last resort is along that same
+      // line. This is a general placement rule, not a pin: it uses only the label's own
+      // measured ink and bearing and still records both the collision and the move.
+      if (source.kind === 'route-list' || source.kind === 'street-name') {
+        let placed = false;
+        for (const base of [held, ...(now ? [now.stop] : [])]) {
+          for (const candidate of alignmentPlacements(base, drawing.zoom)) {
+            if (room.hits(stopBox(candidate, drawing.zoom)).length) continue;
+            candidate.moved = ROUND(distanceAt(old.stop.at, candidate.at, drawing.zoom));
+            candidate.why = `${fullReason}; moved along its alignment to clear the overlap`;
+            take(source, candidate, false);
+            finish(source, candidate);
+            if (now) used.add(now.label.id);
+            placed = true;
+            break;
+          }
+          if (placed) break;
+        }
+        if (placed) continue;
+      }
+      source.why = fullReason;
+    }
+
+    // New lettering, and the detailed labels that took over, fill the room left.
+    const additions = fresh.filter((f) => !used.has(f.label.id) && RANK[f.label.kind] === rank).sort((a, b) => a.label.from - b.label.from || a.label.id.localeCompare(b.label.id));
+    for (const item of additions) {
+      let id = item.label.id;
+      let parent = item.label.parent;
+      let why = null;
+      for (const [oldId, handover] of handovers) if (handover.child.label.id === id) {
+        parent = oldId;
+        why = handover.why;
+        break;
+      }
+      // A base-plan id that last ran before a gap cannot be revived with a gap. Give
+      // the new interval its own id and an explicit parent, as the format intends.
+      if (labels.has(id) && labels.get(id).to !== before[0]?.stop.zoom) {
+        let n = 2;
+        parent = id;
+        while (labels.has(`${id}/interval-${n}`)) { parent = `${id}/interval-${n}`; n++; }
+        id = `${id}/interval-${n}`;
+        why ??= `appears again at zoom ${drawing.zoom} after its previous interval ended`;
+      }
+      const label = labels.get(id) ?? { ...item.label, id, parent, stops: [] };
+      label.parent = parent;
+      label.stops = labels.get(id)?.stops ?? [];
+      label.from = label.stops[0]?.zoom ?? drawing.zoom;
+      const stop = { ...item.stop, ...(why ? { why } : {}) };
+      const hits = label.partOf ? [] : room.hits(stopBox(stop, drawing.zoom));
+      if (hits.length) {
+        // It cannot start here. Keep an existing earlier interval with its reason, but
+        // do not write a new label with no placements.
+        if (label.stops.length) labels.get(id).why = `no longer fits at zoom ${drawing.zoom}: overlaps ${hits.map((h) => h.id).join(', ')}`;
+        continue;
+      }
+      take(label, stop, false);
+      finish(label, stop);
+    }
+    }
+    before = current;
+  }
+  const out = [...labels.values()].filter((l) => l.stops.length).sort((a, b) => a.id.localeCompare(b.id));
+  for (const l of out) {
+    l.stops.sort((a, b) => a.zoom - b.zoom);
+    l.from = l.stops[0].zoom;
+    l.to = l.stops.at(-1).zoom;
+    if (l.to === lastZoom) delete l.why;
+  }
+  return { ...freshPlan, version: 2, placement: 'carried', labels: out };
+}
+
 // --- the checks the plan makes possible ----------------------------------------
 
-const RANK = { 'station-name': 0, 'station-letter': 0, 'line-letter': 1, 'route-list': 2 };
+const RANK = { 'station-name': 0, 'station-letter': 0, 'line-letter': 1, 'hall-label': 2, 'route-list': 3, 'hall-name': 4, 'street-name': 5 };
 
 /** The plan's own arithmetic: every stop has ink, stops run in zoom order, and a
  * label's first and last zooms are those of its first and last stop. */
@@ -409,9 +684,47 @@ export function carryFaults(plan) {
       if (now.length < was.length) faults.push({ kind: 'shorter', id: l.id, zoom: s.zoom, was, now });
     });
     const child = handedOver.get(l.id);
-    if (l.to < last && !l.why && !child?.why) faults.push({ kind: 'gave-way', id: l.id, zoom: l.to });
+    const next = zooms[zooms.indexOf(l.to) + 1];
+    // A successor takes over only if it starts at the very next drawing and says why.
+    const takes = child && child.from === next && (child.why || child.stops[0]?.why);
+    if (l.to < last && !takes) faults.push({ kind: 'gave-way', id: l.id, zoom: l.to });
   }
   return faults;
+}
+
+/**
+ * Labels that end before the last drawing with no label taking over from them: a
+ * recorded fit reason explains why they went, but it is not a successor. Listed apart
+ * so the plan never passes a disappearance off as a handover.
+ */
+export function droppedLabels(plan) {
+  const last = plan.drawings.at(-1)?.zoom;
+  const parents = new Set(plan.labels.filter((l) => l.parent).map((l) => l.parent));
+  return plan.labels.filter((l) => l.to < last && !parents.has(l.id)).map((l) => ({ id: l.id, kind: l.kind, zoom: l.to, why: l.why ?? null }));
+}
+
+/** The carry audit for every neighbouring pair: what stayed, what changed, and why. */
+export function transitionReport(plan) {
+  const out = [];
+  for (let i = 1; i < plan.drawings.length; i++) {
+    const from = plan.drawings[i - 1].zoom, to = plan.drawings[i].zoom;
+    const at = (zoom) => plan.labels.flatMap((l) => {
+      const stop = l.stops.find((s) => s.zoom === zoom);
+      return stop ? [{ label: l, stop }] : [];
+    });
+    const before = at(from), after = at(to);
+    const ended = plan.labels.filter((l) => l.to === from);
+    out.push({
+      from, to, before: before.length, after: after.length,
+      carried: after.filter((x) => x.stop.carried).length,
+      retained: after.filter((x) => x.stop.retained).length,
+      moved: after.filter((x) => x.stop.why?.startsWith('no longer fits')).length,
+      handovers: ended.filter((l) => l.why?.startsWith('handover')).length,
+      gaveWay: ended.filter((l) => l.why?.startsWith('no longer fits')).length,
+      added: plan.labels.filter((l) => l.from === to).length,
+    });
+  }
+  return out;
 }
 
 /** What a build should print: the plan's size, its counts and both checks, grouped. */
@@ -432,6 +745,7 @@ export function planReport(plan) {
     byKind,
     carried: plan.labels.filter((l) => l.parent).length,
     conditional: plan.conditional,
+    transitions: transitionReport(plan),
     bytes,
     overlap: { count: overlap.length, byPair: tally(overlap, (f) => [f.aKind, f.bKind].sort().join(' / ')), byZoom: tally(overlap, (f) => `z${f.zoom}`) },
     carry: { count: carry.length, byKind: tally(carry, (f) => f.kind), byZoom: tally(carry, (f) => `z${f.zoom}`) },
