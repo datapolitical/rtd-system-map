@@ -612,6 +612,10 @@ let picked = null; // { mode: 'bus' | 'rail', route }
 let shown = null; // what the card names: { title, note, routes: [{ mode, route, color }] }
 let opener = null; // the button the card was opened from (the list, #135), where closing it returns
 let selectedAt = null;
+const searchBar = document.querySelector('#finder .bar');
+const searchBox = document.querySelector('#search');
+// The place search found, ringed on the map until the next tap (goTo, below).
+const found = new maplibregl.Marker({ element: Object.assign(document.createElement('div'), { className: 'found' }) });
 let panelOpen = false; // the route panel's fold (tell)
 // The route panel's words (js/panel/route.js) are not the opening view's: they load once it has
 // settled, or with the first route's card if that comes sooner.
@@ -655,7 +659,7 @@ function keepVisible() {
   if (!selectedAt || card.hidden || !map.isStyleLoaded()) return;
   const box = map.getContainer().getBoundingClientRect();
   const p = map.project(selectedAt);
-  const blocks = [card, document.querySelector('#steps'), document.querySelector('#credit'), themeButton]
+  const blocks = [card, document.querySelector('#steps'), document.querySelector('#credit'), themeButton, searchBar]
     .filter((el) => el && !el.hidden).map((el) => {
       const r = el.getBoundingClientRect();
       return { left: r.left - box.left, top: r.top - box.top, right: r.right - box.left, bottom: r.bottom - box.top };
@@ -665,6 +669,9 @@ function keepVisible() {
 }
 function tell(what) {
   shown = what;
+  // A card redrawn while the keyboard is in it (a route's, when RTD's name for it arrives) keeps the focus.
+  const held = card.contains(document.activeElement);
+  const keepFocus = () => { if (held && !card.contains(document.activeElement)) (card.querySelector('button:not(.close)') ?? card.querySelector('button.close'))?.focus({ preventScroll: true }); };
   const { title, note, lead, groups = [] } = what;
   const routes = routesOf(what);
   const hint = hintFor(routes);
@@ -684,6 +691,7 @@ function tell(what) {
       + '<button type="button" class="close" aria-label="Close">\u00d7</button>';
     card.hidden = false;
     say(cardSaid({ title: what.name, note: what.line, routes }));
+    keepFocus();
     requestAnimationFrame(keepVisible);
     return;
   }
@@ -697,6 +705,7 @@ function tell(what) {
   card.classList.remove('list');
   card.hidden = false;
   say(cardSaid({ title: card.querySelector('#card-title').textContent, note, lead, routes }));
+  keepFocus();
   requestAnimationFrame(keepVisible);
 }
 // Closing the card is a tap on empty ground: the card goes, and so does a pick.
@@ -719,7 +728,8 @@ card.addEventListener('click', (e) => {
     if (panelOpen && shown?.entry) say(panelCode.routePanelSaid(panelCode.routePanel(shown.entry, timeWindows)));
     return;
   }
-  if (e.target.closest('button.close')) return close({ focus: true });
+  // Back to where the card was opened from; not to the search box after a touch, which would raise a phone's keyboard.
+  if (e.target.closest('button.close')) { found.remove(); return close({ focus: e.detail === 0 || opener !== searchBox }); }
   const place = e.target.closest('button[data-place]');
   if (place) return placeCard(shown.places[Number(place.dataset.place)], { focus: true });
   const b = e.target.closest('button[data-route]');
@@ -735,7 +745,7 @@ card.addEventListener('click', (e) => {
   const hint = card.querySelector('.hint');
   if (shown && hint) hint.textContent = hintFor(routesOf(shown));
 });
-addEventListener('keydown', (e) => { if (e.key === 'Escape') close({ focus: card.contains(document.activeElement) }); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') { found.remove(); close({ focus: card.contains(document.activeElement) }); } });
 // Panning only moves the sheet. Names keep the places chosen by the build.
 map.on('idle', keepVisible);
 // On the whole district a town's name that would run off the screen is left off, not cut (Chris,
@@ -807,6 +817,7 @@ const rails = (list) => list.map((route) => ({ mode: 'rail', route, color: color
 const buses = (text) => routeList(text).map((route) => ({ mode: 'bus', route }));
 map.on('click', (e) => {
   opener = null;
+  found.remove();
   selectedAt = e.lngLat;
   const n = SHEETS[sheet].id;
   const reach = 9;
@@ -1038,6 +1049,7 @@ function inView() {
 }
 function showList() {
   selectedAt = null;
+  found.remove();
   const { places, stations, routes, lines } = inView();
   shown = { list: true, places, routes };
   opener = listButton;
@@ -1102,18 +1114,25 @@ const routeEntry = (p) => (directory ??= fetch(new URL('../../data/directory.jso
 // A picked route framed whole in the map left clear above its card (DESIGN.md, "the address"):
 // on the link's own sheet, its middle in the middle of that clear area, where it fits there. A
 // link to a closer sheet than the whole route fits on keeps its view: it shows a place on the route.
-function frame(r) {
+// A route search found has no view of its own to keep: `step` moves to the closest sheet that
+// shows all of it in that clear area, measured with its card as drawn (the route panel open or
+// shut), and centres it there.
+function frame(r, { step = false } = {}) {
   const [w, s, e, n] = r.bbox ?? [];
   if (![w, s, e, n].every(Number.isFinite)) return;
   const box = map.getContainer().getBoundingClientRect();
   const over = card.hidden ? box.bottom : card.getBoundingClientRect().top;
-  const pad = { top: 16, left: 16, right: 16, bottom: Math.max(16, box.bottom - over + 12) };
+  const pad = { top: (searchBar ? searchBar.getBoundingClientRect().bottom - box.top : 0) + 16, left: 16, right: 16, bottom: Math.max(16, box.bottom - over + 12) };
   const fit = map.cameraForBounds([[w, s], [e, n]], { padding: pad });
-  if (!fit || fit.zoom < rests[sheet] - 0.05) return;
+  if (!fit) return;
+  if (step) {
+    const to = Math.max(0, rests.findLastIndex((z) => z <= fit.zoom + 0.05));
+    if (to !== sheet) show(to, undefined, true, 0);
+  } else if (fit.zoom < rests[sheet] - 0.05) return;
   map.jumpTo({ center: [(w + e) / 2, (s + n) / 2], zoom: rests[sheet] }, { settling: true });
   map.panBy([0, (pad.bottom - pad.top) / 2], { duration: 0 }, { settling: true });
 }
-function openCard(p, { framed = false } = {}) {
+function openCard(p, { framed = false, step = false } = {}) {
   if (!pickCard(p ?? {})) return;
   const fill = (r = null) => {
     if (picked !== p) return;
@@ -1122,7 +1141,7 @@ function openCard(p, { framed = false } = {}) {
   };
   fill();
   // RTD's name for it, its ends and how often it runs come from the directory, read once.
-  routeEntry(p).then((r) => { if (!r) return; fill(r); if (framed && picked === p) frame(r); });
+  routeEntry(p).then((r) => { if (!r) return; fill(r); if (framed && picked === p) frame(r, { step }); });
   if (p.mode === 'rail' && !colorOf.has(p.route)) map.once('idle', () => routeEntry(p).then(fill));
 }
 // A picked route the address names is set once the map has its style, and kept only if the
@@ -1138,6 +1157,68 @@ function applyAddressPick(p) {
   }
 }
 if (asked?.pick) map.once('load', () => applyAddressPick(asked.pick));
+
+// --- Search (js/search/) -----------------------------------------------------------
+// Search reads RTD's data and knows nothing of the sheets. This is the part that does: it moves
+// the map to what was found, on a sheet that shows it, and opens the card a tap there opens. It
+// is the only part of search the zoomable map replaces.
+const STREET_ZOOM = 13; // a station or a Park-n-Ride is shown at least this close, where its streets read
+function goTo(r, from) {
+  opener = from;
+  found.remove();
+  const focus = () => (card.querySelector('button:not(.close)') ?? card.querySelector('button.close'))?.focus({ preventScroll: true });
+  if (r.kind === 'route') {
+    const p = { mode: r.mode, route: r.route };
+    selectedAt = null;
+    if (!drawsRoute(drawnRoutes, p)) {
+      // A route RTD lists that the sheets don't draw: its card, with nothing to highlight.
+      setPick(null);
+      const what = pickCard(p, r.entry);
+      tell({ ...what, entry: r.entry, routes: [] });
+      return focus();
+    }
+    // Shown on the closest sheet that holds all of it between the search bar and its card: frame
+    // measures the card once it is drawn, so the sheet is chosen there, not guessed here.
+    setPick(p);
+    openCard(p, { framed: true, step: true });
+    return focus();
+  }
+  if (!r.at) return;
+  // Stops are drawn on the closest sheets only; a station or a Park-n-Ride on every one.
+  const stops = SHEETS.findIndex((sh) => map.getLayer(`stop-${sh.id}`));
+  const want = r.kind === 'stop' ? (stops < 0 ? SHEETS.length - 1 : stops) : Math.max(0, zooms.findIndex((z) => z >= STREET_ZOOM));
+  if (picked) { setPick(null); say(pickSaid(null)); }
+  map.jumpTo({ center: r.at });
+  show(Math.max(sheet, want), undefined, true);
+  selectedAt = r.at;
+  found.setLngLat(r.at).addTo(map);
+  // The sheet draws a stop's or a station's mark where the build placed it, beside its street,
+  // which is not always RTD's own point for it. Once the sheet has drawn, the ring and the
+  // card's place move onto the mark itself, so the ring sits round what it names.
+  if (r.kind !== 'place' && r.id != null) {
+    const ring = found.getElement();
+    map.once('idle', () => {
+      if (!ring.isConnected || selectedAt !== r.at) return;
+      const n = SHEETS[sheet].id;
+      const layers = (r.kind === 'stop' ? ['stop', 'group-stop'] : ['station']).map((k) => `${k}-${n}`).filter((id) => map.getLayer(id));
+      const mark = layers.length ? map.queryRenderedFeatures({ layers }).find((f) => String(f.properties.id) === String(r.id)) : null;
+      if (!mark) return;
+      // A stop's mark is a point; a station's is a drawn shape, ringed round its middle.
+      const points = mark.geometry.coordinates.flat(Infinity);
+      const xs = points.filter((_, i) => i % 2 === 0);
+      const ys = points.filter((_, i) => i % 2 === 1);
+      const at = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+      found.setLngLat(at);
+      selectedAt = at;
+      keepVisible();
+    });
+  }
+  tell({ title: esc(r.name), note: r.note, also: r.lead, routes: r.routes.map((x) => (x.mode === 'rail' ? { ...x, color: colorOf.get(x.route) ?? x.color ?? '#888888' } : x)) });
+  focus();
+}
+// The search script and RTD's files it reads load when the box is first used, never at page load.
+const finder = document.querySelector('#finder');
+finder?.addEventListener('focusin', () => import('../search/box.js').then(({ initSearch }) => initSearch({ root: finder, open: goTo })), { once: true });
 
 // --- The picture shown while the map loads (index.html, #poster) -----------------
 
@@ -1185,7 +1266,8 @@ if ('serviceWorker' in navigator) {
         sent = entries.length;
         reg.active?.postMessage({ type: 'keep', urls });
       };
-      hand(firstVisit ? [new URL('../../data/directory.json', import.meta.url).href] : []);
+      // Search's scripts too, which the page fetches only when the box is used: so it works offline the first time.
+      hand(firstVisit ? ['../../data/directory.json', '../search/box.js', '../search/find.js'].map((f) => new URL(f, import.meta.url).href) : []);
       // What came in between, until the worker sees requests itself.
       if (!navigator.serviceWorker.controller) {
         const more = () => hand();
