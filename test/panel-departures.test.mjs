@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { departureTables } from '../scripts/lib/departures.mjs';
+import { departureTables, sign } from '../scripts/lib/departures.mjs';
 import { upcoming, servicesOn, clockIn, addDays, clock, chunkOf, accessible, departuresHtml, departuresSaid, departureSource } from '../public/js/panel/departures.js';
 
 const csv = (rows) => rows.map((r) => r.join(',')).join('\n');
@@ -66,6 +66,19 @@ test('a stop where trips only end is marked, and says so', () => {
 
 test('a route the map draws as one keeps the name on the bus', () => {
   assert.deepEqual(index.patterns.find((p) => p[1] === '9L'), ['9', '9L', 'Downtown', 'WK']);
+});
+
+test('a sign says where the trip is headed, without the line it is on', () => {
+  assert.equal(sign('E-Line RidgeGate', 'E'), 'RidgeGate');
+  assert.equal(sign('C-Line to Mineral', 'C'), 'Mineral');
+  assert.equal(sign('Train to Alameda Station', 'T'), 'Alameda Station');
+  assert.equal(sign('T Line to Lincoln Station', 'T'), 'Lincoln Station');
+  assert.equal(sign('124th - Eastlake', 'N'), '124th – Eastlake');
+  assert.equal(sign('Smoky Hill  Picadilly PnR', '153'), 'Smoky Hill Picadilly PnR');
+  assert.equal(sign('Union Station', '15'), 'Union Station');
+  assert.equal(sign('W-Line Union Station', 'W'), 'Union Station');
+  assert.equal(sign('Train', 'T'), 'Train', 'never an empty sign');
+  assert.equal(sign('', '15'), '');
 });
 
 test('the index carries the calendar, its exceptions, the time zone and each station\'s platforms', () => {

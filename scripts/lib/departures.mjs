@@ -12,6 +12,18 @@ import { chunkOf } from '../../public/js/panel/departures.js';
 const CHUNK_CHARS = 40_000;
 const WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+/**
+ * Where a trip is headed, from its sign, without the line it is on ("E-Line RidgeGate" is
+ * RidgeGate, "Train to Alameda Station" is Alameda Station): the row's chip already says the
+ * line. The place keeps RTD's own words, "Station" and its short forms (Stn, PnR) included.
+ */
+export function sign(headsign, route) {
+  const text = String(headsign ?? '').replace(/\s+/g, ' ').trim();
+  const name = String(route ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const place = text.replace(new RegExp(`^(${name}[- ]?line|train)\\b\\s*`, 'i'), '').replace(/^to\s+/i, '').replace(/\s+-\s+/g, ' \u2013 ').trim();
+  return place || text;
+}
+
 const minutes = (t) => {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
@@ -37,7 +49,8 @@ export function departureTables(text, { lineOf = (id) => id, stations = [] } = {
   const patternOf = (trip) => {
     const r = routes.get(trip.route_id);
     const name = r?.route_short_name || trip.route_id;
-    const key = JSON.stringify([lineOf(trip.route_id) ?? name, name, trip.trip_headsign ?? '', trip.service_id]);
+    const line = lineOf(trip.route_id) ?? name;
+    const key = JSON.stringify([line, name, sign(trip.trip_headsign, line), trip.service_id]);
     if (!patterns.has(key)) patterns.set(key, patterns.size);
     return patterns.get(key);
   };

@@ -132,13 +132,31 @@ if (mode === 'data') {
         await page.clock.install({ time: zone(date, h, m) });
         // The busiest drawn stop then, so the card is at its fullest.
         const rail = new Set(directory.routes.filter((r) => r.mode === 'rail').map((r) => r.route));
+        // The busiest stops then, so the card is at its fullest. The stop is tapped where the sheet
+        // draws its mark, which the build places: the first of them that the sheet draws.
         const some = stops.filter((f) => !f.properties.platform).filter((_, i) => i % 23 === 0);
+        const ranked = [];
+        for (const f of some) { const rec = await file(String(f.properties.id)); ranked.push({ f, rec, n: rec ? upcoming([rec], index, now).rows.length : 0 }); }
+        ranked.sort((x, y) => y.n - x.n);
         let best = null;
-        for (const f of some) { const rec = await file(String(f.properties.id)); const n = rec ? upcoming([rec], index, now).rows.length : 0; if (!best || n > best.n) best = { f, rec, n }; }
-        await page.goto(`${a}/?theme=${theme}#16/${best.f.geometry.coordinates[1].toFixed(5)}/${best.f.geometry.coordinates[0].toFixed(5)}`, { waitUntil: 'load' });
-        await page.waitForFunction(() => window.sheetsReady, null, { timeout: 90000 });
-        await rest();
-        await tap(best.f.geometry.coordinates);
+        let mark = null;
+        for (const candidate of ranked.slice(0, 8)) {
+          await page.goto(`${a}/?theme=${theme}#16/${candidate.f.geometry.coordinates[1].toFixed(5)}/${candidate.f.geometry.coordinates[0].toFixed(5)}`, { waitUntil: 'load' });
+          await page.waitForFunction(() => window.sheetsReady, null, { timeout: 90000 });
+          await rest();
+          mark = await page.evaluate((id) => {
+            const m = window.sheetsMap;
+            const layers = m.getStyle().layers.filter((l) => /^stop-\d+$/.test(l.id)).map((l) => l.id);
+            const hit = m.queryRenderedFeatures({ layers }).find((x) => String(x.properties.id) === id);
+            if (!hit) return null;
+            const p = m.project(hit.geometry.coordinates);
+            // On the map, clear of the buttons and the edges, so the tap is the stop's.
+            return p.x > 30 && p.x < innerWidth - 30 && p.y > 80 && p.y < innerHeight - 160 ? hit.geometry.coordinates : null;
+          }, String(candidate.f.properties.id));
+          if (mark) { best = candidate; break; }
+        }
+        if (!check(best, `${tag} ${when}: none of the eight busiest sampled stops is drawn on the closest sheet`)) continue;
+        await tap(mark);
         const title = await page.textContent('#card-title').catch(() => '');
         if (check(title === best.f.properties.name, `${tag} ${when}: tapped stop ${best.f.properties.id} "${best.f.properties.name}" but the card is "${title}"`)) {
           const got = await rowsOnCard();
