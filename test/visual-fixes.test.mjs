@@ -111,3 +111,9 @@ test('the report says live pins are resolved only, not applied to a drawing', op
   assert.equal(report.live, 1);
   assert.equal(report.applied, false, 'no drawing reads the pin yet, so the report makes no claim that it changed one');
 });
+
+test('any setting a pin does not define is refused, at the top level and inside `set`', options, () => {
+  assert.throws(() => resolveVisualFixes([pin({ text: 'Other name' })], data), /unsupported setting/);
+  assert.throws(() => resolveVisualFixes([pin({ wording: 'x' })], data), /unsupported setting/);
+  assert.throws(() => resolveVisualFixes([pin({ set: { side: 'left', text: 'x' } })], data), /set must contain only a side/);
+});
