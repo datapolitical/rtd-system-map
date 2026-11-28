@@ -18,6 +18,7 @@
     "test": "node --test",
     "check": "playwright test -c qa/playwright.config.mjs --grep-invert @deep",
     "check:sheets": "node qa/sheets.mjs",
+    "check:wide-zoom": "node scripts/wide-zoom.mjs",
     "check:health": "playwright test -c qa/playwright.config.mjs health",
     "check:a11y": "node qa/a11y.mjs",
     "check:classic": "playwright test -c qa/classic/playwright.config.mjs --grep-invert @deep",

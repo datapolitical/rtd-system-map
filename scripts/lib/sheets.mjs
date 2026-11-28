@@ -436,6 +436,22 @@ export function chained(pieces, reach = 1.5, turned = (p) => [...p].reverse()) {
  * the slot changes the line slides across over `ease` pixels, not in a step.
  */
 export function railLines(routes, sheet) {
+  const { joined, tracks, pitch } = railTracks(routes, sheet);
+  return joined.map(({ route, color }, k) => ({
+    route,
+    color,
+    paths: tracks[k].map((t) => simplify(rounded(slotted(t, pitch, SIZES.ease), SIZES.round[sheet.id]))),
+  }));
+}
+
+/**
+ * The shared, rounded track before its lines move sideways: `{ joined, tracks, pitch }`.
+ * `tracks[k][n]` is `{ pts, track }`: `pts` samples each data point once a pixel apart with
+ * its slot as a third number, and `track` is the shared centreline they are all set beside.
+ * The wide zooms (#236) read this to reuse one reference drawing across a band of zooms,
+ * where the page sets the spacing; `railLines` moves the lines onto their slots for a sheet.
+ */
+export function railTracks(routes, sheet) {
   const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
   const lines = new Map();
   for (const f of routes.features) {
@@ -455,11 +471,7 @@ export function railLines(routes, sheet) {
   carriedOn(joined, sheet, pitch);
   const tracks = joined.map(({ runs }) => runs.map((run) => tracked(run, pitch)));
   shareTracks(tracks, sheet, pitch);
-  return joined.map(({ route, color }, k) => ({
-    route,
-    color,
-    paths: tracks[k].map((t) => simplify(rounded(slotted(t, pitch, SIZES.ease), SIZES.round[sheet.id]))),
-  }));
+  return { joined, tracks, pitch };
 }
 
 /**
