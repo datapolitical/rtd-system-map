@@ -32,15 +32,20 @@ const lat2y = (lat, z) => {
 };
 const each = (c, f) => (typeof c[0] === 'number' ? f(c) : c.forEach((d) => each(d, f)));
 
-/** Cuts one GeoJSON file into `name`'s tiles; returns how many it wrote. */
-export async function cut(file, name, { minzoom, maxzoom }, out = OUT) {
-  const data = JSON.parse(await readFile(file, 'utf8'));
+/** Reads a drawing for cutting: a list (a label's offset) goes in as its text, the way the style
+ * looks it up (style.js, listKey), and the drawing's lon/lat bounds come back with it. */
+export function prepare(data) {
   let [w, s, e, n] = [180, 90, -180, -90];
   for (const f of data.features) {
-    // A list (a label's offset) goes in as its text; the style looks it up (style.js, listKey).
     for (const [k, v] of Object.entries(f.properties ?? {})) if (Array.isArray(v)) f.properties[k] = listKey(v);
     each(f.geometry.coordinates, ([x, y]) => { w = Math.min(w, x); e = Math.max(e, x); s = Math.min(s, y); n = Math.max(n, y); });
   }
+  return { data, bounds: [w, s, e, n] };
+}
+
+/** Cuts one drawing's features into `name`'s tiles; returns how many it wrote. */
+export async function cutData(data, name, { minzoom, maxzoom }, out = OUT) {
+  const { bounds: [w, s, e, n] } = prepare(data);
   // As MapLibre's GeoJSON source makes its index (geojson_source.ts, geojson_worker_source.ts).
   const index = new GeoJSONVT(data, {
     buffer: units(TILING.buffer), tolerance: units(TILING.tolerance), extent: EXTENT, maxZoom: maxzoom,
@@ -60,6 +65,11 @@ export async function cut(file, name, { minzoom, maxzoom }, out = OUT) {
     }
   }
   return written;
+}
+
+/** Cuts one GeoJSON file into `name`'s tiles; returns how many it wrote. */
+export async function cut(file, name, zooms, out = OUT) {
+  return cutData(JSON.parse(await readFile(file, 'utf8')), name, zooms, out);
 }
 
 /** Writes the ground's tiles out of the committed pack; returns how many. */
