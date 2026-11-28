@@ -27,7 +27,7 @@ earlier Classic application is preserved on the
 Old `/classic/` links redirect to the current map.
 
 Development has two active tracks: the current map on `main`, and the
-smooth-zoom trial on `zoom-prototype-154`. See
+smooth-zoom trial on `zoom-154-merge`. See
 [the development guide](docs/development.md) for the branches, folders and checks.
 
 **How it's built: [the design specification](DESIGN.md)**, also [in the
@@ -77,10 +77,10 @@ network is written into the code; the build derives it from RTD's data.
   It rebuilds nothing.
 - `functions/`: Pages Functions that connect the site to the relay.
 - `test/`: unit tests, run with `npm test`.
-- `qa/`: the QA brief and findings ([qa/BRIEF.md](qa/BRIEF.md)) and the
-  current browser checks in `qa/checks/`. `qa/classic/` holds historical
-  checks and the renderer fixture used by frozen-build regressions;
-  it is outside the deployed `public/` directory.
+- `qa/`: the current browser checks in `qa/checks/`, and the Classic-era
+  brief for a QA agent ([qa/BRIEF.md](qa/BRIEF.md)) with its findings.
+  `qa/classic/` holds historical checks and the renderer fixture used by
+  frozen-build regressions; it is outside the deployed `public/` directory.
 
 ## Data
 

@@ -2,7 +2,7 @@
 //
 //   node qa/accuracy.mjs [--json out.json]     (npm run check:accuracy)
 //
-// Reads the build (public/data: the four sheets, RTD's route lines, stations) and RTD's GTFS
+// Reads the build (public/data: every sheet, RTD's route lines, stations) and RTD's GTFS
 // feed (downloaded once to qa/.scratch/gtfs.zip, or RTD_GTFS_ZIP), and for each sheet reports:
 //
 // - wrong street: a drawn piece that carries a route for most of its length where neither

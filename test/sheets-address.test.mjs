@@ -1,4 +1,4 @@
-// The sheets page's address is its share link (issue #14, DESIGN.md "Four sheets").
+// The sheets page's address is its share link (issue #14, DESIGN.md "Five sheets").
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readView, writeView, drawsRoute } from '../public/js/sheets/address.js';

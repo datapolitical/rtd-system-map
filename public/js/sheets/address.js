@@ -1,4 +1,4 @@
-// The page's address is its share link (DESIGN.md, "Four sheets", "The address is the link"):
+// The page's address is its share link (DESIGN.md, "Five sheets", "The address is the link"):
 // `#zoom/lat/lon`, MapLibre's own form, which the page has always read, and a picked route after
 // it: `#14/39.74230/-104.99210/bus/15L`. Pure, so the tests can read it (test/sheets-address.test.mjs).
 

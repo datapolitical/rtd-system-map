@@ -3,7 +3,7 @@
 | Branch | Role | Entry point |
 |---|---|---|
 | `main` | Current map; normal fixes land through small branches | `/`, running `public/js/sheets/main.js` |
-| `zoom-prototype-154` | Smooth-zoom trial | `/zoom/`, running `public/js/zoom/main.js` |
+| `zoom-154-merge` | Smooth-zoom trial | `/zoom/`, running `public/js/zoom/main.js` |
 | `classic-archive` | Preserved Classic application | `/classic/`, running `public/js/main.js` in that archive |
 
 Classic was archived at `811135ffe4230f598082667c7fda20994d1bd97d`.
@@ -64,7 +64,8 @@ until deliberately enabled. Neither reports smooth-zoom acceptance.
 
 ## Smooth zoom
 
-In the trial worktree, follow `docs/zoom-prototype.md`. Its additional commands
+In the trial worktree, follow `docs/zoom-prototype.md`, which exists only on
+`zoom-154-merge` (PR #224), not on main. Its additional commands
 are `npm run prototype:zoom`, `npm run check:zoom` and
 `npm run check:zoom-spacing`. A normal `npm run build` does not generate the
 trial bundle. Select its generated `/zoom/` preview explicitly and report

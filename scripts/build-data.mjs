@@ -831,7 +831,7 @@ async function main() {
   meta.code = await dataCode();
   await writeFile(path.join(next, 'meta.json'), JSON.stringify(meta, null, 2));
   await writeFile(path.join(next, 'directory.json'), JSON.stringify(index));
-  // The four sheets are drawn from the files just written (DESIGN.md, "Four sheets").
+  // The sheets are drawn from the files just written (DESIGN.md, "Five sheets").
   await writeSheets(next);
   await rm(OUT, { recursive: true, force: true });
   await rename(next, OUT);
