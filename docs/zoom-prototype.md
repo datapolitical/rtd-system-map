@@ -588,10 +588,8 @@ LIST_CHECK_RESULT
 
 Limits:
 
-- From 16 the two carriageways come in, with the bus stops, as the rule says.
-  On the trial page 16 is the last zoom. The express has no stops on I-25, so
-  its two lines and ramps there show a rider nothing. Whether a road with no
-  stops stays one line at every zoom is Chris's to decide.
+- (Until 2026-11-27) from 16 the two carriageways came in, with the bus stops.
+  Chris has since picked one line at every zoom; see the next section.
 - The join leaves small loops, and each closer drawing shows more of them
   (the table). Two are on the express near 41st / Fox from 14, where a ramp
   runs 25 to 50 m from the main lanes, and Speer has two at 14 that its two
@@ -600,6 +598,42 @@ Limits:
   street build, which is main's.
 - The sheets' zoom-14 sheet on main still draws both carriageways. The live
   map shows the braid at 41st / Fox on that sheet (2026-11-26).
+
+## Lists at 15 and 16, and one line at 16 (2026-11-27)
+
+Chris's answers to review r-20261127-163552-8bb921:
+
+- **Route lists at 15 and 16.** He saw lists still come and go between 13 and
+  15. Counted at every tenth from 14.8 to 16 at 19th and Curtis and Union
+  Station (lists well inside the screen at both steps), they held between
+  handovers, but at 15 one to two went and three came, and at 16 one went and
+  up to two came: from 15 MapLibre placed each drawing's lists afresh. The
+  build now places them at 15 and 16 too (`LISTS_PLACED` in `model.js`),
+  carrying each from the zoom before wherever it still fits:
+
+  | Drawing | 13 | 14 | 15 | 16 |
+  |---|---|---|---|---|
+  | Lists placed | 811 | 1,418 | 2,400 | 4,219 |
+  | Carried from the zoom before | | 599 | 1,065 | 1,661 |
+  | Left out | 51 | 49 | 40 | 43 |
+
+  Every route on a list left out is still named on other lists of the same
+  drawing (at least 2 times at 13, 5 at 14, 8 at 15 and 19 at 16). The
+  neighbourhood names of the 15 to 16 band give way to the lists, as at 13
+  and 14. The drawing at 16 serves its own zoom alone, the trial's last.
+- **One line at 16.** He was unsure whether the express on I-25 should be one
+  line or two, and asked what other maps do; the sources are in DESIGN.md's
+  decision log. He picked one line unless the directions use different
+  streets. Every drawing now uses the joined street graph
+  (`CARRIAGEWAYS_FROM` in `scripts/zoom-prototype.mjs` is past the last
+  zoom); `TRIAL_CARRIAGEWAYS_FROM=16` with `--bus` draws the old way for a
+  comparison. Downtown's one-way pairs stay two lines. Bus line that moves
+  more than 2 px at the handover to 16 fell from 15% to 4.5% (more than 6 px:
+  3.9% to 0.5%). Limit: the joining step leaves a small hook on Speer at
+  Lincoln, and small loops where a ramp runs 25 to 50 m from its road; their
+  fix is in the street build.
+- **The jump at 14** (the rail drawing changing) is left for later: #256 has
+  the measurements and the options.
 
 ## Line letters
 

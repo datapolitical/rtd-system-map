@@ -33,13 +33,14 @@ export function thinned(f, px = THIN_PX) {
   return { ...f, geometry: { ...f.geometry, coordinates: simplify(coords.map((c, i) => [...project(c), i]), tolerance).map((p) => coords[p[2]]) } };
 }
 
-// A divided road is one line out to this zoom and its two carriageways from here in (DESIGN.md,
-// "Readable geometry, on the street graph"). Every drawing below it uses the merged streets, so a
-// road keeps one shape through the band: drawn as two carriageways from 13, a freeway's express
-// lanes were one line at 12 and a braid of ramps at 14.
-// TRIAL_CARRIAGEWAYS_FROM draws a variant for a comparison (17: one line at every zoom of the
-// trial), e.g. `TRIAL_CARRIAGEWAYS_FROM=17 node scripts/zoom-prototype.mjs --bus <copy of data>`.
-export const CARRIAGEWAYS_FROM = Number(process.env.TRIAL_CARRIAGEWAYS_FROM) || 16;
+// A divided road is one line at every zoom of the trial, and two lines only where a route's two
+// directions use different streets (Chris, 2026-11-27: "One line unless the directions use
+// different streets"; DESIGN.md's decision log). The joined street graph keeps the two
+// carriageways of one road as one line and different streets apart, so every drawing uses it: a
+// road keeps one shape through the band. Drawings from this zoom would use both carriageways;
+// past MAX_ZOOM, none does. TRIAL_CARRIAGEWAYS_FROM draws a variant for a comparison (16: both
+// carriageways at 16, as before), e.g. `TRIAL_CARRIAGEWAYS_FROM=16 node scripts/zoom-prototype.mjs --bus <copy of data>`.
+export const CARRIAGEWAYS_FROM = Number(process.env.TRIAL_CARRIAGEWAYS_FROM) || MAX_ZOOM + 1;
 
 // The production size tables stay untouched after each synchronous experiment. This adapter
 // is intentionally local to the trial; #155 replaces sheet lookups in the production build.
@@ -281,7 +282,8 @@ function follows(p, wide, size, top = size) {
 // so each step is read at its start, its middle and just short of its end.
 export function fixedOver(bundle, zoom) {
   const { sizes } = bundle;
-  return [0, 0.125, 0.2499, 0.25, 0.375, 0.4999, 0.5, 0.625, 0.7499, 0.75, 0.875, 0.9999].map((t) => {
+  // The zooms the drawing serves, up to the trial's last.
+  return [0, 0.125, 0.2499, 0.25, 0.375, 0.4999, 0.5, 0.625, 0.7499, 0.75, 0.875, 0.9999].filter((t) => zoom + t <= MAX_ZOOM + 1e-9).map((t) => {
     const z = zoom + t, ref = railRefAt(z), wide = sizeAt(sizes.rail, z), pitch = pitchAt(sizes, z);
     const lines = [], discs = [], boxes = [];
     for (const f of bundle.rails.features) {
@@ -407,7 +409,8 @@ export function placedLists(features, zoom, fixed = null, before = null) {
   // The lists placed so far, as the points of their ink at each end of the zooms the drawing
   // serves: lists grow more slowly than the map does, so one clear of another at both is clear of
   // it between.
-  const ENDS = [zoom, zoom + 0.9999], CELL = 32, taken = ENDS.map(() => new Map());
+  // The ends of the zooms the drawing serves, up to the trial's last (16 serves 16 alone).
+  const ENDS = [zoom, Math.min(zoom + 0.9999, MAX_ZOOM)], CELL = 32, taken = ENDS.map(() => new Map());
   const cell = (q) => `${Math.floor(q[0] / CELL)},${Math.floor(q[1] / CELL)}`;
   const inks = (properties, place) => ENDS.map((z) => inkOf(properties, place, zoom, z));
   const take = (properties, place) => inks(properties, place).forEach((ink, e) => {

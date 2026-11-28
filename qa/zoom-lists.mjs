@@ -25,7 +25,7 @@ import path from 'node:path';
 import { expression, latest } from '@maplibre/maplibre-gl-style-spec';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { previewStyle } from '../public/js/zoom/style.js';
-import { BUS_DRAWINGS, RAIL_DRAWINGS, LISTS_PLACED, pitchAt } from '../public/js/zoom/model.js';
+import { BUS_DRAWINGS, RAIL_DRAWINGS, LISTS_PLACED, MAX_ZOOM, pitchAt } from '../public/js/zoom/model.js';
 import { textWidth } from '../scripts/glyphs.mjs';
 
 const args = process.argv.slice(2);
@@ -234,6 +234,7 @@ try {
       const plan = plans[d.set];
       for (const t of tenths) {
         const zoom = Math.round((d.zoom + t / 10) * 10) / 10;
+        if (zoom > MAX_ZOOM + 1e-9) continue; // the trial's last zoom
         await page.evaluate(({ center, zoom }) => window.zoomMap.jumpTo({ center, zoom }), { center: place.at, zoom });
         await settled(d.set);
         const compare = (seen) => {

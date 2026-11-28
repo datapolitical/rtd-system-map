@@ -43,9 +43,9 @@ test('between 14 and 16 the adapter runs sizes from sheet 3 to sheet 4, and swit
   assert.deepEqual(SIZES, before);
 });
 
-test('a divided road is one line in every drawing below zoom 16 and its two carriageways from 16', () => {
-  assert.equal(CARRIAGEWAYS_FROM, 16);
-  for (const zoom of BUS_BUILT) withZoom(zoom, (s) => assert.equal(s.streets, zoom < CARRIAGEWAYS_FROM ? 'far' : 'near', `drawing ${zoom}`));
+test('a divided road is one line in every drawing of the trial, 16 included', () => {
+  assert.ok(CARRIAGEWAYS_FROM > MAX_ZOOM);
+  for (const zoom of BUS_BUILT) withZoom(zoom, (s) => assert.equal(s.streets, 'far', `drawing ${zoom}`));
   withZoom(15.9, (s) => assert.equal(s.streets, 'far'));
   withZoom(12.5, (s) => assert.equal(s.streets, 'far'));
 });
@@ -668,9 +668,10 @@ test('what the lists keep off is the trial\'s own rail, at each step of the zoom
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   for (const zoom of LISTS_PLACED) {
     const steps = fixedOver(bundle, zoom);
-    assert.ok(steps.length >= 9);
+    // Every tenth or so of the zooms the drawing serves; the last drawing serves its own zoom alone.
+    assert.ok(steps.length >= (zoom < MAX_ZOOM ? 9 : 1));
     assert.equal(steps[0].zoom, zoom);
-    assert.ok(steps.every((s, i) => s.zoom >= zoom && s.zoom < zoom + 1 && (!i || s.zoom > steps[i - 1].zoom)));
+    assert.ok(steps.every((s, i) => s.zoom >= zoom && s.zoom < zoom + 1 && s.zoom <= MAX_ZOOM && (!i || s.zoom > steps[i - 1].zoom)));
     for (const step of steps) {
       // A line with no slot is drawn on its own centre line: a point of it is on rail, and a point
       // well off any rail is on nothing.
@@ -691,8 +692,10 @@ test('the page draws every list of a drawing the build placed, and a neighbourho
   const order = (id) => style.layers.findIndex((l) => l.id === id);
   const kindOf = (l) => JSON.stringify(l.filter).match(/\["==",\["get","kind"\],"([a-z-]+)"\]/)?.[1];
   const placed = BUS_DRAWINGS.filter((d) => LISTS_PLACED.includes(d.zoom));
-  assert.deepEqual(placed.map((d) => d.set), ['13', '3']);
+  assert.deepEqual(placed.map((d) => d.set), ['13', '3', '15', '4']);
   for (const { set, zoom } of placed) {
+    // A drawing's labels hold its own zooms, to the next drawing's; the last's run on.
+    const next = BUS_DRAWINGS[BUS_DRAWINGS.findIndex((d) => d.set === set) + 1]?.zoom;
     for (const who of ['bus', 'picked']) {
       // A list on a straight stretch: a point turned to its street, drawn whatever else is placed,
       // taking no room of its own.
@@ -715,7 +718,7 @@ test('the page draws every list of a drawing the build placed, and a neighbourho
       assert.equal(JSON.stringify(list.filter), JSON.stringify(bend.filter).replace('"bus-label"', '"bus-list"'));
       const stack = layer(`${who}-stack-${set}`);
       assert.equal(stack.layout['text-allow-overlap'], true);
-      for (const l of [list, bend, stack]) assert.deepEqual([l.minzoom, l.maxzoom], [zoom, zoom + 1], l.id);
+      for (const l of [list, bend, stack]) assert.deepEqual([l.minzoom, l.maxzoom], [zoom, next ?? 24], l.id);
     }
     // Unseen marks along each list's lettering take its room, set where the lettering is.
     const room = layer(`list-room-${set}`), list = layer(`bus-list-${set}`);
@@ -728,17 +731,20 @@ test('the page draws every list of a drawing the build placed, and a neighbourho
     // where the next drawing takes over, and there the mark is still narrower than the narrowest
     // list as its own drawing sets it, so every list has room for a mark.
     const stops = list.layout['text-size'].slice(3), last = stops.slice(-2);
-    assert.deepEqual(last, [zoom + 1, sizeAt(zoomStops(SIZES.busLabelSize), zoom + 1)]);
+    if (next !== undefined) assert.deepEqual(last, [next, sizeAt(zoomStops(SIZES.busLabelSize), next)]);
+    else assert.ok(last[0] <= MAX_ZOOM, 'the last drawing\'s lists stop growing by the trial\'s last zoom');
     const font = room.layout['text-font'][0];
     assert.ok(textWidth(room.layout['text-field'], font, last[1]) + 0.5 < textWidth('1', font, sizeAt(zoomStops(SIZES.busLabelSize), zoom), 0.02), `${room.id}: the mark fits a list of one figure`);
-    assert.deepEqual([room.minzoom, room.maxzoom], [zoom, zoom + 1]);
+    assert.deepEqual([room.minzoom, room.maxzoom], [zoom, next ?? 24]);
     // Placed before (above) everything MapLibre still places that gives way to a list.
     for (const id of [`picked-street-${set}`, `hall-label-${set}`, `bus-street-${set}`, `airport-plane-${set}`, `express-shield-${set}`, 'place-3', 'street-name-3']) {
       if (layer(id)) assert.ok(order(room.id) > order(id), `${room.id} is placed before ${id}`);
     }
-    // The neighbourhood names are placed after every list, and still before the bus streets' names.
-    for (const id of [`bus-list-${set}`, `bus-number-${set}`, `bus-stack-${set}`]) assert.ok(order('place-3') < order(id), `place-3 is placed after ${id}`);
-    assert.ok(order('place-3') > order(`bus-street-${set}`));
+    // The neighbourhood names of the band this drawing serves are placed after its lists, and still
+    // before its bus streets' names.
+    const place = style.layers.find((l) => /^place-\d$/.test(l.id) && (l.minzoom ?? 0) <= zoom && zoom < (l.maxzoom ?? 24)).id;
+    for (const id of [`bus-list-${set}`, `bus-number-${set}`, `bus-stack-${set}`]) assert.ok(order(place) < order(id), `${place} is placed after ${id}`);
+    assert.ok(order(place) > order(`bus-street-${set}`), `${place} is placed before bus-street-${set}`);
   }
   // The drawings whose lists MapLibre still sets are as they were: along the stretch, hidden where it finds no room.
   for (const { set } of BUS_DRAWINGS.filter((d) => !LISTS_PLACED.includes(d.zoom))) {
@@ -747,7 +753,6 @@ test('the page draws every list of a drawing the build placed, and a neighbourho
     assert.deepEqual([layer(`bus-number-${set}`).layout['symbol-placement'], layer(`bus-number-${set}`).layout['text-allow-overlap']], ['line', undefined]);
     assert.equal(layer(`bus-stack-${set}`).layout['text-allow-overlap'], undefined);
   }
-  // Towns' names on the wider drawing and the closest band keep their place before the lists.
+  // Towns' names on the wider drawing, whose lists MapLibre sets, keep their place before the lists.
   assert.ok(order('place-2') > order('bus-number-2'));
-  assert.ok(order('place-4') > order('bus-number-4'));
 });

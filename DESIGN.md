@@ -1652,7 +1652,11 @@ streets that no longer met):
   its two carriageways from 16 in, where one line would sit in the median
   off both (Chris, 2026-11-11). The build tags each street that differs
   between the two graphs `zoom: 'far'` or `'near'`; a street the same in
-  both is drawn once at every zoom.
+  both is drawn once at every zoom. The zoom trial draws a divided road as
+  one line at every zoom, 16 included, and two lines only where a route's
+  two directions use different streets (Chris, 2026-11-27; "Continuous
+  zoom trial" below); the sheets keep the rule above until the trial's
+  drawing replaces them.
 - *Ramps* (`simplifyLoops`): a stretch of one set of routes between two
   junctions, 2.5 times longer than the straight line between them, its
   ends within 100 m and no wider than 220 m, is the turn from one road to
@@ -2654,7 +2658,8 @@ shared rounded spine before applying pixel offsets. Terminal curves are
 fitted to their station bars. Per-zoom symbol updates still need a phone
 performance review. Chris's review and choice remain required by #154.
 
-At zooms 13 and 14 the trial's build places every route list itself (#156):
+At every zoom from 13 the trial's build places every route list itself (#156;
+at 13 and 14 from 2026-11-26, at 15 and 16 from 2026-11-27):
 it chooses where each list stands, clear of the trial's rail, station marks,
 line letters, station names and the other lists at every zoom its drawing
 serves, and the page draws each one at every zoom rather than leaving
@@ -2667,9 +2672,11 @@ name with a list in its way is left out. The trial's ground map is still
 fetched from OpenFreeMap's server; it moves to the site's own tiles when they
 are cut for what the zoom page draws (#158).
 
-Every bus drawing of the trial below zoom 16 uses the merged streets, so a
-divided road is one line out to 16 and its two carriageways from there in,
-as "Readable geometry, on the street graph" says. The sheets' zoom-14 sheet
+Every bus drawing of the trial uses the merged streets, so a divided road is
+one line at every zoom, 16 included, and two lines only where a route's two
+directions use different streets, as on downtown's one-way pairs (Chris,
+2026-11-27). Until then the trial followed "Readable geometry, on the street
+graph": one line out to 16 and the two carriageways from there in. The sheets' zoom-14 sheet
 draws both carriageways (`SHEETS` in `sheets.mjs`), and the trial's drawings
 at 13, 14 and 15 had done the same: I-25's express lanes were one line at 12
 and two lines with crossing ramps at 14. What the merge leaves alone still
@@ -5760,6 +5767,29 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ("What people can do", items 2 to 5); most of these sit on top of the
   drawing rather than in it; and the plan of 2026-11-18 no longer
   described the work the trial found. Chris: yes to both.
+- 2026-11-27: Zoom trial (#154): the build places the route lists at 15 and 16
+  too, carrying each from the zoom before wherever it still fits, as from 13
+  to 14; a neighbourhood's name gives way to a list there as well. Reason:
+  Chris saw lists still come and go between 13 and 15; counted at every tenth
+  from 14.8 to 16, they held between handovers but one to three swapped at 15
+  and at 16, where MapLibre placed each drawing's lists afresh. Chris picked
+  "Place the lists at 15 and 16 too".
+- 2026-11-27: Zoom trial (#154): a divided road is one line at every zoom, 16
+  included, and two lines only where a route's two directions use different
+  streets. Reason: Chris was unsure whether the express on I-25 should be one
+  line or two at 16 and asked what other maps do. RTD's own Rail and
+  Flatiron Flyer map draws the FF as one line on US 36 and I-25 and splits
+  it into two lines with arrows only downtown, where its directions use
+  different streets; WMATA's bus map (Human Transit, 2013) does the same for
+  one-way pairs; the LOOM transit-map research merges a line's courses
+  within a set distance and uses that one network at every zoom; the
+  OpenStreetMap bus map (ÖPNVKarte) draws every carriageway and shows the
+  tangle the trial had at 14. Drawn this way, the bus lines that move more
+  than 2 px at 16 fell from 15% to 4.5%. Chris picked "One line unless the
+  directions use different streets". The joining step still leaves a small
+  hook on Speer at Lincoln; its fix is in the street build.
+- 2026-11-27: Zoom trial (#154): the jump where the rail drawing changes at 14
+  is left for later (#256). Chris: "Leave it: let's come back to this later".
 
 ## Sources
 

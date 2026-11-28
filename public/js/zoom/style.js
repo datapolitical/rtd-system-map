@@ -148,7 +148,10 @@ export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
     const serves = BUS_DRAWINGS.filter((d, i) => d.zoom < (place.maxzoom ?? 24) && (BUS_DRAWINGS[i + 1]?.zoom ?? 24) > (place.minzoom ?? 0));
     if (!serves.length || !serves.every((d) => placedSets.has(d.set))) continue;
     original.layers.splice(original.layers.indexOf(place), 1);
-    const first = original.layers.findIndex((l) => /^(bus-number|bus-list|bus-stack)-\d+$/.test(l.id) && placedSets.has(setOf(l)));
+    // Just below the first list of the drawings this band of names serves, so the names are placed
+    // after those lists and still before those drawings' street names.
+    const sets = new Set(serves.map((d) => d.set));
+    const first = original.layers.findIndex((l) => /^(bus-number|bus-list|bus-stack)-\d+$/.test(l.id) && sets.has(setOf(l)));
     original.layers.splice(first, 0, place);
   }
   const busState = {};

@@ -181,8 +181,10 @@ export const BUS_HOLD = 0.05;
 // The bus drawings whose route lists the build places itself, each a point with the angle of its
 // street, for the page to draw as they stand and hide none (#156, the first trial of one decider
 // for lettering: scripts/zoom-prototype.mjs, placedLists; style.js). The rest are still set along
-// their stretch by MapLibre, which hides one when its own measure finds no room.
-export const LISTS_PLACED = [13, 14];
+// their stretch by MapLibre, which hides one when its own measure finds no room. Every drawing
+// from 13 places its lists (Chris, 2026-11-27: "Place the lists at 15 and 16 too"), so a list
+// carries through each handover instead of being placed afresh by MapLibre.
+export const LISTS_PLACED = [13, 14, 15, 16];
 
 // Which of a list of drawings shows at this zoom. A drawing hands over to the next at once, with
 // no fade: two drawings of the same streets or track lie a few pixels apart, so crossing them
