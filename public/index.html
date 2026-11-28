@@ -249,6 +249,8 @@
   #finder .group { padding: 10px 14px 3px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--note); }
   #finder .opt { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 14px 4px 8px; cursor: pointer; touch-action: manipulation; }
   #finder .opt.active { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+  /* On that tint the quieter line needs more ink to stay AA: --note alone is 3.9:1 there in dark (qa/a11y.mjs, axe). */
+  #finder .opt.active .sub { color: color-mix(in srgb, var(--ink) 30%, var(--note)); }
   #finder .text { display: flex; flex-direction: column; min-width: 0; }
   #finder .main, #finder .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #finder .main { font-size: 14.5px; font-weight: 600; line-height: 1.25; }
