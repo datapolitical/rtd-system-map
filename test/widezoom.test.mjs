@@ -171,3 +171,15 @@ test('the nearest distance is found however far the only segment is', () => {
   const two = segmentGrid([[[720, 0], [730, 0]], [[0, 5], [10, 5]]]);
   assert.equal(nearestInGrid(two, [0, 0]), 5);
 });
+
+test('a line end off its station bar is caught, and one on the bar is not', () => {
+  const bar = { name: 'Planted', routes: ['A'], ends: [[0, -10], [0, 10]] };
+  const on = terminalGaps({ lineEnds: [{ route: 'A', point: [0, 3] }], bars: [bar] });
+  assert.equal(on[0].ok, true);
+  assert.ok(on[0].distance < 1e-9);
+  const off = terminalGaps({ lineEnds: [{ route: 'A', point: [5, 3] }], bars: [bar] });
+  assert.equal(off[0].ok, false, 'five px off the bar is a fault');
+  assert.ok(Math.abs(off[0].distance - 5) < 1e-9, 'and its size is measured');
+  // A bar the line does not serve is not its bar.
+  assert.deepEqual(terminalGaps({ lineEnds: [{ route: 'B', point: [0, 0] }], bars: [bar] }), []);
+});
