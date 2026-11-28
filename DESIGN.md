@@ -273,8 +273,16 @@ meant writing an algorithm for any network to tidy a single station).
   RTD's changes still flow through with nobody involved.
 - A general rule is still preferred where one place is a case of a pattern.
 
-Not built yet: neither the file nor the build's reading of it exists (#64).
-Until it does, every cleanup is still a rule in the build.
+The file is `scripts/visual-fixes.json`, read by the sheet build. Each entry
+must explain the visual fault and link its issue. A missing RTD id or changed
+geometry fingerprint skips and reports it; malformed entries and conflicting
+pins stop the build. The first supported entry pins a station name's side by
+RTD station id. Its optional inclusive `zooms: { "from": ..., "to": ... }`
+range covers every zoom between its ends; without one, the pin lasts the
+label's whole life. `sheets.json` reports live and skipped entries. Applying
+those pins to the zoomable map's lettering plan waits for #234 and #156;
+until then the register stays empty and every cleanup is still a rule in the
+build.
 
 ### Rule 2: we rebuild; Cloudflare only publishes
 
@@ -1607,7 +1615,8 @@ which lines share which track is a fact, never listed: improve the algorithm
 first. (This is a studied problem; see LOOM by Bast, Brosi and Storandt.)
 Where one place still draws badly, a visual fix for it may go in the fixes
 file "Rule 1" describes, tied to RTD's data so it drops out when RTD changes
-the place (not built yet, #64).
+the place (#64). Geometry edits still need an applying build pass; the
+register's first supported override is a station-name pin.
 
 ### Bus routes
 
