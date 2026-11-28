@@ -82,7 +82,7 @@ export function busHue(colors = []) {
 
 export const PALETTES = {
   dark: {
-    ground: '#0e141d', water: '#15202f', park: '#101a1c', freeway: '#1b2535', road: '#131a25', street: '#151d2a', building: '#121924',
+    ground: '#0e141d', water: '#15202f', park: '#101a1c', landmark: '#1d1724', freeway: '#1b2535', road: '#131a25', street: '#151d2a', building: '#121924',
     // Bus streets, quietest to busiest, as OKLCh [lightness, chroma] in the bus hue (busHue): a quiet
     // blue, lighter and a little stronger each step. The quiet step on the opening sheet (hairline)
     // sits nearer the ground: there it is the whole outer street grid, which should sit back.
@@ -99,7 +99,7 @@ export const PALETTES = {
     pick: '#eef1f6',
   },
   light: {
-    ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
+    ground: '#f5f3ef', water: '#d3e1ec', park: '#e7ecdf', landmark: '#ece4d2', freeway: '#e0dcd4', road: '#e9e6e0', street: '#ebe8e3', building: '#ebe8e2',
     busTone: { hairline: [0.79, 0.045], quiet: [0.7, 0.055], mid: [0.56, 0.08], top: [0.47, 0.095] },
     busWash: { mid: [0.78, 0.07], top: [0.72, 0.09], strength: 0.9 },
     railFloor: '#70757c',
@@ -108,6 +108,20 @@ export const PALETTES = {
     pick: '#1d2433',
   },
 };
+
+// Landmark grounds (DESIGN.md, "Basemap"): the areas tinted so a rider can find the places people
+// give directions by. The rule is over OpenStreetMap's tags as OpenMapTiles reads them into the
+// ground tiles, never a list of places. An OpenMapTiles `landuse` area counts when its `class` is
+// one of the OSM tags for a hospital (`amenity=hospital`), a campus (`amenity=university`,
+// `amenity=college`) or a stadium (`leisure=stadium`); an `aeroway` area counts when its class is
+// `aerodrome` (the airport). Nothing else is named here: a new hospital or campus RTD serves is
+// picked up the next time the ground tiles are rebuilt.
+export const LANDMARK_GROUNDS = ['hospital', 'university', 'college', 'stadium'];
+export const AIRPORT_GROUND = 'aerodrome';
+// A building is kept (ordinary building outlines are dropped) only when it is this tall in the
+// ground tiles' `render_height`, OpenMapTiles' approximation of OSM's `height`/`building:levels`
+// tags, in metres: the towers and other tall buildings people use as points of reference.
+export const MAJOR_BUILDING_HEIGHT = 24;
 
 // Bus street widths by class, per sheet.
 export const BUS_WIDTH = Object.fromEntries(Object.entries(RAIL).map(([n, w]) => [n,
@@ -313,6 +327,10 @@ export function sheetStyle(theme, stations = [], colors = [], { district = null,
   const layers = [
     { id: 'ground', type: 'background', paint: { 'background-color': c.ground } },
     { id: 'park', type: 'fill', source: 'ground', 'source-layer': 'park', paint: { 'fill-color': c.park } },
+    // Landmark grounds under everything, over park: a hospital, campus or stadium's grounds (its
+    // `landuse` class) and the airport (`aeroway` class aerodrome), tinted the same in both themes.
+    { id: 'landmark', type: 'fill', source: 'ground', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', LANDMARK_GROUNDS]], paint: { 'fill-color': c.landmark } },
+    { id: 'landmark-airport', type: 'fill', source: 'ground', 'source-layer': 'aeroway', filter: ['==', ['get', 'class'], AIRPORT_GROUND], paint: { 'fill-color': c.landmark } },
     { id: 'water', type: 'fill', source: 'ground', 'source-layer': 'water', paint: { 'fill-color': c.water } },
     { id: 'river', type: 'line', source: 'ground', 'source-layer': 'waterway', filter: ['==', ['get', 'class'], 'river'], paint: { 'line-color': c.water, 'line-width': 1.2 } },
   ];
@@ -330,7 +348,10 @@ export function sheetStyle(theme, stations = [], colors = [], { district = null,
       filter: ['all', ['in', ['get', 'class'], ['literal', roads]], ['!=', ['get', 'brunnel'], 'tunnel']], layout: ROUND,
       paint: { 'line-color': ['match', ['get', 'class'], 'motorway', n <= 2 ? c.freeway : c.road, ['trunk', 'primary'], c.road, c.street],
         'line-width': ['match', ['get', 'class'], 'motorway', { 0: 1.6, 1: 2.2, 2: 3, 3: 5, 4: 12 }[n], ['trunk', 'primary'], { 0: 0, 1: 0, 2: 1.2, 3: 4, 4: 10 }[n], { 0: 0, 1: 0, 2: 0, 3: 2.4, 4: 7 }[n]] } });
-    if (n === 4) layers.push({ id: 'buildings-4', type: 'fill', source: 'ground', 'source-layer': 'building', ...band, paint: { 'fill-color': c.building } });
+    // Only the major buildings, not the ordinary ones (DESIGN.md, "Basemap"): the tall buildings
+    // people use as points of reference. The rule is over `render_height`, not a list of places.
+    if (n === 4) layers.push({ id: 'buildings-4', type: 'fill', source: 'ground', 'source-layer': 'building', ...band,
+      filter: ['>=', ['to-number', ['get', 'render_height'], 0], MAJOR_BUILDING_HEIGHT], paint: { 'fill-color': c.building } });
 
 
     // Bus streets, quietest first so the busiest are on top; the frequent steps get a rim of ground to sit clear.

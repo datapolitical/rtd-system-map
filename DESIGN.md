@@ -273,8 +273,18 @@ meant writing an algorithm for any network to tidy a single station).
   RTD's changes still flow through with nobody involved.
 - A general rule is still preferred where one place is a case of a pattern.
 
-Not built yet: neither the file nor the build's reading of it exists (#64).
-Until it does, every cleanup is still a rule in the build.
+The file is `scripts/visual-fixes.json`, read by the sheet build. Each entry
+must explain the visual fault and link its issue. A missing RTD id or changed
+geometry fingerprint skips and reports it; malformed entries and conflicting
+pins stop the build. The first supported entry pins a station name's side by
+RTD station id. Its optional inclusive `zooms: { "from": ..., "to": ... }`
+range covers every zoom between its ends; without one, the pin lasts the
+label's whole life. A station id that more than one source feature carries is
+ambiguous and skips like a missing one. `sheets.json` reports live and skipped
+entries (`applied: false`: the build resolves pins but draws none of them). Applying
+those pins to the zoomable map's lettering plan waits for #234 and #156;
+until then the register stays empty and every cleanup is still a rule in the
+build.
 
 ### Rule 2: we rebuild; Cloudflare only publishes
 
@@ -1247,12 +1257,25 @@ carry the sense of place:
 - **Landmarks people give directions by** from zoom 14: hospitals, campuses,
   stadiums, museums, theaters, libraries, city halls, and the larger parks
   (parks in green italics). Names only, no icons.
+- **Landmark grounds** are tinted, both themes: a hospital's, a campus's or a
+  stadium's grounds, and the airport, in a pale warm wash. Which grounds count
+  is a rule over OpenStreetMap's tags, not a list of places: an OpenMapTiles
+  `landuse` area whose class is `hospital`, `university`, `college` or
+  `stadium`, or an `aeroway` area whose class is `aerodrome` (the airport). A
+  new or renamed place RTD serves is picked up the next time the ground tiles
+  are rebuilt. The wash stays close to the land's lightness, so a transit line
+  drawn over it keeps its 3:1 contrast.
+- **Buildings** from zoom 16: only the major ones. Ordinary building outlines
+  are dropped; what stays are the buildings tall enough to be points of
+  reference — a `render_height` of 24 m or more, OpenMapTiles' reading of OSM's
+  `height`/`building:levels` tags. Nothing names a building: a new tower shows
+  on the next tile rebuild.
 - **Relief** for the foothills, soft hillshade from free elevation tiles,
   because "the mountains are west" is how the region orients itself. It loads
   after the network so it never delays it.
 
 It drops what competes with transit: basemap railways (they look like RTD's
-lines), POI icons, and road colors.
+lines), POI icons, road colors, and ordinary building outlines.
 
 ### Rail line colors
 
@@ -1295,7 +1318,7 @@ screen in V2 step 3.
 
 | State | How it's drawn |
 |---|---|
-| Served | no mark below zoom 9 (stations a few pixels apart read as noise); from 9 to 10.25 a small tick across the track, or a dot (see "From far out"); from 11 a white capsule with an ink edge laid across the track, as wide as the lines it serves and turned to the track's direction (a circle where one line stops), crossfading with the tick from 10.25 to 11. The hub has a ring from 9.75 |
+| Served | no mark below zoom 9 (stations a few pixels apart read as noise); from 9 to 10.25 a small tick across the track, or a dot (see "From far out"); from 11 a white capsule with an ink edge laid across the track, as wide as the lines it serves and half a line's pitch past each of them, so it crosses every line that stops there and never reaches one that passes without stopping (a circle where one line stops), turned to the track's direction, crossfading with the tick from 10.25 to 11. The hub has a ring from 9.75 |
 | Returning | hollow gray ring and gray label, both from zoom 13. Panel: "Trains return Nov 23" |
 | No current service | hollow gray ring and gray label, both from zoom 13. Panel: "No train service right now" |
 
@@ -1607,7 +1630,8 @@ which lines share which track is a fact, never listed: improve the algorithm
 first. (This is a studied problem; see LOOM by Bast, Brosi and Storandt.)
 Where one place still draws badly, a visual fix for it may go in the fixes
 file "Rule 1" describes, tied to RTD's data so it drops out when RTD changes
-the place (not built yet, #64).
+the place (#64). Geometry edits still need an applying build pass; the
+register's first supported override is a station-name pin.
 
 ### Bus routes
 
@@ -4157,6 +4181,29 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   audience, but not the default view.
 
 ## Decision log
+
+- 2026-11-28: A station's capsule crosses its lines instead of reaching
+  their centres: each end runs half a line's pitch past the outermost line
+  that stops there, which clears that line's rail by half a gap and leaves
+  the next slot's line untouched, so at a three-line station the capsule
+  reads as serving all three, not the middle one alone (Dry Creek's read
+  as E only, #206). Where a line passes within that reach without
+  stopping, the end is drawn half a gap short of its rail instead, and
+  never so short it fails to cross its own lines; one line, or two meeting
+  back to back, keep their round mark. Marks still need room, so a few
+  stations a few pixels apart swap which one is marked on the two widest
+  sheets.
+
+- 2026-11-27: Landmark grounds are tinted and ordinary building outlines are
+  dropped (#243). What counts as a landmark ground is a rule over OSM's tags,
+  not a list of places: OpenMapTiles `landuse` `hospital`/`university`/
+  `college`/`stadium`, and `aeroway` `aerodrome` (the airport). A building
+  stays only when its `render_height` is 24 m or more, OpenMapTiles' reading
+  of `height`/`building:levels`, so towers and other tall reference points
+  stay while ordinary outlines go. The tint is a pale warm wash close to the
+  land's lightness, so transit lines keep their 3:1 contrast over it. Schools,
+  kindergartens, libraries, theme parks and zoos are not tinted yet — left as
+  an open question.
 
 - 2026-11-17: Chris requested a light/dark toggle in the lower-right corner
   of the sheets. Use a 44 px sun/moon button aligned with the zoom controls,
