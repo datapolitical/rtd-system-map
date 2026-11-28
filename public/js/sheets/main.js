@@ -1260,7 +1260,9 @@ function goTo(r, from) {
       keepVisible();
     });
   }
-  tell({ title: esc(r.name), note: r.note, also: r.lead, routes: r.routes.map((x) => (x.mode === 'rail' ? { ...x, color: colorOf.get(x.route) ?? x.color ?? '#888888' } : x)) });
+  // A stop or a station search found shows its next departures, as one tapped does (leaves).
+  tell({ title: esc(r.name), note: r.note, also: r.lead, routes: r.routes.map((x) => (x.mode === 'rail' ? { ...x, color: colorOf.get(x.route) ?? x.color ?? '#888888' } : x)),
+    ...leaves({ station: r.kind === 'station' ? r : null, stop: r.kind === 'stop' ? r : null }) });
   focus();
 }
 // The search script and RTD's files it reads load when the box is first used, never at page load.

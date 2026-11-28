@@ -193,6 +193,21 @@ if (mode === 'data') {
           check(JSON.stringify(after) === JSON.stringify(later) && JSON.stringify(after) !== JSON.stringify(before), `${tag}: half an hour on, ${station.label} still shows ${JSON.stringify(after)} (wanted ${JSON.stringify(later)})`);
         }
         await page.keyboard.press('Escape');
+        // A stop found by search shows the same departures as the stop tapped.
+        if (when === 'weekday' && await page.locator('#search').count()) {
+          await page.fill('#search', String(best.f.properties.id));
+          await page.waitForSelector('#search-list .opt', { timeout: 20000 }).catch(() => {});
+          await page.waitForFunction((id) => document.querySelector('#search-list .opt')?.getAttribute('aria-label')?.includes(`Stop ${id}`), String(best.f.properties.id), { timeout: 20000 }).catch(() => {});
+          await page.keyboard.press('Enter');
+          await page.waitForSelector('#card .departures:not([hidden])', { timeout: 15000 }).catch(() => check(false, `${tag}: stop ${best.f.properties.id} found by search shows no departures`));
+          await page.waitForTimeout(400);
+          const got = await rowsOnCard();
+          const exp = want([best.rec], await pageNow(), { rail });
+          check(JSON.stringify(got) === JSON.stringify(exp), `${tag}: stop ${best.f.properties.id} from search shows ${JSON.stringify(got)}, the timetable gives ${JSON.stringify(exp)}`);
+          await rest();
+          await shot('weekday-3-stop-from-search');
+          await page.keyboard.press('Escape');
+        }
       }
       check(errors.length === 0, `${tag}: page errors: ${errors.slice(0, 3).join(' | ')}`);
       await context.close();
