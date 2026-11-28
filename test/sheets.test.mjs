@@ -13,6 +13,7 @@ const sheet = SHEETS.find((s) => s.id === 2);
 // A place on the sheet, `x` and `y` pixels from a corner of it.
 const origin = toPx([-105, 39.75], sheet.zoom);
 const at = (x, y) => toLonLat([origin[0] + x, origin[1] + y], sheet.zoom);
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
 test('pixels and lon/lat turn into each other', () => {
   const p = toLonLat(toPx([-104.99, 39.74], 14), 14);
@@ -75,8 +76,40 @@ test('a station is one bar across the lines that stop there, and a far line list
   const marks = stationMarks(all([point({ id: 1, name: 'Mill', served: true, lines: 'A B C' }, at(150, 0))]), lines, sheet);
   assert.equal(marks.length, 1);
   assert.equal(marks[0].count, 2);
-  assert.ok(Math.abs(marks[0].span - (SIZES.rail[sheet.id] + SIZES.gap[sheet.id])) < 0.5);
+  // One pitch between the two centres, and half a pitch past each of them, so the
+  // bar crosses both rails and not just reaches their centres (#206).
+  assert.ok(Math.abs(marks[0].span - 2 * (SIZES.rail[sheet.id] + SIZES.gap[sheet.id])) < 0.5);
   assert.equal(marks[0].more.length, 0);
+});
+
+test('a bar crosses every line that stops there, and never reaches one that passes without stopping', () => {
+  const rail = (route, slot) => line({ mode: 'rail', route, color: '#57C1E9', slot }, [at(0, 0), at(300, 0)]);
+  const pitch = SIZES.rail[sheet.id] + SIZES.gap[sheet.id];
+  const [railW, gapW] = [SIZES.rail[sheet.id], SIZES.gap[sheet.id]];
+  const place = toPx(at(150, 0), sheet.zoom);
+  // Three lines side by side all stop; D, less than a slot further out, passes through.
+  const lines = railLines(all([rail('A', 0.5), rail('B', 0), rail('C', -0.5), rail('D', 1.45)]), sheet);
+  const marks = stationMarks(all([point({ id: 1, name: 'Mill', served: true, lines: 'A B C' }, at(150, 0))]), lines, sheet);
+  assert.equal(marks.length, 1);
+  const [a, b] = marks[0].ends;
+  for (const l of lines.filter((l) => ['A', 'B', 'C'].includes(l.route))) {
+    const centre = nearest(l.paths[0], place).at;
+    // The bar reaches past each stopping line's centre by more than half its rail.
+    const toEnd = Math.min(dist(centre, a), dist(centre, b));
+    assert.ok(toEnd > railW / 2 + gapW / 4 - 0.1, `${l.route} is crossed whole, ${toEnd.toFixed(2)} px from the nearer end`);
+  }
+  // D passes without stopping, so the bar stops short of its rail by half a gap.
+  const d = nearest(lines.find((l) => l.route === 'D').paths[0], place).at;
+  const toBar = Math.min(dist(d, a), dist(d, b));
+  assert.ok(Math.abs(toBar - (railW / 2 + gapW / 2)) < 0.2, `the bar stops ${toBar.toFixed(2)} px from the passing line's centre, want ${railW / 2 + gapW / 2}`);
+});
+
+test('one line through a station keeps its dot, and the bar that grows is only across two or more', () => {
+  const rail = (route, slot) => line({ mode: 'rail', route, color: '#57C1E9', slot }, [at(0, 0), at(300, 0)]);
+  const lines = railLines(all([rail('A', 0)]), sheet);
+  const marks = stationMarks(all([point({ id: 1, name: 'Mill', served: true, lines: 'A' }, at(150, 0))]), lines, sheet);
+  assert.equal(marks.length, 1);
+  assert.ok(marks[0].span < 0.5, 'a station on one line is a dot still');
 });
 
 test('a name sits clear of the lines and of other names', () => {
@@ -1702,3 +1735,36 @@ test('the whole district is framed on the frequent network, and a line running o
   assert.ok(!drawn.features.some((f) => f.properties.kind === 'pointer' && f.properties.name === 'South End'), 'an end inside the frame is named at its end, with no arrow');
   assert.ok(!drawSheet({ routes, stations, streets, terminals: null }, SHEETS.find((s) => s.opens)).features.some((f) => f.properties.kind === 'pointer'), 'only the whole district points');
 });
+
+// The rule on the real network (#206): Dry Creek, where the E, R and T lines
+// run side by side. The build's GTFS reading says all three stop there
+// (scripts/lib/stations.mjs, stationService), and the sheet's bar crosses
+// all three. The built data is not in git, so this runs only where it is.
+{
+  const { existsSync, readFileSync } = await import('node:fs');
+  if (existsSync('public/data/routes.geojson')) {
+    test('Dry Creek: the bar crosses the E, R and T lines that stop there (real data)', async () => {
+      const read = (name) => JSON.parse(readFileSync(`public/data/${name}.geojson`, 'utf8'));
+      const routes = read('routes');
+      const stations = read('stations');
+      const dry = stations.features.find((f) => f.properties.label === 'Dry Creek');
+      assert.equal(dry.properties.lines, 'E R T', 'the build says E, R and T stop there');
+      assert.ok(dry.properties.served);
+      const sheet3 = SHEETS.find((s) => s.id === 3);
+      const lines = railLines(routes, sheet3);
+      const marks = stationMarks(stations, lines, sheet3, []);
+      const mark = marks.find((m) => m.id === dry.properties.id);
+      assert.ok(mark, 'a mark is drawn');
+      assert.equal(mark.count, 3);
+      const pitch = SIZES.rail[3] + SIZES.gap[3];
+      // Half a pitch past each outer line's centre: three pitches across, not two.
+      assert.ok(Math.abs(mark.span - 3 * pitch) < 0.5, `span ${mark.span.toFixed(1)}, want ${3 * pitch}`);
+      const place = toPx(dry.geometry.coordinates, sheet3.zoom);
+      for (const l of lines.filter((l) => ['R', 'E', 'T'].includes(l.route))) {
+        const centre = nearest(l.paths[0], place).at;
+        const toEnd = Math.min(dist(centre, mark.ends[0]), dist(centre, mark.ends[1]));
+        assert.ok(toEnd > SIZES.rail[3] / 2 + SIZES.gap[3] / 4, `${l.route} is crossed whole, ${toEnd.toFixed(2)} px past its centre`);
+      }
+    });
+  }
+}

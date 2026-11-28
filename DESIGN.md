@@ -1295,7 +1295,7 @@ screen in V2 step 3.
 
 | State | How it's drawn |
 |---|---|
-| Served | no mark below zoom 9 (stations a few pixels apart read as noise); from 9 to 10.25 a small tick across the track, or a dot (see "From far out"); from 11 a white capsule with an ink edge laid across the track, as wide as the lines it serves and turned to the track's direction (a circle where one line stops), crossfading with the tick from 10.25 to 11. The hub has a ring from 9.75 |
+| Served | no mark below zoom 9 (stations a few pixels apart read as noise); from 9 to 10.25 a small tick across the track, or a dot (see "From far out"); from 11 a white capsule with an ink edge laid across the track, as wide as the lines it serves and half a line's pitch past each of them, so it crosses every line that stops there and never reaches one that passes without stopping (a circle where one line stops), turned to the track's direction, crossfading with the tick from 10.25 to 11. The hub has a ring from 9.75 |
 | Returning | hollow gray ring and gray label, both from zoom 13. Panel: "Trains return Nov 23" |
 | No current service | hollow gray ring and gray label, both from zoom 13. Panel: "No train service right now" |
 
@@ -4123,6 +4123,18 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   audience, but not the default view.
 
 ## Decision log
+
+- 2026-11-28: A station's capsule crosses its lines instead of reaching
+  their centres: each end runs half a line's pitch past the outermost line
+  that stops there, which clears that line's rail by half a gap and leaves
+  the next slot's line untouched, so at a three-line station the capsule
+  reads as serving all three, not the middle one alone (Dry Creek's read
+  as E only, #206). Where a line passes within that reach without
+  stopping, the end is drawn half a gap short of its rail instead, and
+  never so short it fails to cross its own lines; one line, or two meeting
+  back to back, keep their round mark. Marks still need room, so a few
+  stations a few pixels apart swap which one is marked on the two widest
+  sheets.
 
 - 2026-11-17: Chris requested a light/dark toggle in the lower-right corner
   of the sheets. Use a 44 px sun/moon button aligned with the zoom controls,
