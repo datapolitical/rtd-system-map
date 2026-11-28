@@ -93,6 +93,21 @@ if (mode === 'data') {
         return '';
       });
 
+      // How far the ring's centre is from the mark the sheet draws for a stop or a station, in px:
+      // the mark is found by its id among the drawn features, not by RTD's point for it (Chris,
+      // 2026-11-27: "the circle seemed off center").
+      const ringOff = (kind, id) => page.evaluate(({ kind, id }) => {
+        const m = window.sheetsMap;
+        const layers = m.getStyle().layers.filter((l) => new RegExp(`^${kind}-\\d+$`).test(l.id) && m.getLayoutProperty(l.id, 'visibility') !== 'none').map((l) => l.id);
+        const marks = m.queryRenderedFeatures({ layers }).filter((f) => String(f.properties.id) === String(id));
+        const ring = document.querySelector('.found');
+        if (!marks.length || !ring?.isConnected) return 999;
+        // The middle of the mark as drawn: a stop's point, or a station's shape (every piece of it on screen).
+        const pts = marks.flatMap((f) => { const c = f.geometry.coordinates.flat(Infinity); return c.filter((_, i) => i % 2 === 0).map((x, i) => m.project([x, c[2 * i + 1]])); });
+        const p = { x: (Math.min(...pts.map((q) => q.x)) + Math.max(...pts.map((q) => q.x))) / 2, y: (Math.min(...pts.map((q) => q.y)) + Math.max(...pts.map((q) => q.y))) / 2 };
+        const r = ring.getBoundingClientRect(); const box = m.getContainer().getBoundingClientRect();
+        return Math.hypot(p.x + box.left - (r.left + r.width / 2), p.y + box.top - (r.top + r.height / 2));
+      }, { kind, id });
       await page.goto(`${base}/?theme=${theme}`, { waitUntil: 'load' });
       await page.waitForFunction(() => window.sheetsReady, null, { timeout: 90000 });
       await rest();
@@ -155,22 +170,28 @@ if (mode === 'data') {
       const inView = (bbox) => page.evaluate(([w, s, e, n]) => {
         const m = window.sheetsMap; const a = m.project([w, n]); const b = m.project([e, s]);
         const top = document.querySelector('#finder .bar').getBoundingClientRect().bottom; const card = document.querySelector('#card').getBoundingClientRect().top;
-        const fits = a.x >= -2 && b.x <= innerWidth + 2 && a.y >= top - 2 && b.y <= card + 2;
+        // On the widest sheet nothing wider can be shown: a route too long for it is centred there.
+        const widest = m.getZoom() < window.sheetsZooms.zooms[1] - 0.3;
+        const centred = Math.abs((a.x + b.x) / 2 - innerWidth / 2) < 40 && (a.y + b.y) / 2 > top && (a.y + b.y) / 2 < card;
+        const fits = (a.x >= -2 && b.x <= innerWidth + 2 && a.y >= top - 2 && b.y <= card + 2) || (widest && centred);
         return fits ? '' : `route spans x ${Math.round(a.x)} to ${Math.round(b.x)}, y ${Math.round(a.y)} to ${Math.round(b.y)}; clear area is y ${Math.round(top)} to ${Math.round(card)} of ${innerWidth} wide, zoom ${m.getZoom().toFixed(2)}`;
       }, bbox);
       const entries = await page.evaluate(async () => (await (await fetch('/data/directory.json')).json()).routes);
       check((await inView(entries.find((r) => r.route === data.bus && r.mode === 'bus').bbox)) === '', `${tag}: route ${data.bus} from search is not all in view: ${await inView(entries.find((r) => r.route === data.bus && r.mode === 'bus').bbox)}`);
       if (await page.locator('#card button.more').count()) {
         await page.click('#card button.more');
-        const tall = entries.filter((r) => r.mode === 'bus').sort((x, y) => (y.bbox[3] - y.bbox[1]) / (y.bbox[2] - y.bbox[0]) * (y.bbox[3] - y.bbox[1]) - (x.bbox[3] - x.bbox[1]) / (x.bbox[2] - x.bbox[0]) * (x.bbox[3] - x.bbox[1]))[0];
-        await page.evaluate(([w, s]) => window.sheetsMap.jumpTo({ center: [w - 0.25, s - 0.2] }), tall.bbox);
-        await page.click('#search');
-        await type(tall.route);
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(500);
-        await rest();
-        check((await where()).pick?.route === tall.route, `${tag}: route ${tall.route} was not the first result for its number`);
-        check((await inView(tall.bbox)) === '', `${tag}: with the route panel open, route ${tall.route} from search is not all in view: ${await inView(tall.bbox)}`);
+        // Routes taller than they are wide, tallest first: the card's height decides their sheet.
+        const tall = entries.filter((r) => r.mode === 'bus' && r.bbox[3] - r.bbox[1] > (r.bbox[2] - r.bbox[0]) * 1.3).sort((x, y) => (y.bbox[3] - y.bbox[1]) - (x.bbox[3] - x.bbox[1])).slice(0, 12);
+        for (const r of tall) {
+          await page.evaluate(([w, s]) => window.sheetsMap.jumpTo({ center: [w - 0.25, s - 0.2] }), r.bbox);
+          await page.click('#search');
+          await type(r.route);
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(500);
+          await rest();
+          if ((await where()).pick?.route !== r.route) continue; // another route leads for these letters
+          check((await inView(r.bbox)) === '', `${tag}: with the route panel open, route ${r.route} from search is not all in view: ${await inView(r.bbox)}`);
+        }
         await shot('3b-route-panel-open');
         await page.click('#card button.more');
       }
@@ -204,6 +225,8 @@ if (mode === 'data') {
       check(w.pick === null, `${tag}: a station result leaves a route picked`);
       check(w.zoom >= 12.9, `${tag}: the station is shown at zoom ${w.zoom.toFixed(2)}, too far out to see it`);
       check((await ringClear()) === '', `${tag}: the station's ring is ${await ringClear()}`);
+      const stationId = (await page.evaluate(async (label) => (await (await fetch('/data/directory.json')).json()).stations.find((x) => x.label === label).id, data.station));
+      check((await ringOff('station', stationId)) < 1.5, `${tag}: the ring's centre is ${(await ringOff('station', stationId)).toFixed(1)} px from the station's mark as the sheet draws it`);
       await shot('6-station');
 
       // --- A stop by its number ---------------------------------------------------------
@@ -219,8 +242,7 @@ if (mode === 'data') {
       check(c?.title === data.stop.name && c.text.includes(`Bus stop ${data.stop.id}`), `${tag}: the stop's card is "${c?.title}": ${c?.text}`);
       check(await page.evaluate(() => !!window.sheetsMap.getLayer(`stop-${window.sheetsZooms.ids[window.sheetsZooms.zooms.findIndex((z) => Math.abs(z - window.sheetsMap.getZoom()) < 0.3)]}`)), `${tag}: the stop is shown on a sheet that draws no stops (zoom ${w.zoom.toFixed(2)})`);
       check((await ringClear()) === '', `${tag}: the stop's ring is ${await ringClear()}`);
-      const off = await page.evaluate((at) => { const p = window.sheetsMap.project(at); const r = document.querySelector('.found').getBoundingClientRect(); return Math.hypot(p.x - (r.left + r.width / 2), p.y - (r.top + r.height / 2)); }, data.stop.at);
-      check(off < 3, `${tag}: the ring is ${off.toFixed(1)} px from the stop`);
+      check((await ringOff('stop', data.stop.id)) < 1.5, `${tag}: the ring's centre is ${(await ringOff('stop', data.stop.id)).toFixed(1)} px from the stop's mark as the sheet draws it`);
       await shot('7-stop');
       // A tap on the map takes the ring away.
       await page.mouse.click(sizes[size].width / 2, sizes[size].height / 2 + 60);

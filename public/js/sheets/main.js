@@ -1192,6 +1192,27 @@ function goTo(r, from) {
   show(Math.max(sheet, want), undefined, true);
   selectedAt = r.at;
   found.setLngLat(r.at).addTo(map);
+  // The sheet draws a stop's or a station's mark where the build placed it, beside its street,
+  // which is not always RTD's own point for it. Once the sheet has drawn, the ring and the
+  // card's place move onto the mark itself, so the ring sits round what it names.
+  if (r.kind !== 'place' && r.id != null) {
+    const ring = found.getElement();
+    map.once('idle', () => {
+      if (!ring.isConnected || selectedAt !== r.at) return;
+      const n = SHEETS[sheet].id;
+      const layers = (r.kind === 'stop' ? ['stop', 'group-stop'] : ['station']).map((k) => `${k}-${n}`).filter((id) => map.getLayer(id));
+      const mark = layers.length ? map.queryRenderedFeatures({ layers }).find((f) => String(f.properties.id) === String(r.id)) : null;
+      if (!mark) return;
+      // A stop's mark is a point; a station's is a drawn shape, ringed round its middle.
+      const points = mark.geometry.coordinates.flat(Infinity);
+      const xs = points.filter((_, i) => i % 2 === 0);
+      const ys = points.filter((_, i) => i % 2 === 1);
+      const at = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+      found.setLngLat(at);
+      selectedAt = at;
+      keepVisible();
+    });
+  }
   tell({ title: esc(r.name), note: r.note, also: r.lead, routes: r.routes.map((x) => (x.mode === 'rail' ? { ...x, color: colorOf.get(x.route) ?? x.color ?? '#888888' } : x)) });
   focus();
 }
