@@ -2748,6 +2748,18 @@ How it is built:
   between lines. Each drawing places its lettering fresh, so the build plans
   lettering across zooms. The plan is #129. (Corrected 2026-11-27; until
   then this said the change was the page's alone.)
+- **One lettering plan.** `npm run build:sheets` writes
+  `public/data/lettering-plan.json` beside the sheets (#234): every station
+  name, station letter, line letter and route list once, with what it says,
+  where its ink sits, its angle and size, the drawings it shows on, and the
+  label it took over from if any. Each label's ink box, measured from the
+  same glyph files the page loads, is the room it takes. `npm run
+  check:plan` reads the plan: no two labels' ink may overlap on a drawing,
+  and a label on one drawing must be on the next within 2 px and no shorter
+  unless the plan records why, as the consistency proposal sets out. The
+  sheets' own placement still leaves 110 overlapping pairs and 3,074
+  zoom changes for the plan's placement to resolve; the plan is the record
+  those later steps work from. Nothing on the page reads it yet.
 - **Sizes run between the sheets; switches are zooms (#155).** Every size
   that has a value per sheet runs straight from one sheet's value to the
   next, so a drawing at one of today's five zooms is exactly today's drawing,
@@ -5894,6 +5906,18 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   same with no throttling (2.85 s, was 2.90 s); the lines on screen from
   first paint (0.4 s on slow 4G), where the picture showed at 3.1 s on
   slow 4G and 6.5 s at 0.65 Mbit/s.
+- 2026-11-27: The build writes one lettering plan (#234, the groundwork in
+  #129) for station names, station letters, line letters and route lists.
+  The plan holds each label's wording, ink box, angle, size, the drawings it
+  shows on, and its parent when a label takes over from another. One `Room`
+  record holds the room each label takes, and two checks read the plan: no
+  two labels overlap on a drawing, and zooming in only adds (a label stays
+  within 2 px and is no shorter, unless the plan records why). Placing from
+  the plan and the page drawing it need the zoom branch's model (#156,
+  #158), so the sheets' own placement is unchanged: the build output's
+  drawings are byte-identical, and the plan reports the 110 overlapping
+  pairs and 3,074 unrecorded changes those placements leave. The plan is
+  2,594 KB raw and 252 KB gzipped for 7,829 labels on 9,797 placements.
 - 2026-11-27: Live predictions on stop and station cards (#13; Chris, about
   20:10 MST, with the relay change). An open card asks, since the sheets
   have no Live button. The relay sends a page only its own stops, and asks

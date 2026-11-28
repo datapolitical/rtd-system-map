@@ -5,8 +5,10 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { SHEETS, drawSheet, districtShape, sheetExtent } from './lib/sheets.mjs';
 import { sheetsCode } from './lib/fingerprint.mjs';
+import { letteringPlan, planReport } from './lib/lettering-plan.mjs';
 import { listKey } from '../public/js/sheets/style.js';
 import { resolveVisualFixes, visualFixReport } from './lib/visual-fixes.mjs';
 import visualFixes from './visual-fixes.json' with { type: 'json' };
@@ -51,6 +53,10 @@ export async function writeSheets(dir) {
   const listsOf = (features) => {
     for (const f of features) for (const [k, v] of Object.entries(f.properties)) if (Array.isArray(v)) (lists[k] ??= new Map()).set(listKey(v), v);
   };
+  // The labels each drawing sets, for the lettering plan (#234): its station names and
+  // their rows of letters, its lines' letters, and its route lists.
+  const planKinds = new Set(['station', 'letter', 'bus-label', 'bus-stack']);
+  const planDrawings = [];
   for (const sheet of SHEETS) {
     const drawn = drawSheet(data, sheet);
     drawn.features = drawn.features.filter((f) => {
@@ -76,11 +82,22 @@ export async function writeSheets(dir) {
     for (const f of drawn.features) if (f.properties.shape === 'name') named.add(f.properties.name);
     for (const f of drawn.features) if (f.properties.kind === 'rail') colors.add(f.properties.color);
     await writeFile(path.join(dir, `sheet-${sheet.id}.geojson`), JSON.stringify(drawn));
+    planDrawings.push({ id: sheet.id, zoom: sheet.zoom, features: drawn.features.filter((f) => planKinds.has(f.properties.kind)) });
     listsOf(drawn.features);
     listsOf(routeLines);
     const count = (kind) => drawn.features.filter((f) => f.properties.kind === kind).length;
     console.log(`sheet ${sheet.id} (zoom ${sheet.zoom}): ${count('rail')} rail lines, ${drawn.features.filter((f) => f.properties.shape === 'name' && !f.properties.alt && !f.properties.edge).length} station names (${drawn.features.filter((f) => f.properties.shape === 'name' && f.properties.alt && !f.properties.edge).length} placed again for a pick), ${drawn.features.filter((f) => f.properties.kind === 'letter' && !f.properties.edge).length} letters, ${count('bus')} bus streets`);
   }
+  // One lettering plan for the whole map (#234): every label, where its ink sits, and the
+  // drawings it shows on. The page will draw this and decide nothing; until then the checks
+  // report what the sheets' own placement leaves for MapLibre to resolve.
+  const plan = letteringPlan(planDrawings);
+  const report = planReport(plan);
+  const raw = JSON.stringify(plan);
+  await writeFile(path.join(dir, 'lettering-plan.json'), raw);
+  console.log(`lettering plan: ${report.labels} labels on ${report.stops} drawings (${Object.entries(report.byKind).map(([k, n]) => `${n} ${k}`).join(', ')}), ${
+    (Buffer.byteLength(raw) / 1e3).toFixed(0)} KB raw and ${(gzipSync(raw).length / 1e3).toFixed(0)} KB gzipped; ${
+    report.overlap.count} overlapping label pairs and ${report.carry.count} zoom changes to fix by placing from the plan`);
   // RTD's district, for the towns the whole-district sheet names (#152). A build without it names every town.
   const district = districtShape(await read('boundary').catch(() => null));
   await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), code: await sheetsCode(), hub, stations: [...named], colors: [...colors], district, frame, groups: groups.filter(Boolean), visualFixes: fixReport,
