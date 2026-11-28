@@ -27,20 +27,26 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROJECT = 'rtd-system-map';
 
 // The ignored paths under public/ that a build makes and the site is meant to
-// carry: files directly in public/data/, the departures tables in
-// public/data/departures/ (the one subfolder a build makes there, which the
-// publish check requires), public/poster/, public/tiles/, public/vendor/ and
-// public/deploy-manifest.json. Paths are as
+// carry: files directly in public/data/, files directly in each folder the
+// build makes there (BUILT_DATA_FOLDERS; nothing deeper), public/poster/,
+// public/tiles/, public/vendor/ and public/deploy-manifest.json. Paths are as
 // `git ls-files --others --ignored --exclude-standard --directory public/`
-// prints them (a folder ends in /), with public/data/ already expanded to its
-// entries. Anything else is an extra: a trial's data, a scratch folder.
+// prints them (a folder ends in /), with public/data/ and the build's folders
+// in it already expanded to their entries (ignoredUnderPublic). Anything else
+// is an extra: a trial's data, a scratch folder.
 // From main extras refuse the deploy; on a branch they are uploaded (a preview
 // of a trial needs them) and listed.
+//
+// The folders build:data writes in public/data/: the departures tables
+// (scripts/build-data.mjs; the publish check requires departures/index.json).
+// The build records no list of its files, so a new folder is added here by
+// hand, with the change that makes the build write it.
+export const BUILT_DATA_FOLDERS = ['departures'];
 export function judgePublicExtras(ignored, branch) {
   const expected = (p) =>
     /^public\/data\/[^/]+$/.test(p) ||
+    BUILT_DATA_FOLDERS.some((dir) => p.startsWith(`public/data/${dir}/`) && /^[^/]+$/.test(p.slice(`public/data/${dir}/`.length))) ||
     p === 'public/data/' ||
-    p === 'public/data/departures/' ||
     p === 'public/deploy-manifest.json' ||
     ['public/poster/', 'public/tiles/', 'public/vendor/'].some((dir) => p.startsWith(dir));
   const extras = ignored.filter((p) => !expected(p));
@@ -53,18 +59,23 @@ function fail(message) {
 }
 const git = (...a) => execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim();
 
-async function ignoredUnderPublic() {
-  const listed = git('ls-files', '--others', '--ignored', '--exclude-standard', '--directory', 'public/')
+export async function ignoredUnderPublic(root = ROOT) {
+  const listed = execFileSync('git', ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', 'public/'], { cwd: root, encoding: 'utf8' })
     .split('\n')
     .filter(Boolean);
+  const entries = async (p) => (await readdir(path.join(root, p), { withFileTypes: true })).map((e) => `${p}${e.name}${e.isDirectory() ? '/' : ''}`);
   const out = [];
   for (const p of listed) {
     if (p !== 'public/data/') {
       out.push(p);
       continue;
     }
-    // public/data/ is ignored whole: look inside for subfolders.
-    for (const e of await readdir(path.join(ROOT, p), { withFileTypes: true })) out.push(`${p}${e.name}${e.isDirectory() ? '/' : ''}`);
+    // public/data/ is ignored whole: look inside for subfolders, and inside the
+    // folders the build makes for anything that is not a file.
+    for (const e of await entries(p)) {
+      if (BUILT_DATA_FOLDERS.some((dir) => e === `public/data/${dir}/`)) out.push(...(await entries(e)));
+      else out.push(e);
+    }
   }
   return out;
 }
