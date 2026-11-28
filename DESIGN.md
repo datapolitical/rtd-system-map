@@ -2770,16 +2770,17 @@ How it is built:
   build carries labels from the widest drawing inward, rank by rank: an old
   label keeps its ground before a new one of its rank, a label missing from the
   fresh drawing stays while its room is clear, and a split route list hands
-  over to its detailed successor. It moves or ends only for a recorded
-  collision or handover. `npm run check:plan` reads the plan: no two labels'
-  ink may overlap on a drawing, and a label on one drawing must be on the next
-  within 2 px and no shorter unless the plan records why, as the consistency
-  proposal sets out. On the five sheets, fresh placement leaves 125 overlapping
-  pairs and 3,181 unexplained zoom changes; the carried plan has no overlaps
-  and six labels that go with nothing taking over (three route lists and three
-  street names that no longer fit at the next zoom): a recorded fit reason
-  explains such a drop but is not a successor, so `check:plan` reports each
-  as a fault until it is fixed. Nothing on the page reads it yet (#158).
+  over to its detailed successor. If a route list or street name's old and fresh
+  places are both blocked, it tries the nearest clear place along its own
+  alignment, alternating directions and going no farther than its own length
+  (or 48 px for a short list); it never moves across the street. Every move is
+  recorded with its collision. `npm run check:plan` reads the plan: no two
+  labels' ink may overlap on a drawing, and a label on one drawing must be on
+  the next within 2 px and no shorter unless the plan records why, as the
+  consistency proposal sets out. On the five sheets, fresh placement leaves 125
+  overlapping pairs and 3,181 unexplained zoom changes; the carried plan has no
+  overlaps, unexplained changes or labels that go with nothing taking over.
+  Nothing on the page reads it yet (#158).
 - **Sizes run between the sheets; switches are zooms (#155).** Every size
   that has a value per sheet runs straight from one sheet's value to the
   next, so a drawing at one of today's five zooms is exactly today's drawing,
@@ -5975,6 +5976,12 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   with fresh placement. The five
   sheet GeoJSON files are unchanged; the page still has to draw the plan
   (#158), and arbitrary whole-zoom drawings need #155.
+- 2026-11-28: Carried route lists and street names no longer end merely because
+  their old and fresh places are blocked (#156, #271). They try the nearest clear
+  place along their own alignment, within one label length (48 px minimum), and
+  record the collision and move. Six real-data regressions pin the former drops;
+  the carried plan now has no overlaps, unexplained changes or successorless
+  drops. The page still has to draw the plan (#158).
 - 2026-11-27: Live predictions on stop and station cards (#13; Chris, about
   20:10 MST, with the relay change). An open card asks, since the sheets
   have no Live button. The relay sends a page only its own stops, and asks

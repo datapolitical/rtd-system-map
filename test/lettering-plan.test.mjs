@@ -245,17 +245,41 @@ test('the carried plan from the real map has no overlaps or unexplained changes'
   const plan = letteringPlan(drawings, { carry: true });
   assert.equal(planFaults(plan).length, 0);
   assert.equal(overlapFaults(plan).length, 0);
-  // Known faults the stricter rule found (#271): labels that no longer fit at the next zoom and
-  // have no successor. Every other carry rule is clean; this list must only shrink.
+  // The six real no-successor faults found by the stricter rule are fixed by the
+  // alignment fallback and pinned individually below; no new disappearance is allowed.
   const faults = carryFaults(plan);
-  assert.deepEqual([...new Set(faults.map((f) => f.kind))].filter(Boolean), faults.length ? ['gave-way'] : [], 'only gave-way faults remain');
-  assert.ok(faults.length <= 6, `${faults.length} labels go with no successor (6 known)`);
+  assert.equal(faults.length, 0, `${faults.length} labels change or go without a recorded handover`);
   assert.equal(droppedLabels(plan).filter((d) => d.why === null).length, 0, 'every drop records why');
   assert.ok(plan.labels.some((l) => l.kind === 'street-name' && l.stops.some((s) => s.carried)), 'real street names carry');
   // Whatever the real map moves, it names the collision (the sizes now leave none; the planted case above pins the rule).
   for (const l of plan.labels) for (const s of l.stops) if (s.why?.startsWith('no longer fits')) assert.match(s.why, /overlaps \S+/, 'a move names its collision');
   assert.ok(plan.labels.some((l) => l.why?.startsWith('handover')), 'real route-list handovers are linked');
 });
+
+// Each disappearance found by the strict successor check is a separate real-data
+// regression: the same label must continue on the very next drawing, not hand over
+// to a substitute or reappear after a gap.
+const realCarryCases = [
+  ['route-list:37#17', 16],
+  ['route-list:38#9', 16],
+  ['route-list:FF#12', 14],
+  ['street-name:Champa St#1', 16],
+  ['street-name:W 53rd Ave#1', 16],
+  ['street-name:W Coal Mine Ave#1', 16],
+];
+let carriedReal;
+for (const [id, nextZoom] of realCarryCases) {
+  test(`real-data carry regression: ${id} continues at zoom ${nextZoom}`, { skip: NO_DATA }, () => {
+    if (!carriedReal) {
+      const drawings = [0, 1, 2, 3, 4].map((n) => ({ id: n, zoom: [8.75, 10, 12, 14, 16][n], features: JSON.parse(readFileSync(`${DATA}sheet-${n}.geojson`, 'utf8')).features }));
+      carriedReal = letteringPlan(drawings, { carry: true });
+    }
+    const label = carriedReal.labels.find((l) => l.id === id);
+    assert.ok(label, `${id} is present in the real plan`);
+    assert.ok(label.stops.some((s) => s.zoom === nextZoom), `${id} has a placement at ${nextZoom}`);
+    assert.ok(!carryFaults(carriedReal).some((f) => f.kind === 'gave-way' && f.id === id), `${id} does not vanish without a successor`);
+  });
+}
 
 test('a planted overlap and a planted disappearance are caught on the real plan', { skip: NO_DATA }, () => {
   const drawings = [0, 1, 2, 3, 4].map((id) => ({ id, zoom: [8.75, 10, 12, 14, 16][id], features: JSON.parse(readFileSync(`${DATA}sheet-${id}.geojson`, 'utf8')).features }));

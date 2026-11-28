@@ -392,6 +392,27 @@ const distanceAt = (a, b, zoom) => {
   return Math.hypot(p[0] - q[0], p[1] - q[1]);
 };
 
+// A street label whose first places are taken can slide along its own alignment, never
+// across the street or onto another feature. Try the nearest clear place first, alternating
+// directions, and go no farther than one label's own length (or 48 px for a short list).
+function slideAlong(stop, zoom, distance) {
+  const angle = (stop.angle * Math.PI) / 180;
+  const dx = Math.cos(angle) * distance, dy = Math.sin(angle) * distance;
+  const moved = (at) => {
+    const [x, y] = toPx(at, zoom);
+    return lonlat([x + dx, y + dy], zoom);
+  };
+  return { ...stop, at: moved(stop.at), anchor: moved(stop.anchor) };
+}
+function *alignmentPlacements(stop, zoom) {
+  const step = Math.max(4, stop.room[1]);
+  const limit = Math.max(48, stop.room[0]);
+  for (let distance = step; distance <= limit + 1e-9; distance += step) {
+    yield slideAlong(stop, zoom, distance);
+    yield slideAlong(stop, zoom, -distance);
+  }
+}
+
 /**
  * The consistency rule, applied to a fresh sheet plan (#156). Existing labels claim
  * their old ground first, in rank order. One keeps its old centre and angle when its
@@ -509,8 +530,9 @@ export function carryLettering(freshPlan) {
         if (now) used.add(now.label.id);
         continue;
       }
-      // The old place no longer fits: the fresh sheet's place is the one recorded move.
+      // The old place no longer fits: the fresh sheet's place is the first recorded move.
       const reason = `no longer fits at zoom ${drawing.zoom}: overlaps ${hits.map((h) => h.id).join(', ')}`;
+      let fullReason = reason;
       if (now) {
         const moved = { ...now.stop, why: reason };
         const freshHits = source.partOf ? [] : room.hits(stopBox(moved, drawing.zoom));
@@ -520,8 +542,29 @@ export function carryLettering(freshPlan) {
           used.add(now.label.id);
           continue;
         }
-        source.why = `${reason}; the fresh place also overlaps ${freshHits.map((h) => h.id).join(', ')}`;
-      } else source.why = reason;
+        fullReason = `${reason}; the fresh place also overlaps ${freshHits.map((h) => h.id).join(', ')}`;
+      }
+      // A list or street name belongs to a line, so its last resort is along that same
+      // line. This is a general placement rule, not a pin: it uses only the label's own
+      // measured ink and bearing and still records both the collision and the move.
+      if (source.kind === 'route-list' || source.kind === 'street-name') {
+        let placed = false;
+        for (const base of [held, ...(now ? [now.stop] : [])]) {
+          for (const candidate of alignmentPlacements(base, drawing.zoom)) {
+            if (room.hits(stopBox(candidate, drawing.zoom)).length) continue;
+            candidate.moved = ROUND(distanceAt(old.stop.at, candidate.at, drawing.zoom));
+            candidate.why = `${fullReason}; moved along its alignment to clear the overlap`;
+            take(source, candidate, false);
+            finish(source, candidate);
+            if (now) used.add(now.label.id);
+            placed = true;
+            break;
+          }
+          if (placed) break;
+        }
+        if (placed) continue;
+      }
+      source.why = fullReason;
     }
 
     // New lettering, and the detailed labels that took over, fill the room left.
