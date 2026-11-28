@@ -81,7 +81,7 @@ before publishing so missing captures stop the build. The historical pins
 in `qa/recall/finds.json` remain regression evidence, not confirmed current bugs.
 
 - Read [docs/development.md](docs/development.md) for the branch boundaries.
-  `main` owns the current sheet map; `zoom-prototype-154` owns smooth-zoom
+  `main` owns the current sheet map; `zoom-154-merge` owns smooth-zoom
   experiments; `classic-archive` preserves the earlier application. Do not
   merge the archive back into main or restore Classic under `public/`.
   Fix shared/current-map faults on main first, then bring main into the

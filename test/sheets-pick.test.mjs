@@ -1,4 +1,4 @@
-// Tap a route on a sheet to highlight it (issue #118, DESIGN.md "Four sheets").
+// Tap a route on a sheet to highlight it (issue #118, DESIGN.md "Five sheets").
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluate } from '../public/js/evaluate.js';

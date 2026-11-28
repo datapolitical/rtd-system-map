@@ -1,7 +1,7 @@
 # RTD system map: design specification
 
 > Current implementation: `main` deploys the five-sheet map. Smooth zoom is
-> developed separately on `zoom-prototype-154`. Classic is preserved on
+> developed separately on `zoom-154-merge`. Classic is preserved on
 > `classic-archive`; its older interface details below are historical or planned
 > features, rather than a second deployed application. See
 > [the development guide](docs/development.md).
@@ -12,8 +12,9 @@ should look and behave. Read it before changing the map, the interface, or the
 data pipeline. When a decision changes, update this file and add a line to the
 decision log at the bottom.
 
-The deployed front page is the four sheets, with the whole district one step
-out from them ("Four sheets"). Old `/classic/` links redirect to that page.
+The deployed front page is the five sheets: four for the network at closer
+scales and the whole district one step out from them ("Five sheets"). Old
+`/classic/` links redirect to that page.
 The smooth-zoom trial has its own branch and `/zoom/` entry point. Classic
 details elsewhere below describe the archive or planned features.
 
@@ -502,8 +503,9 @@ Weekday evening, Saturday, Sunday, or a day and time you pick:
 One search box for routes (by number or name), stations, Park-n-Rides, stops
 (by name or stop number), landmarks, and street addresses.
 
-Built so far (2026-11-06): routes, rail stations, Park-n-Rides and transit
-centers, and bus stops. Landmarks and street addresses are not built.
+Built so far: routes, rail stations, Park-n-Rides and transit centers, and
+bus stops (on the classic map 2026-11-06; on today's sheets 2026-11-27, #238).
+Landmarks and street addresses are not built.
 
 ### 6. Understand rail and transfers
 
@@ -676,7 +678,17 @@ Every frequency shown to riders says when it applies. Some examples:
 
 The route panel also shows weekday peak, evening, Saturday, and Sunday
 frequency, plus first and last trips, so one number is never read as all-day
-service.
+service. The peak rows are RTD's own periods, 6 to 9am and 3 to 6pm, and the
+evening row is 7 to 10pm (`WINDOWS` in `scripts/lib/gtfs.mjs`; #22). Each is
+measured as midday is (the typical gap, the bunching rule, the less frequent
+direction), at the stop with the most departures in that window, since a
+route's rush-hour trips may not pass its busiest midday stop. Rush-hour
+service often runs one way only, in to the city in the morning and out in
+the afternoon. Where only one direction comes twice or more in a window, the
+row gives that direction's frequency and says "one direction"; a window with
+one trip says "1 trip", and with none "No trips". These figures are in
+`directory.json` only (`wk_am`, `wk_pm`, `wk_eve`, `wk_one`, and the hours
+themselves in `windows`), so the drawings do not change.
 
 **Bus routes are measured by stretch, not once per route.** A bus route can
 come every 15 minutes in one place and a few times a day in another: the
@@ -2073,10 +2085,10 @@ state; its icon and tooltip show the mode a tap will choose.
   20% fade is unchanged.
 - `color-scheme` and `theme-color` metas cover both themes.
 
-## Four sheets
+## Five sheets
 
-The site's front page: a second way of drawing the same data, built to be
-finished before it is clever. Think of four printed maps of the district, each drawn
+The site's front page and its only map: RTD's data drawn as fixed sheets, built to be
+finished before it is clever. Think of five printed maps of the district, each drawn
 for one scale on a phone, each complete: every rail line and every bus route
 is on every sheet. The page rests only on a sheet. A scroll or a pinch goes
 to the next sheet the way it was heading, however short it was (a tenth of
@@ -2098,7 +2110,7 @@ preserved on `classic-archive` at commit
 files from the site's root, including at addresses the host answers with it.
 
 `main` holds the current sheets. Smooth-zoom work stays on
-`zoom-prototype-154`, in its own worktree and `/zoom/` preview, until reviewed.
+`zoom-154-merge`, in its own worktree and `/zoom/` preview, until reviewed.
 Shared/current-map fixes land on main first and then merge into that branch.
 See `docs/development.md` for the workflow and separate verification commands.
 `npm run check` exercises the sheets. Historical browser checks and renderer
@@ -2866,7 +2878,27 @@ plain words.
 It works by keyboard: the arrow keys move through results, Enter opens one,
 Esc closes the list, and a screen reader hears how many results there are.
 The stops file (1.5 MB) loads when the search box is first used, never at
-page load.
+page load; so do the search scripts.
+
+A Park-n-Ride or transit center within 300 m of a rail station is found as
+that station. A station's platforms are not listed as bus stops. A stop
+number is matched from its third digit, so "15" is route 15 and "157" starts
+stop numbers.
+
+On today's sheets (#238) a route result steps to the closest sheet that
+shows all of the route and picks it, as a tap on it does. A station or a
+Park-n-Ride is shown on the first sheet at zoom 13 or closer, and a bus stop
+on the first sheet that draws stops; the place is ringed until the next tap,
+because the finger did not choose it. The card is the one a tap opens. A
+stop's card adds its stop number, and a Park-n-Ride's the routes at stops
+within 400 m.
+
+Search is its own code, apart from the map (`public/js/search/`): `find.js`
+holds the matching and the order, with no page in it, and `box.js` the box
+and its list. Neither reads anything of the sheets. What happens when a
+result is chosen is one function the map hands to it (`goTo` in
+`public/js/sheets/main.js`), the only part the zoomable map replaces
+(`test/search-find.test.mjs` fails if either file names the sheets).
 
 ### Highlight, don't list
 
@@ -2889,6 +2921,21 @@ frequency. When a route's stretches differ, a note lists them and the rows
 say "here" for the stretch under the finger. A stretch with no weekday
 service reads "No weekday service here; runs Saturday and Sunday". The panel
 ends with a link to RTD's timetable.
+
+On today's sheets (#162, #22) the panel is folded under the picked route's
+card: the card keeps its two lines (the chip and name, then the ends and the
+midday figure), and a row under them, "Times through the week", opens the
+panel in place. Open or shut, it stays that way for the next route. Each row
+says its own hours ("Weekdays, 6 to 9am", "Saturday, 9am to 3pm"), which
+come from the build, never from the page. The rows are for the whole route:
+the stretch note and "here" are not on the sheets, since which stretch is
+under the finger is the drawing's to say. Data built before a row existed
+leaves that row out.
+
+The panel's words are their own code (`public/js/panel/route.js`): it takes
+a route's directory entry and returns the rows, with no page and nothing of
+the sheets in it (`test/panel-route.test.mjs` fails if it names them). The
+sheets' page only puts it on its card.
 
 Where a bus goes is read from its signs (GTFS `trip_headsign`), most common
 first, without the route's number, "free" and any "via ...", and with RTD's
@@ -2942,17 +2989,14 @@ are in `public/js/sheets/address.js`, with tests.
 A link to the site shows the title "RTD system map", the page's description
 and a picture (`public/og.png`, 1200x630): central Denver on sheet 2 in the
 dark theme, the rail lines fanning out from Union Station past Ball Arena and
-Empower Field, with the buttons and credit hidden. A link to the classic map
-shows its own (`public/classic/og.png`): central Denver at zoom 11 in the
-light theme, with the interface and route letters hidden.
+Empower Field, with the buttons and credit hidden. An old classic link
+redirects to the front page, so it shows the same picture.
 The build retakes the sheets' picture each time, from the site it just built
 (`scripts/poster-build.mjs` runs `scripts/og-image.mjs`), and gives the
 `og:image` link the picture's hash as `?v=`, so apps that keep a preview by
 its address fetch the new one. `node scripts/og-image.mjs` makes it again by
 hand from the live site. The browser tab says
-"RTD system map" on the front page and "RTD system map: classic" on the
-classic map; the classic map's key still says the map is unofficial, and so
-does the sheets' credit line.
+"RTD system map", and the sheets' credit line says the map is unofficial.
 
 ### The key
 
@@ -3153,7 +3197,7 @@ are deferred, not ruled out. See "Open questions".
   build while it is panned. Screen edges and controls crop the drawing;
   they do not trigger alternate positions or abbreviations. Place names
   have a fixed centre anchor. `qa/labels.mjs` compares label pixels at the
-  same world positions before and after pans on all four sheets.
+  same world positions before and after pans on every sheet.
 - **A picked route looks right:** `qa/pickcheck.mjs` picks every bus and
   rail route on every sheet and counts gaps in the picked line, stubs under
   a stub's length beside the rest of the line (a route drawn whole as one
@@ -3919,9 +3963,13 @@ What comes after launch is in these milestones, in this order (decided
    draw from. Released 2026-11-25.
 2. **v1.2: Fixes from the weekly round.** Fixes Chris picks in the weekly
    map round, on today's sheets.
-3. **v1.3: Live, panels and search.** On today's sheets, built so the
-   zoomable map reuses them: the route panel and route tracing, Live, stop
-   and station panels with next departures and alerts, and search.
+3. **v1.3: Live, panels and search.** On today's sheets, only what carries
+   over to the zoomable map without being built twice: search, the route
+   panel with its frequency rows, and stop and station panels with next
+   departures and alerts. Each is its own module under `public/js/` that
+   never reads sheet state; moving the map is one small function, the only
+   part the zoomable map replaces. Route tracing and Live vehicles wait for
+   the zoomable map (#251).
 4. **v2: One zoomable map.** The sheets' drawing at every zoom from the
    whole district to 16, one map that zooms smoothly, with the build
    deciding every label. The milestone holds only the steps to it, in
@@ -3932,7 +3980,7 @@ What comes after launch is in these milestones, in this order (decided
 5. **v2.x: Other times, Live tiers, edge letters and relief.** On the
    zoomable map: edge letters and relief, then Saturday, Sunday and evening
    in the Key, and Live tiers, built on how other times fit the drawings
-   (#233).
+   (#233); and route tracing and Live vehicles (#251).
 6. **Later.** Ideas with no date.
 
 A fifth milestone, **Parked: recheck on the zoomable map**, is not a
@@ -5790,6 +5838,40 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   hook on Speer at Lincoln; its fix is in the street build.
 - 2026-11-27: Zoom trial (#154): the jump where the rail drawing changes at 14
   is left for later (#256). Chris: "Leave it: let's come back to this later".
+- 2026-11-27: The project is moving to the zoomable map, so today's sheets
+  get only what carries over to it easily: search (#238), the route panel
+  with its frequency rows (#162, #22) and next departures and alert panels
+  (#13). Route tracing and Live vehicles wait for the zoomable map (#251,
+  in v2.x): tracing draws from the sheets' own route-line layers (#193) and
+  Live vehicles depend on how v2 serves its drawings (#237), so either
+  would be built twice. Each v1.3 piece is its own module under
+  `public/js/` that never reads sheet state (no sheet numbers, no sheet
+  layers, no step code); moving the map to a result or a card is one small
+  function, the only part v2 replaces. This narrows the v1.3 entry above of
+  the same day. Chris, about 15:30 MST.
+- 2026-11-27: Search on today's sheets (#238). The box is the top row, as
+  "Layout" has it, so the loading line and the keyboard's "List what's in
+  view" button moved under it, and a picked route from a link is framed
+  below it. A place search finds is ringed on the map: a tap marks its own
+  place with the finger, a search result has none. The "Lines" button is
+  not part of this; the keyboard's list of what is in view stays.
+- 2026-11-27: The route panel on today's sheets (#162) with weekday
+  rush-hour and evening rows (#22). The panel is folded under the picked
+  route's two-line card, so the card still covers as little of the map as
+  it did; "Times through the week" opens it. #22 was not blocked on #11:
+  the rows need two more measures per route, in windows DESIGN.md already
+  set, and #11 is the Key's time chooser. One-way rush service says "one
+  direction": the less-frequent-direction rule alone gave an express no
+  rush-hour figure at all.
+- 2026-11-27: The section "Four sheets" is now "Five sheets" (#229, phase 2).
+  The map has had five since sheet 0 joined (#152); entries above keep
+  their wording. Text that described the removed classic map's link
+  picture and tab title now says old classic links redirect.
+- 2026-11-27: The smooth-zoom trial's branch is `zoom-154-merge` (PR #224),
+  not `zoom-prototype-154`. On 2026-11-23 the trial's history was rewritten
+  without the tailnet addresses in its fix register, under the new name, and
+  the old branch left GitHub. Every commit of the old branch has a twin
+  there with the same change, so no work was lost.
 
 ## Sources
 
