@@ -2751,8 +2751,11 @@ How it is built:
   ink may overlap on a drawing, and a label on one drawing must be on the next
   within 2 px and no shorter unless the plan records why, as the consistency
   proposal sets out. On the five sheets, fresh placement leaves 125 overlapping
-  pairs and 3,181 unexplained zoom changes; the carried plan has none of
-  either. Nothing on the page reads it yet (#158).
+  pairs and 3,181 unexplained zoom changes; the carried plan has no overlaps
+  and five labels that go with nothing taking over (two route lists and three
+  street names that no longer fit at the next zoom): a recorded fit reason
+  explains such a drop but is not a successor, so `check:plan` reports each
+  as a fault until it is fixed. Nothing on the page reads it yet (#158).
 - **Sizes run between the sheets; switches are zooms (#155).** Every size
   that has a value per sheet runs straight from one sheet's value to the
   next, so a drawing at one of today's five zooms is exactly today's drawing,
@@ -5920,8 +5923,9 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   a merged list through an explicit parent link. A move or disappearance names
   the labels it collided with. `check:plan` now fails on any overlap or
   unrecorded change and reports every neighbouring pair. On the built sheets:
-  9,707 labels on 13,195 placements, 3,500 KB raw; zero overlaps and zero
-  unexplained changes, against 125 and 3,181 with fresh placement. The five
+  9,707 labels on 13,195 placements, 3,500 KB raw; zero overlaps and five
+  labels that go with no successor (reported as faults), against 125 and 3,181
+  with fresh placement. The five
   sheet GeoJSON files are unchanged; the page still has to draw the plan
   (#158), and arbitrary whole-zoom drawings need #155.
 - 2026-11-27: Live predictions on stop and station cards (#13; Chris, about

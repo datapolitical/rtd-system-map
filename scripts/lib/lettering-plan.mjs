@@ -641,7 +641,7 @@ export function carryFaults(plan) {
       if (now.length < was.length) faults.push({ kind: 'shorter', id: l.id, zoom: s.zoom, was, now });
     });
     const child = handedOver.get(l.id);
-    if (l.to < last && !l.why && !child?.why) faults.push({ kind: 'gave-way', id: l.id, zoom: l.to });
+    if (l.to < last && !(child?.why || child?.stops[0]?.why)) faults.push({ kind: 'gave-way', id: l.id, zoom: l.to });
   }
   return faults;
 }

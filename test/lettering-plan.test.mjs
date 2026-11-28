@@ -62,7 +62,10 @@ test('a name that goes and comes back is a new label with a parent, and the chec
 test('a recorded reason silences the check', () => {
   const plan = letteringPlan([drawing(2, 12, [name(7, '0.0', 'Depot', [0, 0])]), drawing(3, 14, [])]);
   plan.labels[0].why = 'handover: the junction is named here from 14';
-  assert.equal(carryFaults(plan).filter((f) => f.kind === 'gave-way').length, 0);
+  assert.equal(carryFaults(plan).filter((f) => f.kind === 'gave-way').length, 1, 'a reason alone is not a successor');
+  const child = { ...plan.labels[0], id: 'junction#2', parent: plan.labels[0].id, from: 14, to: 14, stops: [{ ...plan.labels[0].stops[0], zoom: 14, why: plan.labels[0].why }] };
+  plan.labels.push(child);
+  assert.equal(carryFaults(plan).filter((f) => f.kind === 'gave-way').length, 0, 'a successor that records the handover is');
 });
 
 test('a label that moves more than 2 px at the next drawing is a fault', () => {
@@ -175,7 +178,7 @@ test('a carried label with nowhere fresh to go ends with a recorded fit reason',
   const listLabel = plan.labels.find((l) => l.kind === 'route-list');
   assert.deepEqual(listLabel.stops.map((s) => s.zoom), [12]);
   assert.match(listLabel.why, /no longer fits/);
-  assert.equal(carryFaults(plan).length, 0);
+  assert.deepEqual(carryFaults(plan).map((f) => f.kind), ['gave-way'], 'the reason is recorded, but nothing took over');
 });
 
 test('the same copy beyond the fresh linker threshold continues instead of becoming a handover', () => {
@@ -237,7 +240,12 @@ test('the carried plan from the real map has no overlaps or unexplained changes'
   const plan = letteringPlan(drawings, { carry: true });
   assert.equal(planFaults(plan).length, 0);
   assert.equal(overlapFaults(plan).length, 0);
-  assert.equal(carryFaults(plan).length, 0);
+  // Known faults the stricter rule found (#271): labels that no longer fit at the next zoom and
+  // have no successor. Every other carry rule is clean; this list must only shrink.
+  const faults = carryFaults(plan);
+  assert.deepEqual([...new Set(faults.map((f) => f.kind))].filter(Boolean), faults.length ? ['gave-way'] : [], 'only gave-way faults remain');
+  assert.ok(faults.length <= 5, `${faults.length} labels go with no successor (5 known)`);
+  assert.equal(droppedLabels(plan).filter((d) => d.why === null).length, 0, 'every drop records why');
   assert.ok(plan.labels.some((l) => l.kind === 'street-name' && l.stops.some((s) => s.carried)), 'real street names carry');
   // Whatever the real map moves, it names the collision (the sizes now leave none; the planted case above pins the rule).
   for (const l of plan.labels) for (const s of l.stops) if (s.why?.startsWith('no longer fits')) assert.match(s.why, /overlaps \S+/, 'a move names its collision');
@@ -270,7 +278,7 @@ test('a planted overlap and a planted disappearance are caught on the real plan'
 test('a label that goes for lack of room with nothing taking over is listed as dropped, not as handed over', () => {
   const plan = letteringPlan(sheets([name(7, '0.0', 'Depot', [0, 0])], []));
   plan.labels[0].why = 'no longer fits at zoom 14: overlaps station-name:9:0#1';
-  assert.equal(carryFaults(plan).filter((f) => f.kind === 'gave-way').length, 0, 'the reason is recorded');
+  assert.equal(carryFaults(plan).filter((f) => f.kind === 'gave-way').length, 1, 'the reason is recorded but is not a successor');
   assert.deepEqual(droppedLabels(plan).map((d) => d.id), [plan.labels[0].id], 'but it is still a drop');
   // A label with a successor is a handover, not a drop.
   const child = { ...plan.labels[0], id: 'x#2', parent: plan.labels[0].id, from: 14, to: 14 };
