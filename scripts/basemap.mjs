@@ -1,7 +1,8 @@
 // The ground's tiles, served by the site itself (DESIGN.md, "Basemap"): the district's tiles out
 // of OpenFreeMap's weekly build of the planet, the build its public tile server serves now, each
-// cut down to the layers and properties the map draws (lib/basemap.mjs, groundNeeds). Run by hand
-// when the ground should be newer, like the RTD data, and commit basemap/ (docs/upkeep.md).
+// cut down to the layers and properties the map draws (lib/basemap.mjs, groundNeeds) and the names
+// the build places itself (groundBuildNeeds, #242). Run by hand when the ground should be newer,
+// like the RTD data, and commit basemap/ (docs/upkeep.md).
 //
 // OpenFreeMap offers the planet as one PMTiles file for anyone to download; this reads only the
 // district's tiles from it, by range requests, rather than asking its tile server for each.
@@ -15,7 +16,7 @@ import { PbfReader } from 'pbf';
 import { fromVectorTileJs } from '@maplibre/vt-pbf';
 import { gunzipSync } from 'node:zlib';
 import { LOWEST, SHEETS, edge } from '../public/js/sheets/style.js';
-import { groundDraws, groundNeeds, writePack } from './lib/basemap.mjs';
+import { groundBuildDraws, groundBuildNeeds, groundDraws, groundNeeds, mergeNeeds, writePack } from './lib/basemap.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 // The tile index the map used to read: it names the planet build its tiles are from.
@@ -36,8 +37,9 @@ const version = (await (await fetch(INDEX)).json()).tiles[0].match(/\/planet\/([
 const planet = new PMTiles(new FetchSource(PLANET(version)));
 const meta = JSON.parse(await readFile(path.join(ROOT, 'public/data/meta.json'), 'utf8'));
 const [[w0, s0], [e0, n0]] = meta.bounds.routes;
-const needs = groundNeeds();
+const needs = mergeNeeds(groundNeeds(), groundBuildNeeds());
 const draws = groundDraws(MAXZOOM);
+const buildDraws = groundBuildDraws();
 const wholeUntil = Math.floor(edge(0)); // the whole district's sheet shows these zooms' tiles
 
 const jobs = [];
@@ -60,7 +62,7 @@ function trim(z, bytes) {
     const features = [];
     for (let i = 0; i < layer.length; i++) {
       const f = layer.feature(i);
-      if (!draws(z, name, f)) continue;
+      if (!draws(z, name, f) && !buildDraws(z, name, f)) continue;
       const properties = Object.fromEntries(keep.filter((k) => f.properties[k] !== undefined).map((k) => [k, f.properties[k]]));
       features.push({ type: f.type, id: f.id, properties, loadGeometry: () => f.loadGeometry() });
     }
