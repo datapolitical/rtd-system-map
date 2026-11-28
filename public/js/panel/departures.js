@@ -22,9 +22,9 @@ export function chunkOf(id, count) {
  * device is set to.
  */
 export function clockIn(at, timeZone) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
     .formatToParts(at).map((p) => [p.type, p.value]));
-  return { date: `${parts.year}${parts.month}${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute) };
+  return { date: `${parts.year}${parts.month}${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute), seconds: Number(parts.second) };
 }
 
 /** The date `days` after a 'YYYYMMDD' date. */
@@ -59,6 +59,10 @@ export function clock(minutes) {
   return `${h % 12 === 0 ? 12 : h % 12}:${String(m % 60).padStart(2, '0')}${h < 12 ? 'am' : 'pm'}`;
 }
 
+// A prediction belongs to the departure of its trip scheduled within this many minutes of it:
+// the same trip runs every weekday, and only the one near now is the one RTD is predicting.
+const LIVE_NEAR = 90;
+
 /**
  * The next departures from one stop's record, or a station's several (its platforms').
  *
@@ -69,45 +73,71 @@ export function clock(minutes) {
  * `now` is `{ date, minutes }` (clockIn). A service day runs past midnight, so last night's
  * late trips are still to come in the small hours.
  *
- * Returns `{ rows, known, ends }`: `ends` says trips only end at these stops; `rows` are `[{ route, name, headsign, times: [{ minutes, clock, in }] }]`,
- * one per route and destination, soonest first, each with its next `each` departures within
- * `within` minutes; `known` is false when the date is outside the timetable. `first(route)`
- * puts some routes ahead (a station's trains before its buses).
+ * `live`, when RTD's predictions are fresh (live.js, liveFor), is `{ trips, id, at, skipped, nowS }`:
+ * `trips[r]` the trips of record r's departures, in step with its times; `id(n)` a trip's id;
+ * `at[r]` a Map of trip id -> the predicted time at that stop (seconds since 1970); `skipped[r]`
+ * the trips RTD says will not call there. A predicted departure takes its scheduled one's place
+ * at its predicted time and is marked `live`; a skipped one is left out; the rest stay scheduled.
+ *
+ * Returns `{ rows, known, ends, live }`: `ends` says trips only end at these stops; `live` that
+ * at least one time shown is a prediction; `rows` are `[{ route, name, headsign, times: [{ minutes,
+ * clock, in, live }] }]`, one per route and destination, soonest first, each with its next `each`
+ * departures within `within` minutes; `known` is false when the date is outside the timetable.
+ * `first(route)` puts some routes ahead (a station's trains before its buses).
  */
-export function upcoming(records, index, now, { each = 2, within = 180, first = () => false } = {}) {
+export function upcoming(records, index, now, { each = 2, within = 180, first = () => false, live = null } = {}) {
   const today = servicesOn(index, now.date);
   const yesterday = servicesOn(index, addDays(now.date, -1));
+  // Where now is within its minute, so a prediction's minutes are counted from the second, not the minute's start.
+  const here = now.minutes + (now.seconds ?? 0) / 60;
   // Every stop given is one where trips only end: nothing boards there on any day.
   const ends = records.length > 0 && records.every((r) => r?.end);
-  if (!today && !yesterday) return { rows: [], known: false, ends };
+  if (!today && !yesterday) return { rows: [], known: false, ends, live: false };
   const rows = new Map();
-  for (const record of records) {
-    for (const [pattern, gaps] of record?.d ?? []) {
+  records.forEach((record, r) => {
+    (record?.d ?? []).forEach(([pattern, gaps], j) => {
       const [route, name, headsign, service] = index.patterns[pattern] ?? [];
-      if (route === undefined) continue;
+      if (route === undefined) return;
+      const trips = live?.trips?.[r]?.[j]?.[0] === pattern ? live.trips[r][j][1] : null;
       // Today's trips at their own time; yesterday's that run past midnight, a day earlier.
       for (const [runs, shift] of [[today?.has(service), 0], [yesterday?.has(service), -1440]]) {
         if (!runs) continue;
         let t = 0;
-        for (const gap of gaps) {
-          t += gap;
-          const at = t + shift;
-          if (at < now.minutes) continue;
-          if (at > now.minutes + within) break;
+        for (let i = 0; i < gaps.length; i++) {
+          t += gaps[i];
+          const scheduled = t + shift;
+          // Far enough ahead that no prediction could bring it into the hours shown.
+          if (scheduled > now.minutes + within + LIVE_NEAR) break;
+          if (scheduled < now.minutes - LIVE_NEAR) continue;
+          let at = scheduled;
+          let predicted = false;
+          if (trips) {
+            const trip = live.id(trips[i]);
+            if (live.skipped[r]?.has(trip)) continue;
+            const time = live.at[r]?.get(trip);
+            const minutes = time === undefined ? null : here + (time - live.nowS) / 60;
+            if (minutes !== null && Math.abs(minutes - scheduled) <= LIVE_NEAR) { at = minutes; predicted = true; }
+          }
+          // A predicted bus due this minute is still to come; one a minute gone has left.
+          if (at < (predicted ? here - 0.5 : now.minutes) || at > now.minutes + within) continue;
           const key = `${name}|${headsign}`;
           const row = rows.get(key) ?? rows.set(key, { route, name, headsign, times: [] }).get(key);
-          row.times.push(at);
+          row.times.push({ at, live: predicted });
         }
       }
-    }
-  }
+    });
+  });
   const list = [...rows.values()].map((row) => {
-    const times = [...new Set(row.times)].sort((a, b) => a - b).slice(0, each);
-    return { ...row, times: times.map((minutes) => ({ minutes, clock: clock(minutes), in: minutes - now.minutes })) };
+    const seen = new Set();
+    const times = row.times.sort((a, b) => a.at - b.at).filter((t) => { const k = `${Math.floor(t.at)}|${t.live}`; return seen.has(k) ? false : seen.add(k); }).slice(0, each);
+    return { ...row, times: times.map((t) => ({ minutes: t.at, clock: clock(Math.floor(t.at)), in: Math.max(0, Math.round(t.at - here)), live: t.live })) };
   });
   list.sort((a, b) => Number(first(b.route)) - Number(first(a.route)) || a.times[0].minutes - b.times[0].minutes || String(a.name).localeCompare(String(b.name), 'en', { numeric: true }));
-  return { rows: list, known: true, ends };
+  return { rows: list, known: true, ends, live: list.some((row) => row.times.some((t) => t.live)) };
 }
+
+/** A time as a row shows it: a prediction as minutes from now ("4 min", "Now"), a scheduled time as the clock ("9:41pm"). */
+export const timeText = (t) => (!t.live ? t.clock : t.in < 1 ? 'Now' : t.in < 60 ? `${t.in} min` : t.clock);
 
 /** Whether a stop can be boarded from a wheelchair, as RTD's stops file says: 1 yes, 2 no, anything else not said. */
 export const accessible = (record) => (record?.a === 1 ? 'Wheelchair accessible' : record?.a === 2 ? 'Not wheelchair accessible' : '');
@@ -123,7 +153,7 @@ export function departuresHtml({ rows, known, ends = false }, { chip = (row) => 
   if (!rows.length) return `<p class="none">No departures in the next ${Math.round(within / 60)} hours</p>`;
   // The soonest few; a busy stop's card stays a card, and says how many more there are.
   const more = rows.length - most;
-  return `<ul class="next">${rows.slice(0, most).map((row) => `<li>${chip(row)}<span class="to"><span class="sr">to </span>${esc(row.headsign)}</span><span class="at">${row.times.map((t) => `<time>${esc(t.clock)}</time>`).join('<i aria-hidden="true">,</i> ')}</span></li>`).join('')}</ul>`
+  return `<ul class="next">${rows.slice(0, most).map((row) => `<li>${chip(row)}<span class="to"><span class="sr">to </span>${esc(row.headsign)}</span><span class="at">${row.times.map((t) => (t.live ? `<time class="live">${esc(timeText(t))}<span class="sr">, live</span></time>` : `<time>${esc(t.clock)}</time>`)).join('<i aria-hidden="true">,</i> ')}</span></li>`).join('')}</ul>`
     + (more > 0 ? `<p class="more">and ${more} more ${more === 1 ? 'route' : 'routes'} in the next ${Math.round(within / 60)} hours</p>` : '');
 }
 
@@ -132,8 +162,10 @@ export function departuresSaid({ rows, known, ends = false }, { routeName = (row
   if (ends && !rows.length) return 'Trips end here. Nothing boards at this stop';
   if (!known) return 'No timetable for today';
   if (!rows.length) return `No departures in the next ${Math.round(within / 60)} hours`;
-  const said = rows.slice(0, most).map((row) => `${routeName(row)} to ${row.headsign}, ${row.times.map((t) => t.clock).join(' and ')}`);
-  return `Scheduled departures: ${said.join('. ')}${rows.length > most ? `. And ${rows.length - most} more` : ''}`;
+  const time = (t) => (t.live ? `${t.in < 1 ? 'now' : t.in < 60 ? `in ${t.in} ${t.in === 1 ? 'minute' : 'minutes'}` : t.clock}, live` : t.clock);
+  const said = rows.slice(0, most).map((row) => `${routeName(row)} to ${row.headsign}, ${row.times.map(time).join(' and ')}`);
+  const any = rows.some((row) => row.times.some((t) => t.live));
+  return `${any ? 'Departures, live where said' : 'Scheduled departures'}: ${said.join('. ')}${rows.length > most ? `. And ${rows.length - most} more` : ''}`;
 }
 
 /**
@@ -154,7 +186,13 @@ export function departureSource(base, get = (url) => fetch(url).then((r) => (r.o
       index = await once(state, 'index', () => get(new URL('index.json', base)));
       const ids = [...new Set([...stops, ...(station === null ? [] : index.stations?.[station] ?? [])].map(String))];
       const records = await Promise.all(ids.map(async (id) => (await once(files, chunkOf(id, index.files), () => get(new URL(`${chunkOf(id, index.files)}.json`, base))))[id] ?? null));
-      return { index, records: records.filter(Boolean), asked: ids.length };
+      // `ids` are in step with `records`: the stops that have a record.
+      return { index, records: records.filter(Boolean), ids: ids.filter((_, i) => records[i]), asked: ids.length };
+    },
+    /** Each of those stops' trips, in step with its departures (the build's trips files), for live predictions. */
+    async trips(ids) {
+      index = await once(state, 'index', () => get(new URL('index.json', base)));
+      return Promise.all(ids.map(async (id) => (await once(files, `trips-${chunkOf(id, index.files)}`, () => get(new URL(`trips-${chunkOf(id, index.files)}.json`, base))))[id] ?? []));
     },
   };
 }
