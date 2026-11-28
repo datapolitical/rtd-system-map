@@ -1,0 +1,33 @@
+{
+  "build": "329752293fdc756a10f5d68a1c17391f4e849684",
+  "source": "evaluation-2026-11-21-f8299c0-3297522.zip, smooth-zoom-verified/inputs/data/zoom-prototype/trial.json",
+  "sha256": "d9bf918f4f9b75879f1c3710e91b561c8ec047f5d53899bd0ca0cd086b6c91d5",
+  "frames": [
+    {
+      "zoom": 12,
+      "labels": [
+        {
+          "id": "178:0",
+          "at": [
+            -105.052883,
+            39.735445
+          ],
+          "anchorSide": "bottom-right"
+        }
+      ]
+    },
+    {
+      "zoom": 12.25,
+      "labels": [
+        {
+          "id": "178:0",
+          "at": [
+            -105.052883,
+            39.735396
+          ],
+          "anchorSide": "bottom"
+        }
+      ]
+    }
+  ]
+}

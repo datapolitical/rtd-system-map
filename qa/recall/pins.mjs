@@ -243,7 +243,7 @@ const finds = PINS.map((p) => ({ ...p, px: p.px ?? p.at.map((q) => pixel(p.view,
 
 const out = {
   about: 'Faults people found on the map, pinned to the ground. qa/recall/recall.mjs scores every check against them. Add a find whenever a person or the release walk sees a fault (qa/recall/README.md).',
-  finds,
+  finds: [...finds, ...JSON.parse(fs.readFileSync(path.join(HERE, 'zoom-finds.json'), 'utf8'))],
 };
 fs.writeFileSync(path.join(HERE, 'finds.json'), `${JSON.stringify(out, null, 2)}\n`);
 console.log(`wrote ${finds.length} finds to qa/recall/finds.json`);

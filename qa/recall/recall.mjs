@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { openModel, pageSources } from '../drawn/model.mjs';
 import { runChecks } from '../checks/run.mjs';
 import { KINDS, metres, plant } from './plant.mjs';
+import { zoomRecall } from '../zoom/recall.mjs';
 import { coverageSummary, coverageMarkdown } from './summary.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -165,6 +166,12 @@ async function main() {
   const plantOn = arg('plant-on', FIXTURE_LIST.plant_on);
   const seed = arg('seed', '1');
   const per = arg('per', '5');
+  const finds = JSON.parse(fs.readFileSync(path.join(HERE, 'finds.json'), 'utf8')).finds;
+  const zoom = zoomRecall(finds, catches);
+  for (const pin of zoom) console.log(`Zoom recall: ${pin.caught ? 'caught' : 'MISSED'} ${pin.id} on ${pin.build} at z${pin.zooms.join(', ')}`);
+  if (zoom.some((pin) => !pin.caught)) process.exitCode = 1;
+  if (flag('zoom-only')) return;
+
   const results = [];
   for (const id of fixtures) {
     const extra = id === plantOn ? ['--plant', '--seed', seed, '--per', per] : [];
@@ -172,7 +179,7 @@ async function main() {
   }
 
   const yes = (b) => (b ? 'yes' : ' - ');
-  const lines = [];
+  const lines = zoom.map((pin) => `Zoom recall: ${pin.id} on ${pin.build} at z${pin.zooms.join(', ')}: ${pin.caught ? 'caught' : 'MISSED'}`);
   const say = (s = '') => { lines.push(s); console.log(s); };
   for (const r of results) {
     if (r.finds.length) {
@@ -198,7 +205,7 @@ async function main() {
 
   const outDir = path.join(HERE, 'out');
   fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(path.join(outDir, 'recall.json'), JSON.stringify({ generated: new Date().toISOString(), seed: Number(seed), per: Number(per), results }, null, 2));
+  fs.writeFileSync(path.join(outDir, 'recall.json'), JSON.stringify({ generated: new Date().toISOString(), seed: Number(seed), per: Number(per), results, zoom }, null, 2));
   fs.writeFileSync(path.join(outDir, 'recall.txt'), `${lines.join('\n')}\n`);
   const coverage = coverageSummary(results);
   const markdown = coverageMarkdown(coverage);
