@@ -3287,9 +3287,12 @@ are deferred, not ruled out. See "Open questions".
     line at the top. The whole network is there faint, and over it bright
     pulses flow out from the hub (sheets.json) along every line, one every
     360 px, moving 360 px in 2 s, each run timed by its distance from the
-    hub so they carry on from one run to the next, until the map has drawn
-    that view (or at once, if a button is pressed first); then the sketch
-    fades and the map lands on the same lines. With reduced motion the
+    hub so they carry on from one run to the next, until the map starts
+    building. From then until the map has drawn that view (or at once, if
+    a button is pressed first) the pulses fill into whole lines and the
+    sketch breathes in opacity, which the compositor runs while the map's
+    start-up holds the main thread (#261); then the sketch fades and the
+    map lands on the same lines. With reduced motion the
     lines are there whole and still. The sketch is part of the page (an inline SVG of
     about 14 KB, 4 KB compressed), so it is on screen with the first
     bytes and asks for nothing: the map's downloads have the whole
@@ -5819,6 +5822,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   same with no throttling (2.85 s, was 2.90 s); the lines on screen from
   first paint (0.4 s on slow 4G), where the picture showed at 3.1 s on
   slow 4G and 6.5 s at 0.65 Mbit/s.
+- 2026-11-28: Once the map starts building, the loading sketch's pulses
+  fill into whole lines that breathe in opacity (#261). Reason: Chris, on
+  the pulses: "it just starts to stutter right at the end before the map
+  loads". The pulses move by stroke-dashoffset, which the main thread
+  paints, and the map's start-up holds the main thread for about 2.1 s of
+  the last 2 s (5 to 7 long tasks; the pulses stopped 4 to 6 times, up to
+  0.5 to 0.8 s). Freezing them once the map was built left the sketch still
+  for 2.2 s; freezing at the map's load was too late. An opacity animation
+  on the whole sketch runs on the compositor (a Chromium trace shows it
+  composited, compositeFailed 0). Chris: "Keep going".
 
 ## Sources
 

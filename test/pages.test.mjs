@@ -114,7 +114,13 @@ test('the front page shows the rail lines drawing in, drawn in the page itself, 
   assert.doesNotMatch(html, /\/poster\//, 'the page asks for no loading picture');
   assert.match(html, /<p id="loading" role="status"><span>Loading…<\/span><\/p>/);
   // Still, with reduced motion: the lines whole, not moving (the rule matches the growing runs exactly).
-  assert.match(html, /@media \(prefers-reduced-motion: reduce\) \{[^\n]*#sketch path:not\(\.base\) \{ animation: none; \}[^\n]*#sketch path:not\(\.base\) \{ stroke-dasharray: none; \}/);
+  assert.match(html, /@media \(prefers-reduced-motion: reduce\) \{[^\n]*#sketch path:not\(\.base\), #poster\.starting #sketch \{ animation: none; \}[^\n]*#sketch path:not\(\.base\) \{ stroke-dasharray: none; \}/);
+  // Once the map starts building, the pulses give way to the whole sketch breathing in opacity, which the
+  // compositor runs through the map's start-up (#261; main.js adds "starting").
+  assert.match(html, /#poster\.starting #sketch path:not\(\.base\) \{ animation: none; stroke-dasharray: none; \}/);
+  assert.match(html, /#poster\.starting #sketch \{ will-change: opacity; animation: starting [^}]*\}/);
+  assert.match(html, /@keyframes starting \{ 50% \{ opacity: [\d.]+; \} \}/);
+  assert.match(fs.readFileSync(path.join(PUBLIC, 'js', 'sheets', 'main.js'), 'utf8'), /new maplibregl\.Map\([\s\S]*?\}\);\n[\s\S]{0,400}classList\.add\('starting'\)/, 'set right after the map is made');
   // It is of the built rail lines and opening view, when they are here (scripts/sketch.mjs; the publish check too).
   if (fs.existsSync(path.join(PUBLIC, 'data', 'routes.geojson'))) {
     const { sketch } = await import('../scripts/sketch.mjs');
