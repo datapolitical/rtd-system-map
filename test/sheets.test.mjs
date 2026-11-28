@@ -261,7 +261,9 @@ test('a turnaround too small to read as a ring is drawn as the point its streets
 });
 
 // The same, on the third sheet, where a short walk is many pixels.
-const near = SHEETS.find((s) => s.id === 3);
+// The near (two-carriageway) street drawing path, used from zoom 16 (#81); the tests keep the
+// kind zoom-14 pixel scale for their distances. Sheet 3 itself now draws the joined graph (#240).
+const near = { ...SHEETS.find((s) => s.id === 3), streets: 'near' };
 const origin3 = toPx([-105, 39.75], near.zoom);
 const at3 = (x, y) => toLonLat([origin3[0] + x, origin3[1] + y], near.zoom);
 const hall = (id, corners) => ({ type: 'Feature', properties: { id, name: `Hall ${id}` }, geometry: { type: 'Polygon', coordinates: [[...corners, corners[0]]] } });
