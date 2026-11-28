@@ -74,3 +74,55 @@ export function groundDraws(maxzoom) {
   }
   return (z, layer, feature) => draws.some((d) => d.layer === layer && d.from < (z === maxzoom ? 24 : z + 1) && d.to > z && d.filter({ zoom: z }, feature));
 }
+
+/**
+ * What the build reads of the ground beyond what the style draws, for its own
+ * lettering (#242: areas and rivers lettered the way printed maps do). The
+ * pack keeps these even though no style layer reads them yet, so the build
+ * can place their names; the style's needs alone would drop them the moment
+ * the style stops reading names (docs/zoom-consistency-proposal.md, §4, "the
+ * build's own needs have to be declared").
+ *
+ * - Rivers carry their name on the `waterway` line the style already draws:
+ *   the pack keeps only `class` today, and drops `name`.
+ * - Lakes carry their name on OpenMapTiles' `water_name` layer, a centreline
+ *   (large lakes) or a point (small ones) the schema makes only for the
+ *   water bodies worth labelling. The pack keeps no part of it today.
+ *
+ * The names themselves come from OpenStreetMap through OpenMapTiles, in the
+ * same planet file scripts/basemap.mjs already reads: nothing new to follow.
+ */
+export function groundBuildNeeds() {
+  return {
+    waterway: ['name'],
+    water_name: ['name', 'class', 'intermittent'],
+  };
+}
+
+/**
+ * Whether the build keeps a ground feature the style does not draw. It only
+ * covers the layers `groundBuildNeeds` adds beyond the style; a feature the
+ * style draws is kept by `groundDraws` as before. A water body is kept only
+ * if it is named, so the pack carries the labels the build can place and
+ * nothing else.
+ */
+export function groundBuildDraws() {
+  return (z, layer, feature) =>
+    layer === 'water_name' && feature.properties.name != null && feature.properties.name !== '';
+}
+
+/**
+ * The union of two or more layer→fields needs, as scripts/basemap.mjs trims
+ * by: one entry per layer, its fields merged without repeats. `groundNeeds`
+ * and `groundBuildNeeds` both name `waterway`, and the style's `class` must
+ * stay beside the build's `name`.
+ */
+export function mergeNeeds(...maps) {
+  const out = {};
+  for (const map of maps) {
+    for (const [layer, fields] of Object.entries(map)) {
+      out[layer] = [...new Set([...(out[layer] ?? []), ...fields])];
+    }
+  }
+  return out;
+}
