@@ -2143,6 +2143,346 @@
       "confidence": "clear"
     },
     {
+      "id": "154-prototype-bus-over-rail",
+      "issue": 154,
+      "place": "Zoom preview, rail approaches to the hub",
+      "said": "The closer bus drawing paints pale rims across the trial rail lines at zoom 14, leaving visible cuts.",
+      "kind": "bus-over-rail",
+      "caught_by": [
+        "prototype-layer-order"
+      ],
+      "seen_on": [
+        "0263589"
+      ],
+      "theme": "light",
+      "zoom": 14,
+      "points": [
+        [
+          -104.99682182006836,
+          39.76050139387517
+        ]
+      ],
+      "radius_px": 80,
+      "capture": {
+        "view": "14/39.7542/-105.0018",
+        "size": [
+          402,
+          874
+        ],
+        "px": [
+          [
+            317,
+            246
+          ]
+        ]
+      },
+      "found_by": "Codex, inspecting Chromium captures, 2026-11-20",
+      "pinned_by": "Codex, isolated /zoom/ experiment, 2026-11-20",
+      "confidence": "clear",
+      "note": "Prototype only. The failing layer order is frozen in prototype-layer-order.json and checked by test/zoom-prototype.test.mjs. Complete local static snapshot: qa/.scratch/zoom-prototype/broken-order-site. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-tapered-pack",
+      "issue": 154,
+      "place": "Shared commuter-rail approach to Union Station",
+      "said": "The A, B, G and N lines get tighter as they move away from Union Station.",
+      "kind": "uneven-gap",
+      "caught_by": [
+        "prototype-pack-spacing"
+      ],
+      "seen_on": [
+        "ce882eb"
+      ],
+      "theme": "light",
+      "zoom": 14,
+      "points": [
+        [
+          -104.9968,
+          39.7567
+        ]
+      ],
+      "radius_px": 100,
+      "capture": {
+        "view": "14/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris, reviewing the prototype images, 2026-11-20",
+      "pinned_by": "Codex, measured against the rendered rail geometry, 2026-11-20",
+      "confidence": "clear",
+      "note": "B\u2013N centre spacing reaches 2.68 px while strokes are 5.6 px and target pitch is 7.6 px. Frozen local-pixel geometry: prototype-spacing.json. Full static snapshot: qa/.scratch/zoom-spacing/before-site. The shared-spine correction passes 33 pair/zoom checks over 11 zooms; zoom-14 spacings are 7.58\u20137.62 px. Physical phone review is pending."
+    },
+    {
+      "id": "154-prototype-bus-labels-vanish",
+      "issue": 154,
+      "place": "Zoom preview, bus streets around Union Station",
+      "said": "Bus route labels disappear instead of fading while zooming from 13 toward 14; drawn labels in the view go 4, 3, 2, 0, 0.",
+      "kind": "label-pop",
+      "caught_by": [
+        "prototype-bus-drawings"
+      ],
+      "seen_on": [
+        "9dfd5b5"
+      ],
+      "theme": "light",
+      "zoom": 13.5,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "13.5/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris, on the names preview, 2026-11-24",
+      "pinned_by": "Claude, counting rendered bus labels at quarter zooms, 2026-11-24",
+      "confidence": "clear",
+      "note": "Prototype only. MapLibre lays line labels out at floor(zoom), so the zoom-14 drawing's labels did not fit from 13 to 14, and collision losers were removed with no fade. Checked by the bus-drawing tests in test/zoom-prototype.test.mjs. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-route-lists-reappear",
+      "issue": 154,
+      "place": "Zoom preview, bus streets around 19th St and Curtis, downtown",
+      "said": "Route lists such as \"FF, MetroRide, RX\" on 19th St appear, disappear and reappear while zooming from 14.95 to 16, because each bus drawing spaced its lists afresh and only a fifth to a third stayed through each zoom step.",
+      "kind": "label-pop",
+      "caught_by": [
+        "prototype-label-carry"
+      ],
+      "seen_on": [
+        "db9bd1d"
+      ],
+      "theme": "dark",
+      "zoom": 15.8,
+      "points": [
+        [
+          -104.9905,
+          39.7488
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "15.8/39.7488/-104.9905",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris, on iPhone screenshots of /v4/zoom/ at 16, 15.8 and 14.95, 2026-11-26",
+      "pinned_by": "Claude, sweeping rendered labels from 12 to 16 by tenths of a zoom, 2026-11-26",
+      "confidence": "clear",
+      "note": "Prototype only. Checked by the carry-over test in test/sheets.test.mjs (a list the drawing one zoom out set keeps its place). Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-chip-order",
+      "issue": 154,
+      "place": "Zoom preview, Union Station's name",
+      "said": "Union Station's route chips read A B G N E W C in some drawings and A B G N C E W in others, so the row reshuffles while zooming.",
+      "kind": "chip-order",
+      "caught_by": [
+        "prototype-chip-order"
+      ],
+      "seen_on": [
+        "0263589"
+      ],
+      "theme": "light",
+      "zoom": 13,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 120,
+      "capture": {
+        "view": "13/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Codex, reviewing the first zoom preview, 2026-11-20 (fix register RTD-004)",
+      "pinned_by": "Claude, from the first preview's own trial.json (qa/recall/prototype-chip-order.json), 2026-11-25",
+      "confidence": "clear",
+      "note": "Prototype only. Checked by the chip-order test in test/zoom-prototype.test.mjs (qa/lib/zoom-labels.mjs), which must fail on the pinned drawings and on a planted swap. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-controls-cover",
+      "issue": 154,
+      "place": "Zoom preview, the controls over the map at Union Station",
+      "said": "The preview's two panels covered 23% of the phone screen and hid nine names and line letters at zoom 12, among them the C letter.",
+      "kind": "controls-cover",
+      "caught_by": [
+        "prototype-controls-cover"
+      ],
+      "seen_on": [
+        "0263589"
+      ],
+      "theme": "light",
+      "zoom": 12,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 400,
+      "capture": {
+        "view": "12/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris and Codex, on the first zoom preview, 2026-11-20 (fix register RTD-005)",
+      "pinned_by": "Claude, measuring the first preview's panels with qa/lib/zoom-cover.mjs (qa/recall/prototype-controls.json), 2026-11-25",
+      "confidence": "clear",
+      "note": "Prototype only. Checked by the controls test in test/zoom-prototype.test.mjs and by npm run check:zoom at the hub camera. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-numbers-on-lettering",
+      "issue": 154,
+      "place": "Zoom preview, Union Station and its neighbours, zooms 12 to 14",
+      "said": "Bus route numbers print over the hub's lettering: at 12 the 32 runs into Union Station's W chip and platform bar and 10, 23 sits on Auraria West Campus; at 13 the 1, 10, 3 crosses Empower Field at Mile High. Measured 14 to 128 pixels of number ink within 2 px of station lettering at every quarter zoom from 12 to 13.75.",
+      "kind": "numbers-on-lettering",
+      "caught_by": [
+        "prototype-lettering-order"
+      ],
+      "seen_on": [
+        "0c522dd",
+        "486bd94"
+      ],
+      "theme": "light",
+      "zoom": 12,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "12/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Fix register RTD-006, from image review of the zoom previews, 2026-11-21",
+      "pinned_by": "Claude, measuring ink overlap with qa/zoom-crowding-browser.mjs and freezing the style's collision settings (qa/recall/prototype-lettering.json), 2026-11-25",
+      "confidence": "clear",
+      "note": "Prototype only. The trial's station names and line letters skipped symbol placement, so MapLibre placed bus numbers over them; the sheets do not do this. Checked by the lettering test in test/zoom-prototype.test.mjs; measured in the browser by qa/zoom-crowding-browser.mjs. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-real-phone-jank",
+      "issue": 154,
+      "place": "Zoom preview, Union Station, opening and pinching 12 to 16 and back",
+      "said": "Chris: the trial is \"pretty rough in like six different ways\" on his phone; on a real iPhone 17 Pro he confirmed the four the video showed: the opening builds up in six visible steps, the two rail drawings show at once near 14 (doubled, striped lines and ghost line letters), names and the street grid go half-clear while zooming, and Union Station's name runs into its route chips near 13 during a pinch.",
+      "kind": "real-phone-jank",
+      "caught_by": [
+        "prototype-name-placement",
+        "prototype-rail-handover",
+        "prototype-bus-visibility"
+      ],
+      "seen_on": [
+        "4525371"
+      ],
+      "theme": "dark",
+      "zoom": 13,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "12/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Chris on his phone, 2026-11-25; shown on a real iPhone 17 Pro through AWS Device Farm (qa/devicefarm/zoom_run.py) and confirmed by Chris",
+      "pinned_by": "Claude, from the Device Farm session video and frame log, 2026-11-25",
+      "confidence": "clear",
+      "note": "Prototype only, and only visible in motion on a real phone: headless frames at rest looked right. The unit tests in test/zoom-prototype.test.mjs check the three causes in code (names placed on the map, rail handover at once, bus layers never hidden); the loading steps and the look in motion are checked by a Device Farm run. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
+      "id": "154-prototype-fast-pinch-blank",
+      "issue": 154,
+      "place": "Zoom preview, Union Station, a fast pinch from 14 to 16",
+      "said": "On a real iPhone 17 Pro, pinching from 14 to 16 in 0.6 s left the streets white and the bus lines doubled and dashed for about 0.3 s, in the build that fixed the four faults Chris confirmed and in the build before it.",
+      "kind": "real-phone-jank",
+      "caught_by": [
+        "prototype-bus-handover-waits",
+        "prototype-ground-bands"
+      ],
+      "seen_on": [
+        "8e0ed4a"
+      ],
+      "theme": "light",
+      "zoom": 15.5,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 200,
+      "capture": {
+        "view": "14/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Claude, from the before/after Device Farm videos, 2026-11-25",
+      "pinned_by": "Claude, 2026-11-26",
+      "confidence": "clear",
+      "note": "Three causes, seen in a frame log of a throttled headless pinch (qa/.scratch/flicker): the page stopped updating until every source had loaded, so the zoom-14 bus drawing hung on and then cross-faded with the next, whose streets lie a few pixels apart; the base map's zoom-15 roads and buildings were missing from the zoom-14 tiles MapLibre stands in with while loading; and the zoom-16 bus drawing had nothing to draw until its tiles parsed. The unit tests check the handover (instant, waiting until the next drawing can draw) and the ground bands; the look in motion needs a Device Farm run."
+    },
+    {
+      "id": "154-prototype-credit-under-controls",
+      "issue": 154,
+      "place": "Zoom preview, the map credit at the bottom right, under the zoom row",
+      "said": "The map credit lay half under the zoom row, and its \"i\" showed four times, two of them half off the bottom of the screen, open and closed, in both themes.",
+      "kind": "credit-under-controls",
+      "caught_by": [
+        "prototype-credit"
+      ],
+      "seen_on": [
+        "3a14dcf"
+      ],
+      "theme": "light",
+      "zoom": 12,
+      "points": [
+        [
+          -105.00067,
+          39.7536
+        ]
+      ],
+      "radius_px": 400,
+      "capture": {
+        "view": "12/39.7536/-105.00067",
+        "size": [
+          402,
+          874
+        ]
+      },
+      "found_by": "Claude, on the captures of the zoom-154-merge branch preview, 2026-11-27; Chris asked for it to be fixed",
+      "pinned_by": "Claude, measuring the preview with qa/lib/zoom-cover.mjs creditInPage (qa/recall/prototype-credit.json), 2026-11-27",
+      "confidence": "clear",
+      "note": "Prototype only. public/css/zoom.css styled every details and summary for the page's ? panel, and MapLibre's credit is a details with a summary button. Checked by the credit test in test/zoom-prototype.test.mjs and by npm run check:zoom in both themes, open and closed. Classic recall fixtures do not run the /zoom/ page."
+    },
+    {
       "id": "210-taps-lost-during-wait",
       "issue": 210,
       "place": "The + and - buttons and keys, any view; most often in the first seconds of a visit, on the opening sheet",

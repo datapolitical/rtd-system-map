@@ -1,0 +1,636 @@
+{
+  "schema_version": 1,
+  "title": "RTD map fixes",
+  "updated_at": "2026-11-27T00:00:00.000Z",
+  "map_commit": "89ab0413167cb5e558558f56c915aeb4090d5ab1",
+  "repository": "datapolitical/rtd-system-map",
+  "tracking_note": "GitHub Issues remain the canonical work tracker. These linked findings supplement the imported open issues. New findings have not been written back to GitHub: the connected integration rejected issue writes with HTTP 403.",
+  "priority_note": "Next and Later are a proposed order for the local findings; existing GitHub milestones and done-when criteria are preserved.",
+  "status_definitions": {
+    "open": "Work remains",
+    "needs-check": "Reproduction or measurement remains",
+    "fixed-preview": "Verified in a local preview; not released"
+  },
+  "preview_url": "/rtd-zoom-prototype-154-spacing/zoom/#14/39.7536/-105.00067",
+  "review_url": "/shots/",
+  "evidence": [
+    {
+      "id": "hub-12-99",
+      "label": "Corrected hub at zoom 12.99, light",
+      "path": "qa/.scratch/zoom-spacing/browser/light-hub-12.99.png",
+      "commit": "486bd94",
+      "type": "image"
+    },
+    {
+      "id": "hub-14",
+      "label": "Corrected hub at zoom 14, light",
+      "path": "qa/.scratch/zoom-spacing/browser/light-hub-14.png",
+      "commit": "486bd94",
+      "type": "image"
+    },
+    {
+      "id": "terminal-14",
+      "label": "Corrected Eastlake terminal at zoom 14, light",
+      "path": "qa/.scratch/zoom-spacing/browser/light-terminal-14.png",
+      "commit": "486bd94",
+      "type": "image"
+    },
+    {
+      "id": "before-hub-14",
+      "label": "Before shared-spine fix, zoom 14, light",
+      "path": "qa/.scratch/fix-register-input/before-light-14.png",
+      "commit": "ce882eb",
+      "type": "image"
+    },
+    {
+      "id": "drawn-hub-14",
+      "label": "Earlier half-step comparison, zoom 14, light",
+      "path": "qa/.scratch/fix-register-input/drawn-light-14.png",
+      "commit": "ce882eb",
+      "type": "image"
+    },
+    {
+      "id": "spacing-checks",
+      "label": "Spacing and endpoint measurement receipt",
+      "path": "qa/fixes/spacing-evidence.json",
+      "commit": "486bd94",
+      "type": "json"
+    },
+    {
+      "id": "trial-notes",
+      "label": "Trial implementation and validation notes",
+      "path": "docs/zoom-prototype.md",
+      "commit": "c233e0f",
+      "type": "text"
+    },
+    {
+      "id": "c233-light-hub-13",
+      "label": "Union Station at zoom 13, light, after planned names",
+      "path": "qa/.scratch/fix-register-input/c233e0f/light-13.png",
+      "commit": "c233e0f",
+      "type": "image"
+    },
+    {
+      "id": "c233-light-hub-14",
+      "label": "Union Station at zoom 14, light, after planned names",
+      "path": "qa/.scratch/fix-register-input/c233e0f/light-14.png",
+      "commit": "c233e0f",
+      "type": "image"
+    },
+    {
+      "id": "c233-dark-hub-13",
+      "label": "Union Station at zoom 13, dark, after planned names",
+      "path": "qa/.scratch/fix-register-input/c233e0f/dark-13.png",
+      "commit": "c233e0f",
+      "type": "image"
+    },
+    {
+      "id": "c233-dark-hub-14",
+      "label": "Union Station at zoom 14, dark, after planned names",
+      "path": "qa/.scratch/fix-register-input/c233e0f/dark-14.png",
+      "commit": "c233e0f",
+      "type": "image"
+    },
+    {
+      "id": "bus13-handover-light",
+      "label": "Bus handover at zoom 13, light, 120 ms and 400 ms",
+      "path": "qa/.scratch/names154/bus13-light-400.png",
+      "commit": "9dfd5b5",
+      "type": "image"
+    },
+    {
+      "id": "bus13-handover-dark",
+      "label": "Bus handover at zoom 13, dark, 400 ms",
+      "path": "qa/.scratch/names154/bus13-dark-400.png",
+      "commit": "9dfd5b5",
+      "type": "image"
+    },
+    {
+      "id": "crowd-before-light-12",
+      "label": "Hub at zoom 12 before RTD-006, light (128 px shared)",
+      "path": "qa/.scratch/zoom16/crowding-before/light-hub-12.png",
+      "commit": "89ab041",
+      "type": "image"
+    },
+    {
+      "id": "crowd-after-light-12",
+      "label": "Hub at zoom 12 after RTD-006, light",
+      "path": "qa/.scratch/zoom16/crowding-final/light-hub-12.png",
+      "commit": "89ab041",
+      "type": "image"
+    },
+    {
+      "id": "crowd-after-light-13.25",
+      "label": "Hub at zoom 13.25 after RTD-006, light (the 1 px left)",
+      "path": "qa/.scratch/zoom16/crowding-final/light-hub-13.25.png",
+      "commit": "89ab041",
+      "type": "image"
+    },
+    {
+      "id": "crowd-after-dark-13",
+      "label": "Hub at zoom 13 after RTD-006, dark",
+      "path": "qa/.scratch/zoom16/crowding-final/dark-hub-13.png",
+      "commit": "89ab041",
+      "type": "image"
+    },
+    {
+      "id": "crowd-report",
+      "label": "Crowding measured at 17 quarter zooms, light and dark",
+      "path": "qa/.scratch/zoom16/crowding-final/report.json",
+      "commit": "89ab041",
+      "type": "data"
+    },
+    {
+      "id": "credit-before-open",
+      "label": "Map credit under the zoom row, two \"i\" icons, as it loads (light)",
+      "path": "qa/.scratch/zoom-224/credit-before-light-open.png",
+      "commit": "3a14dcf",
+      "type": "image"
+    },
+    {
+      "id": "credit-before-closed",
+      "label": "Map credit closed: four \"i\" icons, half off the screen (light)",
+      "path": "qa/.scratch/zoom-224/credit-before-light-closed.png",
+      "commit": "3a14dcf",
+      "type": "image"
+    },
+    {
+      "id": "credit-after-open",
+      "label": "Map credit above the zoom row, one \"i\", on the branch preview (light)",
+      "path": "qa/.scratch/zoom-224/credit-preview-light-open.png",
+      "commit": "e8f29da",
+      "type": "image"
+    },
+    {
+      "id": "credit-after-closed",
+      "label": "Map credit closed: one \"i\" above the zoom row, on the branch preview (dark)",
+      "path": "qa/.scratch/zoom-224/credit-preview-dark-closed.png",
+      "commit": "e8f29da",
+      "type": "image"
+    },
+    {
+      "id": "credit-white-dark",
+      "label": "The credit white on the dark map, as it loads (dark)",
+      "path": "qa/.scratch/zoom-224/theme-before-dark-open.png",
+      "commit": "e8f29da",
+      "type": "image"
+    },
+    {
+      "id": "credit-below-zoom-dark",
+      "label": "The credit's \"i\" below the word Zoom, dark, on the branch preview",
+      "path": "qa/.scratch/zoom-224/preview-below-dark-start.png",
+      "commit": "a46002d",
+      "type": "image"
+    },
+    {
+      "id": "credit-below-zoom-open-dark",
+      "label": "The credit opened, dark, on the branch preview",
+      "path": "qa/.scratch/zoom-224/preview-below-dark-opened.png",
+      "commit": "a46002d",
+      "type": "image"
+    }
+  ],
+  "findings": [
+    {
+      "id": "RTD-001",
+      "title": "A/B/G/N spacing tightens away from Union Station",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · smooth spacing · 12–14",
+      "issues": [
+        154,
+        159
+      ],
+      "observation": "Chris reported the lines tightening away from the station. On ce882eb, B–N centre spacing reached 2.68 px against a 7.6 px target; 5.6 px strokes overlapped.",
+      "next": "Keep the regression checks and inspect the corrected approach on a physical phone before closing the spacing review.",
+      "done_when": "Adjacent lines maintain the intended gap through the approach, bends and joins in both themes. The frozen failing build is detected, the corrected build passes and the phone review is recorded.",
+      "evidence": [
+        "before-hub-14",
+        "hub-14",
+        "spacing-checks"
+      ],
+      "verification": "486bd94 passes 33 pair/zoom cases over 11 zooms from 12 to 14, within 0.25 px of target. At zoom 14 the measured centres are 7.58–7.62 px apart. Physical phone review remains open.",
+      "fixed_commit": "486bd9477eabd29bee51b65a3cd3e44e0efa1de3",
+      "review_url": "/shots/",
+      "review_id": "r-20261120-132837-17de5c"
+    },
+    {
+      "id": "RTD-002",
+      "title": "Rail letters are missing from the visible line segments",
+      "kind": "defect",
+      "status": "open",
+      "priority": "later",
+      "scope": "Zoom trial · Union Station · zoom 14",
+      "issues": [
+        154,
+        156,
+        159
+      ],
+      "observation": "On the one remaining renderer, letters are placed outward from zoom 12 and stay put. At the Union Station camera, B, C, E and W carry letters at 13 and 14 in both themes. A, G and N leave that view without one: they share their pack for their whole length on screen, and the sheets' rule puts a letter only where a line reads on its own. Today's sheets behave the same.",
+      "next": "Hold a letter at the screen edge for a line that crosses the view without one (#31).",
+      "done_when": "Every visible rail line remains identifiable at the comparison cameras and fractional zooms in both themes, with consistent letter visibility across renderer modes.",
+      "evidence": [
+        "c233-light-hub-14",
+        "c233-dark-hub-13",
+        "trial-notes"
+      ],
+      "verification": "Build c233e0f: light and dark captures at 12, 13 and 14 inspected at -105.0015, 39.7536, 402x655. 38 letters at 12, 129 at 14 (report.json letters)."
+    },
+    {
+      "id": "RTD-003",
+      "title": "Union Station name moves away from its station marks",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · Union Station · 12.99–14",
+      "issues": [
+        154,
+        156
+      ],
+      "observation": "The name holds one side from 12 to 13.75 and moves once, at 14, where light rail runs through its old place (26 rail cells more than the clearest place). The move and its reason are in report.json.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
+      "done_when": "The name and chips read as belonging to the station at every sampled zoom and move only when an identified obstruction requires it, in both themes.",
+      "evidence": [
+        "c233-light-hub-13",
+        "c233-light-hub-14",
+        "c233-dark-hub-14"
+      ],
+      "verification": "Build c233e0f: report.json comparisons and captures at 12, 13, 14 in both themes.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
+    },
+    {
+      "id": "RTD-004",
+      "title": "Union Station route chips change order between drawings",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · Union Station chip row",
+      "issues": [
+        154,
+        156
+      ],
+      "observation": "A name keeps the chip order it had one zoom out. Union Station reads A B G N C E W at every zoom.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
+      "done_when": "The same station's chip order stays consistent while zooming, unless its served routes change in the source data.",
+      "evidence": [
+        "c233-light-hub-13",
+        "c233-light-hub-14",
+        "c233-dark-hub-13"
+      ],
+      "verification": "Build 89ab041, 12-16: the check records every \"route before route\" pair for each station name, and no pair is seen both ways. Union Station splits into two names at 14.75 (rail and transit hall), each keeping the shared order.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
+    },
+    {
+      "id": "RTD-005",
+      "title": "Preview controls cover map labels and too much of the view",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · phone layout",
+      "issues": [
+        154,
+        158,
+        159
+      ],
+      "observation": "Controls are now a small top pill (zoom, notes, theme) and one bottom row (-, slider, +, play). The C letter that the old panel hid is clear at 13.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
+      "done_when": "At the review cameras, controls leave a useful map view and no required letter or name is concealed by them; verify touch operation and both themes.",
+      "evidence": [
+        "c233-dark-hub-13",
+        "c233-light-hub-14"
+      ],
+      "verification": "Build c233e0f: npm run check:zoom passed in light and dark (controls, theme change, selection, reload, errors); captures inspected.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
+    },
+    {
+      "id": "RTD-006",
+      "title": "Bus route lists crowd Union Station",
+      "kind": "visual-quality",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · hub labels",
+      "issues": [
+        156,
+        159
+      ],
+      "observation": "Bus numbers printed over the Union Station name, its chips and the station bars, at 12 to 13.75 (light: 491 px of shared ink across those zooms, 128 px at 12).",
+      "next": "Phone check of the trial; recheck when the production zoom refactor (#155) lands.",
+      "done_when": "Bus lists, rail letters, station marks and the station name remain readable as separate information, with no measured text collision.",
+      "evidence": [
+        "crowd-before-light-12",
+        "crowd-after-light-12",
+        "crowd-after-light-13.25",
+        "crowd-after-dark-13",
+        "crowd-report"
+      ],
+      "verification": "Build 89ab041, hub view 402x874, 17 quarter zooms 12-16 (qa/zoom-crowding-browser.mjs): shared ink 1 px in light (13.25, \"15, 19\" within 2 px of a bar end), 0 in dark. Lettering-order detector pinned (154-prototype-numbers-on-lettering) and caught on 0c522dd and 486bd94.",
+      "fixed_commit": "89ab0413167cb5e558558f56c915aeb4090d5ab1"
+    },
+    {
+      "id": "RTD-007",
+      "title": "Station names still change sides while zooming",
+      "kind": "transition-work",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · station names · 12–14",
+      "issues": [
+        154,
+        156,
+        159
+      ],
+      "observation": "Names are placed offline (Been, Daiches and Yap 2006): a plan over all nine drawings picks each name's run of sides with the fewest changes among sides that can be held. Side changes 133 fresh -> 39 -> 20 -> 6, the plan's minimum; 0 rewordings, 0 chip-order changes, 0 names lost, 0 names crossing rail or letters. Five moves are for bus streets and one (Union Station at 14) for rail, each with its reason in report.json.",
+      "next": "Carry route lists and street names with the same rule under #156 (Colorado meets the 40, 46 list at 14).",
+      "done_when": "Every remaining label movement has an accepted reason and no name vanishes while zooming in; report counts for all neighbouring drawings required by #156.",
+      "evidence": [
+        "trial-notes",
+        "c233-light-hub-14"
+      ],
+      "verification": "Build c233e0f: report.json totals, offPlan empty, onRail stable 0 with planted controls; sheets 0-3 names identical to the old module; 524 tests passed.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
+    },
+    {
+      "id": "RTD-008",
+      "title": "The renderer comparison changes labels and station marks too",
+      "kind": "review-quality",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · comparison modes",
+      "issues": [
+        154
+      ],
+      "observation": "The half-step comparison is removed. Smooth spacing is recommended in docs/zoom-prototype.md with its evidence and limits; there is one model for rail, bars, letters and names.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
+      "done_when": "The phone comparison supports a rail-spacing decision without unexplained label or station-mark changes between modes.",
+      "evidence": [
+        "trial-notes",
+        "spacing-checks"
+      ],
+      "verification": "Build c233e0f: check:zoom-spacing 33/33 pairs and 198/198 terminal ends; browser spacing check passed in both themes.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
+    },
+    {
+      "id": "RTD-009",
+      "title": "Bus street detail changes abruptly at zoom 13",
+      "kind": "transition-work",
+      "status": "open",
+      "priority": "later",
+      "scope": "Zoom trial · wider to closer street drawing",
+      "issues": [
+        155,
+        157,
+        158
+      ],
+      "observation": "The existing wider and closer bus drawings switch at 13. The trial intentionally exposes that change instead of providing a completed transition.",
+      "next": "Build the intermediate drawing and define a handover that preserves route identity and street topology. Measure the current discontinuity before choosing treatment.",
+      "done_when": "Route continuity and readability survive the street-detail handover in both themes and with a selected route.",
+      "evidence": [
+        "trial-notes"
+      ],
+      "verification": "The trial's deliberate handover is documented. The current corrected preview has no production handover sign-off."
+    },
+    {
+      "id": "RTD-010",
+      "title": "Selected bus routes need label clearance checks",
+      "kind": "verification",
+      "status": "needs-check",
+      "priority": "later",
+      "scope": "Zoom trial · selected bus routes",
+      "issues": [
+        156,
+        158,
+        162
+      ],
+      "observation": "The normal picked-bus alternative name placements are excluded from the station-name experiment. Selection working through zoom does not verify clearance between a selected route and names.",
+      "next": "Restore or replace those alternatives for the continuous map and run route/label clearance checks, including crowded hubs.",
+      "done_when": "Selected routes remain identifiable and clear of station names through zoom and theme changes, with reported exceptions reviewed.",
+      "evidence": [
+        "trial-notes"
+      ],
+      "verification": "Focused selection/control checks passed. Full picked-route label clearance was not tested."
+    },
+    {
+      "id": "RTD-011",
+      "title": "Physical phone performance is unmeasured",
+      "kind": "verification",
+      "status": "needs-check",
+      "priority": "next",
+      "scope": "Zoom trial · corrected shared-spine renderer",
+      "issues": [
+        154,
+        159,
+        160
+      ],
+      "observation": "The initial software-rendered Chromium sweep was slow: median frame intervals 150–217 ms. Those results do not measure a physical phone or the corrected geometry.",
+      "next": "Measure the corrected preview on a physical phone before selecting the renderer, including animation, pinch, load time and memory pressure.",
+      "done_when": "Record device, browser, build, zoom range, load/download measurements and observed responsiveness against the project's performance criteria.",
+      "evidence": [
+        "trial-notes"
+      ],
+      "verification": "No physical-phone performance pass is recorded."
+    },
+    {
+      "id": "RTD-012",
+      "title": "The trial loads all drawings together",
+      "kind": "transition-work",
+      "status": "open",
+      "priority": "later",
+      "scope": "Production continuous-map loading",
+      "issues": [
+        158,
+        159
+      ],
+      "observation": "The experiment bundles the trial (two rail drawings, names and attachments for 12-16) at about 167 KB gzipped, with the rails thinned to 0.1 px, and loads five bus drawings. It is an experimental bundle.",
+      "next": "Implement current and neighbouring drawing loading with cancellation, caching and bounded retention for production.",
+      "done_when": "Phone measurements show acceptable first display, zoom handover and retained memory; the normal sheets remain intact until the production transition is approved.",
+      "evidence": [
+        "trial-notes"
+      ],
+      "verification": "Build 89ab041: trial.json 1.24 MB raw, 167 KB gzipped (report.json bytes). Production loading strategy has not been implemented."
+    },
+    {
+      "id": "RTD-013",
+      "title": "Continuous zoom covers only 12 through 16",
+      "kind": "transition-work",
+      "status": "open",
+      "priority": "later",
+      "scope": "Full zoomable map",
+      "issues": [
+        129,
+        155,
+        156,
+        157,
+        158,
+        160,
+        161
+      ],
+      "observation": "The isolated prototype covers 12-16. It does not complete the full-range map, the zooms below 12 or final band-by-band review.",
+      "next": "Finish the #154 experiment, then follow the existing #129 order. #155 and later implementation wait for v1.0 to close under the current plan.",
+      "done_when": "The corresponding GitHub issues meet their existing done-when criteria across the full supported range, with phone review and release sign-off.",
+      "evidence": [
+        "trial-notes"
+      ],
+      "verification": "The preview is local branch work; it is not merged production v2."
+    },
+    {
+      "id": "RTD-014",
+      "title": "Passing render checks missed visible map defects",
+      "kind": "verification",
+      "status": "open",
+      "priority": "next",
+      "scope": "Visual QA and regression coverage",
+      "issues": [
+        159
+      ],
+      "observation": "Earlier render/control checks passed while the published images still showed the tapered pack and other visual problems. Feature counts and no browser errors are insufficient visual acceptance.",
+      "next": "Pin reproducible missing-letter, anchor/order and control-occlusion failures on their observed builds; add checks that demonstrably catch them and perform a visual pass.",
+      "done_when": "Each confirmed visual failure has preserved evidence and a detector that fails on its bad build, with clear scope and a reviewed corrected capture.",
+      "evidence": [
+        "before-hub-14",
+        "hub-12-99",
+        "spacing-checks"
+      ],
+      "verification": "The taper and layer-order regressions are pinned and detected. Coverage for the other current findings remains incomplete."
+    },
+    {
+      "id": "RTD-015",
+      "title": "Bus layers cut pale slashes across rail",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · layer ordering",
+      "issues": [
+        154,
+        159
+      ],
+      "observation": "The first prototype placed the closer bus drawing above rail. At zoom 14 its pale rims visibly cut the rail lines.",
+      "next": "Retain the frozen bad layer order and regression check when changing the comparison style.",
+      "done_when": "Base bus layers stay below rail, the frozen faulty ordering is caught, and corrected views show uninterrupted rail.",
+      "evidence": [
+        "trial-notes"
+      ],
+      "verification": "Fixed locally in ce882eb; qa/recall/prototype-layer-order.json preserves the bad ordering from 0263589. This does not close all of #154.",
+      "fixed_commit": "ce882eb88f41c49722dcf390e4dd4d61a69f83a5"
+    },
+    {
+      "id": "RTD-016",
+      "title": "Shared-spine curves could extend past terminal bars",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · rail terminals",
+      "issues": [
+        154,
+        159
+      ],
+      "observation": "An unpublished shared-spine candidate overshot station bars. The correction fits the terminal curves to the bars.",
+      "next": "Retain the endpoint detector and terminal captures while adjusting shared-spine geometry.",
+      "done_when": "Terminal ends stay within the accepted bar tolerance across the sampled zooms, and the detector catches an intentionally overshooting fixture.",
+      "evidence": [
+        "spacing-checks",
+        "terminal-14"
+      ],
+      "verification": "486bd94 passes 198 endpoint/zoom checks over 11 zooms; maximum distance is 0.5443 px against a 1 px limit. Light/dark terminal captures were inspected.",
+      "fixed_commit": "486bd9477eabd29bee51b65a3cd3e44e0efa1de3"
+    },
+    {
+      "id": "RTD-017",
+      "title": "Half-step fallback has no between-drawing spacing correction",
+      "kind": "transition-work",
+      "status": "fixed-preview",
+      "priority": "later",
+      "scope": "Zoom trial · fallback comparison",
+      "issues": [
+        154
+      ],
+      "observation": "The fallback was not pursued. Its limits (drift between drawings, a jump at each handover, different letters and marks per drawing) are recorded in the rail-spacing recommendation.",
+      "next": "None; recheck only if smooth spacing fails the phone check (RTD-011).",
+      "done_when": "Either the fallback is completed and reviewed, or its limitations are explicitly recorded in the renderer choice under #154.",
+      "evidence": [
+        "trial-notes"
+      ],
+      "verification": "Build c233e0f: recorded in docs/zoom-prototype.md, 'Rail spacing: recommendation'.",
+      "fixed_commit": "c233e0f583dee4120a0fbc9f492726502d0f99e4"
+    },
+    {
+      "id": "RTD-018",
+      "title": "Bus route labels vanish instead of fading between 13 and 14",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · bus labels",
+      "issues": [
+        154
+      ],
+      "observation": "MapLibre placed the zoom-14 bus drawing's labels at zoom 13, where most did not fit; labels that lost a collision were removed at once.",
+      "next": "Phone check of the handover at 13 and 14 with #154's other preview checks.",
+      "done_when": "Bus labels stay in view from 13 to 14 and every label that leaves while zooming fades out; the 13 and 14 handovers never show both label sets or pale streets.",
+      "evidence": [
+        "bus13-handover-light",
+        "bus13-handover-dark"
+      ],
+      "verification": "Union Station view: drawn labels 18/13/7/5/4 at 13–14 by quarter zoom (were 4/3/2/0/0); unit tests cover the drawing per zoom, hold and handover; check:zoom and spacing browser checks pass; light and dark handover captures inspected.",
+      "fixed_commit": "a2de8b625bfb3aec82b049a1d7612fe7b833a9e8"
+    },
+    {
+      "id": "RTD-019",
+      "title": "Route lists appear, disappear and reappear while zooming",
+      "kind": "defect",
+      "status": "open",
+      "priority": "next",
+      "scope": "Zoom trial · bus labels",
+      "issues": [
+        154
+      ],
+      "observation": "Each bus drawing (12 to 16) spaced its route lists and street names afresh, so only 20 to 33 percent of lists stayed through each zoom step; zooming in, a list could show, go and come back (Chris, iPhone screenshots of /v4/zoom/ at 16, 15.8 and 14.95 near 19th and Curtis). Carry-over in the build (not yet committed) keeps 93 to 97 percent; the page still hides some for a moment after the 13 and 14 handovers, some under the base map's neighbourhood names (place-3).",
+      "next": "Find the remaining page-side hides, publish /v5, phone check with #154's other preview checks.",
+      "done_when": "Zooming in from 12 to 16 at 19th and Curtis, Union Station and Colfax, a route list or street name that has shown stays until it leaves the screen, except where a new station name or line letter takes its room.",
+      "evidence": [],
+      "verification": "Not yet verified. Sweep of rendered labels 12 to 16 by tenths (local build, uncommitted): flagged labels 12 to 6 at 19th and Curtis, 5 to 4 at Union Station, 3 to 2 at Colfax.",
+      "fixed_commit": ""
+    },
+    {
+      "id": "RTD-020",
+      "title": "Map credit lies under the zoom row and its \"i\" shows four times",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · phone layout",
+      "issues": [
+        154
+      ],
+      "observation": "public/css/zoom.css styled every details and summary for the ? panel; MapLibre's credit is a details with a summary button, so its 24 px \"i\" grew to 44 px (four icons, half off the screen) and its lettering to 13 px, and the credit sat under the zoom row. The panel's rules now apply to the top pill only and the credit sits above the row.",
+      "next": "Recheck when the production zoom refactor (#155) lands; nothing further in the trial.",
+      "done_when": "At phone size in both themes, the credit shows one \"i\", lies clear of the controls and on the screen, open and closed.",
+      "evidence": [
+        "credit-before-open",
+        "credit-before-closed",
+        "credit-after-open",
+        "credit-after-closed"
+      ],
+      "verification": "Build e8f29da: npm run check:zoom 88 ok, 0 failed, light and dark, including the credit check open and closed; the same measurement on the zoom-154-merge branch preview found nothing in either theme; the unit test catches the pinned build 3a14dcf (qa/recall/prototype-credit.json).",
+      "fixed_commit": "e8f29da564e2da452280a8451eadcfffc4d877c6"
+    },
+    {
+      "id": "RTD-021",
+      "title": "Map credit white on the dark map, open until the first drag",
+      "kind": "defect",
+      "status": "fixed-preview",
+      "priority": "next",
+      "scope": "Zoom trial · phone layout",
+      "issues": [
+        154
+      ],
+      "observation": "MapLibre's credit kept its own white ground and black lettering in both themes and opened as a full line until the first drag. Chris: the white credit on the dark map \"is pretty awful\"; \"just have it start as an i\"; \"just put it below the word zoom\". It now takes the panels' colours, starts as one \"i\" below the word Zoom, and opens to its right.",
+      "next": "Recheck when the production zoom refactor (#155) lands; a picked route's card covers the \"i\" while it is open.",
+      "done_when": "In both themes the credit starts as one \"i\" below the word Zoom, in the theme's colours with lettering at 4.5 to 1 or better, opens and closes with a tap, on the screen and clear of the controls.",
+      "evidence": [
+        "credit-white-dark",
+        "credit-below-zoom-dark",
+        "credit-below-zoom-open-dark"
+      ],
+      "verification": "Build a46002d: npm run check:zoom 88 ok, 0 failed, light and dark, including the credit check (starts closed below Zoom, opens and closes, clear of the panels, theme colours); the same measurement on the branch preview found nothing in either theme; keyboard: Tab reaches the \"i\", the page's focus outline shows, Enter opens it. The unit tests catch the pinned white credit on the dark map (e8f29da).",
+      "fixed_commit": "a46002d650b69330e10a5000d74e48023d0e2cf4"
+    }
+  ]
+}

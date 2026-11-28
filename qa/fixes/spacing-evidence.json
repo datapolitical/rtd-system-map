@@ -1,0 +1,73 @@
+{
+  "source_commit": "486bd9477eabd29bee51b65a3cd3e44e0efa1de3",
+  "source_path": "qa/.scratch/zoom-spacing/report.json",
+  "source_sha256": "d10efd562edb8ad32bccb5b9b85640212fa634d8a802d81a5ccaad0e7a8a060b",
+  "zooms": [
+    12,
+    12.25,
+    12.5,
+    12.75,
+    12.99,
+    13,
+    13.01,
+    13.25,
+    13.5,
+    13.75,
+    14
+  ],
+  "pair_cases": 33,
+  "pair_failures": 0,
+  "tolerance_px": 0.25,
+  "zoom_14_pairs": {
+    "zoom": 14,
+    "pairs": [
+      {
+        "pair": [
+          "G",
+          "B"
+        ],
+        "samples": 64,
+        "target": 7.6,
+        "min": 7.59999999950703,
+        "max": 7.600000000427095,
+        "minimumVisibleGap": 1.9999999995070308,
+        "nearStation": 7.600000000013033,
+        "fartherOut": 7.600000000023513,
+        "ok": true
+      },
+      {
+        "pair": [
+          "B",
+          "N"
+        ],
+        "samples": 64,
+        "target": 7.6,
+        "min": 7.579218403705976,
+        "max": 7.620327401189966,
+        "minimumVisibleGap": 1.9792184037059766,
+        "nearStation": 7.60071446454729,
+        "fartherOut": 7.60364568854336,
+        "ok": true
+      },
+      {
+        "pair": [
+          "N",
+          "A"
+        ],
+        "samples": 64,
+        "target": 7.6,
+        "min": 7.577896895861052,
+        "max": 7.620690159681969,
+        "minimumVisibleGap": 1.9778968958610523,
+        "nearStation": 7.60115432392868,
+        "fartherOut": 7.603132758029411,
+        "ok": true
+      }
+    ]
+  },
+  "endpoint_cases": 198,
+  "endpoint_failures": 0,
+  "maximum_endpoint_distance_px": 0.5443066366136309,
+  "endpoint_limit_px": 1,
+  "scope": "Perpendicular centre-line distances on the pinned shared approach, sampled from the same pixel offsets used by the renderer. Visual captures are checked separately."
+}

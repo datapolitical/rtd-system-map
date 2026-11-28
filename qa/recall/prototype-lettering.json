@@ -1,0 +1,197 @@
+{
+  "build": "0c522dd",
+  "also_seen": [
+    "486bd94"
+  ],
+  "theme": "light",
+  "note": "Symbol layers of the /zoom/ trial style in order (others dropped), with their collision settings. Station names and line letters skip placement, so bus route numbers print over them at the hub (RTD-006).",
+  "layers": [
+    {
+      "id": "bus-number-2",
+      "type": "symbol",
+      "source": "sheet-2",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "bus-stack-2",
+      "type": "symbol",
+      "source": "sheet-2",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "picked-number-2",
+      "type": "symbol",
+      "source": "sheet-2",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "picked-stack-2",
+      "type": "symbol",
+      "source": "sheet-2",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "bus-number-13",
+      "type": "symbol",
+      "source": "trial-bus-13",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "bus-number-3",
+      "type": "symbol",
+      "source": "sheet-3",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "bus-stack-13",
+      "type": "symbol",
+      "source": "trial-bus-13",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "bus-stack-3",
+      "type": "symbol",
+      "source": "sheet-3",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "picked-number-13",
+      "type": "symbol",
+      "source": "trial-bus-13",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "picked-number-3",
+      "type": "symbol",
+      "source": "sheet-3",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "picked-stack-13",
+      "type": "symbol",
+      "source": "trial-bus-13",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "picked-stack-3",
+      "type": "symbol",
+      "source": "sheet-3",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "bus-number-15",
+      "type": "symbol",
+      "source": "trial-bus-15",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "bus-number-4",
+      "type": "symbol",
+      "source": "sheet-4",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "bus-stack-15",
+      "type": "symbol",
+      "source": "trial-bus-15",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "bus-stack-4",
+      "type": "symbol",
+      "source": "sheet-4",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "picked-number-15",
+      "type": "symbol",
+      "source": "trial-bus-15",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "picked-number-4",
+      "type": "symbol",
+      "source": "sheet-4",
+      "layout": {
+        "text-padding": 4
+      }
+    },
+    {
+      "id": "picked-stack-15",
+      "type": "symbol",
+      "source": "trial-bus-15",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "picked-stack-4",
+      "type": "symbol",
+      "source": "sheet-4",
+      "layout": {
+        "text-padding": 2
+      }
+    },
+    {
+      "id": "trial-name",
+      "type": "symbol",
+      "source": "trial-labels",
+      "layout": {
+        "text-allow-overlap": true,
+        "text-ignore-placement": true
+      }
+    },
+    {
+      "id": "trial-attached-letter",
+      "type": "symbol",
+      "source": "trial-attached",
+      "layout": {
+        "text-allow-overlap": true,
+        "text-ignore-placement": true
+      }
+    },
+    {
+      "id": "trial-labels-letter",
+      "type": "symbol",
+      "source": "trial-labels",
+      "layout": {
+        "text-allow-overlap": true,
+        "text-ignore-placement": true
+      }
+    }
+  ]
+}

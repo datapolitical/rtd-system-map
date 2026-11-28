@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f5f3ef">
+  <meta name="color-scheme" content="light dark">
+  <!-- The theme is set before the first paint, so the page never flashes the other theme: the
+       address's ?theme=, else the theme last picked here or on the sheets (one saved choice for
+       both), else the phone's setting. -->
+  <script>(() => { const valid = (v) => v === 'light' || v === 'dark' ? v : null; let saved = null; try { saved = valid(localStorage.getItem('rtd-sheets-theme')); } catch {} const t = valid(new URLSearchParams(location.search).get('theme')) ?? saved ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); document.documentElement.dataset.theme = t; document.querySelector('meta[name=theme-color]').content = t === 'dark' ? '#0e141d' : '#f5f3ef'; })();</script>
+  <title>Zoom preview · RTD system map</title>
+  <link rel="stylesheet" href="../vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="../css/zoom.css">
+</head>
+<body>
+  <main id="map" aria-label="RTD map zoom preview"></main>
+  <header class="panel top">
+    <span id="status" role="status">Loading map…</span>
+    <details><summary aria-label="About this preview">?</summary><div class="about"><p>Zoom preview, 12 to 16. Pinch, scroll or drag the slider. Tap a line to keep it highlighted.</p><p>Rail lines are drawn once and spaced by the page as you zoom. Station names keep their place unless something covers them. Bus streets change detail at each whole zoom, and the rail drawing changes at 14.</p><p><a href="../">Open the current sheets</a> · <a href="https://github.com/datapolitical/rtd-system-map/issues/154">Work plan</a></p></div></details>
+    <button id="theme" type="button" aria-label="Switch to dark theme" disabled>◐</button>
+  </header>
+  <section class="panel controls" aria-label="Zoom">
+    <button id="out" type="button" aria-label="Zoom out" disabled>−</button>
+    <label for="zoom" class="sr-only">Zoom from 12 to 16</label>
+    <input id="zoom" type="range" min="12" max="16" step="0.01" value="12" disabled>
+    <button id="in" type="button" aria-label="Zoom in" disabled>+</button>
+    <button id="sweep" type="button" aria-label="Play zoom" disabled>▶</button>
+  </section>
+  <aside id="card" class="panel card" aria-label="Selected route" hidden><span id="selection"></span><button id="clear" type="button" aria-label="Clear selection">×</button><div id="route-options"></div></aside>
+  <div id="error" role="alert" hidden></div>
+  <script type="module" src="../js/zoom/main.js"></script>
+</body>
+</html>

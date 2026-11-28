@@ -1749,7 +1749,11 @@ streets that no longer met):
   its two carriageways from 16 in, where one line would sit in the median
   off both (Chris, 2026-11-11). The build tags each street that differs
   between the two graphs `zoom: 'far'` or `'near'`; a street the same in
-  both is drawn once at every zoom.
+  both is drawn once at every zoom. The zoom trial draws a divided road as
+  one line at every zoom, 16 included, and two lines only where a route's
+  two directions use different streets (Chris, 2026-11-27; "Continuous
+  zoom trial" below); the sheets keep the rule above until the trial's
+  drawing replaces them.
 - *Ramps* (`simplifyLoops`): a stretch of one set of routes between two
   junctions, 2.5 times longer than the straight line between them, its
   ends within 100 m and no wider than 220 m, is the turn from one road to
@@ -2752,6 +2756,45 @@ How it is built:
   (express 38.6 to 16.7 km; small loops 75 to 54). Broadway and Lincoln and
   the downtown one-way pairs stay two lines: they are different streets, not
   two carriageways of one.
+
+### Continuous zoom trial (#154)
+
+The isolated `/zoom/` experiment on `zoom-prototype-154` compares continuous
+rail spacing and half-zoom drawings between zooms 12 and 14, with names
+preferring their preceding positions. It leaves the front page and the
+normal build unchanged. Its renderer, measurements and architectural limits
+are documented in `docs/zoom-prototype.md`; it is a decision aid for #154,
+not the selected design for v2. Following Chris's report that the approach
+to Union Station tightened away from its platforms, the trial now uses one
+shared rounded spine before applying pixel offsets. Terminal curves are
+fitted to their station bars. Per-zoom symbol updates still need a phone
+performance review. Chris's review and choice remain required by #154.
+
+At every zoom from 13 the trial's build places every route list itself (#156;
+at 13 and 14 from 2026-11-26, at 15 and 16 from 2026-11-27):
+it chooses where each list stands, clear of the trial's rail, station marks,
+line letters, station names and the other lists at every zoom its drawing
+serves, and the page draws each one at every zoom rather than leaving
+MapLibre to hide it. A list with no clear place is left out, and the build
+says which and why. There a neighbourhood's name gives way to a route list,
+the reverse of the sheets' rule ("Four sheets", where route numbers give way
+to a place's name): the first list on a stretch stays and the name moves.
+The names are still MapLibre's to place, so until the build places them too a
+name with a list in its way is left out. The trial's ground map is still
+fetched from OpenFreeMap's server; it moves to the site's own tiles when they
+are cut for what the zoom page draws (#158).
+
+Every bus drawing of the trial uses the merged streets, so a divided road is
+one line at every zoom, 16 included, and two lines only where a route's two
+directions use different streets, as on downtown's one-way pairs (Chris,
+2026-11-27). Until then the trial followed "Readable geometry, on the street
+graph": one line out to 16 and the two carriageways from there in. The sheets' zoom-14 sheet
+draws both carriageways (`SHEETS` in `sheets.mjs`), and the trial's drawings
+at 13, 14 and 15 had done the same: I-25's express lanes were one line at 12
+and two lines with crossing ramps at 14. What the merge leaves alone still
+differs between drawings, because each joins what lies within 7 px at its own
+zoom: a ramp 25 to 50 m from its road is part of the line at 12 and 13 and a
+small loop from 14 (`docs/zoom-prototype.md`).
 
 ## Interface
 
@@ -5617,6 +5660,19 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
 - 2026-11-23: The pair rule above is for free routes only, the ones RTD names
   free (the FreeRide and the MetroRide). Reason: shown the same
   rule on route 65 at Monaco & Mansfield, Chris picked "FreeRide only".
+- 2026-11-20: An isolated zoom-12-to-14 comparison for #154 lives at `/zoom/`
+  on `zoom-prototype-154`. It measures station-name consistency and compares
+  reconstructed centre-line offsets with half-zoom rail drawings. This is
+  an experiment; the sheet entry point, build and selected v2 architecture
+  are unchanged. See `docs/zoom-prototype.md` for the limits and measurements.
+
+- 2026-11-20: Chris found the prototype's A/B/G/N approach narrowing away
+  from Union Station. Reconstructing tracks from finished drawings left
+  unequal centre lines. The isolated trial now shares one rounded spine
+  before applying screen-pixel offsets, and fits terminal curves to their
+  bars. The reported geometry is pinned on ce882eb; new checks measure
+  adjacent spacing along the approach at fractional zooms and rail ends
+  against station bars. The production drawing and v2 sign-off are separate.
 
 - 2026-11-24: Stops snap to their line from up to 100 m, stops no trip calls
   at are dropped, and the hub's name carries the letter of a line whose far
@@ -5773,6 +5829,55 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   internals renamed and no check, the step waited the whole 8 s cap before
   going; test/maplibre-internals.test.mjs now fails when an update renames
   them. Chris: "Do the second one" (measure it before deciding).
+- 2026-11-25: Zoom trial (#154): the opening shows in one step, the rail
+  drawing hands over at once, MapLibre's label fade is off as on the sheets,
+  bus layers stay visible and fade their lines by opacity, and a station's
+  name is placed on the map like its chips. Reason: on a real iPhone 17 Pro
+  (AWS Device Farm) the trial loaded in six visible steps, showed doubled rail
+  near 14, faded names and streets while zooming, and ran Union Station's name
+  into its chips near 13; Chris: "Yes, those are the issues I meant". The
+  trial also keeps the theme last picked (Chris: "Just keep working" on the
+  recommendation).
+- 2026-11-26: Zoom trial (#154): bus drawings also hand over at once, and only
+  when the next can be drawn; the page keeps updating while sources load; the
+  base map's banded roads and buildings are held, unseen, a zoom either side of
+  their band. Reason: on the real iPhone a 0.6 s pinch from 14 to 16 left the
+  streets white and the bus lines doubled for about 0.3 s in both builds;
+  Chris: "Go". The rail drawings' opacity has no transition, so they too
+  change in one frame.
+- 2026-11-26: Zoom trial (#154): each bus drawing keeps the route lists and
+  street names of the drawing one zoom out, in place (sliding at most half
+  their length along the street), and places new ones only in between; a list
+  goes in only where the page will have room for it, and the trial draws all
+  five bus drawings (12 to 16) itself. Reason: Chris, on screenshots at 16,
+  15.8 and 14.95 near 19th and Curtis: "We probably shouldn't have labels that
+  appear, disappear, and reappear." Each drawing had spaced its lists afresh,
+  so only a fifth to a third of them stayed through a zoom step; now 93 to 97
+  percent do.
+- 2026-11-26: Zoom trial (#156): at zooms 13 and 14 the build places every
+  route list and the page draws each one at every zoom its drawing serves; a
+  list with no clear place is left out and reported (51 of 931 at 13, 42 of
+  1,592 at 14, each of their routes still named on other lists). Reason: Chris
+  chose to start the trial "where our build places every route list". MapLibre
+  was hiding lists whose stretch had room for them: at 19th and Curtis, 8
+  lists came or went between one tenth of a zoom and the next from 13 to 15;
+  all 41 the build places there now show at every tenth.
+- 2026-11-26: Zoom trial: where the build places the lists, a neighbourhood's
+  name gives way to a route list, the reverse of the sheets' rule. Reason:
+  Chris, asked which gives way: the first list on a stretch stays and the
+  neighbourhood's name moves.
+- 2026-11-26: Zoom trial: the ground map stays on OpenFreeMap's server until
+  the site's tiles are cut for what the zoom page draws (#158). Reason: the
+  site's tiles hold at each zoom only what the sheets draw there, and the trial
+  holds each road band a zoom either side of its own.
+- 2026-11-26: Zoom trial (#154): every bus drawing below zoom 16 draws a
+  divided road as one line, as the rule of 2026-11-11 says; the drawings at
+  13, 14 and 15 had drawn both carriageways, as the sheets' zoom-14 sheet
+  still does. Reason: Chris, on screenshots at 12.75, 13.34 and 14.49 near
+  41st / Fox, where the express was one line, then two lines with crossing
+  ramps: "Here's my main issue with the zoom." Express line with a second
+  express line beside it fell from 39 to 17 km at 14 and from 31 to 16 km at
+  15 (`qa/zoom-doubled.mjs`); at 12 it is 4 km.
 - 2026-11-26: MapLibre 6.15.0 -> 6.19.0. The version stays pinned exactly, so
   a rebuild never changes it on its own; it moves only by a change like this
   one, checked before and after. Reason: it had not moved since the map was
@@ -5818,6 +5923,29 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ("What people can do", items 2 to 5); most of these sit on top of the
   drawing rather than in it; and the plan of 2026-11-18 no longer
   described the work the trial found. Chris: yes to both.
+- 2026-11-27: Zoom trial (#154): the build places the route lists at 15 and 16
+  too, carrying each from the zoom before wherever it still fits, as from 13
+  to 14; a neighbourhood's name gives way to a list there as well. Reason:
+  Chris saw lists still come and go between 13 and 15; counted at every tenth
+  from 14.8 to 16, they held between handovers but one to three swapped at 15
+  and at 16, where MapLibre placed each drawing's lists afresh. Chris picked
+  "Place the lists at 15 and 16 too".
+- 2026-11-27: Zoom trial (#154): a divided road is one line at every zoom, 16
+  included, and two lines only where a route's two directions use different
+  streets. Reason: Chris was unsure whether the express on I-25 should be one
+  line or two at 16 and asked what other maps do. RTD's own Rail and
+  Flatiron Flyer map draws the FF as one line on US 36 and I-25 and splits
+  it into two lines with arrows only downtown, where its directions use
+  different streets; WMATA's bus map (Human Transit, 2013) does the same for
+  one-way pairs; the LOOM transit-map research merges a line's courses
+  within a set distance and uses that one network at every zoom; the
+  OpenStreetMap bus map (ÖPNVKarte) draws every carriageway and shows the
+  tangle the trial had at 14. Drawn this way, the bus lines that move more
+  than 2 px at 16 fell from 15% to 4.5%. Chris picked "One line unless the
+  directions use different streets". The joining step still leaves a small
+  hook on Speer at Lincoln; its fix is in the street build.
+- 2026-11-27: Zoom trial (#154): the jump where the rail drawing changes at 14
+  is left for later (#256). Chris: "Leave it: let's come back to this later".
 - 2026-11-27: The project is moving to the zoomable map, so today's sheets
   get only what carries over to it easily: search (#238), the route panel
   with its frequency rows (#162, #22) and next departures and alert panels

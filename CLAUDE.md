@@ -66,6 +66,20 @@ we are" section from them (closed issues show as done).
 - Drawing work goes in the order [docs/refining.md](docs/refining.md) sets
   out, with a work log kept as it happens. Rebuilding for RTD's new data and
   what watches the live site are in [docs/upkeep.md](docs/upkeep.md).
+
+The consolidated fix register is `qa/fixes/register.json`. It links specific
+image findings and verification gaps to the canonical GitHub issues. Update it
+when a new fault is reported or found, attaching the build, place/zoom/theme,
+evidence, next action and completion criterion. Keep preview fixes distinct
+from released fixes. `qa/fixes/github-snapshot.json` preserves the fetched open
+issues and their discussion; refresh it from GitHub when reconciling work,
+without editing issue bodies or done-when criteria locally. New local findings
+still need an issue or an update to an existing issue when write access permits.
+`npm run fixes:build` produces a searchable reading copy and JSON/CSV exports in
+`qa/.scratch/fix-register/`; use `npm run fixes:build -- --require-evidence`
+before publishing so missing captures stop the build. The historical pins
+in `qa/recall/finds.json` remain regression evidence, not confirmed current bugs.
+
 - Read [docs/development.md](docs/development.md) for the branch boundaries.
   `main` owns the current sheet map; `zoom-154-merge` owns smooth-zoom
   experiments; `classic-archive` preserves the earlier application. Do not

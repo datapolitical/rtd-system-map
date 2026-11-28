@@ -1,0 +1,32 @@
+{
+  "base": "http://127.0.0.1:8082/rtd-map-fixes/",
+  "checks": [
+    "findings: 17 visible",
+    "No horizontal overflow at 393 px",
+    "findings: 3 visible",
+    "findings: 14 visible",
+    "findings: 1 visible",
+    "findings: 0 visible",
+    "github: 42 visible",
+    "github: 5 visible",
+    "All 42 issue bodies preserved exactly",
+    "findings: 17 visible",
+    "GitHub-to-finding link selects and opens the finding",
+    "history: 44 visible",
+    "Tab keyboard navigation",
+    "All seven evidence files served with matching SHA256",
+    "All structured exports served",
+    "Direct finding URL opens the target",
+    "Dark phone and desktop widths do not overflow"
+  ],
+  "errors": [],
+  "scope": "Chromium static register at 393x760 and 1280x900; light/dark; filters, record counts, source fidelity, navigation and downloads. Does not verify physical phone or tailnet HTTPS access.",
+  "validated_at": "2026-11-21T00:48:12.708285+00:00",
+  "index_sha256": "6458f96fe74a963085cc79d725993c2018476924b833c68c07658c5bd66d0cd8",
+  "source_sha256": {
+    "qa/fixes/build.mjs": "9b5dbb88eec5090ce8ced7674b74214b5d57625d1a020835fbd5f7447809c61a",
+    "qa/fixes/register.json": "3c18cc9cfa2c8fdb3d585f3f8027c17e1deffc21000727cae406f45af63d3528",
+    "qa/fixes/github-snapshot.json": "89366db45658ee05a69828efde26714cdb4d0637a9ae507f3faddf2d5960813b",
+    "qa/recall/finds.json": "86b35b1464f9d08c6308b6a3df5267af659e544e1ef9e8ec7bfeb703fa4cd79a"
+  }
+}
