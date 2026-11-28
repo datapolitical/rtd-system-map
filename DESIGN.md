@@ -485,7 +485,8 @@ next one?" and "is anything wrong?" in either view, Live or not:
   - "Near me" does the same for your location.
 
 Built on today's sheets (2026-11-27, #13): a stop's and a station's card
-show the next scheduled departures. Live predictions, alerts in panels and
+show the next departures, live where RTD has a prediction and scheduled
+otherwise (see "Departures", "Live times on a card"). Alerts in panels and
 the vehicle panel are not built; the vehicle panel and alert marks on the
 map wait for Live on the zoomable map (#251).
 
@@ -808,6 +809,42 @@ The panel is its own code and reads nothing of the sheets; the sheets' page
 only says which stop or station a card is for (`leaves` and
 `showDepartures` in `public/js/sheets/main.js`).
 
+**Live times on a card.** While a stop's or a station's card is open, the
+page asks the relay for RTD's predictions for that card's stops, and only
+those (`public/js/panel/live.js`; the relay's side is under "Live data").
+There is no Live button on the sheets: an open card is what asks.
+
+- A prediction takes the place of its own scheduled departure, matched by
+  trip, and reads as minutes ("4 min", "Now") with the live mark, the amber
+  dot of "Visual tokens". From an hour away it reads as a clock time, still
+  marked. A scheduled time stays a clock time with no mark. So a late bus
+  stays on the card past its scheduled time, and one that left early drops
+  off.
+- A call RTD marks skipped, or a cancelled trip, is left out: its scheduled
+  time would be wrong.
+- The card always says which kind it shows. With any live time its heading
+  is "Next departures, live" and a line under the rows says "Minutes are
+  RTD's live predictions. Clock times are scheduled." With none it is "Next
+  departures, scheduled".
+- Nothing stale is shown as live. Predictions count as live only while the
+  relay has answered in the last 50 seconds, RTD's feed could be read, and
+  the feed's own time is under two minutes old (`fresh` in `live.js`).
+  Otherwise the card is the timetable, and after 20 seconds without live
+  times, or at once when the relay says RTD's feed failed, it adds "Live
+  times aren't loading. These are scheduled."
+- A relay that knows nothing of predictions, or no relay, leaves the
+  timetable: the page works with either.
+
+To match by trip the build keeps each departure's trip id beside its time,
+in files of their own (`data/departures/trips-N.json`, about 1.7 MB
+compressed in all, 13 KB a file) that only a page showing live times reads.
+A trip's id is stored as its distance from the smallest id
+(`index.tripBase`). The same trip runs every weekday, so a prediction
+belongs to the departure of its trip scheduled within 90 minutes of it.
+Measured 2026-11-27: RTD's TripUpdate feed held 375 trips, all in the
+timetable, at 5,571 stops, with absolute times and no delays, and marked
+159 calls skipped.
+
 ### Station service: also from GTFS
 
 RTD's station layer lists every station, including ones with no trains right
@@ -936,8 +973,20 @@ What each feed is used for:
 | Feed | Used for |
 |---|---|
 | VehiclePosition | Vehicles on the map, with heading and occupancy |
-| TripUpdate | Predicted departures in stop and station panels, and how late a vehicle is |
+| TripUpdate | Predicted departures in stop and station panels (built 2026-11-27, below), and how late a vehicle is |
 | Alerts | Alert marks on the map, and alert text in panels |
+
+**Predictions for a card's stops.** A page with only a stop's or a
+station's card open connects as a card (`/live/stream?for=card`) and says
+which stops it shows (`{"watch": [...]}`, at most 40). It is sent those
+stops' predictions and nothing else (`kind: "stops"`): each call's trip,
+time and route, and the trips RTD says will skip the stop. It is not sent
+the vehicles. The object asks RTD for `TripUpdate.pb` only while some card
+is watching a stop, at most once a poll, and reads it into memory, not
+storage (it is 340 KB). A feed it cannot read is said (`problem`), never
+sent as empty predictions. An empty watch list means the card closed; when
+no card watches and nobody has Live on, polling stops as before. Vehicle
+positions are asked for only while someone has Live on, not for cards.
 
 The page listens only while Live is on and the tab is visible; a hidden tab
 closes its socket and reconnects, getting the current state at once, when it's
@@ -5861,6 +5910,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   same with no throttling (2.85 s, was 2.90 s); the lines on screen from
   first paint (0.4 s on slow 4G), where the picture showed at 3.1 s on
   slow 4G and 6.5 s at 0.65 Mbit/s.
+- 2026-11-27: Live predictions on stop and station cards (#13; Chris, about
+  20:10 MST, with the relay change). An open card asks, since the sheets
+  have no Live button. The relay sends a page only its own stops, and asks
+  RTD for trip updates only while a card is open. Predictions are matched
+  to the timetable by trip, so the build keeps each departure's trip id in
+  files only live pages read; matching by route and nearest time was
+  rejected because a wrong match shows a rider a wrong bus. Nothing stale
+  is shown as live, and the card always says which kind of time it shows.
+  The relay deploys before the page, and the page works with the old relay
+  (scheduled times).
 
 - 2026-11-27: The build draws the ground for every drawing (#241): streets,
   water, parks and rivers come from the committed OpenStreetMap tiles at their

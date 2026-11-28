@@ -13,5 +13,8 @@ export function onRequest({ request, env }) {
   if (origin && origin !== new URL(request.url).origin) return json({ error: 'Origin not allowed' }, 403);
   if (!env.LIVE_ROOM) return json({ error: 'The live relay is not set up' }, 503);
   const room = env.LIVE_ROOM.get(env.LIVE_ROOM.idFromName('rtd'));
-  return room.fetch(new Request('https://live-room.internal/stream', request));
+  // A page with only a stop's or a station's card open asks for that (`?for=card`): it is sent
+  // its stops' predictions, not the vehicles.
+  const card = new URL(request.url).searchParams.get('for') === 'card';
+  return room.fetch(new Request(`https://live-room.internal/stream${card ? '?for=card' : ''}`, request));
 }

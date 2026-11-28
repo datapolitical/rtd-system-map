@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ALERTS_EVERY_MS, STALE_S, VEHICLE_COLUMNS, alertsFrom, emptyState, message, refresh, routeOf, tick, vehicle, vehiclesFrom } from '../public/js/realtime.js';
+import { ALERTS_EVERY_MS, STALE_S, VEHICLE_COLUMNS, WATCH_MOST, alertsFrom, emptyState, message, predictionsByStop, refresh, routeOf, stopsMessage, tick, vehicle, vehiclesFrom, watchList } from '../public/js/realtime.js';
 import { ageText, band, pillText, zoomNote } from '../public/js/age.js';
 import { routeAliases } from '../scripts/lib/realtime.mjs';
 
@@ -204,4 +204,45 @@ test('the zoom note names what is missing, and is silent when everything shows',
   assert.equal(zoomNote(9, 9.75, 13), 'Zoom in to see the trains.');
   assert.equal(zoomNote(11, 9.75, 13), 'Trains are on the map. Zoom in for buses.');
   assert.equal(zoomNote(14, 9.75, 13), null);
+});
+
+// --- Predictions for the stops a card shows ------------------------------------------------
+const update = (trip, route, calls, extra = {}) => ({ id: trip, trip_update: { trip: { trip, route, ...extra }, stops: calls } });
+const call = (stop, time, more = {}) => ({ stop, ...(time ? { departure: { time } } : {}), ...more });
+
+test('a page asks for stops by a short list; anything else is not a watch', () => {
+  assert.deepEqual(watchList('{"watch":["12563","P1","12563"]}'), ['12563', 'P1']);
+  assert.deepEqual(watchList('{"watch":[]}'), [], 'an empty list: the card closed');
+  assert.equal(watchList('{"watch":"12563"}'), null);
+  assert.equal(watchList('not json'), null);
+  assert.equal(watchList('{"other":1}'), null);
+  // Ids that could not be a stop's are dropped, and the list is capped.
+  assert.deepEqual(watchList(JSON.stringify({ watch: ['ok', 5, '', 'x'.repeat(40), '<script>', 'a/b'] })), ['ok']);
+  assert.equal(watchList(JSON.stringify({ watch: Array.from({ length: 200 }, (_, i) => String(i)) })).length, WATCH_MOST);
+});
+
+test('predictions are filed by stop, soonest first; a skipped call or a cancelled trip has no time', () => {
+  const index = predictionsByStop(feed([
+    update('t2', '15', [call('A', T + 600), call('B', T + 900)]),
+    update('t1', '101E', [call('A', T + 120), { stop: 'B', arrival: { time: T + 300 } }, call('C', 0, { relationship: 1 })]),
+    update('t3', '15', [call('A', T + 60), call('B', T + 200)], { relationship: 3 }),
+    { id: 'v', vehicle: {} },
+    update('', '15', [call('A', T + 5)]),
+  ]));
+  assert.equal(index.at, T);
+  assert.deepEqual(index.byStop.get('A'), { times: [['t1', T + 120, '101E'], ['t2', T + 600, '15']], skipped: ['t3'] });
+  // An arrival stands in where RTD gives no departure.
+  assert.deepEqual(index.byStop.get('B'), { times: [['t1', T + 300, '101E'], ['t2', T + 900, '15']], skipped: ['t3'] });
+  assert.deepEqual(index.byStop.get('C'), { times: [], skipped: ['t1'] });
+});
+
+test('a watching page is sent its own stops and nothing else', () => {
+  const index = predictionsByStop(feed([update('t1', '15', [call('A', T + 120), call('B', T + 300)]), update('t2', '0', [call('Z', T + 60)])]));
+  const m = stopsMessage(index, ['A', 'nowhere'], 5000);
+  assert.deepEqual(m, { v: 1, kind: 'stops', at: 5000, feed: T, stops: { A: { times: [['t1', T + 120, '15']] } } });
+  assert.ok(!JSON.stringify(m).includes('t2'), "another page's stop is not sent");
+});
+
+test('a feed that cannot be read is said, not sent as empty predictions', () => {
+  assert.deepEqual(stopsMessage(null, ['A'], 5000), { v: 1, kind: 'stops', at: 5000, problem: true });
 });
