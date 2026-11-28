@@ -210,9 +210,18 @@ test('a double tap on the map, as Safari delivers it, goes one sheet on', async 
     return null;
   });
   expect(at, 'a spot of bare ground near the middle of the map').not.toBeNull();
-  await page.touchscreen.tap(...at);
-  await page.waitForTimeout(40);
-  await page.touchscreen.tap(...at);
+  // Timestamp the native touch events at the source. Waiting for touchscreen.tap() to
+  // return before sending the second tap can stretch the gesture past MapLibre's window
+  // when the renderer is busy (#259).
+  await page.evaluate(() => { window.safariBurst = true; });
+  const session = await page.context().newCDPSession(page);
+  const [x, y] = at;
+  const start = Date.now() / 1000 - 0.08;
+  await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }], timestamp: start });
+  await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: start + 0.02 });
+  await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }], timestamp: start + 0.06 });
+  await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: start + 0.08 });
+  await session.detach();
   await stepped(page);
   await page.waitForTimeout(1000);
   await stepped(page);
