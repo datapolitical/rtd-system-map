@@ -27,8 +27,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROJECT = 'rtd-system-map';
 
 // The ignored paths under public/ that a build makes and the site is meant to
-// carry: files directly in public/data/ (no subfolders), public/poster/,
-// public/tiles/, public/vendor/ and public/deploy-manifest.json. Paths are as
+// carry: files directly in public/data/, the departures tables in
+// public/data/departures/ (the one subfolder a build makes there, which the
+// publish check requires), public/poster/, public/tiles/, public/vendor/ and
+// public/deploy-manifest.json. Paths are as
 // `git ls-files --others --ignored --exclude-standard --directory public/`
 // prints them (a folder ends in /), with public/data/ already expanded to its
 // entries. Anything else is an extra: a trial's data, a scratch folder.
@@ -38,6 +40,7 @@ export function judgePublicExtras(ignored, branch) {
   const expected = (p) =>
     /^public\/data\/[^/]+$/.test(p) ||
     p === 'public/data/' ||
+    p === 'public/data/departures/' ||
     p === 'public/deploy-manifest.json' ||
     ['public/poster/', 'public/tiles/', 'public/vendor/'].some((dir) => p.startsWith(dir));
   const extras = ignored.filter((p) => !expected(p));

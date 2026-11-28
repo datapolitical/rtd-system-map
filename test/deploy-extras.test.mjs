@@ -15,6 +15,16 @@ test('main accepts the normal built site', () => {
   assert.deepEqual(judgePublicExtras(normal, 'main'), { extras: [], refuse: false });
 });
 
+test('main accepts the departures tables, the one subfolder a build makes in public/data/', () => {
+  assert.deepEqual(judgePublicExtras([...normal, 'public/data/departures/'], 'main'), { extras: [], refuse: false });
+});
+
+test('main still refuses another folder beside the departures tables', () => {
+  const r = judgePublicExtras([...normal, 'public/data/departures/', 'public/data/departures-trial/'], 'main');
+  assert.equal(r.refuse, true);
+  assert.deepEqual(r.extras, ['public/data/departures-trial/']);
+});
+
 test('main refuses a trial folder in public/data/ and a data.next folder', () => {
   const r = judgePublicExtras([...normal, 'public/data/zoom-prototype/', 'public/data.next/'], 'main');
   assert.equal(r.refuse, true);
