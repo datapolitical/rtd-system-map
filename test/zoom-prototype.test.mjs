@@ -7,9 +7,10 @@ import { SIZES, names, toPx, toLonLat } from '../scripts/lib/sheets.mjs';
 import { withZoom, zoomStops, placedLists, fixedOver, listWide, LIST_STRAIGHT, LIST_FOLLOW, BUS_BUILT, CARRIAGEWAYS_FROM } from '../scripts/zoom-prototype.mjs';
 import { previewStyle } from '../public/js/zoom/style.js';
 import { sheetStyle } from '../public/js/sheets/style.js';
-import { attachedPoint, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChanges,
+import { attachedPoint, attachedCollection, pixels, coordinate, sizeAt, pitchAt, frameAt, labelChanges,
   labelsAt, SIDE_HOLD, FADE_OUT_MS, FADE_IN_MS, busDrawingAt, BUS_HOLD, railDrawingAt, railRefAt, attachedFor,
-  MIN_ZOOM, MAX_ZOOM, BUS_DRAWINGS, LISTS_PLACED } from '../public/js/zoom/model.js';
+  MIN_ZOOM, MAX_ZOOM, BUS_DRAWINGS, LISTS_PLACED, RAIL_DRAWINGS, RAIL_BLEND_FROM, RAIL_BLEND_TO, railBlendAt,
+  prepareRailBlend, blendRail, railPairs, blendAttached, attachedKey } from '../public/js/zoom/model.js';
 import { railOrderErrors, letteringOrderErrors } from '../qa/lib/zoom-order.mjs';
 import { canonicalTracks, fitTerminalSpines } from '../scripts/lib/zoom-rail.mjs';
 import { spacingReport, terminalGaps } from '../qa/lib/zoom-spacing.mjs';
@@ -496,7 +497,7 @@ test('banded ground layers load a zoom either side of their band and show only i
 test('the rail drawings change over with no transition', { skip: NO_TRIAL }, () => {
   const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
   const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
-  const rails = previewStyle('dark', metadata, bundle).layers.filter((l) => /^trial-rail/.test(l.id) && JSON.stringify(l.paint['line-opacity']).includes('global-state'));
+  const rails = previewStyle('dark', metadata, bundle).layers.filter((l) => /^trial-rail/.test(l.id) && JSON.stringify(l.paint?.['line-opacity'])?.includes('global-state'));
   assert.ok(rails.length >= 4);
   // The style's default 300 ms transition cross-faded the two drawings (real iPhone run 2026-11-26).
   for (const l of rails) assert.deepEqual(l.paint['line-opacity-transition'], { duration: 0, delay: 0 }, l.id);
@@ -755,4 +756,147 @@ test('the page draws every list of a drawing the build placed, and a neighbourho
   }
   // Towns' names on the wider drawing, whose lists MapLibre sets, keep their place before the lists.
   assert.ok(order('place-2') > order('bus-number-2'));
+});
+
+// --- The slide across the rail handover at 14 (#256) ---
+
+test('the slide band starts and ends at the drawings, and is empty outside it', () => {
+  assert.equal(railBlendAt(13.79), null);
+  assert.equal(railBlendAt(13.8), 0);
+  assert.equal(railBlendAt(14), 0.5);
+  assert.ok(Math.abs(railBlendAt(14.19) - 0.975) < 1e-9);
+  assert.equal(railBlendAt(14.2), null, 'at the band\'s end the zoom-15 drawing takes over');
+  assert.equal(railBlendAt(16), null);
+  assert.ok(Math.abs(RAIL_BLEND_TO - RAIL_BLEND_FROM - 0.4) < 1e-9);
+});
+
+test('a line pairs with the same line in the other drawing, reversed or not, keeping both ends', () => {
+  const line = Array.from({ length: 41 }, (_, i) => [i * 5, Math.sin(i / 40 * Math.PI) * 10]);
+  const moved = line.map(([x, y]) => [x + 2, y + 2]);
+  for (const other of [moved, [...moved].reverse()]) {
+    const { pairs } = railPairs(line, other);
+    assert.deepEqual(pairs[0], [0, 0]);
+    assert.deepEqual(pairs.at(-1), [1, 1]);
+    // Every input vertex of both lines appears as a position along its own line, in order.
+    const along = (u) => line[Math.round(u * (line.length - 1))];
+    let last = -1;
+    for (const [ua] of pairs) { assert.ok(ua >= last); last = ua; }
+  }
+});
+
+test('the real rail drawings pair route for route: the slide thins to about 4,000 points', { skip: NO_TRIAL }, () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const prepared = prepareRailBlend(bundle.rails, bundle.sizes);
+  const routes = new Set(bundle.rails.features.map((f) => f.properties.route));
+  assert.equal(prepared.routes.length, routes.size, 'every route has both drawings');
+  for (const r of prepared.routes) {
+    assert.equal(r.a.length, r.b.length, `${r.route} points pair one to one`);
+    assert.ok(r.points > 2);
+  }
+  assert.ok(prepared.points < 6000, `${prepared.points} points, so one source update stays near the 4,000 the issue planned`);
+});
+
+// The drawn rail at 14: joined per route, moved sideways by each piece's slot and the pitch, as
+// the style's line-offset does it.
+function drawnRail(features, sizes) {
+  const pitch = pitchAt(sizes, 14);
+  const routes = new Map();
+  for (const f of features) {
+    const r = f.properties.route;
+    if (!routes.has(r)) routes.set(r, []);
+    routes.get(r).push(f);
+  }
+  const out = new Map();
+  for (const [route, list] of routes) {
+    list.sort((x, y) => Number(x.properties.key.split(':')[2]) - Number(y.properties.key.split(':')[2]));
+    const geo = [], slots = [];
+    for (const f of list) for (const c of f.geometry.coordinates) {
+      if (geo.length && Math.hypot(geo.at(-1)[0] - c[0], geo.at(-1)[1] - c[1]) < 1e-12) continue;
+      geo.push(c); slots.push(f.properties.slot);
+    }
+    const pts = geo.map((c) => pixels(c, 14));
+    out.set(route, pts.map((p, i) => {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy) || 1;
+      return [p[0] - dy / d * slots[i] * pitch, p[1] + dx / d * slots[i] * pitch];
+    }));
+  }
+  return out;
+}
+const nearestDistance = (p, line) => {
+  let best = Infinity;
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1], b = line[i];
+    const dx = b[0] - a[0], dy = b[1] - a[1], den = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / den));
+    best = Math.min(best, Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dy * t));
+  }
+  return best;
+};
+
+test('at 14 the rail drawings jump by up to 18 px; the slide removes that jump', { skip: NO_TRIAL }, () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const prepared = prepareRailBlend(bundle.rails, bundle.sizes);
+  const wide = drawnRail(bundle.rails.features.filter((f) => f.properties.ref === 13), bundle.sizes);
+  const close = drawnRail(bundle.rails.features.filter((f) => f.properties.ref === 15), bundle.sizes);
+  // The fault this issue pins, as a control for the numbers below.
+  let jump = 0;
+  for (const [route, line] of wide) for (const p of line) jump = Math.max(jump, nearestDistance(p, close.get(route)));
+  assert.ok(jump > 10, `the wider drawing sits ${jump.toFixed(1)} px off the closer one at 14`);
+  // The slide at t=0 is the wider drawing and at t=1 the closer one, within the thinning tolerance.
+  const start = blendRail(prepared, 0), end = blendRail(prepared, 1);
+  for (const [i, f] of start.features.entries()) {
+    for (const c of f.geometry.coordinates) assert.ok(nearestDistance(pixels(c, 14), wide.get(f.properties.route)) < 0.2, `${f.properties.route} starts on the wider drawing`);
+    for (const c of end.features[i].geometry.coordinates) assert.ok(nearestDistance(pixels(c, 14), close.get(f.properties.route)) < 0.2, `${f.properties.route} ends on the closer drawing`);
+  }
+});
+
+test('no point of the slide moves more than a pixel between frames through the band', { skip: NO_TRIAL }, () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const prepared = prepareRailBlend(bundle.rails, bundle.sizes);
+  let previous = null, worst = 0;
+  for (let zoom = RAIL_BLEND_FROM; zoom < RAIL_BLEND_TO - 1e-9; zoom += 0.01) {
+    const shown = blendRail(prepared, railBlendAt(zoom)).features.map((f) => f.geometry.coordinates.map((c) => pixels(c, 14)));
+    if (previous) for (let f = 0; f < shown.length; f++) for (let i = 0; i < shown[f].length; i++) {
+      worst = Math.max(worst, Math.hypot(shown[f][i][0] - previous[f][i][0], shown[f][i][1] - previous[f][i][1]));
+    }
+    previous = shown;
+  }
+  assert.ok(worst < 1, `worst movement between 0.01 zoom frames ${worst.toFixed(3)} px`);
+});
+
+test('station bars and line letters exist in both drawings and glide with the rail', { skip: NO_TRIAL }, () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const one = (ref) => ({ sets: Object.fromEntries(RAIL_DRAWINGS.map((d) => [d.set, { lines: d.ref === ref ? 1 : 0, labels: d.ref === ref ? 1 : 0 }])) });
+  const a = attachedCollection(attachedFor(bundle.attached, one(13), 14), bundle.sizes, 14);
+  const b = attachedCollection(attachedFor(bundle.attached, one(15), 14), bundle.sizes, 14);
+  assert.equal(a.features.length, b.features.length);
+  assert.deepEqual([...a.features.map(attachedKey)].sort(), [...b.features.map(attachedKey)].sort());
+  const kinds = new Set(a.features.map((f) => f.properties.kind));
+  assert.deepEqual([...kinds].sort(), ['letter', 'station']);
+  const start = blendAttached(a, b, 0), end = blendAttached(a, b, 1);
+  for (const [i, f] of start.features.entries()) {
+    assert.deepEqual(f.geometry.coordinates, a.features[i].geometry.coordinates, 't=0 is the wider drawing');
+    assert.deepEqual(end.features[i].geometry.coordinates, b.features[i].geometry.coordinates, 't=1 is the closer drawing');
+    assert.equal(f.properties.ref, 'blend');
+  }
+});
+
+test('the style draws the slide from its own sources, with no offset and with the bars keeping their room', { skip: NO_TRIAL }, () => {
+  const bundle = JSON.parse(readFileSync(new URL('../public/data/zoom-prototype/trial.json', import.meta.url)));
+  const metadata = JSON.parse(readFileSync(new URL('../public/data/sheets.json', import.meta.url)));
+  const style = previewStyle('light', metadata, bundle);
+  assert.ok(style.sources['trial-rail-blend']);
+  assert.ok(style.sources['trial-attached-blend']);
+  const rail = style.layers.filter((l) => l.source === 'trial-rail-blend');
+  assert.deepEqual(rail.map((l) => l.id).sort(), ['trial-rail-blend', 'trial-rail-casing-blend', 'trial-rail-rim-blend']);
+  for (const l of rail) assert.equal(l.paint['line-offset'], 0, `${l.id} takes its points already offset`);
+  const bars = style.layers.filter((l) => l.source === 'trial-attached-blend');
+  assert.ok(bars.some((l) => l.id === 'trial-station-blend'));
+  assert.ok(bars.some((l) => l.id === 'trial-attached-letter-blend'));
+  const index = new Map(style.layers.map((l, i) => [l.id, i]));
+  assert.ok(index.has('trial-station-room-blend'));
+  for (const [id, i] of index) if (/^(bus-number|bus-stack|picked-number|picked-stack)-(?:[234]|13|15)$/.test(id)) {
+    assert.ok(index.get('trial-station-room-blend') > i, `${id} is placed after the slide's bar room`);
+  }
 });

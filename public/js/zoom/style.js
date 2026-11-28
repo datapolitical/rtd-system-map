@@ -219,6 +219,11 @@ export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
   const casing = byId.get('rail-casing-2');
   if (casing) rails.splice(1, 0, { ...casing, id: 'trial-rail-casing', source: 'trial-rail', minzoom: 0, maxzoom: 24,
     layout: round, paint: { ...casing.paint, 'line-width': size('rail', (w) => w + 1.2), 'line-offset': offset } });
+  // One more copy of the rail, drawn from the source the page fills with each route's line
+  // between the two drawings through the slide band at 14 (model.js, prepareRailBlend and
+  // blendRail). Its points already carry the slot's sideways move, so it takes no line-offset.
+  const blendRails = rails.map((l) => ({ ...structuredClone(l), id: `${l.id}-blend`, source: 'trial-rail-blend',
+    filter: ['==', ['get', 'ref'], 'blend'], paint: { ...l.paint, 'line-offset': 0 } }));
   // One copy of the rail for each rail drawing, faded through global state as the page hands
   // over between them (model.js, railDrawingAt).
   const railState = {};
@@ -268,7 +273,16 @@ export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
   // over rail at either detail level, then stations and their lettering follow.
   const pickedLayers = original.layers.filter((l) => /^pick-bus/.test(l.id));
   original.layers = original.layers.filter((l) => !/^pick-bus/.test(l.id));
-  original.layers.push(...rails, ...pickedLayers, ...attached, ...labels);
+  // The slide's station bars and line letters, from their own source, drawn only while the page
+  // holds the rail between the two drawings (model.js, blendAttached).
+  const blendAttached = attached.map((l) => ({ ...structuredClone(l), id: `${l.id}-blend`, source: 'trial-attached-blend',
+    filter: ['==', ['get', 'ref'], 'blend'] }));
+  // The bars' room is placed with the name, before the line letters, exactly as the drawings'
+  // own bar room is (labels[0]); the slide's letters follow the name as the drawings' letters do.
+  const stationRoomBlend = { ...structuredClone(labels[0]), id: 'trial-station-room-blend', source: 'trial-attached-blend', filter: ['==', ['get', 'ref'], 'blend'] };
+  const blendLetters = labels.filter((l) => l.source === 'trial-attached' && l.id !== 'trial-station-room')
+    .map((l) => ({ ...structuredClone(l), id: `${l.id}-blend`, source: 'trial-attached-blend', filter: ['==', ['get', 'ref'], 'blend'] }));
+  original.layers.push(...rails, ...blendRails, ...pickedLayers, ...attached, ...blendAttached, stationRoomBlend, ...labels, ...blendLetters);
   const warm = fontsOf(original.layers).map((font, i) => ({ id: `trial-font-warm-${i}`, type: 'symbol', source: 'trial-font-warm',
     layout: { 'text-field': 'a\u2013', 'text-font': [font], 'text-size': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
     paint: { 'text-opacity': 0 } }));
@@ -287,7 +301,9 @@ export function previewStyle(theme, metadata, bundle, warmAt = metadata.hub) {
   return { ...original, state: { ...original.state, ...busState, ...railState },
     sources: { ground: GROUND, ...busSources,
     'trial-rail': { type: 'geojson', data: bundle.rails, tolerance: 0, buffer: 256, maxzoom: 14 },
+    'trial-rail-blend': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-attached': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
+    'trial-attached-blend': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-labels': { type: 'geojson', data: empty, tolerance: 0, buffer: 256, maxzoom: 14 },
     'trial-font-warm': { type: 'geojson', data: { type: 'FeatureCollection', features: warmAt ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: warmAt } }] : [] } },
   } };

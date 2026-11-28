@@ -1,7 +1,8 @@
 import * as maplibregl from '../../vendor/maplibre-gl.mjs';
 import { readView, writeView } from '../sheets/address.js';
 import { PALETTES } from '../sheets/style.js';
-import { MIN_ZOOM, MAX_ZOOM, RAIL_DRAWINGS, attachedCollection, attachedFor, labelsAt, busDrawingAt, railDrawingAt } from './model.js';
+import { MIN_ZOOM, MAX_ZOOM, RAIL_DRAWINGS, attachedCollection, attachedFor, labelsAt, busDrawingAt, railDrawingAt,
+  railBlendAt, prepareRailBlend, blendRail, blendAttached } from './model.js';
 import { previewStyle } from './style.js';
 import { resolveImages } from './images.js';
 
@@ -17,6 +18,12 @@ let updatedZoom = null;
 const labelState = { sides: new Map(), fades: new Map() };
 const busState = {};
 const railState = {};
+// The rail drawings paired for the slide across 14 (model.js, prepareRailBlend), and the last
+// zoom the slide's sources were filled for.
+let railBlend = null;
+let blendShown = false;
+let blendZoom = null;
+const EMPTY = { type: 'FeatureCollection', features: [] };
 let busLayers = null;
 let busSources = null;
 // True from the style's load until the theme changes it: the page's sources exist.
@@ -60,11 +67,38 @@ function update() {
   // letters (model.js, railDrawingAt). Line letters appear as the zoom reaches them and stay for
   // every closer zoom.
   const rail = railDrawingAt(zoom, railState);
-  for (const d of RAIL_DRAWINGS) {
-    const value = rail.sets[d.set].lines, key = `rail${d.set}`;
-    if (busShown.get(key) !== value) { map.setGlobalStateProperty(key, value); busShown.set(key, value); }
+  // Across the short band either side of 14 the rail and what rides it are drawn from the two
+  // drawings' lines gliding into one another (model.js, railBlendAt); outside it they hand over
+  // as before. The slide's sources are filled only when the zoom moves.
+  const blend = railBlendAt(zoom);
+  if (blend !== null) {
+    railBlend ??= prepareRailBlend(bundle.rails, bundle.sizes);
+    for (const d of RAIL_DRAWINGS) {
+      const key = `rail${d.set}`;
+      if (busShown.get(key) !== 0) { map.setGlobalStateProperty(key, 0); busShown.set(key, 0); }
+    }
+    if (!blendShown || blendZoom === null || Math.abs(blendZoom - zoom) > 1e-7) {
+      map.getSource('trial-rail-blend').setData(blendRail(railBlend, blend));
+      const one = (ref) => ({ sets: Object.fromEntries(RAIL_DRAWINGS.map((d) => [d.set, { lines: d.ref === ref ? 1 : 0, labels: d.ref === ref ? 1 : 0 }])) });
+      map.getSource('trial-attached-blend').setData(blendAttached(
+        attachedCollection(attachedFor(bundle.attached, one(RAIL_DRAWINGS[0].ref), zoom), bundle.sizes, zoom),
+        attachedCollection(attachedFor(bundle.attached, one(RAIL_DRAWINGS[1].ref), zoom), bundle.sizes, zoom), blend));
+      blendZoom = zoom;
+    }
+    if (!blendShown) map.getSource('trial-attached').setData(EMPTY);
+    blendShown = true;
+  } else {
+    if (blendShown) {
+      map.getSource('trial-rail-blend').setData(EMPTY);
+      map.getSource('trial-attached-blend').setData(EMPTY);
+      blendShown = false; blendZoom = null;
+    }
+    for (const d of RAIL_DRAWINGS) {
+      const value = rail.sets[d.set].lines, key = `rail${d.set}`;
+      if (busShown.get(key) !== value) { map.setGlobalStateProperty(key, value); busShown.set(key, value); }
+    }
+    map.getSource('trial-attached').setData(attachedCollection(attachedFor(bundle.attached, rail, zoom), bundle.sizes, zoom));
   }
-  map.getSource('trial-attached').setData(attachedCollection(attachedFor(bundle.attached, rail, zoom), bundle.sizes, zoom));
   const labels = labelsAt(bundle.frames, zoom, bundle.sizes, labelState, performance.now(), { motion: !calm.matches });
   map.getSource('trial-labels').setData(labels.collection);
   busLayers ??= map.getStyle().layers.filter((l) => l.metadata?.busKey).map((l) => ({ id: l.id, key: l.metadata.busKey, source: l.source, plain: l.metadata.busPlain, set: null }));
@@ -89,7 +123,7 @@ function update() {
   $('in').disabled = zoom >= MAX_ZOOM - 0.001;
   $('status').textContent = `Zoom ${zoom.toFixed(2)}`;
   timings.push(performance.now() - started);
-  window.zoomState = { zoom, labelFrame, busSet: bus.set, railSet: rail.set, fading: labels.busy || bus.busy || rail.busy, updates: timings.length, lastUpdateMs: timings.at(-1) };
+  window.zoomState = { zoom, labelFrame, busSet: bus.set, railSet: rail.set, blending: blend !== null, fading: labels.busy || bus.busy || rail.busy, updates: timings.length, lastUpdateMs: timings.at(-1) };
 }
 
 // Whether a source has something to draw on screen: its tiles for this zoom, or, while those
@@ -113,6 +147,8 @@ function applyStyle() {
   busSources = null;
   styleReady = false;
   busShown.clear();
+  blendShown = false;
+  blendZoom = null;
   const ready = () => { styleReady = true; update(); setPick(picked); };
   map.once('style.load', ready);
   map.setStyle(previewStyle(theme, metadata, bundle, map.getCenter().toArray()));
@@ -155,6 +191,11 @@ try {
     update(); setPick(picked);
     for (const id of ['theme', 'zoom', 'sweep']) $(id).disabled = false;
     window.zoomReady = true;
+    // Pair the two rail drawings for the slide once the opening view has drawn (model.js,
+    // prepareRailBlend); 130 ms here rather than as a hitch in the first pinch through 14.
+    const prepareBlend = () => { if (!railBlend) railBlend = prepareRailBlend(bundle.rails, bundle.sizes); };
+    if ('requestIdleCallback' in window) requestIdleCallback(prepareBlend, { timeout: 2000 });
+    else setTimeout(prepareBlend, 0);
     // Shown once everything at the opening zoom has drawn (zoom.css), or after 10 s regardless.
     const reveal = () => { if (window.zoomShown) return; document.documentElement.dataset.ready = ''; window.zoomShown = performance.now(); };
     map.once('idle', reveal);
