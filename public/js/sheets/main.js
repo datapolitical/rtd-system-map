@@ -629,6 +629,7 @@ whenSettled(() => loadPanel().catch(() => {}));
 let timeWindows = {}; // the hours the build measured each frequency in (directory.json, windows)
 function setPick(p) {
   picked = p;
+  if (map.getGlobalState().busFallbackSheet !== -1) map.setGlobalStateProperty('busFallbackSheet', -1);
   // A picked bus route is drawn from its sheets' route lines, whose layers show only now (#193).
   if (p?.mode === 'bus' && !routeLines) {
     routeLines = true;
@@ -641,6 +642,15 @@ function setPick(p) {
   remember();
   markKey();
 }
+// The main sheet already knows which buses use each street. If the separate route
+// geometry never drew (for example, its tile failed), use those streets for the pick.
+map.on('idle', () => {
+  if (picked?.mode !== 'bus') return;
+  const n = SHEETS[sheet].id;
+  const hasLine = map.queryRenderedFeatures({ layers: [`pick-bus-${n}`] }).length > 0;
+  const fallbackSheet = hasLine ? -1 : n;
+  if (map.getGlobalState().busFallbackSheet !== fallbackSheet) map.setGlobalStateProperty('busFallbackSheet', fallbackSheet);
+});
 function chip(r) {
   const on = picked?.mode === r.mode && picked.route === r.route;
   const look = r.mode === 'rail' ? ` style="background:${esc(r.color)};color:${esc(inkOn(r.color))}"` : '';

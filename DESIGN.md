@@ -2340,6 +2340,10 @@ they are. The pick is MapLibre global state (`bus`, `rail`) that each sheet's
 layers read, so it holds on every sheet and through zooms with no tile made
 again (`public/js/sheets/style.js`, `pick.js`).
 
+If the settled view has a picked bus but its composed line did not draw,
+the map highlights that bus's matching street pieces already in the sheet
+(#288). The composed geometry takes precedence whenever it draws.
+
 How it is built:
 
 - **One procedure, run once per sheet.** `scripts/lib/sheets.mjs` draws a
@@ -5903,6 +5907,11 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ground metres so streets only split as the map zooms in. The page still
   keeps its own copies of five sizes until the lettering plan (#234) gives
   it the build's tables.
+
+- 2026-11-28: A picked bus still highlights its streets when its composed
+  line fails to draw (#288). The settled sheet already has those street
+  pieces and their route lists, so it can show the pick while the separate
+  route geometry is unavailable.
 
 ## Sources
 

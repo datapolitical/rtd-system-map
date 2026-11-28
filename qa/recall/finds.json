@@ -2205,6 +2205,23 @@
       "found_by": "Chris, on his iPhone, on the #215 preview (hold-taps), 2026-11-25",
       "pinned_by": "Claude; an interaction fault: Safari makes no click of a tap within about 300 ms of the last, and the buttons stepped only on clicks. qa/checks/steps.spec.mjs ('two quick taps on +, as Safari delivers them') drops those clicks as Safari does; it fails on b074d26 and passes on the fix, 2026-11-25",
       "confidence": "clear"
+    },
+    {
+      "id": "288-alameda-pick-no-line",
+      "issue": 288,
+      "place": "Alameda Avenue with route 3 selected, sheet 2",
+      "said": "The route chip and map numbers turn white while Alameda Avenue stays dim.",
+      "kind": "pick-line-missing",
+      "caught_by": ["pick-line-missing"],
+      "theme": "dark",
+      "zoom": 12,
+      "points": [[-104.98207, 39.71228]],
+      "radius_px": 20,
+      "capture": { "view": "12/39.73090/-104.98619", "size": [402, 654] },
+      "seen_on": ["8b0bb6c"],
+      "found_by": "Chris, on iPhone Safari, 2026-11-28",
+      "pinned_by": "Codex, from the Safari screenshot. qa/checks/sheets.spec.mjs exercises the same visible failure by returning HTTP 503 for the route tile.",
+      "confidence": "clear"
     }
   ]
 }

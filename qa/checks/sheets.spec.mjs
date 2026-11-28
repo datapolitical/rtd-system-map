@@ -33,6 +33,36 @@ test('a selected route survives theme changes and reload; Escape clears it', asy
   expect(await page.evaluate(() => window.sheetsPick)).toBeNull();
 });
 
+test.describe('bus selection on Alameda Avenue', () => {
+  test.use({ serviceWorkers: 'block' });
+
+  test('draws the selected street if the route tile fails and the composed line when it loads', async ({ sheetPage }) => {
+    const { page, goto } = sheetPage;
+    const routeTiles = '**/tiles/routes-2/**';
+    await page.route(routeTiles, (request) => request.fulfill({ status: 503, body: 'Route tile unavailable' }));
+    await goto('#12/39.73090/-104.98619');
+    const alameda = await page.evaluate(() => {
+      const { x, y } = window.sheetsMap.project([-104.98207, 39.71228]);
+      return [x, y];
+    });
+    await page.touchscreen.tap(...alameda);
+    await expect(page.locator('#card button[data-route="3"]')).toHaveAttribute('aria-pressed', 'true');
+    const features = (id) => page.evaluate((layer) => window.sheetsMap.queryRenderedFeatures({ layers: [layer] })
+      .map(({ properties }) => properties.routes), id);
+    await expect.poll(() => features('pick-street-2')).toContain('3');
+    expect(await features('pick-bus-2')).toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect.poll(() => features('pick-street-2')).toEqual([]);
+
+    await page.unroute(routeTiles);
+    await goto('#12/39.73090/-104.98619/bus/3');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await sheetPage.settled();
+    await expect.poll(() => features('pick-bus-2')).toContain('3');
+    expect(await features('pick-street-2')).toEqual([]);
+  });
+});
+
 test('an old Classic link redirects to the current map and keeps its view', async ({ sheetPage }) => {
   const { page } = sheetPage;
   const response = await page.request.get('/data/sheets.json');
