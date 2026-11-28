@@ -179,6 +179,7 @@ export function stationService(text, stations, { today, isRailRoute, lineOf }) {
         platforms: found
           .flatMap(({ platforms }) => [...platforms.values()])
           .map(({ stop, lines: at }) => ({
+            id: stop.stop_id, // for the station's departures (departures.mjs)
             at: [Number(stop.stop_lon), Number(stop.stop_lat)],
             lines: [...at].filter((line) => !positioning.has(line)).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
           }))

@@ -484,6 +484,11 @@ next one?" and "is anything wrong?" in either view, Live or not:
   - Rail within about a 20-minute walk is included.
   - "Near me" does the same for your location.
 
+Built on today's sheets (2026-11-27, #13): a stop's and a station's card
+show the next scheduled departures. Live predictions, alerts in panels and
+the vehicle panel are not built; the vehicle panel and alert marks on the
+map wait for Live on the zoomable map (#251).
+
 *Done when:* someone can answer "when's the next bus I can catch from here?"
 in under 20 seconds, and "what's the most frequent bus within a 5-minute walk
 of this address?" in under 30.
@@ -503,8 +508,9 @@ Weekday evening, Saturday, Sunday, or a day and time you pick:
 One search box for routes (by number or name), stations, Park-n-Rides, stops
 (by name or stop number), landmarks, and street addresses.
 
-Built so far (2026-11-06): routes, rail stations, Park-n-Rides and transit
-centers, and bus stops. Landmarks and street addresses are not built.
+Built so far: routes, rail stations, Park-n-Rides and transit centers, and
+bus stops (on the classic map 2026-11-06; on today's sheets 2026-11-27, #238).
+Landmarks and street addresses are not built.
 
 ### 6. Understand rail and transfers
 
@@ -765,6 +771,37 @@ publishes:
 
 The page works out the tiers for any moment from the summary. In Live it
 recomputes every minute and fades a line to its new tier when it changes.
+
+### Departures: every stop's timetable, in small files
+
+The build writes every stop's departures from the feed's `stop_times.txt`
+to `data/departures/` (`scripts/lib/departures.mjs`; #13): one small file
+per group of stops and an index, so a card fetches a few kilobytes, not the
+timetable. A trip's last stop is not a departure, nor is a stop where it
+only sets down; a stop where trips only end is marked, and its card says
+"Trips end here". Each departure belongs to a pattern (the map's route, the
+name on the bus, where it is headed, and the service it runs on), and the
+index carries the feed's calendar and its exceptions and each rail station's
+platforms. The page works out "next" itself for today's real date
+(`public/js/panel/departures.js`): the services running today, and
+yesterday's that run past midnight, in the timetable's own time zone
+whatever the device is set to. So a holiday shows its own timetable, and
+nothing is rebuilt each day. Measured on the November 2026 feed: 791,758
+departures at 7,468 stops in 128 files, 2.8 MB in all and about 460 KB
+compressed, the largest 58 KB; `qa/departures.mjs data` recounts every
+stop from RTD's raw file by a second reading.
+
+A card shows the next two departures for each route and destination within
+three hours, soonest first, at most six rows, trains first at a station,
+as clock times ("9:41pm"): a count of minutes is kept for RTD's live
+predictions. It is headed "Next departures, scheduled" and redrawn each
+half minute, so a bus that has left drops off. Stops in RTD's stops layer
+that its timetable does not carry (64 in November 2026) say "RTD's
+timetable lists no trips here".
+
+The panel is its own code and reads nothing of the sheets; the sheets' page
+only says which stop or station a card is for (`leaves` and
+`showDepartures` in `public/js/sheets/main.js`).
 
 ### Station service: also from GTFS
 
@@ -2834,7 +2871,27 @@ plain words.
 It works by keyboard: the arrow keys move through results, Enter opens one,
 Esc closes the list, and a screen reader hears how many results there are.
 The stops file (1.5 MB) loads when the search box is first used, never at
-page load.
+page load; so do the search scripts.
+
+A Park-n-Ride or transit center within 300 m of a rail station is found as
+that station. A station's platforms are not listed as bus stops. A stop
+number is matched from its third digit, so "15" is route 15 and "157" starts
+stop numbers.
+
+On today's sheets (#238) a route result steps to the closest sheet that
+shows all of the route and picks it, as a tap on it does. A station or a
+Park-n-Ride is shown on the first sheet at zoom 13 or closer, and a bus stop
+on the first sheet that draws stops; the place is ringed until the next tap,
+because the finger did not choose it. The card is the one a tap opens. A
+stop's card adds its stop number, and a Park-n-Ride's the routes at stops
+within 400 m.
+
+Search is its own code, apart from the map (`public/js/search/`): `find.js`
+holds the matching and the order, with no page in it, and `box.js` the box
+and its list. Neither reads anything of the sheets. What happens when a
+result is chosen is one function the map hands to it (`goTo` in
+`public/js/sheets/main.js`), the only part the zoomable map replaces
+(`test/search-find.test.mjs` fails if either file names the sheets).
 
 ### Highlight, don't list
 
@@ -3907,9 +3964,13 @@ What comes after launch is in these milestones, in this order (decided
    draw from. Released 2026-11-25.
 2. **v1.2: Fixes from the weekly round.** Fixes Chris picks in the weekly
    map round, on today's sheets.
-3. **v1.3: Live, panels and search.** On today's sheets, built so the
-   zoomable map reuses them: the route panel and route tracing, Live, stop
-   and station panels with next departures and alerts, and search.
+3. **v1.3: Live, panels and search.** On today's sheets, only what carries
+   over to the zoomable map without being built twice: search, the route
+   panel with its frequency rows, and stop and station panels with next
+   departures and alerts. Each is its own module under `public/js/` that
+   never reads sheet state; moving the map is one small function, the only
+   part the zoomable map replaces. Route tracing and Live vehicles wait for
+   the zoomable map (#251).
 4. **v2: One zoomable map.** The sheets' drawing at every zoom from the
    whole district to 16, one map that zooms smoothly, with the build
    deciding every label. The milestone holds only the steps to it, in
@@ -3920,7 +3981,7 @@ What comes after launch is in these milestones, in this order (decided
 5. **v2.x: Other times, Live tiers, edge letters and relief.** On the
    zoomable map: edge letters and relief, then Saturday, Sunday and evening
    in the Key, and Live tiers, built on how other times fit the drawings
-   (#233).
+   (#233); and route tracing and Live vehicles (#251).
 6. **Later.** Ideas with no date.
 
 A fifth milestone, **Parked: recheck on the zoomable map**, is not a
@@ -5693,6 +5754,23 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ("What people can do", items 2 to 5); most of these sit on top of the
   drawing rather than in it; and the plan of 2026-11-18 no longer
   described the work the trial found. Chris: yes to both.
+- 2026-11-27: The project is moving to the zoomable map, so today's sheets
+  get only what carries over to it easily: search (#238), the route panel
+  with its frequency rows (#162, #22) and next departures and alert panels
+  (#13). Route tracing and Live vehicles wait for the zoomable map (#251,
+  in v2.x): tracing draws from the sheets' own route-line layers (#193) and
+  Live vehicles depend on how v2 serves its drawings (#237), so either
+  would be built twice. Each v1.3 piece is its own module under
+  `public/js/` that never reads sheet state (no sheet numbers, no sheet
+  layers, no step code); moving the map to a result or a card is one small
+  function, the only part v2 replaces. This narrows the v1.3 entry above of
+  the same day. Chris, about 15:30 MST.
+- 2026-11-27: Search on today's sheets (#238). The box is the top row, as
+  "Layout" has it, so the loading line and the keyboard's "List what's in
+  view" button moved under it, and a picked route from a link is framed
+  below it. A place search finds is ringed on the map: a tap marks its own
+  place with the finger, a search result has none. The "Lines" button is
+  not part of this; the keyboard's list of what is in view stays.
 - 2026-11-27: The route panel on today's sheets (#162) with weekday
   rush-hour and evening rows (#22). The panel is folded under the picked
   route's two-line card, so the card still covers as little of the map as
@@ -5710,6 +5788,14 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   without the tailnet addresses in its fix register, under the new name, and
   the old branch left GitHub. Every commit of the old branch has a twin
   there with the same change, so no work was lost.
+- 2026-11-27: Next departures on today's sheets (#13), scheduled first.
+  The build publishes every stop's timetable in small files and the page
+  works out "next" for today's real calendar, so nothing is rebuilt daily
+  and a holiday shows its own timetable. Scheduled times are clock times;
+  minutes are kept for live predictions, which are not built: RTD's
+  TripUpdate feed reaches the page only through the Live relay, and Live
+  waits for the zoomable map (#251). Alerts in panels are not built
+  either: the relay asks RTD for alerts only while someone has Live on.
 - 2026-11-27: While the map loads, the page shows RTD's rail lines with
   pulses flowing out from the hub along them, in their own colours and
   where the map will draw them, and
