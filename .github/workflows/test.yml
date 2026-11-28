@@ -60,4 +60,4 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Bundle the Live relay
-        run: npx --yes wrangler@4.80.0 deploy --dry-run --outdir "$RUNNER_TEMP/live" --config live/wrangler.toml
+        run: npx --yes wrangler@4.153.0 deploy --dry-run --outdir "$RUNNER_TEMP/live" --config live/wrangler.toml
