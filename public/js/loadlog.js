@@ -173,6 +173,36 @@ export function openDetails(from) {
   dlg.querySelector('button').focus();
 }
 
+// A long press on `el`, done with touch events on a phone and pointer events for a mouse or pen.
+// iOS Safari starts a text selection and a callout on a held touch, and fires pointercancel when it
+// does, so a touch hold is read from touchstart (preventDefault there stops both) and not from
+// pointer events. A press that starts on a link is left alone so the link stays tappable.
+export const HOLD_MS = 500;
+export const SLOP = 10;
+export function longPress(el, onLong, { ms = HOLD_MS, slop = SLOP, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+  let timer = null;
+  let from = null;
+  const cancel = () => { if (timer != null) clearTimer(timer); timer = null; from = null; };
+  const start = (e, x, y) => {
+    if (e.target?.closest?.('a')) return false;
+    cancel();
+    from = { x, y };
+    timer = setTimer(() => { timer = null; from = null; onLong(); }, ms);
+    return true;
+  };
+  const move = (x, y) => { if (from && Math.hypot(x - from.x, y - from.y) > slop) cancel(); };
+  el.addEventListener('touchstart', (e) => {
+    const t = e.touches?.[0];
+    if (e.touches?.length > 1 || !t) return cancel();
+    if (start(e, t.clientX, t.clientY)) e.preventDefault(); // no selection, no callout; a link press is not started or blocked
+  }, { passive: false });
+  el.addEventListener('touchmove', (e) => { const t = e.touches?.[0]; if (t) move(t.clientX, t.clientY); }, { passive: true });
+  for (const t of ['touchend', 'touchcancel']) el.addEventListener(t, cancel);
+  el.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') start(e, e.clientX, e.clientY); });
+  el.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') move(e.clientX, e.clientY); });
+  for (const t of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(t, (e) => { if (e.pointerType !== 'touch') cancel(); });
+}
+
 function wire() {
   const credit = document.getElementById('credit');
   if (!credit) return;
@@ -183,19 +213,10 @@ function wire() {
   credit.addEventListener('keydown', (e) => {
     if (e.target === credit && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDetails(credit); }
   });
-  // Touch and mouse: a long press (about 0.6 s) anywhere on the line but a link.
-  let timer = null;
-  let fired = false;
-  const cancel = () => { clearTimeout(timer); timer = null; };
-  credit.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('a')) return;
-    fired = false;
-    cancel();
-    timer = setTimeout(() => { fired = true; openDetails(credit); }, 600);
-  });
-  for (const t of ['pointerup', 'pointercancel', 'pointerleave', 'pointermove']) credit.addEventListener(t, (e) => { if (t !== 'pointermove' || Math.abs(e.movementX) + Math.abs(e.movementY) > 6) cancel(); });
-  // A long press on a phone also asks for the page's own menu; the sheet replaces it.
-  credit.addEventListener('contextmenu', (e) => { if (fired || timer) e.preventDefault(); });
+  // Touch and mouse: a long press anywhere on the line but a link.
+  longPress(credit, () => openDetails(credit));
+  // The browser's own menu on a long press (desktop right-click, some phones): open the sheet instead.
+  credit.addEventListener('contextmenu', (e) => { if (e.target.closest?.('a')) return; e.preventDefault(); openDetails(credit); });
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
