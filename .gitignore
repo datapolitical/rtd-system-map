@@ -3,6 +3,8 @@ node_modules/
 .DS_Store
 # The build's scratch folder while it writes public/data; never committed.
 public/data.next/
+# The ground drawings our build makes (scripts/ground.mjs): input for tiling (#237), not served.
+build/
 # Copied from node_modules by scripts/vendor.mjs.
 public/vendor/
 # Cut from the built sheets and the committed basemap/ by scripts/tiles.mjs, on every build.

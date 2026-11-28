@@ -17,9 +17,16 @@ export async function readPack(dir = DIR) {
   const keys = Object.keys(index.tiles);
   return {
     ...index,
+    keys,
     count: keys.length,
+    // A tile's bytes by its "z/x/y" key, or null when the pack has none.
+    tile(key) {
+      const span = index.tiles[key];
+      return span ? gunzipSync(bin.subarray(span[0], span[0] + span[1])) : null;
+    },
     // Each tile is kept gzipped, to keep the file small enough for git; the site serves it plain.
-    *tiles() { for (const key of keys) { const [at, length] = index.tiles[key]; yield [key, gunzipSync(bin.subarray(at, at + length))]; } },
+    // `zoom` reads only that level's tiles (scripts/lib/ground.mjs draws from the deepest).
+    *tiles(zoom = null) { for (const key of keys) { if (zoom !== null && Number(key.split('/')[0]) !== zoom) continue; const [at, length] = index.tiles[key]; yield [key, gunzipSync(bin.subarray(at, at + length))]; } },
   };
 }
 
