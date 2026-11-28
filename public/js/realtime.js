@@ -120,6 +120,66 @@ export async function refresh(state, { fetchBytes, decode, now = Date.now() }) {
   return next;
 }
 
+// --- Predictions for the stops a card shows (TripUpdate) ----------------------------------
+// A page with a stop's or a station's card open says which stops it wants (`watch`), and gets
+// only those stops' predictions back, each poll, while the card is open. The relay asks RTD for
+// the trip updates only while some page is watching a stop.
+
+// How many stops one page may watch (a station's platforms, with room), and how long a stop id may be.
+export const WATCH_MOST = 40;
+const STOP_ID = /^[\w .:-]{1,24}$/;
+// Predictions this old are not shown as live: RTD regenerates the feed about every 30 seconds.
+export const PREDICTIONS_STALE_S = 120;
+
+/** The stops a page asks to watch, from the text it sent: `{"watch": ["12563", …]}`. Null when it isn't that. */
+export function watchList(text) {
+  let asked;
+  try { asked = JSON.parse(text)?.watch; } catch { return null; }
+  if (!Array.isArray(asked)) return null;
+  return [...new Set(asked.filter((id) => typeof id === 'string' && STOP_ID.test(id)))].slice(0, WATCH_MOST);
+}
+
+/**
+ * Every stop's predictions, from a decoded TripUpdate feed: `{ at, byStop }`, `at` the feed's
+ * own time (seconds) and `byStop` a Map of stop id -> `{ times: [[trip, time, route]], skipped: [trip] }`.
+ * A call's time is its departure, or its arrival where RTD gives no departure. A call RTD marks
+ * skipped has no time: the trip does not stop there, so its scheduled time must not be shown.
+ */
+export function predictionsByStop(feed) {
+  const byStop = new Map();
+  const of = (stop) => byStop.get(stop) ?? byStop.set(stop, { times: [], skipped: [] }).get(stop);
+  for (const e of feed.entities) {
+    const u = e.trip_update;
+    const trip = u?.trip?.trip;
+    if (!trip) continue;
+    // 3 is CANCELED: none of the trip's calls run.
+    const canceled = u.trip.relationship === 3;
+    for (const call of u.stops ?? []) {
+      if (!call.stop) continue;
+      const time = call.departure?.time ?? call.arrival?.time;
+      if (canceled || call.relationship === 1) of(call.stop).skipped.push(trip);
+      else if (time) of(call.stop).times.push([trip, time, u.trip.route ?? '']);
+    }
+  }
+  for (const s of byStop.values()) s.times.sort((a, b) => a[1] - b[1]);
+  return { at: feed.header?.timestamp ?? 0, byStop };
+}
+
+/**
+ * What a watching page is sent: its own stops' predictions and nothing else. `index` is
+ * predictionsByStop's result, or null when the feed could not be read, which the page is told
+ * (`problem`) so it shows the timetable and says so.
+ */
+export function stopsMessage(index, stops, now) {
+  if (!index) return { v: SCHEMA, kind: 'stops', at: now, problem: true };
+  const out = {};
+  for (const id of stops) {
+    const s = index.byStop.get(id);
+    if (s && (s.times.length || s.skipped.length)) out[id] = { times: s.times, ...(s.skipped.length ? { skipped: s.skipped } : {}) };
+  }
+  return { v: SCHEMA, kind: 'stops', at: now, feed: index.at, stops: out };
+}
+
 /** The message a viewer gets: the whole state, as a snapshot or an update. */
 export const message = (state, kind) => ({
   v: SCHEMA,

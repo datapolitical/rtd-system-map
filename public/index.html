@@ -126,7 +126,7 @@
   :root { color-scheme: light; --ground: #f5f3ef; --card: #ffffff; --ink: #161c28; --quiet: #8b8f98; --note: #656a74; --rim: #8b8f98; }
   :root[data-theme="dark"] { color-scheme: dark; --ground: #0e141d; --card: #1a222e; --ink: #f3f5f9; --quiet: #5f6b82; --note: #8592a6; --rim: #6c7890; }
   /* --top is where the search bar sits; the loading line and the keyboard's list button sit under it. */
-  html { --top: max(12px, calc(env(safe-area-inset-top) + 8px)); --under: calc(var(--top) + 54px); }
+  html { --top: max(12px, calc(env(safe-area-inset-top) + 8px)); --under: calc(var(--top) + 54px); --live: #E89A00; }
   html, body, #map { margin: 0; height: 100%; background: var(--ground); }
   main { position: absolute; inset: 0; }
   /* A pinch or double tap on the map is the map's, never the page's, even before the map script has run. */
@@ -216,6 +216,9 @@
     box-shadow: inset 0 0 0 1.5px var(--rim); font-variant-numeric: tabular-nums; }
   #card .next .chip.rail { justify-self: center; min-width: 24px; width: 24px; padding: 0; box-shadow: none; font-weight: 800; }
   #card .next .sr { position: absolute; }
+  /* A live time carries the live mark, amber like an LED departure sign (DESIGN.md, "Visual tokens": Live). Scheduled times carry none. */
+  #card .next time.live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 4px; border-radius: 50%; background: var(--live); vertical-align: 0.08em; }
+  #card .departures .kind { font-size: 11.5px; }
   /* What's in view (#135): its places one under another, each opening its card. */
   #card.list { max-height: calc(100% - 200px); overflow-y: auto; }
   #card span.head { margin-top: 10px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
