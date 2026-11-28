@@ -3119,6 +3119,14 @@ network…" line at once; transit lines draw as soon as they arrive, even
 before every basemap tile is in. The attribution is a small "i" button on
 phones, not a full-width bar.
 
+The map needs iOS 16.4 or later. Safari 16.4 added support for the class
+static blocks used by MapLibre 6.19.0.
+[WebKit release notes](https://webkit.org/blog/13966/webkit-features-in-safari-16-4/).
+
+If the map's startup module fails, the loading sketch stops and the status
+line tells riders on older iOS to update or open the map on a newer device.
+On other browsers the line asks the rider to reload the page.
+
 ## Installed on a phone
 
 The site is a web page and stays one. On a phone it should be
@@ -5903,6 +5911,10 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   ground metres so streets only split as the map zooms in. The page still
   keeps its own copies of five sizes until the lettering plan (#234) gives
   it the build's tables.
+- 2026-11-27: Set iOS 16.4 as the map's minimum (#275). On an iPhone 7
+  with iOS 15.8.4, MapLibre's class static blocks stopped the page before
+  the map could start. Replace the loading sketch with an update message
+  when the startup import fails on older iOS.
 
 ## Sources
 

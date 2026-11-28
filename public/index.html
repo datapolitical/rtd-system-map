@@ -105,6 +105,7 @@
 <!-- Everything the opening view needs is asked for here, at once, instead of each file waiting
      for the one that names it (DESIGN.md, "Quality floor"). Its tiles are fetched by the script
      after the placeholder, which knows the view. -->
+<link rel="modulepreload" href="/js/sheets/main.js">
 <link rel="modulepreload" href="/vendor/maplibre-gl.mjs">
 <link rel="modulepreload" href="/js/sheets/style.js">
 <link rel="modulepreload" href="/js/sheets/settle.js">
@@ -315,6 +316,8 @@
   #loading, #wait { position: absolute; left: 50%; top: var(--under); transform: translateX(-50%); margin: 0; padding: 7px 15px 6px;
     background: var(--card); color: var(--ink); border-radius: 16px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
   #loading span, #wait span { animation: breathe 1.4s ease-in-out infinite; }
+  #poster.failed #sketch { display: none; }
+  #poster.failed #loading { box-sizing: border-box; width: max-content; max-width: calc(100% - 24px); white-space: normal; text-align: center; }
   #wait { z-index: 3; pointer-events: none; }
   #wait[hidden] { display: none; }
   @keyframes breathe { 50% { opacity: 0.45; } }
@@ -417,7 +420,21 @@
 <p id="say" class="sr" role="status"></p>
 </main>
 <footer id="credit">Unofficial. Data: RTD<span class="sep" aria-hidden="true">·</span><a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a><span class="sep" aria-hidden="true">·</span><a href="https://openfreemap.org">OpenFreeMap</a></footer>
-<script type="module" src="/js/sheets/main.js"></script>
+<script>
+  // Catch parse errors in dependencies as well as failures while the map starts.
+  import('/js/sheets/main.js').catch((error) => {
+    const ua = navigator.userAgent;
+    // iPads can identify as Macs when requesting the desktop site.
+    const ios = ua.match(/(?:iPhone|iPad|iPod).*?\bOS (\d+)[_.](\d+)/)
+      || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1 && ua.match(/\bVersion\/(\d+)\.(\d+)/));
+    const olderIOS = ios && (+ios[1] < 16 || (+ios[1] === 16 && +ios[2] < 4));
+    document.getElementById('poster').classList.add('failed');
+    document.getElementById('loading').textContent = olderIOS
+      ? 'This map needs iOS 16.4 or later. Update your device, or open the map on a newer one.'
+      : 'The map couldn’t load. Reload the page to try again.';
+    console.error(error);
+  });
+</script>
 <script type="module" src="/js/loadlog.js"></script>
 </body>
 </html>
