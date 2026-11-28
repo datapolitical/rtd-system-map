@@ -14,6 +14,7 @@ import { dataCode, sheetsCode } from './lib/fingerprint.mjs';
 import { drawingFingerprint } from './sheets.mjs';
 import { groundNeeds, readPack } from './lib/basemap.mjs';
 import { readdir } from 'node:fs/promises';
+import { sketch } from './sketch.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = path.join(ROOT, 'public', 'data');
@@ -58,6 +59,13 @@ const html = await readFile(path.join(ROOT, 'public', 'index.html'), 'utf8');
 const poster = html.match(/<div id="poster"[^>]*\sdata-drawing="([^"]*)"/)?.[1];
 if (sheets && poster !== sheets.drawing) {
   problems.push('the loading pictures were taken of another drawing: run `node scripts/poster-build.mjs`, commit public/index.html (the pictures themselves are not committed), then `npm run deploy`');
+}
+
+// The loading sketch is of these rail lines and this opening view (scripts/sketch.mjs).
+const drawnSketch = html.match(/<svg id="sketch"[\s\S]*?<\/svg>/)?.[0];
+const wantSketch = await sketch(path.join(ROOT, 'public') + path.sep).catch(() => null);
+if (wantSketch && drawnSketch !== wantSketch) {
+  problems.push('the loading sketch in public/index.html is not of the built rail lines: run `node scripts/sketch.mjs`, commit public/index.html, then `npm run deploy`');
 }
 
 // The ground is the site's own (scripts/basemap.mjs): there, with every property the style reads,

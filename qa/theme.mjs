@@ -72,11 +72,15 @@ try {
     await page.route('**/data/meta.json', async (route) => { await gate; await route.continue(); });
     try {
       await page.goto(base, { waitUntil: 'commit' });
-      await page.waitForSelector('#poster svg', { timeout: 30000 });
+      await page.waitForSelector('#sketch path', { timeout: 30000 });
       assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), other);
       // The placeholder is drawn in the saved theme's ground, not the device's.
       const ground = await page.evaluate(() => [getComputedStyle(document.querySelector('#poster')).backgroundColor, getComputedStyle(document.documentElement).getPropertyValue('--ground').trim()]);
       assert.equal(ground[1], other === 'dark' ? '#0e141d' : '#f5f3ef');
+      // The sketch's lines take that theme's colours (scripts/sketch.mjs, --l and --d).
+      const ink = await page.evaluate(() => { const p = document.querySelector('#sketch path'); const s = getComputedStyle(p); return [s.stroke, s.getPropertyValue(document.documentElement.dataset.theme === 'dark' ? '--d' : '--l').trim()]; });
+      const hex = (rgb) => '#' + rgb.match(/\d+/g).slice(0, 3).map((v) => Number(v).toString(16).padStart(2, '0')).join('');
+      assert.equal(hex(ink[0]), ink[1].toLowerCase());
     } finally { release(); }
     await palette(other); await page.unroute('**/data/meta.json');
     results.push({ system, check: 'saved preference overrides device setting before paint and draws the placeholder in it', ok: true });

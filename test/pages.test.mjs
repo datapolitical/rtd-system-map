@@ -96,22 +96,31 @@ test('a list a feature carries is looked up from the build\'s table, as the tile
   for (const o of offsets) assert.deepEqual(o, ['match', ['get', 'offset'], listKey([0, -1.2]), ['literal', [0, -1.2]], listKey([0.5, 0]), ['literal', [0.5, 0]], ['literal', [0, 0]]]);
 });
 
-test('the front page shows a placeholder drawn in the page itself while the map loads', async () => {
+test('the front page shows the rail lines drawing in, drawn in the page itself, while the map loads', async () => {
   const html = read('');
   const [, view, bounds] = html.match(/<div id="poster" data-view="([^"]*)" data-bounds="([^"]*)" data-drawing="[^"]*"[^>]*>/) ?? [];
-  // scripts/poster.mjs writes these: the opening view (its tiles are fetched early) and the map's bounds.
+  // scripts/poster.mjs writes these: the opening view (the sketch and the early tiles) and the map's bounds.
   assert.match(view ?? '', /^\d+(\.\d+)?\/-?\d+\.\d+\/-?\d+\.\d+$/, 'the opening view');
   const [w, s, e, n] = (bounds ?? '').split(',').map(Number);
   assert.ok(w < e && s < n, 'the map bounds');
   const [, lat, lon] = view.split('/').map(Number);
   assert.ok(w < lon && lon < e && s < lat && lat < n, 'the view is inside them');
-  // Nothing to download before the map can start (#222): a mark drawn inline in the theme's own
-  // colours, and the line saying so. No picture, no font of its own.
-  const poster = html.slice(html.indexOf('<div id="poster"'), html.indexOf('</div>', html.indexOf('<div id="poster"')));
-  assert.match(poster, /<svg [^>]*aria-hidden="true"/);
-  assert.match(poster, /<p id="loading" role="status"><span>Loading…<\/span><\/p>/);
-  assert.doesNotMatch(poster, /\b(?:src|href)=|#[0-9a-f]{3,8}\b/i, 'no file and no colour of its own');
+  // Nothing to download before the map can start (#222): the sketch is part of the page.
+  const poster = html.slice(html.indexOf('<div id="poster"'), html.indexOf('<p id="loading"'));
+  const svg = poster.match(/<svg id="sketch"[^>]*aria-hidden="true"[^>]*>([\s\S]*?)<\/svg>/)?.[1];
+  assert.ok(svg, 'the sketch, hidden from screen readers');
+  const paths = [...svg.matchAll(/<path pathLength="1" style="--l:(#[0-9a-f]{6});--d:(#[0-9a-f]{6});--i:(\d+)" d="M[-\d. M]+"\/>/gi)];
+  assert.ok(paths.length >= 1 && paths.length === (svg.match(/<path/g) ?? []).length, 'one path per rail line, each with its colour in both themes');
+  assert.doesNotMatch(poster, /\b(?:src|href)=/, 'no file of its own');
   assert.doesNotMatch(html, /\/poster\//, 'the page asks for no loading picture');
+  assert.match(html, /<p id="loading" role="status"><span>Loading…<\/span><\/p>/);
+  // Still, with reduced motion: drawn whole at once.
+  assert.match(html, /@media \(prefers-reduced-motion: reduce\) \{[^\n]*#sketch path \{ animation: none; \}|@media \(prefers-reduced-motion: reduce\) \{[^\n]*#sketch path[^\n]*animation: none;[^\n]*#sketch path \{ stroke-dashoffset: 0; \}/);
+  // It is of the built rail lines and opening view, when they are here (scripts/sketch.mjs; the publish check too).
+  if (fs.existsSync(path.join(PUBLIC, 'data', 'routes.geojson'))) {
+    const { sketch } = await import('../scripts/sketch.mjs');
+    assert.equal(html.match(/<svg id="sketch"[\s\S]*?<\/svg>/)[0], await sketch(), 'run node scripts/sketch.mjs');
+  }
   // The buttons start as they are on the opening sheet, so nothing changes under the picture when the script runs.
   // The page opens on sheet 1, one step in from the whole district (#152): a wider sheet is there.
   const { SHEETS, OPENING } = await import('../public/js/sheets/style.js');

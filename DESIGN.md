@@ -3224,18 +3224,25 @@ are deferred, not ruled out. See "Open questions".
   - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are tiles
     of their own, `routes-N`, whose layers show from the first pick, or at the opening when the
     address picks a bus route (#193). They were about 40% of every sheet's bytes.
-  - While it loads, the sheets page shows the map's ground with a small
-    junction mark in the middle and the "Loading…" line at the top, and
-    fades to the map once the map has drawn its opening view (or at once,
-    if a button is pressed first). The mark is drawn in the page itself
-    (an inline SVG in the theme's own ink, grey and card colours), so it
-    is on screen with the first bytes of the page and asks for nothing:
-    the map's downloads have the whole connection from the start (#222).
-    The build still takes the pictures of the opening view
-    (`scripts/poster.mjs`, `public/poster/`): the same step records the
-    opening view and its tile zooms (`data-view`, `data-early`), the
-    drawing programs, and the drawing and ground fingerprints the publish
-    check reads, but the page no longer shows or asks for the pictures.
+  - While it loads, the sheets page shows RTD's rail lines drawing
+    themselves in on the map's ground, each in its own colour (as the map
+    draws it in that theme) and where the map will draw it on the opening
+    view, with the "Loading…" line at the top. Once the map has drawn that
+    view (or at once, if a button is pressed first) the sketch fades and
+    the map lands on the same lines. With reduced motion the lines are
+    there whole from the start. The sketch is part of the page (an inline
+    SVG of about 10 KB, 3 KB compressed), so it is on screen with the first
+    bytes and asks for nothing: the map's downloads have the whole
+    connection from the start (#222). `scripts/sketch.mjs` writes it from
+    the built rail lines, the opening view and the map's colour rule
+    (`railInk`), as part of the build's picture step; the publish check
+    fails if it is not of the built lines. A link to another view gets the
+    line on plain ground. The build still takes the pictures of the
+    opening view (`scripts/poster.mjs`, `public/poster/`): the same step
+    records the opening view and its tile zooms (`data-view`,
+    `data-early`), the drawing programs, and the drawing and ground
+    fingerprints the publish check reads, but the page no longer shows or
+    asks for the pictures.
   - MapLibre and the Overpass font are served from the site itself: no extra
     connections to a CDN or Google before the map can start.
   - Symbols are drawn on canvases kept in memory, not on the GPU
@@ -5700,21 +5707,24 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   without the tailnet addresses in its fix register, under the new name, and
   the old branch left GitHub. Every commit of the old branch has a twin
   there with the same change, so no work was lost.
-- 2026-11-27: While the map loads, the page shows a small junction mark
-  drawn in the page itself and the "Loading…" line on the map's ground,
-  not a picture of the opening view (#222). This replaces the picture of
-  2026-11-12 and the download order tried on the first-paint branch (#226).
-  Reason: the picture was 90 to 102 KB of the about 680 KB a phone fetched
-  before the map drew, and on a normal connection it gave nothing but cost
-  the map's downloads that share of the line. Chris: "show something
-  immediately, with no extra download", then, on the measurements, "we
-  shouldn't use the picture anymore". Measured locally (Chromium at iPhone
-  14 size, 4x CPU, light and dark): 572 KB before the map, was 683 KB; the
-  map's files all in at 1.20 s on typical 4G (was 1.50 s), 4.0 s on slow
-  4G (was 4.1 s), 8.6 s at 0.65 Mbit/s (was 9.8 s); something on screen
-  at first paint in every case, where the picture showed at 3.1 s on slow
-  4G and 6.6 s at 0.65 Mbit/s. The time the map is drawn did not differ
-  beyond the noise of a busy machine.
+- 2026-11-27: While the map loads, the page shows RTD's rail lines drawing
+  themselves in, in their own colours and where the map will draw them, and
+  the "Loading…" line, all drawn in the page itself; not a picture of the
+  opening view (#222). This replaces the picture of 2026-11-12 and the
+  download order tried on the first-paint branch (#226). Reason: the
+  picture was 90 to 102 KB of the about 680 KB a phone fetched before the
+  map drew, and on a normal connection it gave nothing but cost the map's
+  downloads that share of the line. Chris: "show something immediately,
+  with no extra download", then, on the measurements, "we shouldn't use
+  the picture anymore", and he picked the rail sketch from four looks
+  (review of 2026-11-27: the sketch, trains on grey tracks, line bullets, a
+  small mark) because he wanted "something visually interesting".
+  Measured locally (Chromium at iPhone 14 size, 4x CPU, light and dark),
+  with the picture gone: the map's files all in at 1.20 s on typical 4G
+  (was 1.50 s), 4.0 s on slow 4G (was 4.1 s), 8.6 s at 0.65 Mbit/s (was
+  9.8 s); something on screen at first paint in every case, where the
+  picture showed at 3.1 s on slow 4G and 6.6 s at 0.65 Mbit/s. The time
+  the map is drawn did not differ beyond the noise of a busy machine.
 
 ## Sources
 
