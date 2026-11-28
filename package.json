@@ -28,6 +28,7 @@
     "check:recall": "node qa/recall/recall.mjs",
     "check:accuracy": "node qa/accuracy.mjs",
     "check:evidence": "node qa/evaluation/run.mjs",
+    "check:plan": "node scripts/check-plan.mjs",
     "sweep:classic": "node qa/sweep/sweep.mjs",
     "watch:rtd": "node refresh/watch.mjs"
   },
