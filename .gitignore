@@ -1,7 +1,7 @@
 node_modules/
 .wrangler/
 .DS_Store
-# The build's scratch folder while it writes public/data (committed).
+# The build's scratch folder while it writes public/data; never committed.
 public/data.next/
 # Copied from node_modules by scripts/vendor.mjs.
 public/vendor/
