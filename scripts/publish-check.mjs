@@ -32,6 +32,8 @@ const meta = await json('meta.json');
 const sheets = await json('sheets.json');
 // What the page loads: these, and one file per sheet.
 await json('directory.json');
+// What a stop's or a station's card loads for its next departures (scripts/lib/departures.mjs).
+await json('departures/index.json');
 const drawn = {};
 for (const sheet of SHEETS) drawn[sheet.id] = await json(`sheet-${sheet.id}.geojson`);
 

@@ -112,8 +112,8 @@ test('GTFS rail stations far from any map station are reported', () => {
 test('a station reports its platforms: each child stop and the lines that call there', () => {
   const result = stationService(feed(), stations, options);
   assert.deepEqual(result.stations[0].platforms, [
-    { at: [0, 0.0002], lines: ['X'] },
-    { at: [0, -0.0002], lines: ['Y'] },
+    { id: 'p1a', at: [0, 0.0002], lines: ['X'] },
+    { id: 'p1b', at: [0, -0.0002], lines: ['Y'] },
   ]);
   assert.deepEqual(result.stations[3].platforms, [], 'a station with no trains has no platforms to group');
 });
