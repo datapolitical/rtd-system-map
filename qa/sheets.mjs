@@ -1,4 +1,4 @@
-// Regression checks for the four-sheet launch and the issues found in its audit.
+// Regression checks for the sheets' launch and the issues found in its audit.
 // node qa/sheets.mjs <base-url> [out-dir]
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';

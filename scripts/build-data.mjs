@@ -841,7 +841,7 @@ async function main() {
   await writeFile(path.join(next, 'departures', 'index.json'), JSON.stringify(tables.index));
   await Promise.all(tables.files.map((file, k) => writeFile(path.join(next, 'departures', `${k}.json`), JSON.stringify(file))));
   console.log(`  departures: ${tables.departures} at ${tables.stops} stops (${tables.ends} more where trips only end), in ${tables.files.length} files of about ${Math.round(tables.chars / tables.files.length / 1000)} KB; ${Object.keys(tables.index.stations).length} stations' platforms`);
-  // The four sheets are drawn from the files just written (DESIGN.md, "Four sheets").
+  // The sheets are drawn from the files just written (DESIGN.md, "Five sheets").
   await writeSheets(next);
   await rm(OUT, { recursive: true, force: true });
   await rename(next, OUT);

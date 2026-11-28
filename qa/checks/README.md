@@ -42,5 +42,5 @@ checking a different application. The old map-report and sweep commands are
 `check:classic:map` and `sweep:classic`; their findings describe that renderer,
 not the sheet map. Frozen builds retain their original page code.
 
-The smooth-zoom trial has its own preview and checks on `zoom-prototype-154`.
+The smooth-zoom trial has its own preview and checks on `zoom-154-merge`.
 See [the development guide](../../docs/development.md).

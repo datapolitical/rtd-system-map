@@ -6,7 +6,7 @@ which claims are justified. A passing command covers only its stated scope.
 | Profile | Target | Required scope |
 |---|---|---|
 | Current sheets | `main`, `/` | Five scales: 8.75, 10, 12, 14, 16; actual settled camera; both themes; selection, theme/reload/clear |
-| Smooth-zoom trial | `zoom-prototype-154`, `/zoom/` | Both offset/drawn modes and themes; endpoints 12/14, boundary sides 12.99/13.01, fractional samples; selection, reversal and motion separately |
+| Smooth-zoom trial | `zoom-154-merge`, `/zoom/` | Both offset/drawn modes and themes; endpoints 12/14, boundary sides 12.99/13.01, fractional samples; selection, reversal and motion separately |
 | Historical Classic | Frozen fixtures / `classic-archive` | Detector regression only; cannot establish acceptance of either active version |
 
 The district sheet fits the viewport and can settle above 8.75. Record the
@@ -68,7 +68,7 @@ With the selected server running:
 npm test
 npm run check
 npm run check:evidence -- --url http://127.0.0.1:8788 --profile sheets
-npm run check:evidence -- --url http://127.0.0.1:8879 --profile smooth-zoom --source-root ../zoom-prototype-154
+npm run check:evidence -- --url http://127.0.0.1:8879 --profile smooth-zoom --source-root <trial worktree>
 node qa/evaluation/review.mjs qa/.scratch/evaluation/smooth-zoom/report.json
 ```
 

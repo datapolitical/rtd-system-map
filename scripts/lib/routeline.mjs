@@ -1,4 +1,4 @@
-// A picked route's line on a sheet, drawn as one clean path (DESIGN.md, "Four sheets", the picked
+// A picked route's line on a sheet, drawn as one clean path (DESIGN.md, "Five sheets", the picked
 // route): built from the sheet's own street pieces that carry the route, so it lies on the streets
 // the sheet draws, then tidied for reading on its own:
 //
