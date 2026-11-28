@@ -872,6 +872,20 @@ export function stationMarks(stations, lines, sheet, walls = []) {
       const near = (left) => left < 3 * pitch || left <= walk;
       h.end = near(h.along) && open(0) ? 0 : near(h.total - h.along) && open(1) ? 1 : null;
     }
+    // Lines that pass without stopping: their nearest drawn point, so a bar can
+    // be kept short of them. A bar must cross every line that stops there, and
+    // never reach one that doesn't: both are rules, not lists of stations
+    // (DESIGN.md, "Prominence follows rules").
+    const passing = [];
+    for (const l of byRoute.values()) {
+      if (hits.some((h) => h.line === l)) continue;
+      let best = null;
+      l.paths.forEach((path) => {
+        const h = nearest(path, at);
+        if (!best || h.d < best.d) best = h;
+      });
+      if (best && best.d <= walk) passing.push(best.at);
+    }
     // Platforms apart from each other get a bar each; the bar with the most lines carries the name.
     const groups = [];
     for (const h of hits) {
@@ -946,7 +960,30 @@ export function stationMarks(stations, lines, sheet, walls = []) {
       const byLetter = (x, y) => x.line.route.localeCompare(y.line.route, 'en', { numeric: true });
       g.ending = sets.map((set) => set.filter((h) => h.at).sort(byLetter)).filter((set) => set.length).sort((x, y) => byLetter(x[0], y[0]))
         .flat().map((h) => ({ route: h.line.route, color: h.line.color }));
-      return [Math.min(...ss), Math.max(...ss)].map((v) => [c[0] + n[0] * v, c[1] + n[1] * v]);
+      // A bar ends past each outer line, never at its centre: at the centre half of the
+      // rail shows beyond the bar, and a station of three lines reads as its middle line
+      // alone (#206: Dry Creek's bar ended at the R and T centres and read as E only).
+      // It reaches half a pitch out, clearing its own rail by half a gap — and never
+      // further: half a pitch short of a line in the next slot, so a bar crosses the
+      // lines that stop there and no other. Where a line passes within that reach
+      // without stopping, the bar stops half a gap short of its rail instead — but
+      // never so short it fails to cross its own. A single line keeps its dot.
+      const [rail, gap] = [SIZES.rail[sheet.id], SIZES.gap[sheet.id]];
+      const side = (dir) => {
+        const outer = dir > 0 ? Math.max(...ss) : Math.min(...ss);
+        // One line across, or two meeting back to back at one fat mark, is a dot, not a bar.
+        if (Math.max(...ss) - Math.min(...ss) < 0.5) return outer;
+        let out = outer + dir * (pitch / 2);
+        for (const p of passing) {
+          const s = (p[0] - c[0]) * n[0] + (p[1] - c[1]) * n[1];
+          if ((s - outer) * dir <= 0 || Math.abs(s - outer) > 2 * pitch) continue;
+          const short = s - dir * (rail / 2 + gap / 2);
+          out = dir > 0 ? Math.min(out, short) : Math.max(out, short);
+        }
+        const least = outer + dir * (rail / 2 + gap / 4);
+        return dir > 0 ? Math.max(out, least) : Math.min(out, least);
+      };
+      return [side(-1), side(1)].map((v) => [c[0] + n[0] * v, c[1] + n[1] * v]);
     });
     const ends = bars[0];
     marks.push({ id: q.id, name: q.label ?? q.name, hub: !!q.hub, end: !!q.end, lines: q.lines, count: hits.length, ends, span: dist(ends[0], ends[1]), more: bars.slice(1), fat: !!groups[0].fat,
