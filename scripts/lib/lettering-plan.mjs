@@ -641,7 +641,10 @@ export function carryFaults(plan) {
       if (now.length < was.length) faults.push({ kind: 'shorter', id: l.id, zoom: s.zoom, was, now });
     });
     const child = handedOver.get(l.id);
-    if (l.to < last && !(child?.why || child?.stops[0]?.why)) faults.push({ kind: 'gave-way', id: l.id, zoom: l.to });
+    const next = zooms[zooms.indexOf(l.to) + 1];
+    // A successor takes over only if it starts at the very next drawing and says why.
+    const takes = child && child.from === next && (child.why || child.stops[0]?.why);
+    if (l.to < last && !takes) faults.push({ kind: 'gave-way', id: l.id, zoom: l.to });
   }
   return faults;
 }

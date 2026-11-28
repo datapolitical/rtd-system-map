@@ -66,6 +66,11 @@ test('a recorded reason silences the check', () => {
   const child = { ...plan.labels[0], id: 'junction#2', parent: plan.labels[0].id, from: 14, to: 14, stops: [{ ...plan.labels[0].stops[0], zoom: 14, why: plan.labels[0].why }] };
   plan.labels.push(child);
   assert.equal(carryFaults(plan).filter((f) => f.kind === 'gave-way').length, 0, 'a successor that records the handover is');
+  // One that only comes back later leaves the label missing at the drawing between.
+  const late = { ...child, from: 16, to: 16 };
+  plan.drawings.push({ id: 4, zoom: 16, labels: 0 });
+  plan.labels.splice(plan.labels.indexOf(child), 1, late);
+  assert.equal(carryFaults(plan).filter((f) => f.kind === 'gave-way' && f.id === plan.labels[0].id).length, 1, 'a successor two drawings later is not a handover');
 });
 
 test('a label that moves more than 2 px at the next drawing is a fault', () => {
@@ -244,7 +249,7 @@ test('the carried plan from the real map has no overlaps or unexplained changes'
   // have no successor. Every other carry rule is clean; this list must only shrink.
   const faults = carryFaults(plan);
   assert.deepEqual([...new Set(faults.map((f) => f.kind))].filter(Boolean), faults.length ? ['gave-way'] : [], 'only gave-way faults remain');
-  assert.ok(faults.length <= 5, `${faults.length} labels go with no successor (5 known)`);
+  assert.ok(faults.length <= 6, `${faults.length} labels go with no successor (6 known)`);
   assert.equal(droppedLabels(plan).filter((d) => d.why === null).length, 0, 'every drop records why');
   assert.ok(plan.labels.some((l) => l.kind === 'street-name' && l.stops.some((s) => s.carried)), 'real street names carry');
   // Whatever the real map moves, it names the collision (the sizes now leave none; the planted case above pins the rule).

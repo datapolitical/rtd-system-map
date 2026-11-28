@@ -2752,7 +2752,7 @@ How it is built:
   within 2 px and no shorter unless the plan records why, as the consistency
   proposal sets out. On the five sheets, fresh placement leaves 125 overlapping
   pairs and 3,181 unexplained zoom changes; the carried plan has no overlaps
-  and five labels that go with nothing taking over (two route lists and three
+  and six labels that go with nothing taking over (three route lists and three
   street names that no longer fit at the next zoom): a recorded fit reason
   explains such a drop but is not a successor, so `check:plan` reports each
   as a fault until it is fixed. Nothing on the page reads it yet (#158).
@@ -5923,7 +5923,7 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   a merged list through an explicit parent link. A move or disappearance names
   the labels it collided with. `check:plan` now fails on any overlap or
   unrecorded change and reports every neighbouring pair. On the built sheets:
-  9,707 labels on 13,195 placements, 3,500 KB raw; zero overlaps and five
+  9,707 labels on 13,195 placements, 3,500 KB raw; zero overlaps and six
   labels that go with no successor (reported as faults), against 125 and 3,181
   with fresh placement. The five
   sheet GeoJSON files are unchanged; the page still has to draw the plan
