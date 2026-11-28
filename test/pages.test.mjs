@@ -11,9 +11,7 @@ const read = (page) => fs.readFileSync(path.join(PUBLIC, page, 'index.html'), 'u
 // What a page asks its own site for, as written and as the path it comes to.
 const refs = (page) => [...read(page).matchAll(/(?:href|src)="([^"#]+)"|url\(([^)]+)\)/g)].map((m) => m[1] ?? m[2]).filter((ref) => !/^[a-z]+:/.test(ref));
 const asked = (page) => refs(page).map((ref) => new URL(ref, `http://site/${page}`).pathname);
-// public/poster/ is made by npm run build:sheets on our machine and not kept in git (docs/upkeep.md).
 // Without it these checks skip, loudly, instead of failing.
-const NO_POSTER = fs.existsSync(path.join(PUBLIC, 'poster')) ? false : 'public/poster/ is not built here: run npm run build:sheets';
 
 test('the sheet map is the only deployed application; old Classic links redirect to it', () => {
   assert.ok(asked('').includes('/js/sheets/main.js'), 'the front page runs the sheets');
@@ -28,8 +26,8 @@ test('the sheet map is the only deployed application; old Classic links redirect
 
 test('each page asks only for files the site has', () => {
   for (const page of ['']) {
-    // data/ and vendor/ are made by the build and not kept in git; so is poster/.
-    for (const p of asked(page).filter((p) => !/^\/(data|vendor)\//.test(p) && !(NO_POSTER && p.startsWith('/poster/')))) {
+    // data/ and vendor/ are made by the build and not kept in git.
+    for (const p of asked(page).filter((p) => !/^\/(data|vendor)\//.test(p))) {
       assert.ok(fs.existsSync(path.join(PUBLIC, p, p.endsWith('/') ? 'index.html' : '')), `${page || '/'} asks for ${p}`);
     }
     for (const made of ['/vendor/maplibre-gl.css', '/vendor/overpass-latin.woff2']) assert.ok(asked(page).includes(made), `${page || '/'} reaches ${made}`);

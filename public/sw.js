@@ -15,7 +15,7 @@ const TILE_CAP = 3000; // about 30 MB at the most; the oldest go first
 const NETWORK_WAIT_MS = 2500;
 
 // The sheets page and what it fetches. Other pages (the classic map) are left to the network.
-const OWN = /^\/(?:|index\.html|js\/.+|vendor\/.+|data\/(?:meta\.json|sheets\.json|directory\.json|programs\.json|facilities\.geojson|stops\.geojson|departures\/[\w-]+\.json)|poster\/.+)$/;
+const OWN = /^\/(?:|index\.html|js\/.+|vendor\/.+|data\/(?:meta\.json|sheets\.json|directory\.json|programs\.json|facilities\.geojson|stops\.geojson|departures\/[\w-]+\.json))$/;
 const TILE = /^\/tiles\/[\w-]+\/\d+\/\d+\/\d+\.pbf$/;
 
 const kind = (url) => {
