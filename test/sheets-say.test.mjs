@@ -44,6 +44,26 @@ test("the sheets page's quieter text and rings meet AA in both themes", async ()
     assert.ok(contrast(t.rim, t.card) >= 3, `${name}: a route button's ring on the card`);
   }
 });
+test("a search result's second line meets AA on the highlighted row, in both themes", async () => {
+  // The highlight is a tint of ink over the card; the line on it is --note with ink mixed in
+  // (index.html, #finder .opt.active). Both amounts are read from the page's own rules.
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const tokens = (block) => Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})/g)].map((m) => [m[1], m[2]]));
+  const light = tokens(html.match(/:root \{([^}]*)\}/)[1]);
+  const dark = { ...light, ...tokens(html.match(/:root\[data-theme="dark"\] \{([^}]*)\}/)[1]) };
+  const tint = Number(html.match(/#finder \.opt\.active \{ background: color-mix\(in srgb, var\(--ink\) (\d+)%, transparent\)/)[1]) / 100;
+  const firm = Number(html.match(/#finder \.opt\.active \.sub \{ color: color-mix\(in srgb, var\(--ink\) (\d+)%, var\(--note\)\)/)[1]) / 100;
+  const rgb = (hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  const mix = (a, b, share) => `#${rgb(a).map((x, i) => Math.round(x * share + rgb(b)[i] * (1 - share)).toString(16).padStart(2, '0')).join('')}`;
+  for (const [name, t] of Object.entries({ light, dark })) {
+    const row = mix(t.ink, t.card, tint);
+    assert.ok(contrast(mix(t.ink, t.note, firm), row) >= 4.5, `${name}: the second line on the highlighted row`);
+    assert.ok(contrast(t.ink, row) >= 4.5, `${name}: the first line on the highlighted row`);
+  }
+  // The control: --note alone does not reach AA on that row in dark, which is why the rule exists.
+  assert.ok(contrast(dark.note, mix(dark.ink, dark.card, tint)) < 4.5);
+});
 test('visual separators are phrased as punctuation in speech', () => {
   assert.equal(cardSaid({ title: 'Route 15', note: 'Colfax · Every 10 min' }), 'Route 15. Colfax, Every 10 min');
   assert.equal(cardSaid({ title: 'Stop', note: 'Bus stop · Southwest-bound' }), 'Stop. Bus stop, Southwest-bound');
