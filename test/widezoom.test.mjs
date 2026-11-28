@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import {
   WIDE_MIN, WIDE_MAX, WIDE_HANDOVER, referenceAt, withZoom, pitchAt, slotPieces,
   buildReference, sharedPairs, renderedPaths, terminalGaps, referenceDrift,
-  frameFit, referenceSummary,
+  frameFit, referenceSummary, segmentGrid, nearestInGrid,
 } from '../scripts/lib/widezoom.mjs';
 import { nearest } from '../scripts/lib/sheets.mjs';
 
@@ -156,4 +156,18 @@ test('a wide drawing stays under a pixel from a fresh one at the whole district'
   const drift = referenceDrift(built(), drawing, WIDE_MIN);
   assert.ok(drift.worst < 2, `worst drift ${drift.worst}`);
   assert.ok(drift.mean < 0.5, `mean drift ${drift.mean}`);
+});
+
+test('the nearest distance is found however far the only segment is', () => {
+  // One short segment 30 cells (720 px) away: past the old eight-ring reach.
+  const far = segmentGrid([[[720, 0], [730, 0]]]);
+  assert.equal(nearestInGrid(far, [0, 0]), 720);
+  // A long segment spanning the cells between: the point sits 100 px off its middle.
+  const long = segmentGrid([[[-500, 100], [900, 100]]]);
+  assert.equal(nearestInGrid(long, [200, 0]), 100);
+  // Nothing in the grid is no distance at all, not a wrong one.
+  assert.equal(nearestInGrid(segmentGrid([]), [0, 0]), Infinity);
+  // A near segment still wins over a far one.
+  const two = segmentGrid([[[720, 0], [730, 0]], [[0, 5], [10, 5]]]);
+  assert.equal(nearestInGrid(two, [0, 0]), 5);
 });

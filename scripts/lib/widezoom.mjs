@@ -189,8 +189,9 @@ function segmentDistance(p, [a, b]) {
 }
 
 /** A grid of a path's segments, so a nearest distance is read from nearby cells only. */
-function segmentGrid(paths, cell = 24) {
+export function segmentGrid(paths, cell = 24) {
   const map = new Map();
+  const span = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
   const key = (x, y) => `${x},${y}`;
   for (const path of paths) {
     for (let i = 1; i < path.length; i++) {
@@ -198,6 +199,8 @@ function segmentGrid(paths, cell = 24) {
       const seg = { a, b };
       const [x0, x1] = [Math.floor(Math.min(a[0], b[0]) / cell), Math.floor(Math.max(a[0], b[0]) / cell)];
       const [y0, y1] = [Math.floor(Math.min(a[1], b[1]) / cell), Math.floor(Math.max(a[1], b[1]) / cell)];
+      span.x0 = Math.min(span.x0, x0); span.x1 = Math.max(span.x1, x1);
+      span.y0 = Math.min(span.y0, y0); span.y1 = Math.max(span.y1, y1);
       for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
         const k = key(x, y);
         if (!map.has(k)) map.set(k, []);
@@ -205,14 +208,17 @@ function segmentGrid(paths, cell = 24) {
       }
     }
   }
-  return { map, cell, key };
+  return { map, cell, key, span };
 }
 
 /** The nearest distance from `p` to any segment in a `segmentGrid`. */
-function nearestInGrid(grid, p) {
+export function nearestInGrid(grid, p) {
   const cx = Math.floor(p[0] / grid.cell), cy = Math.floor(p[1] / grid.cell);
   let best = Infinity;
-  for (let ring = 0; ring <= 8; ring++) {
+  const { x0, x1, y0, y1 } = grid.span;
+  // Out as far as the farthest occupied cell, so a lone far segment is found too.
+  const last = Math.max(0, cx - x0, x1 - cx, cy - y0, y1 - cy);
+  for (let ring = 0; ring <= last; ring++) {
     for (let dx = -ring; dx <= ring; dx++) for (let dy = -ring; dy <= ring; dy++) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
       for (const seg of grid.map.get(grid.key(cx + dx, cy + dy)) ?? []) best = Math.min(best, segmentDistance(p, [seg.a, seg.b]));
