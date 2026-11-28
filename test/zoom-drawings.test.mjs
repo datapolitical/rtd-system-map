@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,6 +10,9 @@ import { WHOLE_ZOOMS, measureDrawing, wholeZoomPlan, writeZoomDrawings } from '.
 
 const DATA = path.resolve('public/data');
 const read = async (name) => readFile(path.join(DATA, name), 'utf8');
+const NO_DATA = existsSync(path.join(DATA, 'sheet-2.geojson')) && existsSync(path.join(DATA, 'sheet-2-routes.geojson'))
+  ? false
+  : 'public/data is not built; run npm run build:data to run the real-data drawing tests';
 
 test('whole-zoom plan covers 11 through 16 and never imitates the missing #155 adapter', () => {
   const plan = wholeZoomPlan({ SHEETS: sheetModel.SHEETS, drawSheet: sheetModel.drawSheet });
@@ -25,7 +29,7 @@ test('whole-zoom plan covers 11 through 16 and never imitates the missing #155 a
   assert.deepEqual(withZoomRules.filter((d) => d.anchor == null).map((d) => d.sheet.id), [5.5, 6.5, 7.5]);
 });
 
-test('real zoom-12 drawing measures separate drawing and route downloads', async () => {
+test('real zoom-12 drawing measures separate drawing and route downloads', { skip: NO_DATA }, async () => {
   const drawing = JSON.parse(await read('sheet-2.geojson'));
   const routes = JSON.parse(await read('sheet-2-routes.geojson'));
   const measured = measureDrawing({ ...drawing, features: [...drawing.features, ...routes.features] }, 12.4);
@@ -41,7 +45,7 @@ test('real zoom-12 drawing measures separate drawing and route downloads', async
   assert.equal(r.totalGzipBytes, r.gzipBytes + r.routesGzipBytes);
 });
 
-test('writer reproduces the real zoom-12 anchor byte for byte and reports blockers without drawing', async (t) => {
+test('writer reproduces the real zoom-12 anchor byte for byte and reports blockers without drawing', { skip: NO_DATA }, async (t) => {
   const out = await mkdtemp(path.join(tmpdir(), 'rtd-zoom-drawings-'));
   t.after(() => rm(out, { recursive: true, force: true }));
   const drawing = JSON.parse(await read('sheet-2.geojson'));
