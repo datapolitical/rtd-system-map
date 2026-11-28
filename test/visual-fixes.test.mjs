@@ -94,3 +94,20 @@ test('malformed selectors, fingerprints, explanations and zoom ranges fail at bu
   assert.throws(() => resolveVisualFixes([pin({ zooms: { from: 12, to: 16, extra: 1 } })], data), /only from and to/);
   assert.throws(() => pinsAtZoom(resolveVisualFixes([pin()], data), NaN), /finite zoom/);
 });
+
+test('a station id carried by two features is ambiguous: the pin is skipped, not tied to the first', options, () => {
+  const twin = { ...station, geometry: { ...station.geometry, coordinates: [station.geometry.coordinates[0] + 0.01, station.geometry.coordinates[1]] } };
+  const dup = { stations: { features: [...stations.features, twin] } };
+  const entry = pin();
+  assert.equal(visualFixFingerprint(entry, dup), null, 'a valid fingerprint for the first feature does not bless it');
+  const resolved = resolveVisualFixes([entry], dup);
+  assert.equal(resolved.pins.length, 0);
+  assert.match(resolved.skipped[0].reason, /ambiguous/);
+  assert.equal(pinsAtZoom(resolved, 14).length, 0);
+});
+
+test('the report says live pins are resolved only, not applied to a drawing', options, () => {
+  const report = visualFixReport(resolveVisualFixes([pin()], data));
+  assert.equal(report.live, 1);
+  assert.equal(report.applied, false, 'no drawing reads the pin yet, so the report makes no claim that it changed one');
+});

@@ -279,7 +279,9 @@ geometry fingerprint skips and reports it; malformed entries and conflicting
 pins stop the build. The first supported entry pins a station name's side by
 RTD station id. Its optional inclusive `zooms: { "from": ..., "to": ... }`
 range covers every zoom between its ends; without one, the pin lasts the
-label's whole life. `sheets.json` reports live and skipped entries. Applying
+label's whole life. A station id that more than one source feature carries is
+ambiguous and skips like a missing one. `sheets.json` reports live and skipped
+entries (`applied: false`: the build resolves pins but draws none of them). Applying
 those pins to the zoomable map's lettering plan waits for #234 and #156;
 until then the register stays empty and every cleanup is still a rule in the
 build.

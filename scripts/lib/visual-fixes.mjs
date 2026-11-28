@@ -22,11 +22,16 @@ export function geometryFingerprint(geometry) {
 }
 
 /** The current fingerprint for a register entry, or null when RTD no longer has its station. */
-export function visualFixFingerprint(fix, { stations }) {
-  const wanted = String(fix.what.station);
-  const source = stations?.features?.find((f) => String(f.properties?.id) === wanted);
-  return source ? geometryFingerprint(source.geometry) : null;
+export function visualFixFingerprint(fix, data) {
+  const found = stationMatches(fix, data);
+  return found.length === 1 ? geometryFingerprint(found[0].geometry) : null;
 }
+
+/** Every source feature that carries the entry's station id. Exactly one identifies a place. */
+const stationMatches = (fix, { stations }) => {
+  const wanted = String(fix.what.station);
+  return (stations?.features ?? []).filter((f) => String(f.properties?.id) === wanted);
+};
 
 function checkedRange(fix, index) {
   if (fix.zooms === undefined) return { from: -Infinity, to: Infinity };
@@ -64,6 +69,11 @@ export function resolveVisualFixes(fixes, data) {
   const pins = [], skipped = [];
   for (const [index, fix] of fixes.entries()) {
     const range = checkedFix(fix, index);
+    const matches = stationMatches(fix, data);
+    if (matches.length > 1) {
+      skipped.push({ index, key: keyOf(fix), reason: `RTD station id is ambiguous: ${matches.length} features carry it` });
+      continue;
+    }
     const fingerprint = visualFixFingerprint(fix, data);
     if (fingerprint === null) {
       skipped.push({ index, key: keyOf(fix), reason: 'RTD station id is no longer present' });
@@ -93,6 +103,9 @@ export function pinsAtZoom(resolved, zoom) {
 export function visualFixReport(resolved) {
   return {
     total: resolved.total,
+    // Pins are resolved against RTD's data and listed here; no drawing or lettering plan
+    // reads them yet (#234/#156), so a live pin has changed nothing that is drawn.
+    applied: false,
     live: resolved.pins.length,
     skipped: resolved.skipped,
     pins: resolved.pins.map(({ range, index, ...pin }) => pin),

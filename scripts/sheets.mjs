@@ -30,7 +30,7 @@ export async function writeSheets(dir) {
   const fixes = resolveVisualFixes(visualFixes, data);
   const fixReport = visualFixReport(fixes);
   for (const skipped of fixes.skipped) console.warn(`visual fix ${skipped.key} skipped: ${skipped.reason}`);
-  console.log(`visual fixes: ${fixReport.live} live pins, ${fixReport.skipped.length} skipped`);
+  console.log(`visual fixes: ${fixReport.live} live pins (resolved only, not yet applied to any drawing), ${fixReport.skipped.length} skipped`);
   // Where the page opens (the hub), and the names the sheets give their stations.
   let hub = null;
   let opening;
