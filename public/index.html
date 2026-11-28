@@ -309,6 +309,11 @@
   #sketch .base { opacity: 0.3; }
   #sketch path:not(.base) { opacity: 0.9; stroke-dasharray: 180 180; animation: pulse 2s linear calc(var(--t) * -1ms) infinite; }
   @keyframes pulse { from { stroke-dashoffset: 360; } to { stroke-dashoffset: 0; } }
+  /* Once the map starts building (main.js, "starting"), the pulses give way to the whole lines breathing, run by the
+     compositor, so nothing stops and jumps while the map's start-up holds the main thread (#261). */
+  #poster.starting #sketch path:not(.base) { animation: none; stroke-dasharray: none; }
+  #poster.starting #sketch { will-change: opacity; animation: starting 1.6s ease-in-out infinite; }
+  @keyframes starting { 50% { opacity: 0.55; } }
   #poster.gone { opacity: 0; pointer-events: none; }
   #loading, #wait { position: absolute; left: 50%; top: var(--under); transform: translateX(-50%); margin: 0; padding: 7px 15px 6px;
     background: var(--card); color: var(--ink); border-radius: 16px; box-shadow: 0 1px 8px rgb(0 0 0 / 0.28); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
@@ -316,7 +321,7 @@
   #wait { z-index: 3; pointer-events: none; }
   #wait[hidden] { display: none; }
   @keyframes breathe { 50% { opacity: 0.45; } }
-  @media (prefers-reduced-motion: reduce) { #poster, #key { transition: none; } #loading span, #wait span, #sketch path:not(.base) { animation: none; } #sketch path:not(.base) { stroke-dasharray: none; } }
+  @media (prefers-reduced-motion: reduce) { #poster, #key { transition: none; } #loading span, #wait span, #sketch path:not(.base), #poster.starting #sketch { animation: none; } #sketch path:not(.base) { stroke-dasharray: none; } }
 </style>
 </head>
 <body>

@@ -166,6 +166,10 @@ const map = new maplibregl.Map({
   // deepest zoom and cut them out of the sheet's own on the phone.
   zoomLevelsToOverscale: undefined,
 });
+// The map's start-up fills the main thread from here to its first draw, and the loading sketch's pulses
+// (index.html, #sketch) are painted by the main thread, so they would stop and jump. They settle into whole
+// lines that breathe in opacity, which the compositor runs while the main thread is busy (#261).
+document.getElementById('poster')?.classList.add('starting');
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
 // A theme change only recolours the drawing; keep its camera, card and route selection.
