@@ -40,7 +40,9 @@ const minutes = (t) => {
  * departures as `[[pattern, [first, gap, gap…]]]` in minutes, and `end: 1` marks a stop where
  * trips call but none can be boarded.
  *
- * A trip's last stop is not a departure, nor is a stop where it only sets down.
+ * `tripFiles` hold each departure's trip id beside it (see below), for matching RTD's live
+ * predictions to the timetable. A trip's last stop is not a departure, nor is a stop where it
+ * only sets down.
  */
 export function departureTables(text, { lineOf = (id) => id, stations = [] } = {}) {
   const routes = new Map(readCsv(text['routes.txt']).map((r) => [r.route_id, r]));
@@ -66,7 +68,7 @@ export function departureTables(text, { lineOf = (id) => id, stations = [] } = {
     if (!list) calls.set(row[tripCol], (list = []));
     list.push([Number(row[seqCol]), row[stopCol], row[depCol] && row[pickupCol] !== '1' ? minutes(row[depCol]) : null]);
   }
-  const byStop = new Map(); // stop -> Map(pattern -> [minutes])
+  const byStop = new Map(); // stop -> Map(pattern -> [[minutes, trip_id]])
   const called = new Set(); // every stop a trip calls at, boarding or not
   for (const [id, list] of calls) {
     list.sort((a, b) => a[0] - b[0]);
@@ -78,18 +80,24 @@ export function departureTables(text, { lineOf = (id) => id, stations = [] } = {
       if (!of) byStop.set(stop, (of = new Map()));
       let times = of.get(pattern);
       if (!times) of.set(pattern, (times = []));
-      times.push(at);
+      times.push([at, id]);
     }
   }
 
   const boarding = new Map(readCsv(text['stops.txt']).map((s) => [s.stop_id, Number(s.wheelchair_boarding) || 0]));
+  // Trip ids are kept beside the times, in files of their own: only a page showing live times
+  // needs to know which trip each departure is. RTD's ids are long numbers close together, so
+  // each is stored as its distance from the smallest; ids that aren't numbers are kept whole.
+  const allIds = [...calls.keys()];
+  const numeric = allIds.every((id) => /^\d{1,15}$/.test(id));
+  const base = numeric ? Math.min(...allIds.map(Number)) : null;
   const records = new Map();
+  const tripRecords = new Map();
   let chars = 0;
   for (const [stop, of] of byStop) {
-    const d = [...of].sort((a, b) => a[0] - b[0]).map(([pattern, times]) => {
-      times.sort((a, b) => a - b);
-      return [pattern, times.map((t, i) => (i ? t - times[i - 1] : t))];
-    });
+    const sorted = [...of].sort((a, b) => a[0] - b[0]).map(([pattern, times]) => [pattern, times.sort((a, b) => a[0] - b[0] || String(a[1]).localeCompare(String(b[1])))]);
+    const d = sorted.map(([pattern, times]) => [pattern, times.map(([t], i) => (i ? t - times[i - 1][0] : t))]);
+    tripRecords.set(stop, sorted.map(([pattern, times]) => [pattern, times.map(([, id]) => (numeric ? Number(id) - base : id))]));
     const record = { a: boarding.get(stop) ?? 0, d };
     records.set(stop, record);
     chars += JSON.stringify(record).length + stop.length + 4;
@@ -104,6 +112,10 @@ export function departureTables(text, { lineOf = (id) => id, stations = [] } = {
   const count = Math.max(1, 2 ** Math.ceil(Math.log2(chars / CHUNK_CHARS)));
   const files = Array.from({ length: count }, () => ({}));
   for (const [stop, record] of [...records].sort((a, b) => a[0].localeCompare(b[0], 'en', { numeric: true }))) files[chunkOf(stop, count)][stop] = record;
+  // The trips of each departure, filed as the departures are: `tripFiles[k][stop]` is
+  // `[[pattern, [trip…]]]`, each trip in step with the time at the same place in `files`.
+  const tripFiles = Array.from({ length: count }, () => ({}));
+  for (const [stop, record] of [...tripRecords].sort((a, b) => a[0].localeCompare(b[0], 'en', { numeric: true }))) tripFiles[chunkOf(stop, count)][stop] = record;
 
   const calendar = readCsv(text['calendar.txt']);
   const index = {
@@ -114,8 +126,10 @@ export function departureTables(text, { lineOf = (id) => id, stations = [] } = {
     exceptions: readCsv(text['calendar_dates.txt']).map((e) => [e.date, e.service_id, Number(e.exception_type)]),
     patterns: [...patterns.keys()].map((key) => JSON.parse(key)),
     files: count,
+    // How a trip's id is read from the trips files: the number there plus this, or the id itself when null.
+    tripBase: base,
     // Only the platforms trains leave from: a station's card reads these.
     stations: Object.fromEntries(stations.map((s) => [s.id, s.stops.filter((id) => records.has(id))]).filter(([, stops]) => stops.length)),
   };
-  return { index, files, ends, stops: records.size - ends, departures: [...byStop.values()].reduce((n, of) => n + [...of.values()].reduce((k, t) => k + t.length, 0), 0), chars };
+  return { index, files, tripFiles, ends, stops: records.size - ends, departures: [...byStop.values()].reduce((n, of) => n + [...of.values()].reduce((k, t) => k + t.length, 0), 0), chars };
 }
