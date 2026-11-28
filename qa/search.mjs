@@ -149,7 +149,33 @@ if (mode === 'data') {
       check(await page.evaluate(() => document.querySelector('#card').contains(document.activeElement)), `${tag}: the focus does not move to the route's card`);
       check(await page.inputValue('#search') === '', `${tag}: the box is not emptied once a result is chosen`);
       await shot('3-route');
+      // The whole route is in view, between the search bar and its card. Then again with the route
+      // panel open (a taller card) from a view far from the route: the tallest route there is, north
+      // to south, which a guessed card height left off the screen (review of #254).
+      const inView = (bbox) => page.evaluate(([w, s, e, n]) => {
+        const m = window.sheetsMap; const a = m.project([w, n]); const b = m.project([e, s]);
+        const top = document.querySelector('#finder .bar').getBoundingClientRect().bottom; const card = document.querySelector('#card').getBoundingClientRect().top;
+        const fits = a.x >= -2 && b.x <= innerWidth + 2 && a.y >= top - 2 && b.y <= card + 2;
+        return fits ? '' : `route spans x ${Math.round(a.x)} to ${Math.round(b.x)}, y ${Math.round(a.y)} to ${Math.round(b.y)}; clear area is y ${Math.round(top)} to ${Math.round(card)} of ${innerWidth} wide, zoom ${m.getZoom().toFixed(2)}`;
+      }, bbox);
+      const entries = await page.evaluate(async () => (await (await fetch('/data/directory.json')).json()).routes);
+      check((await inView(entries.find((r) => r.route === data.bus && r.mode === 'bus').bbox)) === '', `${tag}: route ${data.bus} from search is not all in view: ${await inView(entries.find((r) => r.route === data.bus && r.mode === 'bus').bbox)}`);
+      if (await page.locator('#card button.more').count()) {
+        await page.click('#card button.more');
+        const tall = entries.filter((r) => r.mode === 'bus').sort((x, y) => (y.bbox[3] - y.bbox[1]) / (y.bbox[2] - y.bbox[0]) * (y.bbox[3] - y.bbox[1]) - (x.bbox[3] - x.bbox[1]) / (x.bbox[2] - x.bbox[0]) * (x.bbox[3] - x.bbox[1]))[0];
+        await page.evaluate(([w, s]) => window.sheetsMap.jumpTo({ center: [w - 0.25, s - 0.2] }), tall.bbox);
+        await page.click('#search');
+        await type(tall.route);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(500);
+        await rest();
+        check((await where()).pick?.route === tall.route, `${tag}: route ${tall.route} was not the first result for its number`);
+        check((await inView(tall.bbox)) === '', `${tag}: with the route panel open, route ${tall.route} from search is not all in view: ${await inView(tall.bbox)}`);
+        await shot('3b-route-panel-open');
+        await page.click('#card button.more');
+      }
       // Esc closes the card and gives the focus back to the box.
+      await page.focus('#card button[data-route]');
       await page.keyboard.press('Escape');
       check((await card()) === null && await page.evaluate(() => document.activeElement?.id === 'search'), `${tag}: Esc on the card does not close it and return to the search box`);
 

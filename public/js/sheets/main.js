@@ -1114,18 +1114,25 @@ const routeEntry = (p) => (directory ??= fetch(new URL('../../data/directory.jso
 // A picked route framed whole in the map left clear above its card (DESIGN.md, "the address"):
 // on the link's own sheet, its middle in the middle of that clear area, where it fits there. A
 // link to a closer sheet than the whole route fits on keeps its view: it shows a place on the route.
-function frame(r) {
+// A route search found has no view of its own to keep: `step` moves to the closest sheet that
+// shows all of it in that clear area, measured with its card as drawn (the route panel open or
+// shut), and centres it there.
+function frame(r, { step = false } = {}) {
   const [w, s, e, n] = r.bbox ?? [];
   if (![w, s, e, n].every(Number.isFinite)) return;
   const box = map.getContainer().getBoundingClientRect();
   const over = card.hidden ? box.bottom : card.getBoundingClientRect().top;
   const pad = { top: (searchBar ? searchBar.getBoundingClientRect().bottom - box.top : 0) + 16, left: 16, right: 16, bottom: Math.max(16, box.bottom - over + 12) };
   const fit = map.cameraForBounds([[w, s], [e, n]], { padding: pad });
-  if (!fit || fit.zoom < rests[sheet] - 0.05) return;
+  if (!fit) return;
+  if (step) {
+    const to = Math.max(0, rests.findLastIndex((z) => z <= fit.zoom + 0.05));
+    if (to !== sheet) show(to, undefined, true, 0);
+  } else if (fit.zoom < rests[sheet] - 0.05) return;
   map.jumpTo({ center: [(w + e) / 2, (s + n) / 2], zoom: rests[sheet] }, { settling: true });
   map.panBy([0, (pad.bottom - pad.top) / 2], { duration: 0 }, { settling: true });
 }
-function openCard(p, { framed = false } = {}) {
+function openCard(p, { framed = false, step = false } = {}) {
   if (!pickCard(p ?? {})) return;
   const fill = (r = null) => {
     if (picked !== p) return;
@@ -1134,7 +1141,7 @@ function openCard(p, { framed = false } = {}) {
   };
   fill();
   // RTD's name for it, its ends and how often it runs come from the directory, read once.
-  routeEntry(p).then((r) => { if (!r) return; fill(r); if (framed && picked === p) frame(r); });
+  routeEntry(p).then((r) => { if (!r) return; fill(r); if (framed && picked === p) frame(r, { step }); });
   if (p.mode === 'rail' && !colorOf.has(p.route)) map.once('idle', () => routeEntry(p).then(fill));
 }
 // A picked route the address names is set once the map has its style, and kept only if the
@@ -1170,13 +1177,10 @@ function goTo(r, from) {
       tell({ ...what, entry: r.entry, routes: [] });
       return focus();
     }
-    // The closest sheet that shows all of it, between the search bar and its card.
-    const [w, s, e, n] = r.bbox ?? [];
-    const fit = [w, s, e, n].every(Number.isFinite) ? map.cameraForBounds([[w, s], [e, n]], { padding: { top: 84, bottom: 150, left: 24, right: 24 } }) : null;
-    const to = fit ? Math.max(0, rests.findLastIndex((z) => z <= fit.zoom + 0.05)) : sheet;
-    if (to !== sheet) show(to, undefined, true, 0);
+    // Shown on the closest sheet that holds all of it between the search bar and its card: frame
+    // measures the card once it is drawn, so the sheet is chosen there, not guessed here.
     setPick(p);
-    openCard(p, { framed: true });
+    openCard(p, { framed: true, step: true });
     return focus();
   }
   if (!r.at) return;
