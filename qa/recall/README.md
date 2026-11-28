@@ -1,8 +1,10 @@
 # Recall: how much of what is wrong the checks catch
 
-**Scope: historical Classic fixtures only.** A green run means no detection
-regression from `baseline.json`, including its known misses. It does not
-establish acceptance of the current sheets or smooth-zoom trial. Each run also
+**Scope: historical Classic fixtures and three frozen trial faults.** A green
+run preserves the Classic detection baseline and catches the trial faults on
+their original geometry, layer order or rendered anchor observations.
+Use `npm run check:recall -- --zoom-only` to replay the trial faults alone.
+Current continuous-zoom acceptance uses [the zoom checks](../zoom/README.md). Each run also
 writes `coverage.json` and `coverage.md` with known/planted totals, per-kind
 default/targeted detection and explicitly unmeasured precision. CI publishes
 that table in its job summary. Unexplained findings have not been classified

@@ -70,7 +70,8 @@ are `npm run prototype:zoom`, `npm run check:zoom` and
 `npm run check:zoom-spacing`. A normal `npm run build` does not generate the
 trial bundle. Select its generated `/zoom/` preview explicitly and report
 which commit, themes and zoom range were checked. Current-map checks do not
-establish that the trial works.
+establish that the trial works. Main holds the [continuous zoom QA and trial
+replay commands](../qa/zoom/README.md).
 
 ## Classic and historical checks
 

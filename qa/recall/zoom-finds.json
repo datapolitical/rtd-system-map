@@ -1,0 +1,98 @@
+[
+  {
+    "id": "154-prototype-bus-over-rail",
+    "issue": 154,
+    "place": "Zoom preview, rail approaches to the hub",
+    "said": "The closer bus drawing paints pale rims across the trial rail lines at zoom 14, leaving visible cuts.",
+    "kind": "bus-over-rail",
+    "caught_by": [
+      "prototype-layer-order"
+    ],
+    "seen_on": [
+      "0263589"
+    ],
+    "theme": "light",
+    "zoom": 14,
+    "points": [
+      [
+        -104.99682182006836,
+        39.76050139387517
+      ]
+    ],
+    "radius_px": 80,
+    "capture": {
+      "view": "14/39.7542/-105.0018",
+      "size": [
+        402,
+        874
+      ],
+      "px": [
+        [
+          317,
+          246
+        ]
+      ]
+    },
+    "found_by": "Codex, inspecting Chromium captures, 2026-11-20",
+    "pinned_by": "Codex, isolated /zoom/ experiment, 2026-11-20",
+    "confidence": "clear",
+    "note": "The trial style’s layer order is frozen in prototype-layer-order.json."
+  },
+  {
+    "id": "154-prototype-tapered-pack",
+    "issue": 154,
+    "place": "Shared commuter-rail approach to Union Station",
+    "said": "The A, B, G and N lines get tighter as they move away from Union Station.",
+    "kind": "uneven-gap",
+    "caught_by": [
+      "rail-spacing"
+    ],
+    "seen_on": [
+      "ce882eb"
+    ],
+    "theme": "light",
+    "zoom": 14,
+    "points": [
+      [
+        -104.9968,
+        39.7567
+      ]
+    ],
+    "radius_px": 100,
+    "capture": {
+      "view": "14/39.7536/-105.00067",
+      "size": [
+        402,
+        874
+      ]
+    },
+    "found_by": "Chris, reviewing the prototype images, 2026-11-20",
+    "pinned_by": "Codex, measured against the rendered rail geometry, 2026-11-20",
+    "confidence": "clear",
+    "note": "Rendered local-pixel geometry is frozen in prototype-spacing.json. The B–N gap was negative."
+  },
+  {
+    "id": "159-prototype-station-name-moved",
+    "issue": 159,
+    "place": "Union Station",
+    "said": "The name moves from bottom-right at 13.01 to top at 14.",
+    "kind": "label-moved",
+    "caught_by": [
+      "label-moved"
+    ],
+    "seen_on": [
+      "329752293fdc756a10f5d68a1c17391f4e849684"
+    ],
+    "theme": "light",
+    "zoom": 14,
+    "points": [
+      [
+        -105.00067,
+        39.7536
+      ]
+    ],
+    "radius_px": 120,
+    "confidence": "clear",
+    "note": "Rendered anchor observations with screenshot hashes are in test/fixtures/zoom-anchor-observations.json."
+  }
+]
