@@ -9,6 +9,7 @@
     "build": "node scripts/vendor.mjs && node scripts/tiles.mjs && node scripts/publish-check.mjs",
     "build:data": "node scripts/vendor.mjs && node scripts/build-data.mjs && node scripts/tiles.mjs && node scripts/poster-build.mjs",
     "build:sheets": "node scripts/vendor.mjs && node scripts/sheets.mjs && node scripts/tiles.mjs && node scripts/poster-build.mjs",
+    "build:ground": "node scripts/ground.mjs",
     "build:basemap": "node scripts/basemap.mjs && node scripts/tiles.mjs",
     "sheets": "node scripts/sheets.mjs",
     "dev": "NODE_OPTIONS=--max-old-space-size=4096 wrangler pages dev public --port 8788",

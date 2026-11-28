@@ -530,13 +530,18 @@ drawn side by side, never on top of each other.
 All data is public. The network, its schedules and its live trains come from
 RTD. Two things come from OpenStreetMap:
 
-- **The basemap** (streets, water, parks, place names), as OpenFreeMap's
-  vector tiles, served by the site itself ("Basemap"). `npm run build:basemap`
-  reads the district's tiles out of OpenFreeMap's weekly planet file (one
-  PMTiles file anyone may download, read by range requests rather than tile by
-  tile from its tile server), keeps only what the style draws at each zoom,
-  and writes them gzipped to `basemap/` (about 34 MB, committed). It runs by
-  hand, like the RTD data; every build unpacks it into `public/tiles/ground/`.
+- **The basemap** (streets, water, parks, place names): the geometry the
+  build draws, and place names from OpenFreeMap's vector tiles ("Ground").
+  `npm run build:basemap` reads the district's tiles out of OpenFreeMap's
+  weekly planet file (one PMTiles file anyone may download, read by range
+  requests rather than tile by tile from its tile server), keeps only what
+  the style draws at each zoom, and writes them gzipped to `basemap/` (about
+  34 MB, committed). It runs by hand, like the RTD data; every build unpacks
+  it into `public/tiles/ground/`. From those committed tiles the build draws
+  each drawing's streets, water and parks itself (`scripts/lib/ground.mjs`,
+  "Ground"), into `build/ground/`, so another tile generator's per-zoom
+  choices no longer decide the ground. Until #235 and #243, the OpenFreeMap
+  tiles still carry place names and buildings.
 - **The shapes of stations**, read by the build from OpenStreetMap's map API
   (`api.openstreetmap.org/api/0.6/map`, a box around each station): rail
   platforms, the canopies over them and station buildings
@@ -1204,6 +1209,33 @@ carry the sense of place:
 
 It drops what competes with transit: basemap railways (they look like RTD's
 lines), POI icons, and road colors.
+
+### Ground (our build, #241)
+
+The streets, water, parks and rivers on the ground are drawn by the build
+(`scripts/lib/ground.mjs`, `scripts/ground.mjs`), one drawing per sheet's
+zoom, from the committed OpenStreetMap tiles at their deepest zoom (14).
+No other tile generator decides what is on a drawing:
+
+- **Streets only add as you zoom in.** Classes are drawn from a written
+  threshold and never removed: motorways on every drawing; trunk and primary
+  from 11.5; secondary, tertiary, minor and service roads from 13.5. That
+  keeps today's sheets' sets (motorways at 8.75 and 10, three classes at 12,
+  all of them at 14 and 16). A class's width and ink stay in
+  `public/js/sheets/style.js`.
+- **Each drawing is smoothed at its own scale.** Lines and rings are
+  simplified to 0.35 px of that drawing's pixels, and a line under 0.75 px or
+  a polygon under 1 px² is not drawn: detail a drawing at 16 keeps, a drawing
+  at 8.75 drops.
+- **Water, parks and rivers** are drawn on every drawing from the same
+  deepest tiles, at the same scale.
+
+The output is `build/ground/ground-<sheet id>.geojson` and `ground.json`
+(the rule and what each drawing holds); `npm run build:sheets` redraws it
+with the sheets, and `node scripts/ground.mjs` alone redraws it. It is not
+served yet: #237 tiles the drawings, and a drawing at 16 is over Cloudflare
+Pages' 25 MiB file limit as one file. Place names and buildings still come
+from OpenFreeMap's own tiles until #235 and #243.
 
 ### Rail line colors
 
@@ -4072,6 +4104,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   these; the rest would need the name of the last stop. Neither is built.
 - **Director districts:** RTD's map includes them. Useful for the secondary
   audience, but not the default view.
+- **The ground drawings' weight (open, #241/#237):** the build's drawings of
+  the ground are 2.6 to 86 MB of GeoJSON (about 37 MB gzipped together): a
+  drawing at 16 is over Cloudflare Pages' 25 MiB file limit, so they are not
+  site files, and `build/ground/` is not published. The tiling step (#237)
+  decides how much of a drawing a phone fetches; until then the drawings cost
+  build time (about 20 s) and disk only.
+- **Names and buildings (open, #235/#243):** the ground's geometry is the
+  build's, but its place and street names and its buildings still come from
+  OpenFreeMap's tiles on the same schedule they always did. #235 and #243
+  move those to the build.
 
 ## Decision log
 
@@ -5819,6 +5861,16 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   same with no throttling (2.85 s, was 2.90 s); the lines on screen from
   first paint (0.4 s on slow 4G), where the picture showed at 3.1 s on
   slow 4G and 6.5 s at 0.65 Mbit/s.
+
+- 2026-11-27: The build draws the ground for every drawing (#241): streets,
+  water, parks and rivers come from the committed OpenStreetMap tiles at their
+  deepest zoom, and a written rule picks the street classes for each drawing
+  (motorways on the widest; trunk and primary from 11.5; every class from
+  13.5), so zooming in only adds streets. Each drawing simplifies in its own
+  pixels and drops sub-pixel shapes. Nothing about the network or the ground
+  is written down: the tiles are the data. The drawings stay in `build/ground/`
+  until #237 tiles them, because a drawing at 16 is larger than Cloudflare
+  Pages takes as one file.
 
 ## Sources
 

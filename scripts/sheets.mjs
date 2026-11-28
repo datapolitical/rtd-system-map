@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SHEETS, drawSheet, districtShape, sheetExtent } from './lib/sheets.mjs';
 import { sheetsCode } from './lib/fingerprint.mjs';
+import { writeGround } from './ground.mjs';
 import { listKey } from '../public/js/sheets/style.js';
 
 // The picture must match both the built transit drawing and the code that inks it.
@@ -77,6 +78,9 @@ export async function writeSheets(dir) {
   await writeFile(path.join(dir, 'sheets.json'), JSON.stringify({ drawing: await drawingFingerprint(opening), code: await sheetsCode(), hub, stations: [...named], colors: [...colors], district, frame, groups: groups.filter(Boolean),
     routes: { rail: [...drawnRoutes.rail].sort(), bus: [...drawnRoutes.bus].sort() },
     lists: Object.fromEntries(Object.entries(lists).sort(([a], [b]) => a.localeCompare(b)).map(([k, m]) => [k, [...m.keys()].sort().map((key) => m.get(key))])) }));
+  // The ground each sheet draws (#241): streets, water and parks chosen and simplified for that
+  // sheet's drawing, out of the committed OpenStreetMap pack (scripts/ground.mjs).
+  await writeGround();
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
