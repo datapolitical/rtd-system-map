@@ -105,29 +105,58 @@ export function readPlaces(pack, { zooms = null } = {}) {
     counts[r.zoom].names++;
     counts[r.zoom].classes[r.cls] = (counts[r.zoom].classes[r.cls] ?? 0) + 1;
   }
-  const deepZoom = Math.max(...Object.keys(counts).map(Number));
-  const names = [...found.values()].filter((r) => r.zoom === deepZoom).map((r) => ({ ...r, from: deepZoom }));
-  const deep = new Map(names.map((r) => [keyOf(r), r]));
-  // A shallower record is the same place when its written name and class match
-  // and its point is within a pixel of the deeper drawing's. That is what the
-  // tiles do: they carry the same point at every zoom.
-  for (const r of [...found.values()].filter((x) => x.zoom < deepZoom).sort((a, b) => b.zoom - a.zoom)) {
-    const hit = findNear(deep, r, deepZoom);
-    if (hit) hit.from = Math.min(hit.from, r.zoom);
-  }
+  const { names, deepZoom } = chainPlaces([...found.values()]);
   return { names, counts, deepZoom };
 }
 
-function findNear(byKey, r, zoom) {
-  const direct = byKey.get(keyOf(r));
-  if (direct) return direct;
-  const p = toPx(r.at, zoom);
-  const nearPx = (q) => {
-    const d = toPx(q.at, zoom);
-    return Math.hypot(d[0] - p[0], d[1] - p[1]) <= 1;
-  };
-  for (const q of byKey.values()) if (q.cls === r.cls && q.name === r.name && nearPx(q)) return q;
-  return null;
+/** Records (one per zoom, name and point) to the deepest zoom's places, each with `from`. */
+export function chainPlaces(records) {
+  const zooms = [...new Set(records.map((r) => r.zoom))].sort((x, y) => y - x);
+  const deepZoom = zooms[0];
+  const names = records.filter((r) => r.zoom === deepZoom).map((r) => ({ ...r, from: deepZoom }));
+  // Walk outward one zoom at a time. Each place at a shallower zoom takes the
+  // nearest same-name, same-class place one zoom deeper that no other place has
+  // taken (one to one), so repeated names stay separate places and a point the
+  // tiles moved by more than a pixel is still followed. A place with no match
+  // starts its own chain and is not carried back.
+  let deeper = names.map((r) => ({ r, root: r }));
+  for (const z of zooms.slice(1)) {
+    const here = records.filter((r) => r.zoom === z);
+    const pairs = [];
+    for (const [i, r] of here.entries()) {
+      for (const [j, d] of deeper.entries()) {
+        if (d.r.cls !== r.cls || d.r.name !== r.name) continue;
+        const dist = pixelGap(d.r.at, r.at, d.r.zoom);
+        if (dist <= MATCH_PX) pairs.push({ i, j, dist });
+      }
+    }
+    pairs.sort((a, b) => a.dist - b.dist || a.i - b.i || a.j - b.j);
+    const takenHere = new Set(), takenDeep = new Set(), next = [];
+    for (const { i, j } of pairs) {
+      if (takenHere.has(i) || takenDeep.has(j)) continue;
+      takenHere.add(i);
+      takenDeep.add(j);
+      deeper[j].root.from = Math.min(deeper[j].root.from, z);
+      next.push({ r: here[i], root: deeper[j].root });
+    }
+    deeper = next;
+  }
+  return { names, deepZoom };
+}
+
+// How far the tiles may carry one place between two zooms: simplification
+// moves a point, so a pixel is too tight (#265).
+const MATCH_PX = 4;
+const pixelGap = (a, b, zoom) => {
+  const [p, q] = [toPx(a, zoom), toPx(b, zoom)];
+  return Math.hypot(p[0] - q[0], p[1] - q[1]);
+};
+
+/** The drawings a plan must be checked on: every one at or past `firstZoom`. Names
+ * that are missing a drawing were never checked there, so the caller stops. */
+export function drawingsNeeded(sheets, firstZoom, has) {
+  const need = sheets.filter((s) => s.zoom >= firstZoom);
+  return { need, missing: need.filter((s) => !has(s)) };
 }
 
 /** The box a name takes when its text is centred on `at`, at `zoom` and `size`. */

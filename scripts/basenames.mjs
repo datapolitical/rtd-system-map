@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { readPack } from './lib/basemap.mjs';
-import { checkPlan, placeBaseNames, placeId, placeSize, planOf, readPlaces, roomOfSheet } from './lib/basenames.mjs';
+import { checkPlan, drawingsNeeded, placeBaseNames, placeId, placeSize, planOf, readPlaces, roomOfSheet } from './lib/basenames.mjs';
 import { SHEETS } from './lib/sheets.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -39,9 +39,9 @@ if (!names.length) {
 // at. Each name must fit every one of them at one ground position, so it never
 // goes while zooming in; the closest drawing is where that costs the most.
 const firstZoom = Math.min(...Object.keys(counts).map(Number));
-const sheets = SHEETS.filter((s) => s.zoom >= firstZoom && existsSync(path.join(DATA, `sheet-${s.id}.geojson`)));
-if (!sheets.length) {
-  console.error(`basenames: no drawing at zoom ${firstZoom} or closer in public/data (run \`npm run build:sheets\`)`);
+const { need: sheets, missing } = drawingsNeeded(SHEETS, firstZoom, (s) => existsSync(path.join(DATA, `sheet-${s.id}.geojson`)));
+if (!sheets.length || missing.length) {
+  console.error(`basenames: no drawing at zoom ${(missing.length ? missing : [{ zoom: firstZoom }]).map((s) => s.zoom).join(', ')} in public/data, and the plan must be checked on every one (run \`npm run build:sheets\`)`);
   process.exit(1);
 }
 

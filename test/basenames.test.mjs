@@ -10,8 +10,8 @@ import { existsSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { readPack } from '../scripts/lib/basemap.mjs';
-import { PLACE_CLASSES, Room, checkPlan, nameBox, placeBaseNames, placeId, planOf, readPlaces, roomOfSheet } from '../scripts/lib/basenames.mjs';
-import { SHEETS, toPx } from '../scripts/lib/sheets.mjs';
+import { PLACE_CLASSES, Room, chainPlaces, checkPlan, drawingsNeeded, nameBox, placeBaseNames, placeId, planOf, readPlaces, roomOfSheet } from '../scripts/lib/basenames.mjs';
+import { SHEETS, toLonLat, toPx } from '../scripts/lib/sheets.mjs';
 import { PLACE_SIZE } from '../public/js/sheets/style.js';
 
 const pack = await readPack();
@@ -147,4 +147,28 @@ test('every name fits on the built drawings, and the plan checks', { skip: noGro
   const plan = planOf({ ...out, frames, source: {} });
   assert.deepEqual(checkPlan(plan), []);
   assert.equal(plan.names.length, names.length);
+});
+
+test('a place the tiles moved by a few pixels is still one place back to its first zoom', () => {
+  const rec = (zoom, [x, y]) => ({ name: 'Park Hill', cls: 'suburb', rank: 1, zoom, at: toLonLat([toPx([-104.9, 39.75], zoom)[0] + x, toPx([-104.9, 39.75], zoom)[1] + y], zoom) });
+  // 3 px apart at zoom 12, 1.5 px at 11: past the old one-pixel reach, still the same place.
+  const { names } = chainPlaces([rec(12, [0, 0]), rec(11, [3 / 2, 0]), rec(10, [3 / 4 * 3, 0])]);
+  assert.equal(names.length, 1);
+  assert.equal(names[0].from, 10);
+});
+
+test('two places with one name and one point-pair stay two, each with its own first zoom', () => {
+  const rec = (zoom, [x, y]) => ({ name: 'Union', cls: 'suburb', rank: 1, zoom, at: toLonLat([toPx([-104.9, 39.75], zoom)[0] + x, toPx([-104.9, 39.75], zoom)[1] + y], zoom) });
+  // Two same-name places 2 px apart at the deepest zoom; only one of them is carried to zoom 11.
+  const { names } = chainPlaces([rec(12, [0, 0]), rec(12, [2, 0]), rec(11, [1, 0])]);
+  assert.equal(names.length, 2);
+  assert.deepEqual(names.map((n) => n.from).sort(), [11, 12], 'one place is not claimed by both');
+});
+
+test('a plan is not checked on a partial set of drawings: a missing sheet is reported', () => {
+  const sheets = [{ id: 2, zoom: 12 }, { id: 3, zoom: 14 }, { id: 4, zoom: 16 }];
+  const { need, missing } = drawingsNeeded(sheets, 12, (s) => s.id !== 3);
+  assert.equal(need.length, 3);
+  assert.deepEqual(missing.map((s) => s.zoom), [14]);
+  assert.deepEqual(drawingsNeeded(sheets, 12, () => true).missing, []);
 });
