@@ -86,3 +86,13 @@ test('the build draws at 11, 13 and 15 with no sheet number', { skip: NO_DATA },
   const width = (zoom) => SIZES.rail[sheetAt(zoom).id];
   assert.ok(width(12) < width(13) && width(13) < width(14));
 });
+
+test('the merge distance runs straight between the sheets: the halfway zoom is the halfway distance', () => {
+  for (let i = 1; i < SHEETS.length; i++) {
+    const [a, b] = [SHEETS[i - 1], SHEETS[i]];
+    const mid = mergeMetresAt((a.zoom + b.zoom) / 2);
+    const want = (mergeMetresAt(a.zoom) + mergeMetresAt(b.zoom)) / 2;
+    assert.ok(Math.abs(mid - want) < 1e-6, `${a.zoom} to ${b.zoom}: ${mid} is not halfway to ${want}`);
+    assert.ok(mid < mergeMetresAt(a.zoom) && mid > mergeMetresAt(b.zoom), 'and strictly between the two');
+  }
+});
