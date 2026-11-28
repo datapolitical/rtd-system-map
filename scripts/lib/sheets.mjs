@@ -16,7 +16,7 @@ export const SHEETS = [
   { id: 0, zoom: 8.75, streets: 'far', whole: true },
   { id: 1, zoom: 10, streets: 'far', opens: true },
   { id: 2, zoom: 12, streets: 'far' },
-  { id: 3, zoom: 14, streets: 'near' },
+  { id: 3, zoom: 14, streets: 'far' },
   { id: 4, zoom: 16, streets: 'near' },
 ];
 
@@ -102,7 +102,9 @@ export function sheetExtent(drawn, sheet) {
   return [r(w), r(s), r(e), r(n)];
 }
 
-/** Sizes in pixels, by sheet id. The page draws with these; so does the build. */
+/** Sizes in pixels, by sheet id. The page draws with these; so does the build. A table with a
+ * value per sheet also answers a fractional sheet id between two sheets, straight between their
+ * values (running, below), so the build draws any zoom (#155). */
 export const SIZES = {
   // The picked route's line (routeLine, DESIGN.md "the picked route"): ends this close are one
   // corner; a dead end shorter than a stub goes; a second street closer than `apart` to the main
@@ -139,11 +141,13 @@ export const SIZES = {
   alone: 1.6,
   // Station names: lettering size, and whether the sheet names every station or only the hub and line ends.
   name: { 0: 11, 1: 11.5, 2: 11.5, 3: 13, 4: 14.5 },
-  nameAll: { 0: false, 1: false, 2: true, 3: true, 4: true },
+  // Every station is named from this zoom; before it, only the hub and each line's far end.
+  nameAllFrom: 11,
   // The whole district (#152) names only the hub and each line's far end: of the stations a line
   // ends at, the one farthest from the hub. A far end nearer the hub than `nameHubClear` px is
   // left to the hub's name, and a name's row of letters holds only the lines whose far end it is.
-  nameFar: { 0: true, 1: false, 2: false, 3: false, 4: false },
+  // The whole district's naming (hub and line ends only) holds out to this zoom.
+  nameFarUntil: 9.375,
   nameHubClear: 60,
   // On the whole district, what each px a name stands nearer another station than its own costs (names).
   nameStray: 30,
@@ -191,6 +195,11 @@ export const SIZES = {
   busSlim: 6,
   // A street's end this near another street is on it.
   busSnap: 3,
+  // How much wider the busiest streets are than rail, by sheet; from the closest sheet they are
+  // rail's own width (#152, BUSIEST). Zoom runs between the values (#155).
+  busiestOverRail: { 0: 1.3, 1: 1.3, 2: 1.3, 3: 1.3, 4: 1 },
+  // The quiet step is a hairline on the two widest sheets, where it is the whole outer street grid.
+  quietHairlineUntil: 11,
   // A street that carries straight on and strays no farther than this from a straight line is drawn straight.
   busStraight: 2.5,
   // Where a street turns at a corner the turn is rounded over about this far, as a pen would take it.
@@ -216,12 +225,12 @@ export const SIZES = {
   // A line runs on past a last stop behind it no farther than this (metres) to be cut level with the
   // stop; farther, the run is the bus's way round to turn, drawn to its tip (termini).
   busBarbMetres: 40,
-  // A bus station's name beside its hall, from this sheet (drawSheet, 'hall-label').
-  hallNameSheet: 3,
-  // The sheet from which bus stops are drawn, each a ring.
-  stopSheet: 4,
-  // From this sheet bus streets are named, from their stops (drawSheet, runStreet).
-  streetSheet: 3,
+  // A bus station's name beside its hall, from this zoom (drawSheet, 'hall-label').
+  hallNameFrom: 14,
+  // The zoom from which bus stops are drawn, each a ring.
+  stopFrom: 16,
+  // From this zoom bus streets are named, from their stops (drawSheet, runStreet).
+  streetNameFrom: 14,
   // How far past each end of a labelled run its street's stops still say which street it is (about 600 m).
   streetAhead: { 0: 0, 1: 0, 2: 0, 3: 80, 4: 320 },
   // No two names of one street closer than this (px): about one a screen.
@@ -249,20 +258,96 @@ export const SIZES = {
   sourceTile: 1024,
   // A line letter's disc, out to its edge (public/js/sheets/style.js, the letter layer's radius and stroke).
   letterDisc: { 0: 8.5, 1: 8.9, 2: 9.7, 3: 10.9, 4: 12.1 },
-  // RTD's stop groups (stopGroups): from this sheet the page shows a key on the screen saying which
+  // RTD's stop groups (stopGroups): from this zoom the page shows a key on the screen saying which
   // routes stop at which lettered stop (main.js, placeKey). A letter's square is `badge` wide
   // (public/js/sheets/style.js, GROUP.badge).
-  groupSheet: 2,
+  groupFrom: 12,
   group: { badge: 12 },
-  // From this sheet until stops are drawn, each lettered stop's letter sits on its street in the
+  // From this zoom until stops are drawn, each lettered stop's letter sits on its street in the
   // table's square, with a rim of ground this wide (public/js/sheets/style.js, GROUP.streetRim).
   // Squares keep this far apart, and move at most this far along their street, within their
   // block, to keep off cross streets, rail and lettering.
-  groupStreetSheet: 3,
+  groupStreetFrom: 14,
   groupStreetRim: 1.5,
   groupStreetApart: 1,
   groupStreetNudge: 24,
 };
+
+// --- Sizes as a function of zoom ----------------------------------------------
+
+// The sizes above are the five drawings' own values. For a drawing between two sheets
+// (#155), an indexed value runs straight between the two sheets' values, so a drawing at
+// one of today's zooms is exactly the drawing it is now. A table is wrapped so the
+// existing `SIZES.name[sheet.id]` call sites work for a zoom's fractional sheet id too.
+const PER_SHEET_SIZES = ['pickStub', 'pickApart', 'pickBridge', 'pickFar', 'pickSmooth', 'rail', 'gap', 'round',
+  'letterClear', 'letterEvery', 'name', 'nameLetter', 'busTurn', 'busMerge', 'busLabelEvery', 'busLabelSize',
+  'streetAhead', 'streetEvery', 'letterDisc', 'busiestOverRail'];
+const N = (v) => typeof v === 'number';
+function running(table) {
+  const ids = Object.keys(table).map(Number).filter(N).sort((a, b) => a - b);
+  return new Proxy(table, {
+    get(target, key, receiver) {
+      if (typeof key !== 'string' || !/^\d+(\.\d+)?$/.test(key) || Object.hasOwn(target, key)) return Reflect.get(target, key, receiver);
+      const id = Number(key);
+      const lo = ids.filter((x) => x <= id).at(-1);
+      const hi = ids.find((x) => x >= id);
+      if (lo == null) return target[ids[0]];
+      if (hi == null) return target[ids.at(-1)];
+      const t = hi === lo ? 0 : (id - lo) / (hi - lo);
+      return target[lo] + (target[hi] - target[lo]) * t;
+    },
+  });
+}
+for (const name of PER_SHEET_SIZES) SIZES[name] = running(SIZES[name]);
+
+/**
+ * The sheet at any zoom from the widest drawing to the closest (#155): its fractional id
+ * interpolates the size tables, and the switches that used to ask "which sheet" are now the
+ * zooms at which the thing comes in. A whole zoom's own sheet is returned unchanged.
+ */
+export function sheetAt(zoom) {
+  const first = SHEETS[0];
+  const last = SHEETS.at(-1);
+  const at = Math.min(last.zoom, Math.max(first.zoom, zoom));
+  const hi = SHEETS.findIndex((s) => s.zoom >= at - 1e-9);
+  const up = SHEETS[hi];
+  if (Math.abs(at - up.zoom) < 1e-9) return { ...up };
+  const lo = SHEETS[hi - 1];
+  const t = (at - lo.zoom) / (up.zoom - lo.zoom);
+  return {
+    id: lo.id + t * (up.id - lo.id),
+    zoom: at,
+    // A divided road is one line out to zoom 16 and its two carriageways from there in
+    // (DESIGN.md, "Readable geometry"; #81, #240).
+    streets: at >= last.zoom ? 'near' : 'far',
+    whole: at <= first.zoom,
+    opens: false,
+  };
+}
+
+/**
+ * How close, in ground metres, two streets may be and still be drawn as one. It runs straight
+ * between the five sheets' values on the ground, so it only shrinks as the map zooms in:
+ * a pair drawn apart at one zoom is never joined again at a closer one (#155).
+ */
+export function mergeMetresAt(zoom, lat = 39.75) {
+  const first = SHEETS[0];
+  const last = SHEETS.at(-1);
+  const at = Math.min(last.zoom, Math.max(first.zoom, zoom));
+  const hi = SHEETS.findIndex((s) => s.zoom >= at - 1e-9);
+  const up = SHEETS[hi];
+  const metres = (s) => SIZES.busMerge[s.id] * metresPerPixel(lat, s.zoom);
+  if (Math.abs(at - up.zoom) < 1e-9) return metres(up);
+  const lo = SHEETS[hi - 1];
+  const t = (at - lo.zoom) / (up.zoom - lo.zoom);
+  return metres(lo) + (metres(up) - metres(lo)) * t;
+}
+
+/** The merge distance in screen pixels at a sheet's zoom. One of today's sheets keeps its value. */
+export function mergeDistance(sheet, lat) {
+  if (Number.isInteger(sheet.id)) return SIZES.busMerge[sheet.id];
+  return mergeMetresAt(sheet.zoom, lat) / metresPerPixel(lat, sheet.zoom);
+}
 
 // --- Screen pixels at a zoom (512-pixel tiles, as MapLibre draws) -----------
 
@@ -1157,8 +1242,8 @@ export function names(marks, lines, discs, sheet, streets = []) {
   // names that station to the eye, which is worse than no name.
   const bars = marks.map((m) => ({ m, pts: [m.ends, ...m.more].flatMap((bar) => [bar[0], lerp(bar[0], bar[1], 0.5), bar[1]]) }));
   const r = SIZES.nameLetter[sheet.id];
-  // Each line's far end (SIZES.nameFar): line -> the mark it ends at farthest from the hub.
-  const farOnly = SIZES.nameFar[sheet.id];
+  // Each line's far end (SIZES.nameFarUntil): line -> the mark it ends at farthest from the hub.
+  const farOnly = sheet.zoom < SIZES.nameFarUntil;
   const farOf = farOnly ? farEnds(marks) : new Map();
   // What the whole-district sheet is framed on (sheetExtent): the frequent network side to side, and
   // the rail lines within it top to bottom. A name keeps inside it, so it turns in, not off the screen.
@@ -1181,7 +1266,7 @@ export function names(marks, lines, discs, sheet, streets = []) {
     // On the whole district every far end carries its lines' letters: no letter fits on the lines there.
     const row = ending.length >= 2 || (farOnly && ending.length) ? ending : [];
     // Where not every name fits, the hub and line ends are lettered larger than the rest.
-    const minor = !must && !SIZES.nameAll[sheet.id];
+    const minor = !must && sheet.zoom < SIZES.nameAllFrom;
     const size = minor ? SIZES.nameMinor : SIZES.name[sheet.id];
     let c = mid;
     // A far end past the frame's side (the airport, out beyond the frequent network) is named on
@@ -2158,7 +2243,7 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
   // Streets closer together than a line can be told apart are drawn as one: the busier
   // (then the longer) is kept and carries the other's routes. Streets that meet end to end
   // are never folded into each other, so no street gains a gap.
-  const cell = SIZES.busMerge[sheet.id];
+  const cell = mergeDistance(sheet, lat);
   const step = Math.min(2, cell / 3);
   const grid = new Map();
   const at = (p, dx = 0, dy = 0) => `${Math.floor(p[0] / cell) + dx},${Math.floor(p[1] / cell) + dy}`;
@@ -2355,7 +2440,7 @@ export function busStreets(streets, sheet, walls = [], marks = [], lines = []) {
   // A ring gathered to the point where its streets meet takes its routes no farther than busEndKeep
   // from where they run: half round it is its reach at most.
   const ring = Math.min(SIZES.busRing, 2 * keepEnd);
-  const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), ring), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap, SIZES.busMerge[sheet.id] + SIZES.rail[sheet.id]), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
+  const tidied = (list) => unjogged(unlooped(unslivered(unringed(noded(list, SIZES.busSnap, cell), ring), 5 * SIZES.busRing, SIZES.busSlim, SIZES.busSnap, cell + SIZES.rail[sheet.id]), SIZES.busSlim, SIZES.busSpeck), 3 * SIZES.busSlim);
   // How far a point is from the nearest rail line or station bar.
   const inked = [...lines.flatMap((l) => l.paths), ...marks.flatMap((m) => [m.ends, ...(m.more ?? [])])];
   const railOff = (p) => inked.reduce((d, path) => (boxed(path, p, d) ? Math.min(d, nearest(path, p).d) : d), 1e9);
@@ -3557,7 +3642,12 @@ export const expressRoutes = (routes) => inCategory(routes, EXPRESS_CATEGORY);
 export const AIRPORT_CATEGORY = 'SKYRIDE';
 export const airportRoutes = (routes) => inCategory(routes, AIRPORT_CATEGORY);
 export const isExpress = (routes, express) => String(routes ?? '').split(/[ ,]+/).some((r) => express.has(r));
-export const busWide = (cls, sheet) => { const w = SIZES.rail[sheet.id]; return [sheet.id <= 1 ? 1 : w / 1.6 ** 2, w / 1.4, BUSIEST[cls] && sheet.id <= 3 ? w * 1.3 : w][BUS_STEP[cls] ?? 0]; };
+export const busWide = (cls, sheet) => {
+  const w = SIZES.rail[sheet.id];
+  const quiet = sheet.zoom < SIZES.quietHairlineUntil ? 1 : w / 1.6 ** 2;
+  const busy = BUSIEST[cls] ? w * SIZES.busiestOverRail[sheet.id] : w;
+  return [quiet, w / 1.4, busy][BUS_STEP[cls] ?? 0];
+};
 
 /** A sheet's pixels around a place, each set where something is drawn (lines, dots, boxes, rooms), grown by a margin. */
 export class Raster {
@@ -3698,7 +3788,10 @@ export function placeStreetLetters(stretch, stops, solid, across = []) {
 // --- One sheet, as GeoJSON -------------------------------------------------------
 
 /** Everything one sheet draws, as a FeatureCollection the page loads. */
-export function drawSheet({ routes, stations, streets, terminals, stops }, sheet) {
+export function drawSheet(data, sheet) {
+  // A zoom draws the sheet between the two it falls between (#155): `drawSheet(data, 13)`.
+  if (typeof sheet === 'number') sheet = sheetAt(sheet);
+  const { routes, stations, streets, terminals, stops } = data;
   const lines = railLines(routes, sheet);
   const walls = halls(terminals, sheet);
   const marks = stationMarks(stations, lines, sheet, walls);
@@ -3708,7 +3801,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   const { streets: bus, ends } = termini(busStreets(streets, sheet, walls, marks, lines), endStops, 1 / metresPerPixel(lat0, sheet.zoom),
     marks.flatMap((m) => [m.ends, ...(m.more ?? [])]), walls);
   // On the whole district a line's letter is under its far end's name, not on the line (names).
-  const lettered = SIZES.nameFar[sheet.id] ? new Set([...farEnds(marks)].filter(([, x]) => x.named).map(([route]) => route)) : new Set();
+  const lettered = sheet.zoom < SIZES.nameFarUntil ? new Set([...farEnds(marks)].filter(([, x]) => x.named).map(([route]) => route)) : new Set();
   const discs = letters(lines, marks, sheet).filter((d) => !lettered.has(d.route));
   const express = expressRoutes(routes);
   const airport = airportRoutes(routes);
@@ -3725,7 +3818,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     // station is (#174: Wade Blank Civic Center, Downtown Boulder). `r` is the hall's reach from its
     // middle in px, so the page sets the name just clear of it, on whichever side has room. A hall
     // that is a rail station's (Union Station's concourse) has that station's name already.
-    if (sheet.id >= SIZES.hallNameSheet && h.name && !railIds.has(String(h.id))) {
+    if (sheet.zoom >= SIZES.hallNameFrom && h.name && !railIds.has(String(h.id))) {
       const xs = h.ring.map((p) => p[0]), ys = h.ring.map((p) => p[1]);
       const mid = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
       const r = Math.round(Math.max(...h.ring.map((p) => Math.max(Math.abs(p[0] - mid[0]), Math.abs(p[1] - mid[1])))) * 10) / 10;
@@ -3734,7 +3827,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   }
   // RTD's stop groups: where a street's stops carry a letter, a table says which routes stop at
   // which letter, and the table's streets carry no numbers for its routes (stopGroups).
-  const tables = sheet.id >= SIZES.groupSheet ? stopGroups(stops) : [];
+  const tables = sheet.zoom >= SIZES.groupFrom ? stopGroups(stops) : [];
   const chains = tables.length ? through(bus) : [];
   const grouped = tables.map((table) => ({ table, all: new Set(table.rows.flatMap((r) => r.routes)), ...groupStretches(table, bus, sheet, chains) }));
   const groupOf = new Map();
@@ -3791,7 +3884,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // its street, placed before the route lists and street names, which keep off it (placeStreetLetters).
   let squares = [];
   const letterings = [];
-  if (sheet.id >= SIZES.groupStreetSheet && sheet.id < SIZES.stopSheet) for (const [ti, g] of grouped.entries()) for (const s of g.streets) {
+  if (sheet.zoom >= SIZES.groupStreetFrom && sheet.zoom < SIZES.stopFrom) for (const [ti, g] of grouped.entries()) for (const s of g.streets) {
     const pad = SIZES.groupStreetNudge + 30;
     const window = [Math.min(...s.path.map((p) => p[0])) - pad, Math.min(...s.path.map((p) => p[1])) - pad, Math.max(...s.path.map((p) => p[0])) + pad, Math.max(...s.path.map((p) => p[1])) + pad];
     const near = (path, r) => path.some((p) => p[0] > window[0] - r && p[0] < window[2] + r && p[1] > window[1] - r && p[1] < window[3] + r);
@@ -3835,7 +3928,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
   // The stops' rings, from the sheet that draws them. A ring half under a rail line can't be read
   // as a stop: one that close to a line is not drawn.
   const clear = SIZES.rail[sheet.id] / 2 + SIZES.stopRing;
-  const rings = sheet.id < SIZES.stopSheet ? [] : stopRings(busStops(stops, routes), bus, sheet, undefined, freeRoutes(routes))
+  const rings = sheet.zoom < SIZES.stopFrom ? [] : stopRings(busStops(stops, routes), bus, sheet, undefined, freeRoutes(routes))
     .filter((r) => !lines.some((l) => l.paths.some((path) => boxed(path, r.at, clear) && nearest(path, r.at).d < clear)));
   // A name or a list keeps off each stop's ring, where the page keeps lettering off it.
   const cell = 64;
@@ -3855,7 +3948,7 @@ export function drawSheet({ routes, stations, streets, terminals, stops }, sheet
     const xs = path.map((p) => Math.floor(p[k] / SIZES.sourceTile));
     return Math.min(...xs) === Math.max(...xs);
   });
-  const naming = sheet.id >= SIZES.streetSheet;
+  const naming = sheet.zoom >= SIZES.streetNameFrom;
   const reach = Math.max(SIZES.busMerge[sheet.id], 8);
   // Mixed-case words run wider than route figures: about 0.58 em a letter.
   const wordsWide = (text) => String(text).length * size * 0.58;
