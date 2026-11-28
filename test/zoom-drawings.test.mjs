@@ -45,7 +45,7 @@ test('real zoom-12 drawing measures separate drawing and route downloads', { ski
   assert.equal(r.totalGzipBytes, r.gzipBytes + r.routesGzipBytes);
 });
 
-test('writer reproduces the real zoom-12 anchor byte for byte and reports blockers without drawing', { skip: NO_DATA }, async (t) => {
+test('writer reproduces the real zoom-12 anchor byte for byte and draws the intermediate zoom now sheetAt exists', { skip: NO_DATA }, async (t) => {
   const out = await mkdtemp(path.join(tmpdir(), 'rtd-zoom-drawings-'));
   t.after(() => rm(out, { recursive: true, force: true }));
   const drawing = JSON.parse(await read('sheet-2.geojson'));
@@ -58,13 +58,27 @@ test('writer reproduces the real zoom-12 anchor byte for byte and reports blocke
     zooms: [11, 12],
     draw: () => { calls++; return { ...drawing, features: [...drawing.features, ...routes.features] }; },
   });
-  assert.equal(calls, 1, 'the blocked intermediate zoom must not call drawSheet');
-  assert.equal(report.complete, false);
+  assert.equal(calls, 2, 'the intermediate zoom is drawn once #155 provides sheetAt');
+  assert.equal(report.complete, true);
   assert.equal(report.drawings[0].zoom, 11);
-  assert.match(report.drawings[0].blocked, /#155/);
+  assert.equal(report.drawings[0].blocked, undefined);
   assert.equal(report.drawings[1].drawingMatchesSheet, true);
   assert.equal(report.drawings[1].routesMatchesSheet, true);
   assert.equal(await readFile(path.join(out, 'zoom-12.geojson'), 'utf8'), await read('sheet-2.geojson'));
   assert.equal(await readFile(path.join(out, 'zoom-12-routes.geojson'), 'utf8'), await read('sheet-2-routes.geojson'));
   assert.equal(JSON.parse(await readFile(path.join(out, 'report.json'), 'utf8')).drawings.length, 2);
+});
+
+test('a model with no sheetAt reports the intermediate zoom as blocked and does not draw it', { skip: NO_DATA }, async (t) => {
+  const out = await mkdtemp(path.join(tmpdir(), 'rtd-zoom-drawings-'));
+  t.after(() => rm(out, { recursive: true, force: true }));
+  const drawing = JSON.parse(await read('sheet-2.geojson'));
+  let calls = 0;
+  const report = await writeZoomDrawings({
+    dir: DATA, out, data: {}, zooms: [11, 12], model: { SHEETS: sheetModel.SHEETS },
+    draw: () => { calls++; return drawing; },
+  });
+  assert.equal(calls, 1, 'the blocked intermediate zoom must not call drawSheet');
+  assert.equal(report.complete, false);
+  assert.match(report.drawings[0].blocked, /#155/);
 });

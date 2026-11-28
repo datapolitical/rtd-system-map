@@ -1,5 +1,5 @@
 // Draw and measure the whole-zoom drawings for #157 from an existing public/data build.
-// No network, server, tiles or deploy. Until #155 lands, the three anchored zooms are
+// No network, server, tiles or deploy. Where sheets.mjs has no sheetAt (before #155), the anchored zooms are
 // measured and the intermediate zooms are reported as blocked instead of using the trial's
 // size-table adapter. Once sheets.mjs exports sheetAt, the same command draws all five.
 import { createHash } from 'node:crypto';
