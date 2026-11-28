@@ -5812,13 +5812,13 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   first version, which drew the lines in once: "it just sort of sits there
   when what it should probably do is either pulse or something like it
   should branch out and repeat that until it loads".
-  Measured locally (Chromium at iPhone 14 size, 4x CPU, light and dark,
-  three runs each): 578 KB before the map, was 685 KB (673 in dark); the
-  map drawn at 3.46 s on typical 4G (was 3.69 s), 5.78 s on slow 4G (was
-  6.55 s) and 10.5 s at 0.65 Mbit/s (was 12.0 s), the same with no
-  throttling (2.83 s, was 2.79 s); the lines on screen from first paint
-  (0.4 s on slow 4G), where the picture showed at 3.1 s on slow 4G and
-  6.5 s at 0.65 Mbit/s.
+  Measured locally with the pulses (Chromium at iPhone 14 size, 4x CPU,
+  light and dark, three runs each): 583 KB before the map, was 689 KB (677
+  in dark); the map drawn at 3.35 s on typical 4G (was 3.51 s), 5.79 s on
+  slow 4G (was 6.50 s) and about 11 s at 0.65 Mbit/s (was 12.1 s), the
+  same with no throttling (2.85 s, was 2.90 s); the lines on screen from
+  first paint (0.4 s on slow 4G), where the picture showed at 3.1 s on
+  slow 4G and 6.5 s at 0.65 Mbit/s.
 
 ## Sources
 
