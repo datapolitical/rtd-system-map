@@ -485,7 +485,8 @@ next one?" and "is anything wrong?" in either view, Live or not:
   - "Near me" does the same for your location.
 
 Built on today's sheets (2026-11-27, #13): a stop's and a station's card
-show the next scheduled departures. Live predictions, alerts in panels and
+show the next departures, live where RTD has a prediction and scheduled
+otherwise (see "Departures", "Live times on a card"). Alerts in panels and
 the vehicle panel are not built; the vehicle panel and alert marks on the
 map wait for Live on the zoomable map (#251).
 
@@ -803,6 +804,42 @@ The panel is its own code and reads nothing of the sheets; the sheets' page
 only says which stop or station a card is for (`leaves` and
 `showDepartures` in `public/js/sheets/main.js`).
 
+**Live times on a card.** While a stop's or a station's card is open, the
+page asks the relay for RTD's predictions for that card's stops, and only
+those (`public/js/panel/live.js`; the relay's side is under "Live data").
+There is no Live button on the sheets: an open card is what asks.
+
+- A prediction takes the place of its own scheduled departure, matched by
+  trip, and reads as minutes ("4 min", "Now") with the live mark, the amber
+  dot of "Visual tokens". From an hour away it reads as a clock time, still
+  marked. A scheduled time stays a clock time with no mark. So a late bus
+  stays on the card past its scheduled time, and one that left early drops
+  off.
+- A call RTD marks skipped, or a cancelled trip, is left out: its scheduled
+  time would be wrong.
+- The card always says which kind it shows. With any live time its heading
+  is "Next departures, live" and a line under the rows says "Minutes are
+  RTD's live predictions. Clock times are scheduled." With none it is "Next
+  departures, scheduled".
+- Nothing stale is shown as live. Predictions count as live only while the
+  relay has answered in the last 50 seconds, RTD's feed could be read, and
+  the feed's own time is under two minutes old (`fresh` in `live.js`).
+  Otherwise the card is the timetable, and after 20 seconds without live
+  times, or at once when the relay says RTD's feed failed, it adds "Live
+  times aren't loading. These are scheduled."
+- A relay that knows nothing of predictions, or no relay, leaves the
+  timetable: the page works with either.
+
+To match by trip the build keeps each departure's trip id beside its time,
+in files of their own (`data/departures/trips-N.json`, about 1.7 MB
+compressed in all, 13 KB a file) that only a page showing live times reads.
+A trip's id is stored as its distance from the smallest id
+(`index.tripBase`). The same trip runs every weekday, so a prediction
+belongs to the departure of its trip scheduled within 90 minutes of it.
+Measured 2026-11-27: RTD's TripUpdate feed held 375 trips, all in the
+timetable, at 5,571 stops, with absolute times and no delays, and marked
+159 calls skipped.
+
 ### Station service: also from GTFS
 
 RTD's station layer lists every station, including ones with no trains right
@@ -931,8 +968,20 @@ What each feed is used for:
 | Feed | Used for |
 |---|---|
 | VehiclePosition | Vehicles on the map, with heading and occupancy |
-| TripUpdate | Predicted departures in stop and station panels, and how late a vehicle is |
+| TripUpdate | Predicted departures in stop and station panels (built 2026-11-27, below), and how late a vehicle is |
 | Alerts | Alert marks on the map, and alert text in panels |
+
+**Predictions for a card's stops.** A page with only a stop's or a
+station's card open connects as a card (`/live/stream?for=card`) and says
+which stops it shows (`{"watch": [...]}`, at most 40). It is sent those
+stops' predictions and nothing else (`kind: "stops"`): each call's trip,
+time and route, and the trips RTD says will skip the stop. It is not sent
+the vehicles. The object asks RTD for `TripUpdate.pb` only while some card
+is watching a stop, at most once a poll, and reads it into memory, not
+storage (it is 340 KB). A feed it cannot read is said (`problem`), never
+sent as empty predictions. An empty watch list means the card closed; when
+no card watches and nobody has Live on, polling stops as before. Vehicle
+positions are asked for only while someone has Live on, not for cards.
 
 The page listens only while Live is on and the tab is visible; a hidden tab
 closes its socket and reconnects, getting the current state at once, when it's
@@ -2082,7 +2131,7 @@ sheets start with that setting too, and have a 44 px circular sun/moon button
 in the lower-right corner. It switches the map and interface together and
 remembers the reader's choice locally. Until a choice is made, system changes
 recolour the open map. Theme changes preserve the view, card and picked route.
-A saved choice is applied before paint, including to the loading picture.
+A saved choice is applied before paint, including to the loading placeholder.
 The button has a stable accessible name, “Dark mode”, and reports its pressed
 state; its icon and tooltip show the mode a tap will choose.
 
@@ -2158,7 +2207,7 @@ suite still checks the original historical drawings.
 | 0 | 8.75 | The whole district on one screen: every rail line and bus street, the hub and each line's far end named, the towns in RTD's district. |
 | 1 | 10 | The network: rail lines whole, every bus street by how often a bus comes, the hub and line ends named. Tap a line for its routes. |
 | 2 | 12 | Every station named, route numbers along bus streets. |
-| 3 | 14 | One-way pairs on their own streets, names of the main streets. |
+| 3 | 14 | Divided roads as one line, one-way pairs on their own streets, names of the main streets. |
 | 4 | 16 | Every stop, buildings, platforms apart from each other. |
 
 **The whole district** (#152). Sheet 0 is one step out from sheet 1, where
@@ -2692,6 +2741,21 @@ How it is built:
   between lines. Each drawing places its lettering fresh, so the build plans
   lettering across zooms. The plan is #129. (Corrected 2026-11-27; until
   then this said the change was the page's alone.)
+- **Sizes run between the sheets; switches are zooms (#155).** Every size
+  that has a value per sheet runs straight from one sheet's value to the
+  next, so a drawing at one of today's five zooms is exactly today's drawing,
+  and `drawSheet` takes any zoom from 8.75 to 16 without a sheet number.
+  Each "which sheet" test is the zoom at which the thing comes in. Street
+  merging is held in ground metres, not sheet pixels, so it only shrinks as
+  the map zooms in: two streets drawn apart at one zoom are never joined
+  again at a closer one.
+- **A divided road is one line out to zoom 16 (#81, #240).** From zoom 14,
+  the sheet draws the joined street graph as well; sheet 3 used to draw both
+  carriageways. At 41st / Fox the I-25 express braid and its crossing ramps
+  are gone, and the doubled bus ink on sheet 3 falls from 276.4 to 183.4 km
+  (express 38.6 to 16.7 km; small loops 75 to 54). Broadway and Lincoln and
+  the downtown one-way pairs stay two lines: they are different streets, not
+  two carriageways of one.
 
 ### Continuous zoom trial (#154)
 
@@ -3318,26 +3382,34 @@ are deferred, not ruled out. See "Open questions".
     layer gives its colour, width and opacity per feature, with the same
     values, so the opening needs 10 programs, not 17 (`style.js`, SAME).
   - MapLibre's stylesheet doesn't hold up the first paint: the page uses
-    none of its controls, and the picture covers the map until it is drawn.
+    none of its controls, and the placeholder covers the map until it is drawn.
   - The Overpass font swaps in when it arrives; until then "Loading…" is in
     the phone's own font, not hidden.
   - Each sheet's route lines (a route's whole path, drawn only for a picked bus route) are tiles
     of their own, `routes-N`, whose layers show from the first pick, or at the opening when the
     address picks a bus route (#193). They were about 40% of every sheet's bytes.
-  - While it loads, the sheets page shows a picture of the view it opens on,
-    with a "Loading…" line over it, and fades to the map once the map has
-    drawn that view (or at once, if a button is pressed first). The pictures
-    (`public/poster/`, one per theme for a phone and for a wider screen, about
-    60 to 150 KB each) are taken by `scripts/poster.mjs` at the end of every
-    build, from the site just built (`scripts/poster-build.mjs`), so they go
-    live with the drawing they show. A fingerprint of the opening drawing
-    and its rendering code is captured with the pictures, along with the
-    planet build the basemap is from (`data-ground`); the publish check fails
-    if that is not the committed basemap's. The picture stays
-    hidden unless its fingerprint matches the current `sheets.json`; a stale
-    picture cannot jump to a different drawing. The page centres the picture as the map is centred, and shifts it as the
-    map's bounds shift the view on a very wide screen. A link to another view,
-    or an address forcing a theme, gets the line on plain ground instead.
+  - While it loads, the sheets page shows RTD's rail lines on the map's
+    ground, each in its own colour (as the map draws it in that theme) and
+    where the map will draw it on the opening view, with the "Loading…"
+    line at the top. The whole network is there faint, and over it bright
+    pulses flow out from the hub (sheets.json) along every line, one every
+    360 px, moving 360 px in 2 s, each run timed by its distance from the
+    hub so they carry on from one run to the next, until the map has drawn
+    that view (or at once, if a button is pressed first); then the sketch
+    fades and the map lands on the same lines. With reduced motion the
+    lines are there whole and still. The sketch is part of the page (an inline SVG of
+    about 14 KB, 4 KB compressed), so it is on screen with the first
+    bytes and asks for nothing: the map's downloads have the whole
+    connection from the start (#222). `scripts/sketch.mjs` writes it from
+    the built rail lines, the opening view and the map's colour rule
+    (`railInk`), as part of the build's picture step; the publish check
+    fails if it is not of the built lines. A link to another view gets the
+    line on plain ground. The build still takes the pictures of the
+    opening view (`scripts/poster.mjs`, `public/poster/`): the same step
+    records the opening view and its tile zooms (`data-view`,
+    `data-early`), the drawing programs, and the drawing and ground
+    fingerprints the publish check reads, but the page no longer shows or
+    asks for the pictures.
   - MapLibre and the Overpass font are served from the site itself: no extra
     connections to a CDN or Google before the map can start.
   - Symbols are drawn on canvases kept in memory, not on the GPU
@@ -5916,6 +5988,49 @@ releases are not tagged. Cloudflare Pages still deploys every commit to
   TripUpdate feed reaches the page only through the Live relay, and Live
   waits for the zoomable map (#251). Alerts in panels are not built
   either: the relay asks RTD for alerts only while someone has Live on.
+- 2026-11-27: While the map loads, the page shows RTD's rail lines with
+  pulses flowing out from the hub along them, in their own colours and
+  where the map will draw them, and
+  the "Loading…" line, all drawn in the page itself; not a picture of the
+  opening view (#222). This replaces the picture of 2026-11-12 and the
+  download order tried on the first-paint branch (#226). Reason: the
+  picture was 90 to 102 KB of the about 680 KB a phone fetched before the
+  map drew, and on a normal connection it gave nothing but cost the map's
+  downloads that share of the line. Chris: "show something immediately,
+  with no extra download", then, on the measurements, "we shouldn't use
+  the picture anymore", and he picked the rail sketch from four looks
+  (review of 2026-11-27: the sketch, trains on grey tracks, line bullets, a
+  small mark) because he wanted "something visually interesting". On the
+  first version, which drew the lines in once: "it just sort of sits there
+  when what it should probably do is either pulse or something like it
+  should branch out and repeat that until it loads".
+  Measured locally with the pulses (Chromium at iPhone 14 size, 4x CPU,
+  light and dark, three runs each): 583 KB before the map, was 689 KB (677
+  in dark); the map drawn at 3.35 s on typical 4G (was 3.51 s), 5.79 s on
+  slow 4G (was 6.50 s) and about 11 s at 0.65 Mbit/s (was 12.1 s), the
+  same with no throttling (2.85 s, was 2.90 s); the lines on screen from
+  first paint (0.4 s on slow 4G), where the picture showed at 3.1 s on
+  slow 4G and 6.5 s at 0.65 Mbit/s.
+- 2026-11-27: Live predictions on stop and station cards (#13; Chris, about
+  20:10 MST, with the relay change). An open card asks, since the sheets
+  have no Live button. The relay sends a page only its own stops, and asks
+  RTD for trip updates only while a card is open. Predictions are matched
+  to the timetable by trip, so the build keeps each departure's trip id in
+  files only live pages read; matching by route and nearest time was
+  rejected because a wrong match shows a rider a wrong bus. Nothing stale
+  is shown as live, and the card always says which kind of time it shows.
+  The relay deploys before the page, and the page works with the old relay
+  (scheduled times).
+
+- 2026-11-27: Sizes are functions of zoom between the five sheets and the
+  "which sheet" switches are the zooms at which the thing comes in (#155),
+  so main's build draws any zoom from 8.75 to 16. Sheet 3 draws the joined
+  street graph, making a divided road one line out to zoom 16 (#81, #240):
+  at 41st / Fox the I-25 express braid is gone, and sheet 3's doubled bus
+  ink falls from 276.4 to 183.4 km. The street merge distance is held in
+  ground metres so streets only split as the map zooms in. The page still
+  keeps its own copies of five sizes until the lettering plan (#234) gives
+  it the build's tables.
 
 ## Sources
 

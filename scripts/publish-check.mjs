@@ -14,6 +14,7 @@ import { dataCode, sheetsCode } from './lib/fingerprint.mjs';
 import { drawingFingerprint } from './sheets.mjs';
 import { groundNeeds, readPack } from './lib/basemap.mjs';
 import { readdir } from 'node:fs/promises';
+import { sketch } from './sketch.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = path.join(ROOT, 'public', 'data');
@@ -55,15 +56,23 @@ const maplibre = JSON.parse(await readFile(path.join(ROOT, 'node_modules', 'mapl
 if (sheets && programs && (programs.drawing !== sheets.drawing || programs.maplibre !== maplibre)) {
   problems.push('public/data/programs.json was recorded from another drawing or MapLibre: run `node scripts/poster-build.mjs`, then `npm run deploy`');
 }
-// The loading pictures were taken of this drawing; otherwise the page hides them.
+// The opening view (#poster's data-view and data-early: the early tiles and the loading sketch) was
+// recorded from this drawing (scripts/poster.mjs).
 const html = await readFile(path.join(ROOT, 'public', 'index.html'), 'utf8');
 const poster = html.match(/<div id="poster"[^>]*\sdata-drawing="([^"]*)"/)?.[1];
 if (sheets && poster !== sheets.drawing) {
-  problems.push('the loading pictures were taken of another drawing: run `node scripts/poster-build.mjs`, commit public/index.html (the pictures themselves are not committed), then `npm run deploy`');
+  problems.push('the opening view in public/index.html was recorded from another drawing: run `node scripts/poster-build.mjs`, commit public/index.html, then `npm run deploy`');
+}
+
+// The loading sketch is of these rail lines and this opening view (scripts/sketch.mjs).
+const drawnSketch = html.match(/<svg id="sketch"[\s\S]*?<\/svg>/)?.[0];
+const wantSketch = await sketch(path.join(ROOT, 'public') + path.sep).catch(() => null);
+if (wantSketch && drawnSketch !== wantSketch) {
+  problems.push('the loading sketch in public/index.html is not of the built rail lines: run `node scripts/sketch.mjs`, commit public/index.html, then `npm run deploy`');
 }
 
 // The ground is the site's own (scripts/basemap.mjs): there, with every property the style reads,
-// and the one the pictures show.
+// and the one the opening view was recorded on.
 const pack = await readPack();
 if (!pack) problems.push('basemap/ has no ground tiles: run `npm run build:basemap` and commit basemap/');
 else {
@@ -72,7 +81,7 @@ else {
     if (!pack.layers?.[layer] || missing.length) problems.push(`the style reads the ground's ${layer}${missing.length ? ` (${missing.join(', ')})` : ''}, which basemap/ left out: run \`npm run build:basemap\` and commit basemap/`);
   }
   const shows = html.match(/<div id="poster"[^>]*\sdata-ground="([^"]*)"/)?.[1];
-  if (shows !== pack.planet) problems.push(`the loading pictures show another ground (${shows || 'none'}, basemap/ is ${pack.planet}): run \`node scripts/poster-build.mjs\`, commit public/index.html (the pictures themselves are not committed), then \`npm run deploy\``);
+  if (shows !== pack.planet) problems.push(`the opening view in public/index.html was recorded on another ground (${shows || 'none'}, basemap/ is ${pack.planet}): run \`node scripts/poster-build.mjs\`, commit public/index.html, then \`npm run deploy\``);
 }
 // The tiles the page reads (scripts/tiles.mjs; git ignores them): each sheet, its route lines,
 // and the ground. Without them the site would upload with no map drawn.

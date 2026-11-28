@@ -20,27 +20,30 @@ import { spacingReport, terminalGaps } from '../qa/lib/zoom-spacing.mjs';
 const NO_TRIAL = ['zoom-prototype/trial.json', 'sheets.json'].every((file) => existsSync(new URL(`../public/data/${file}`, import.meta.url)))
   ? false : 'public/data/zoom-prototype/trial.json is not built here: run npm run build:data, then npm run prototype:zoom';
 
+// A plain copy of the size tables. Since #155 the per-sheet tables are Proxies that run sizes
+// between sheets (scripts/lib/sheets.mjs, running), which structuredClone cannot copy.
+const snapshotSizes = () => Object.fromEntries(Object.entries(SIZES).map(([k, v]) => [k, v && typeof v === 'object' ? { ...v } : v]));
 const sizes = Object.fromEntries(['rail', 'gap', 'name', 'nameLetter', 'letterDisc'].map((key) => [key, zoomStops(SIZES[key])]));
 test('zoom adapter preserves every original size and restores tables after a failure', () => {
-  const before = structuredClone(SIZES);
+  const before = snapshotSizes();
   withZoom(13.25, (s) => assert.equal(SIZES.rail[s.id], 5.15));
-  assert.deepEqual(SIZES, before);
+  assert.deepEqual(snapshotSizes(), before);
   assert.throws(() => withZoom(12.25, () => { throw new Error('interrupted draw'); }));
-  assert.deepEqual(SIZES, before);
+  assert.deepEqual(snapshotSizes(), before);
   for (const [zoom, value] of sizes.rail) assert.equal(sizeAt(sizes.rail, zoom), value);
 });
 
 test('between 14 and 16 the adapter runs sizes from sheet 3 to sheet 4, and switches keep sheet 3 until 16', () => {
-  const before = structuredClone(SIZES);
+  const before = snapshotSizes();
   withZoom(15, (s) => {
     assert.equal(s.zoom, 15);
     assert.equal(SIZES.rail[s.id], (SIZES.rail[3] + SIZES.rail[4]) / 2);
     assert.equal(SIZES.busMerge[s.id], (SIZES.busMerge[3] + SIZES.busMerge[4]) / 2);
-    assert.equal(s.id < SIZES.stopSheet, true, 'bus stops come in at 16, with sheet 4');
+    assert.equal(s.zoom < SIZES.stopFrom, true, 'bus stops come in at 16, with sheet 4');
   });
   withZoom(16, (s) => assert.equal(SIZES.rail[s.id], SIZES.rail[4]));
   assert.throws(() => withZoom(8, () => {}), /not between two sheets/);
-  assert.deepEqual(SIZES, before);
+  assert.deepEqual(snapshotSizes(), before);
 });
 
 test('a divided road is one line in every drawing of the trial, 16 included', () => {
