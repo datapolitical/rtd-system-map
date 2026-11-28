@@ -1338,7 +1338,7 @@ map.on('movestart', (e) => { if (e.originalEvent) reveal(); });
 // does for later (the offline copy) waits until the reader first touches the page, or until the
 // opening has been on the screen for SETTLE_MS, so none of it competes with the opening view on a
 // slow phone (DESIGN.md, "Quality floor").
-map.once('idle', () => { addOtherSheets(); window.sheetsReady = true; window.sheetsAll = true; reveal(); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
+map.once('idle', () => { addOtherSheets(); window.sheetsReady = true; window.sheetsAll = true; window.dispatchEvent(new Event('sheetsready')); reveal(); if (touched) readerHasIt(); else setTimeout(readerHasIt, SETTLE_MS); });
 
 // --- Offline (sw.js) ------------------------------------------------------------------
 // Asked for only once the opening view is drawn and the reader has it (whenSettled), so it
